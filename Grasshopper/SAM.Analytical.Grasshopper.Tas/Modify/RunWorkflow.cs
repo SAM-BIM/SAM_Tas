@@ -23,9 +23,9 @@ namespace SAM.Analytical.Grasshopper.Tas
             }
 
             AnalyticalModel result = analyticalModel;
-            using (ProgressForm progressForm = new ProgressForm("Workflow"))
+            using (ProgressForm progressForm = new("Workflow"))
             {
-                WorkflowCalculator workflowCalculator = new WorkflowCalculator(workflowSettings);
+                WorkflowCalculator workflowCalculator = new(workflowSettings);
                 workflowCalculator.StepsCounted += (s, e) =>
                 {
                     progressForm.Max = e.Count;
@@ -115,7 +115,11 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             if (parallel)
             {
-                Parallel.For(0, count, new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount - 1 }, action.Invoke);
+                Parallel.For(0, count, new ParallelOptions() 
+                { 
+                    MaxDegreeOfParallelism = Environment.ProcessorCount - 1 
+                }, 
+                action.Invoke);
             }
             else
             {

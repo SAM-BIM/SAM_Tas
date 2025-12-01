@@ -204,7 +204,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             index = Params.IndexOfInputParam("surfaceOutputSpec_");
             if (index != -1 && dataAccess.GetDataList(index, objectWrappers) && objectWrappers != null && objectWrappers.Count != 0)
             {
-                surfaceOutputSpecs = new List<SurfaceOutputSpec>();
+                surfaceOutputSpecs = [];
                 foreach (GH_ObjectWrapper objectWrapper in objectWrappers)
                 {
                     object value = objectWrapper.Value;
@@ -241,7 +241,6 @@ namespace SAM.Analytical.Grasshopper.Tas
                     {
                         surfaceOutputSpecs.Add((SurfaceOutputSpec)value);
                     }
-
                 }
             }
 
@@ -254,7 +253,6 @@ namespace SAM.Analytical.Grasshopper.Tas
                     simulate = false;
                 }
             }
-
 
             bool useBEWidths = false;
             index = Params.IndexOfInputParam("_useBEthickness_");
@@ -275,7 +273,6 @@ namespace SAM.Analytical.Grasshopper.Tas
                     sizing = true;
                 }
             }
-
 
             bool unmetHours = false;
             index = Params.IndexOfInputParam("_runUnmetHours_");
@@ -351,12 +348,10 @@ namespace SAM.Analytical.Grasshopper.Tas
                 dataAccess.SetDataList(index, dictionary?.Keys);
             }
 
-
             if (index_successful != -1)
             {
                 dataAccess.SetData(index_successful, true);
             }
-
         }
 
         public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
