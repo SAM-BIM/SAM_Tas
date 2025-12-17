@@ -19,6 +19,10 @@
     <OutputPath>..\..\build\</OutputPath>
     <DocumentationFile>..\..\build\SAM.Analytical.Grasshopper.Tas.GenOpt.xml</DocumentationFile>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>..\..\build\</OutputPath>
+    <DocumentationFile>..\..\build\SAM.Analytical.Grasshopper.Tas.GenOpt.xml</DocumentationFile>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="SAM.Core.Grasshopper">
       <HintPath>..\..\..\SAM\build\SAM.Core.Grasshopper.dll</HintPath>
