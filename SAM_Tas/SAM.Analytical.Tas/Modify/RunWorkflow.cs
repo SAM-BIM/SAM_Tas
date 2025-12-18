@@ -362,14 +362,14 @@ namespace SAM.Analytical.Tas
             //return new AnalyticalModel(result, adjacencyCluster);
         }
 
-        public static Dictionary<string, AnalyticalModel> RunWorkflow(this IEnumerable<AnalyticalModel> analyticalModels, WorkflowSettings workflowSettings, string directory, bool parallel = true)
+        public static Dictionary<string, AnalyticalModel> RunWorkflow(this IEnumerable<AnalyticalModel> analyticalModels, WorkflowSettings workflowSettings, string directory, bool parallel = true, bool saveAnalyticalModels = false)
         {
             if (workflowSettings == null || analyticalModels is null || !analyticalModels.Any())
             {
                 return null;
             }
 
-            List<Tuple<string, AnalyticalModel>> tuples = [.. Enumerable.Repeat<Tuple<string, AnalyticalModel>>(null, analyticalModels.Count())];
+            List<Tuple<string, string, AnalyticalModel>> tuples = [.. Enumerable.Repeat<Tuple<string, string, AnalyticalModel>>(null, analyticalModels.Count())];
 
             Func<int, int, string> getName = (i, count) =>
             {
@@ -430,7 +430,7 @@ namespace SAM.Analytical.Tas
 
                 WorkflowCalculator workflowCalculator = new(workflowSettings_AnalyticalModel);
 
-                tuples[i] = new(directory_AnalyticalModel, workflowCalculator.Calculate(analyticalModel));
+                tuples[i] = new(directory_AnalyticalModel, name, workflowCalculator.Calculate(analyticalModel));
             };
 
             if (parallel)
@@ -450,14 +450,20 @@ namespace SAM.Analytical.Tas
             }
 
             Dictionary<string, AnalyticalModel> result = [];
-            foreach (Tuple<string, AnalyticalModel> tuple in tuples)
+            foreach (Tuple<string, string, AnalyticalModel> tuple in tuples)
             {
                 if (tuple is null)
                 {
                     continue;
                 }
 
-                result[tuple.Item1] = tuple.Item2;
+                result[tuple.Item1] = tuple.Item3;
+
+                if(saveAnalyticalModels)
+                {
+                    string path_json = Path.Combine(tuple.Item1, tuple.Item2 + ".json");
+                    Core.Convert.ToFile(tuple.Item3, path_json);
+                }
             }
 
             return result;
