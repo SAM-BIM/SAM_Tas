@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
-// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
-
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Xml;
 
 namespace SAM.Analytical.Tas.TM59
