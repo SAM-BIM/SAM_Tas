@@ -1,0 +1,23 @@
+name: Cleanup old failed runs
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'   # weekly
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+
+    steps:
+      - uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          delete_run_by_conclusion_pattern: failed|cancelled
+          retain_days: 14
+          keep_minimum_runs: 0
+

@@ -1,0 +1,108 @@
+name: Build (Windows)
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Guard: if this ever gets merged upstream, it will "skip" there.
+    if: github.repository_owner == 'SAM-BIM'
+    runs-on: windows-2022
+
+    env:
+      MSBUILDDISABLENODEREUSE: "1"
+
+    steps:
+      # Checkout THIS repo into a folder so we can clone sibling repos next to it.
+      - name: Checkout SAM_Tas
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: SAM_Tas
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.x"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Clone dependency repos (siblings)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $deps = @(
+            'SAM',
+            'SAM_Systems',
+            'SAM_Psychrometrics',
+            'SAM_Mollier',
+            'SAM_Windows',
+            'SAM_gbXML',
+            'SAM_SolarCalculator'
+          )
+
+          foreach ($r in $deps) {
+            if (Test-Path $r) { continue }
+            git clone --depth 1 "https://github.com/SAM-BIM/$r.git" $r
+          }
+
+          # Ensure the reference path folder exists even before SAM_Windows builds
+          New-Item -ItemType Directory -Force -Path "SAM_Windows\build" | Out-Null
+
+      - name: Restore + Rebuild in order (CI props like SAM_Deploy)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $windowsRef = Join-Path (Get-Location) 'SAM_Windows\build'
+
+          # IMPORTANT: keep these as an ARRAY of args (do NOT join into one string)
+          $common = @(
+            '/m:1'
+            '/nr:false'
+            '/v:m'
+            '/p:Configuration=Release'
+            '/p:UseSharedCompilation=false'
+            '/p:RunPostBuildEvent=OnOutputUpdated'
+            "/p:ReferencePath=$windowsRef"
+          )
+
+          # If you really want Platform, use this (quoted) line:
+          # $common += '/p:Platform="Any CPU"'
+
+          $solutions = @(
+            'SAM\SAM.sln'
+            'SAM_Systems\SAM_Systems.sln'
+            'SAM_Psychrometrics\SAM_Psychrometrics.sln'
+            'SAM_Mollier\SAM_Mollier.sln'
+            'SAM_Windows\SAM_Windows.sln'
+            'SAM_gbXML\SAM_gbXML.sln'
+            'SAM_SolarCalculator\SAM_SolarCalculator.sln'
+            'SAM_Tas\SAM_Tas.sln'
+          )
+
+          foreach ($sln in $solutions) {
+            if (-not (Test-Path $sln)) { throw "Missing solution: $sln" }
+            Write-Host "==> Restore: $sln"
+            & msbuild $sln /t:Restore @common
+          }
+
+          foreach ($sln in $solutions) {
+            Write-Host "==> Rebuild: $sln"
+            & msbuild $sln /t:Rebuild @common
+          }
+
+
+      - name: Upload build folders (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAM_Tas-build-folders
+          path: |
+            **\build\*
+          if-no-files-found: warn

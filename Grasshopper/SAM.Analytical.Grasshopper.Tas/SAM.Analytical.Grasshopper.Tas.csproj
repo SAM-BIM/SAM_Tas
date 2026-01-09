@@ -14,6 +14,7 @@
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
 	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	<LangVersion>12.0</LangVersion>
   </PropertyGroup>
   <PropertyGroup>
     <OutputType>Library</OutputType>
