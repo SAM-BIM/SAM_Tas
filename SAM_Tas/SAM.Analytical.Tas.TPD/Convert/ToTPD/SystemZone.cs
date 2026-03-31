@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using SAM.Core.Systems;
 using System.Collections.Generic;
 using TPD;
@@ -20,9 +23,16 @@ namespace SAM.Analytical.Tas.TPD
                 result = system.AddSystemZone();
             }
 
+            result.Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagDisplacementVent;
+            result.Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagModelInterzoneFlow;
+            result.Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
+
             EnergyCentre energyCentre = system.GetPlantRoom()?.GetEnergyCentre();
 
             dynamic @dynamic = result;
+
+            dynamic.name = displaySystemSpace.Name;
+            dynamic.Description = displaySystemSpace.Description;
 
             result.TemperatureSetpoint.Update(displaySystemSpace.TemperatureSetpoint, energyCentre);
             result.RHSetpoint.Update(displaySystemSpace.RelativeHumiditySetpoint, energyCentre);

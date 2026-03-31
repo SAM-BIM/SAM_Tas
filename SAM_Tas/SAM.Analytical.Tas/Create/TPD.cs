@@ -1,4 +1,8 @@
-﻿using SAM.Core.Tas;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
+using SAM.Core.Tas;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -44,7 +48,7 @@ namespace SAM.Analytical.Tas
                     TSDData tSDData = energyCentre.GetTSDData(1);
 
 
-                    Dictionary<string, Tuple<List<ZoneLoad>, CoolingSystem, HeatingSystem, VentilationSystem>> dictionary = new Dictionary<string, Tuple<List<ZoneLoad>, CoolingSystem, HeatingSystem, VentilationSystem>>();
+                    Dictionary<string, Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>> dictionary = new Dictionary<string, Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>>();
 
                     if (analyticalModel != null)
                     {
@@ -66,8 +70,8 @@ namespace SAM.Analytical.Tas
 
                             List<string> names = new List<string>();
                             names.Add(ventilationSystem?.DisplayName());
-                            names.Add(heatingSystem?.FullName);
-                            names.Add(coolingSystem?.FullName);
+                            //names.Add(heatingSystem?.FullName);
+                            //names.Add(coolingSystem?.FullName);
 
                             names.RemoveAll(x => string.IsNullOrEmpty(x));
 
@@ -77,10 +81,22 @@ namespace SAM.Analytical.Tas
                                 name = string.Empty;
                             }
 
-                            if (!dictionary.TryGetValue(name, out Tuple<List<ZoneLoad>, CoolingSystem, HeatingSystem, VentilationSystem> zoneLoads))
+                            if (!dictionary.TryGetValue(name, out Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem> zoneLoads))
                             {
-                                zoneLoads = new Tuple<List<ZoneLoad>, CoolingSystem, HeatingSystem, VentilationSystem>(new List<ZoneLoad>(), coolingSystem, heatingSystem, ventilationSystem);
+                                zoneLoads = new Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>(new List<ZoneLoad>(), [coolingSystem], [heatingSystem], ventilationSystem);
                                 dictionary[name] = zoneLoads;
+                            }
+                            else
+                            {
+                                if(coolingSystem is not null)
+                                {
+                                    zoneLoads.Item2.Add(coolingSystem);
+                                }
+
+                                if(heatingSystem is not null)
+                                {
+                                    zoneLoads.Item3.Add(heatingSystem);
+                                }
                             }
 
                             zoneLoads.Item1.Add(zoneLoad);
@@ -97,7 +113,7 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
-                            dictionary[zoneLoadGroup.Name] = new Tuple<List<ZoneLoad>, CoolingSystem, HeatingSystem, VentilationSystem>(new List<ZoneLoad>(), null, null, null);
+                            dictionary[zoneLoadGroup.Name] = new Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>(new List<ZoneLoad>(), new List<CoolingSystem>(), new List<HeatingSystem>(), null);
                             for (int k = 1; k <= zoneLoadGroup.GetZoneLoadCount(); k++)
                             {
                                 dictionary[zoneLoadGroup.Name].Item1.Add(zoneLoadGroup.GetZoneLoad(k));
@@ -144,6 +160,8 @@ namespace SAM.Analytical.Tas
                     {
                         dHWGroup = plantRoom.AddDHWGroup();
                         dHWGroup.Name = "DHW Circuit Group";
+                        dHWGroup.DesignDeltaT = 50;
+                        dHWGroup.MinimumReturnTemp = 10;
                         dHWGroup.DesignPressureDrop = 17 + (circuitLength / 4);
                         dHWGroup.LoadDistribution = global::TPD.tpdLoadDistribution.tpdLoadDistributionEven;
                         dHWGroup.SetPosition(200, 140);
@@ -311,7 +329,7 @@ namespace SAM.Analytical.Tas
                     {
                         pump_Heating = plantRoom.AddPump();
                         pump_Heating.Name = "Heating Circuit Pump";
-                        pump_Heating.DesignFlowRate = 0;
+                        //pump_Heating.DesignFlowRate = 0;
                         pump_Heating.Capacity = 1;
                         pump_Heating.OverallEfficiency.Value = 1;
                         pump_Heating.SetFuelSource(1, fuelSource_Electrical);
@@ -336,6 +354,7 @@ namespace SAM.Analytical.Tas
                     if(multiBoiler_DHW == null)
                     {
                         multiBoiler_DHW = plantRoom.AddMultiBoiler();
+                        multiBoiler_DHW.Name = "DHW Circuit Boiler";
                         multiBoiler_DHW.DesignPressureDrop = 25;
                         multiBoiler_DHW.Setpoint.Value = 60;
                         multiBoiler_DHW.SetFuelSource(1, fuelSource_Gas);
@@ -343,6 +362,7 @@ namespace SAM.Analytical.Tas
                         multiBoiler_DHW.Duty.SizeFraction = 1.0;
                         multiBoiler_DHW.Duty.AddDesignCondition(energyCentre.GetDesignCondition(2));
                         multiBoiler_DHW.SetPosition(0, 140);
+                        multiBoiler_DHW.Flags = multiBoiler_DHW.Flags | (int)global::TPD.tpdMultiBoilerFlags.tpdMultiBoilerIsDHW;
                     }
 
                     //DHW Pump
@@ -352,7 +372,7 @@ namespace SAM.Analytical.Tas
                         pump_DHW = plantRoom.AddPump();
                         pump_DHW.Name = "DHW Circuit Pump";
                         pump_DHW.Description = "DHW Circuit Pump";
-                        pump_DHW.DesignFlowRate = 1;
+                        //pump_DHW.DesignFlowRate = 1;
                         pump_DHW.Capacity = 1;
                         pump_DHW.OverallEfficiency.Value = 1;
                         pump_DHW.SetFuelSource(1, fuelSource_Electrical);
@@ -398,12 +418,12 @@ namespace SAM.Analytical.Tas
                     plantController_Temperature.SensorArc1 = plantSensorArc_Temperature;
 
                     dynamic plantController_Max = plantRoom.AddController();
-                    plantController_Max.Name = "DHW Max Controller";
+                    plantController_Max.Name = "DHW Min Controller";
                     plantController_Max.SetPosition(110, 210);
-                    plantController_Max.ControlType = global::TPD.tpdControlType.tpdControlMin;
                     plantController_Max.AddControlArc(pump_DHW);
                     plantController_Max.AddChainArc(plantController_Load);
                     plantController_Max.AddChainArc(plantController_Temperature);
+                    plantController_Max.ControlType = global::TPD.tpdControlType.tpdControlMin;
 
                     dynamic multiChiller = plantRoom.AddMultiChiller();
                     multiChiller.Name = "Cooling Circuit Chiller";
@@ -418,7 +438,7 @@ namespace SAM.Analytical.Tas
 
                     dynamic pump_Cooling = plantRoom.AddPump();
                     pump_Cooling.Name = "Cooling Circuit Pump";
-                    pump_Cooling.DesignFlowRate = 0;
+                    //pump_Cooling.DesignFlowRate = 0;
                     pump_Cooling.Capacity = 1;
                     pump_Cooling.OverallEfficiency.Value = 1;
                     pump_Cooling.SetFuelSource(1, fuelSource_Electrical);
@@ -458,12 +478,12 @@ namespace SAM.Analytical.Tas
                         plantController_Cooling.AddDayType(plantDayType);
                     }
 
-                    foreach (KeyValuePair<string, Tuple<List<ZoneLoad>, CoolingSystem, HeatingSystem, VentilationSystem>> keyValuePair in dictionary)
+                    foreach (KeyValuePair<string, Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>> keyValuePair in dictionary)
                     {
                         TPD(energyCentre, keyValuePair.Key, keyValuePair.Value.Item1, keyValuePair.Value.Item4, keyValuePair.Value.Item3, keyValuePair.Value.Item2);
                     }
 
-                    plantRoom.SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)global::TPD.tpdSimulationData.tpdSimulationDataLoad + (int)global::TPD.tpdSimulationData.tpdSimulationDataPipe + (int)global::TPD.tpdSimulationData.tpdSimulationDataDuct + (int)global::TPD.tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
+                    plantRoom.SimulateEx(1, 8760, 15, energyCentre.ExternalPollutant.Value, 10.0, (int)global::TPD.tpdSimulationData.tpdSimulationDataLoad + (int)global::TPD.tpdSimulationData.tpdSimulationDataPipe + (int)global::TPD.tpdSimulationData.tpdSimulationDataDuct + (int)global::TPD.tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
 
                     if(analyticalModel != null)
                     {
@@ -549,7 +569,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD(this EnergyCentre energyCentre, string name, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD(this EnergyCentre energyCentre, string name, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             if(string.IsNullOrWhiteSpace(name) || energyCentre == null || zoneLoads == null || zoneLoads.Count() == 0)
             {
@@ -560,45 +580,45 @@ namespace SAM.Analytical.Tas
 
             if (name.StartsWith("UV"))
             {
-                return TPD_UV(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_UV(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if(name.StartsWith("NV"))
             {
-                return TPD_NV(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_NV(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if (name.StartsWith("EOL"))
             {
-                return TPD_EOL(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_EOL(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if (name.StartsWith("EOC"))
             {
-                return TPD_EOC(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_EOC(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if (name.StartsWith("CAV"))
             {
-                return TPD_CAV(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_CAV(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if (name.StartsWith("MVRE"))
             {
-                return TPD_MVRE(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_MVRE(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if (name.StartsWith("MV"))
             {
-                return TPD_MV(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem);
+                return TPD_MV(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems);
             }
             else if (name.StartsWith("DISP"))
             {
-                return TPD_VAV(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem, true);
+                return TPD_VAV(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems, true);
             }
             else if (name.StartsWith("VAV"))
             {
-                return TPD_VAV(energyCentre, zoneLoads, ventilationSystem, heatingSystem, coolingSystem, false);
+                return TPD_VAV(energyCentre, zoneLoads, ventilationSystem, heatingSystems, coolingSystems, false);
             }
 
             return true;
         }
 
-        private static bool TPD_UV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_UV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if(plantRoom == null)
@@ -668,7 +688,12 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.SetDHWGroup(dHWGroup);
                 }
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+
+                (systemZone_Group as SystemZone).Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 i += 3;
             }
@@ -676,7 +701,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_NV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_NV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
@@ -734,7 +759,12 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.SetDHWGroup(dHWGroup);
                 }
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+
+                (systemZone_Group as SystemZone).Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 i++;
             }
@@ -742,7 +772,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_EOL(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_EOL(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             Point offset = new Point(0, 0);
 
@@ -762,10 +792,7 @@ namespace SAM.Analytical.Tas
             system.Name = name;
             system.Multiplicity = 1;//zoneLoads.Count();
 
-            dynamic plantSchedule = energyCentre.AddSchedule(global::TPD.tpdScheduleType.tpdScheduleFunction);
-            plantSchedule.Name = "System Schedule";
-            plantSchedule.FunctionType = global::TPD.tpdScheduleFunctionType.tpdScheduleFunctionAllZonesLoad;
-            plantSchedule.FunctionLoads = 4 + 8 + 1024; // heating, cooling, occupant sensible
+            dynamic plantSchedule_System = energyCentre.PlantSchedule("System Schedule");
 
             dynamic zone = system.AddSystemZone();
             zone.SetPosition(offset.X + 0, offset.Y + 0);
@@ -786,7 +813,7 @@ namespace SAM.Analytical.Tas
             fan.SetElectricalGroup1(electricalGroup_Fans);
             fan.PartLoad.Value = 0;
             fan.PartLoad.ClearModifiers();
-            fan.SetSchedule(plantSchedule);
+            fan.SetSchedule(plantSchedule_System);
             fan.SetPosition(offset.X + 140, offset.Y + 10);
             fan.SetDirection(global::TPD.tpdDirection.tpdLeftRight);
             fan.DesignFlowType = global::TPD.tpdFlowRateType.tpdFlowRateNearestZoneFlowRate;
@@ -811,16 +838,20 @@ namespace SAM.Analytical.Tas
             dynamic junction_Out = system.AddJunction();
             junction_Out.SetPosition(offset.X + 220, offset.Y + 10);
             junction_Out.SetDirection(global::TPD.tpdDirection.tpdLeftRight);
+            junction_Out.name = "junction_Out";
+            junction_Out.Description = "Extract";
 
-            dynamic junction_In = system.AddJunction();
-            junction_In.SetPosition(offset.X - 60, offset.Y + 20);
-            junction_In.SetDirection(global::TPD.tpdDirection.tpdLeftRight);
+            //dynamic junction_In = system.AddJunction();
+            //junction_In.SetPosition(offset.X - 60, offset.Y + 20);
+            //junction_In.SetDirection(global::TPD.tpdDirection.tpdLeftRight);
+            //junction_In.name = "junction_In";
+            //junction_In.Description = "Supply";
 
             dynamic damper = system.AddDamper();
             damper.SetPosition(offset.X + 80, offset.Y + 10);
             damper.DesignFlowType = global::TPD.tpdFlowRateType.tpdFlowRateAllAttachedZonesFlowRate;
 
-            system.AddDuct(junction_In, 1, zone, 1);
+            //system.AddDuct(junction_In, 1, zone, 1);
             system.AddDuct(zone, 1, damper, 1);
             system.AddDuct(damper, 1, fan, 1);
             system.AddDuct(fan, 1, junction_Out, 1);
@@ -838,17 +869,18 @@ namespace SAM.Analytical.Tas
             dynamic heatingGroup = plantRoom.HeatingGroup("Heating Circuit Group");
 
 
-            List<string> names = new List<string>();
-            for(int k=1; k < componentGroup.GetComponentCount(); k ++)
-            {
-                SystemComponent systemComponent = componentGroup.GetComponent(k);
-                names.Add((systemComponent as dynamic)?.name);
-            }
+            //List<string> names = new List<string>() { null };
+            //for(int k=1; k < componentGroup.GetComponentCount(); k ++)
+            //{
+            //    SystemComponent systemComponent = componentGroup.GetComponent(k);
+            //    names.Add((systemComponent as dynamic)?.name);
+            //}
 
             int i = 1;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
-                SystemZone systemZone_Group = componentGroup.GetComponent(i * 3) as SystemZone;
+                dynamic systemZone_Group = componentGroup.GetComponent((i * 3) - 1); //as SystemZone;
+                //SystemZone systemZone_Group = componentGroup.GetComponent(i * 3) as SystemZone;
                 (systemZone_Group as dynamic).AddZoneLoad(zoneLoad);
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowACH;
@@ -876,10 +908,16 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(j));
                 }
 
-                Damper damper_Zone = componentGroup.GetComponent((i * 3) + 1) as Damper;
+                //Damper damper_Zone = componentGroup.GetComponent((i * 3) + 1) as Damper;
+                Damper damper_Zone = componentGroup.GetComponent(i * 3) as Damper;
                 damper_Zone.DesignFlowType = global::TPD.tpdFlowRateType.tpdFlowRateNearestZoneFlowRate;
 
-                Modify.AddComponents(systemZone_Group, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group, energyCentre, heatingSystems, coolingSystems);
+
+                (systemZone_Group as SystemZone).Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 i++;
             }
@@ -887,7 +925,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_EOC(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_EOC(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             Point offset = new Point(0, 0);
 
@@ -982,7 +1020,7 @@ namespace SAM.Analytical.Tas
             int i = 1;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
-                SystemZone systemZone_Group = componentGroup.GetComponent(i + 2) as SystemZone;
+                dynamic systemZone_Group = componentGroup.GetComponent(i + 2) as dynamic;
                 (systemZone_Group as dynamic).AddZoneLoad(zoneLoad);
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowACH;
@@ -1013,7 +1051,12 @@ namespace SAM.Analytical.Tas
                 Damper damper_Zone = componentGroup.GetComponent(i + 3) as Damper;
                 damper_Zone.DesignFlowType = global::TPD.tpdFlowRateType.tpdFlowRateNearestZoneFlowRate;
 
-                Modify.AddComponents(systemZone_Group, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group, energyCentre, heatingSystems, coolingSystems);
+
+                (systemZone_Group as SystemZone).Flags &= ~(int)tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 i += 2;
             }
@@ -1021,7 +1064,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_CAV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_CAV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
@@ -1307,7 +1350,10 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
                 }
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 index++;
             }
@@ -1315,7 +1361,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_VAV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem, bool displacementVent = false)
+        private static bool TPD_VAV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems, bool displacementVent = false)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
@@ -1581,7 +1627,10 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
                 }
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 index++;
             }
@@ -1589,7 +1638,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_VAV_Special(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem, bool displacementVent = false)
+        private static bool TPD_VAV_Special(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems, bool displacementVent = false)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
@@ -1852,7 +1901,10 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
                 }
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 index++;
             }
@@ -1860,7 +1912,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_MVRE(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_MVRE(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
@@ -1868,7 +1920,7 @@ namespace SAM.Analytical.Tas
                 return false;
             }
 
-            dynamic plantSchedule_Occupancy = energyCentre.PlantSchedule("Occupancy Schedule");
+            dynamic plantSchedule_System = energyCentre.PlantSchedule("System Schedule");
 
             dynamic electricalGroup_Fans = plantRoom.ElectricalGroup("Electrical Group - Fans");
             dynamic electricalGroup_Lighting = plantRoom.ElectricalGroup("Electrical Group - Lighting");
@@ -1919,7 +1971,7 @@ namespace SAM.Analytical.Tas
             fan_FreashAir.SetElectricalGroup1(electricalGroup_Fans);
             fan_FreashAir.PartLoad.Value = 0;
             fan_FreashAir.PartLoad.ClearModifiers();
-            fan_FreashAir.SetSchedule(plantSchedule_Occupancy);
+            fan_FreashAir.SetSchedule(plantSchedule_System);
             fan_FreashAir.DesignFlowType = global::TPD.tpdFlowRateType.tpdFlowRateAllAttachedZonesFlowRate;
             fan_FreashAir.SetPosition(390, 100);
 
@@ -1950,7 +2002,7 @@ namespace SAM.Analytical.Tas
             fan_Return.SetElectricalGroup1(electricalGroup_Fans);
             fan_Return.PartLoad.Value = 0;
             fan_Return.PartLoad.ClearModifiers();
-            fan_Return.SetSchedule(plantSchedule_Occupancy);
+            fan_Return.SetSchedule(plantSchedule_System);
             fan_Return.SetDirection(global::TPD.tpdDirection.tpdRightLeft);
             fan_Return.DesignFlowType = global::TPD.tpdFlowRateType.tpdFlowRateAllAttachedZonesFlowRate;
             fan_Return.SetPosition(600, 240);
@@ -2046,7 +2098,10 @@ namespace SAM.Analytical.Tas
                     systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
                 }
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+                
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 index++;
             }
@@ -2054,7 +2109,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD_MV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, HeatingSystem heatingSystem, CoolingSystem coolingSystem)
+        private static bool TPD_MV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, VentilationSystem ventilationSystem, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
         {
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
@@ -2238,7 +2293,10 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.Flags = systemZone_Group.Flags | ~(int)global::TPD.tpdSystemZoneFlags.tpdSystemZoneFlagModelInterzoneFlow;
                 systemZone_Group.Flags = systemZone_Group.Flags | (int)global::TPD.tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
 
-                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystem, coolingSystem);
+                Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, heatingSystems, coolingSystems);
+
+                systemZone_Group.name = zoneLoad.Name;
+                systemZone_Group.Description = zoneLoad.Description;
 
                 index++;
             }

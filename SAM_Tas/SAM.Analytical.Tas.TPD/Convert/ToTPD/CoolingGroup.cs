@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using TPD;
 
 namespace SAM.Analytical.Tas.TPD
@@ -31,14 +34,17 @@ namespace SAM.Analytical.Tas.TPD
             result.VariableFlowCapacity = displayCoolingSystemCollection.VariableFlowCapacity.ToTPD();
             //result.PeakDemand = displayCoolingSystemCollection.PeakDemand;
             result.SizeFraction = displayCoolingSystemCollection.SizeFraction;
-            result.DistributionHeatGainProfile?.Update(displayCoolingSystemCollection.Distribution, energyCentre);
-            result.UseDistributionHeatGainProfile = displayCoolingSystemCollection.Distribution == null ? (false).ToTPD() : (!displayCoolingSystemCollection.Distribution.IsEfficiency).ToTPD();
+
+            bool isEfficiency = displayCoolingSystemCollection.Distribution?.IsEfficiency ?? false;
+            result.UseDistributionHeatGainProfile = (!isEfficiency).ToTPD();
+
+            ProfileData profileData = isEfficiency ? dynamic.DistributionEfficiency : dynamic.DistributionHeatGainProfile;
+            profileData?.Update(displayCoolingSystemCollection.Distribution, energyCentre);
 
             if(coolingGroup == null)
             {
                 displayCoolingSystemCollection.SetLocation(result as PlantComponent);
             }
-
 
             return result;
         }

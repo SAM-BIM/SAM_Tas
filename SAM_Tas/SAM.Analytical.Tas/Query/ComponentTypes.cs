@@ -1,8 +1,13 @@
-﻿namespace SAM.Analytical.Tas
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using System.Collections.Generic;
+
+namespace SAM.Analytical.Tas
 {
     public static partial class Query
     {
-        public static void ComponentTypes(HeatingSystem heatingSystem, CoolingSystem coolingSystem, out bool radiator, out bool fanCoil_Heating, out bool fanCoil_Cooling, out bool dXCoil_Heating, out bool dXCoil_Cooling, out bool chilledBeam_Heating, out bool chilledBeam_Cooling)
+        public static void ComponentTypes(IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems, out bool radiator, out bool fanCoil_Heating, out bool fanCoil_Cooling, out bool dXCoil_Heating, out bool dXCoil_Cooling, out bool chilledBeam_Heating, out bool chilledBeam_Cooling)
         {
             radiator = false;
             fanCoil_Heating = false;
@@ -12,47 +17,58 @@
             chilledBeam_Heating = false;
             chilledBeam_Cooling = false;
 
-            if (heatingSystem == null && coolingSystem == null)
+            if (heatingSystems == null && coolingSystems == null)
             {
                 return;
             }
 
-            if (heatingSystem != null)
+            if(heatingSystems is not null)
             {
-                if (heatingSystem.Name == "RAD" || heatingSystem.Name == "THR" || heatingSystem.Name == "UFH")
+                foreach (HeatingSystem heatingSystem in heatingSystems)
                 {
-                    radiator = true;
-                }
-                else if (heatingSystem.Name == "FCU")
-                {
-                    fanCoil_Heating = true;
-                }
-                else if (heatingSystem.Name == "RP" || heatingSystem.Name == "CHB")
-                {
-                    chilledBeam_Heating = true;
-                }
-                else if (heatingSystem.Name == "VRV")
-                {
-                    dXCoil_Heating = true;
+                    if (heatingSystem != null)
+                    {
+                        if (heatingSystem.Name == "RAD" || heatingSystem.Name == "TRH" || heatingSystem.Name == "UFH")
+                        {
+                            radiator = true;
+                        }
+                        else if (heatingSystem.Name == "FCU")
+                        {
+                            fanCoil_Heating = true;
+                        }
+                        else if (heatingSystem.Name == "RP" || heatingSystem.Name == "CHB")
+                        {
+                            chilledBeam_Heating = true;
+                        }
+                        else if (heatingSystem.Name == "VRV")
+                        {
+                            dXCoil_Heating = true;
+                        }
+                    }
                 }
             }
 
-            if (coolingSystem != null)
+            if(coolingSystems is not null)
             {
-                if (coolingSystem.Name == "RP" || coolingSystem.Name == "CHB" || coolingSystem.Name == "UFC")
+                foreach (CoolingSystem coolingSystem in coolingSystems)
                 {
-                    chilledBeam_Cooling = true;
-                }
-                else if (coolingSystem.Name == "TRC" || coolingSystem.Name == "FCU")
-                {
-                    fanCoil_Cooling = true;
-                }
-                else if (coolingSystem.Name == "VRV")
-                {
-                    dXCoil_Cooling = true;
+                    if (coolingSystem != null)
+                    {
+                        if (coolingSystem.Name == "RP" || coolingSystem.Name == "CHB" || coolingSystem.Name == "UFC")
+                        {
+                            chilledBeam_Cooling = true;
+                        }
+                        else if (coolingSystem.Name == "TRC" || coolingSystem.Name == "FCU")
+                        {
+                            fanCoil_Cooling = true;
+                        }
+                        else if (coolingSystem.Name == "VRV")
+                        {
+                            dXCoil_Cooling = true;
+                        }
+                    }
                 }
             }
-
         }
     }
 }

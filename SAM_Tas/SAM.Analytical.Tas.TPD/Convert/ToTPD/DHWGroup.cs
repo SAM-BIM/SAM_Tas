@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using TPD;
 
 namespace SAM.Analytical.Tas.TPD
@@ -29,8 +32,12 @@ namespace SAM.Analytical.Tas.TPD
 
             result.LoadDistribution = displayDomesticHotWaterSystemCollection.LoadDistribution.ToTPD();
             result.MinimumReturnTemp = displayDomesticHotWaterSystemCollection.MinimumReturnTemperature;
-            result.UseDistributionHeatLossProfile = displayDomesticHotWaterSystemCollection.Distribution == null ? (false).ToTPD() : (!displayDomesticHotWaterSystemCollection.Distribution.IsEfficiency).ToTPD();
-            result.DistributionHeatLossProfile.Update(displayDomesticHotWaterSystemCollection.Distribution, energyCentre);
+
+            bool isEfficiency = displayDomesticHotWaterSystemCollection.Distribution?.IsEfficiency ?? false;
+            result.UseDistributionHeatLossProfile = (!isEfficiency).ToTPD();
+
+            ProfileData profileData = isEfficiency ? dynamic.DistributionEfficiency : dynamic.DistributionHeatLossProfile;
+            profileData?.Update(displayDomesticHotWaterSystemCollection.Distribution, energyCentre);
 
             if(dHWGroup == null)
             {

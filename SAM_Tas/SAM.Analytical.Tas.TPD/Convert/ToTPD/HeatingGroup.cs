@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using TPD;
 
 namespace SAM.Analytical.Tas.TPD
@@ -31,8 +34,12 @@ namespace SAM.Analytical.Tas.TPD
             result.VariableFlowCapacity = displayHeatingSystemCollection.VariableFlowCapacity.ToTPD();
             //result.PeakDemand = displayHeatingSystemCollection.PeakDemand;
             result.SizeFraction = displayHeatingSystemCollection.SizeFraction;
-            result.UseDistributionHeatLossProfile = displayHeatingSystemCollection.Distribution == null ? (false).ToTPD() : (!displayHeatingSystemCollection.Distribution.IsEfficiency).ToTPD();
-            result.DistributionHeatLossProfile?.Update(displayHeatingSystemCollection.Distribution, energyCentre);
+
+            bool isEfficiency = displayHeatingSystemCollection.Distribution?.IsEfficiency ?? false;
+            result.UseDistributionHeatLossProfile = (!isEfficiency).ToTPD();
+
+            ProfileData profileData = isEfficiency ? dynamic.DistributionEfficiency : dynamic.DistributionHeatLossProfile;
+            profileData?.Update(displayHeatingSystemCollection.Distribution, energyCentre);
 
             if(heatingGroup == null)
             {

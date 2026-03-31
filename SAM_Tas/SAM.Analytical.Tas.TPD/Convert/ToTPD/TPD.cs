@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using SAM.Core;
 using SAM.Core.Systems;
 using SAM.Core.Tas;
@@ -57,7 +60,7 @@ namespace SAM.Analytical.Tas.TPD
                 {
                     foreach(PlantRoom plantRoom in energyCentre.PlantRooms())
                     {
-                        plantRoom.SimulateEx(systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
+                        plantRoom.SimulateEx(systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1, 15, energyCentre.ExternalPollutant.Value, 10.0, (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
                     }
 
                     if (systemEnergyCentreConversionSettings.IncludeComponentResults)
@@ -655,7 +658,7 @@ namespace SAM.Analytical.Tas.TPD
 
                                                 int groupIndex = -1;
 
-                                                if (!systemController_SAM_Temp.TryGetValue(SAM.Analytical.Systems.SystemControllerParameter.GroupIndex, out groupIndex))
+                                                if (!systemController_SAM_Temp.TryGetValue(Systems.SystemControllerParameter.GroupIndex, out groupIndex))
                                                 {
                                                     continue;
                                                 }
@@ -722,6 +725,9 @@ namespace SAM.Analytical.Tas.TPD
                                     if (systemComponents_TPD.Count > 0)
                                     {
                                         ComponentGroup componentGroup = system.AddGroup(systemComponents_TPD.ToArray(), controllers_TPD.ToArray());
+                                        ((dynamic)componentGroup).Name = airSystemGroup.Name;
+                                        ((dynamic)componentGroup).Description = airSystemGroup.Description;
+
                                         airSystemGroup.SetReference(componentGroup.Reference());
                                         systemPlantRoom.Add(airSystemGroup);
 

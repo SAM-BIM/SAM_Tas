@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using TPD;
 
 namespace SAM.Analytical.Tas.TPD
@@ -26,7 +29,7 @@ namespace SAM.Analytical.Tas.TPD
 
             result.OverallEfficiency?.Update(displaySystemPump.OverallEfficiency, energyCentre);
             result.Pressure = displaySystemPump.Pressure;
-            result.DesignFlowRate = displaySystemPump.DesignFlowRate;
+            //result.DesignFlowRate = displaySystemPump.DesignFlowRate; //20206-03-22 this force auto-size consider 0 but then DHW issue
             result.Capacity = displaySystemPump.Capacity;
             result.PartLoad?.Update(displaySystemPump.PartLoad, energyCentre);
 
