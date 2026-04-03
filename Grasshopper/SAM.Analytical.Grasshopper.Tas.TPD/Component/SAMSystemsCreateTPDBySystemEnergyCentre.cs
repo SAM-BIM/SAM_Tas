@@ -3,6 +3,7 @@ using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Systems;
 using SAM.Analytical.Grasshopper.Tas.TPD.Properties;
 using SAM.Analytical.Tas.TPD;
+using SAM.Core;
 using SAM.Core.Grasshopper;
 using SAM.Core.Systems;
 using System;
@@ -17,7 +18,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
         /// </summary>
-        public override Guid ComponentGuid => new Guid("a28c3e99-ce8d-4101-8e4f-6ade5889bfe5");
+        public override Guid ComponentGuid => new ("a28c3e99-ce8d-4101-8e4f-6ade5889bfe5");
 
         /// <summary>
         /// The latest version of this component
@@ -48,17 +49,17 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         {
             get
             {
-                List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_FilePath() { Name = "_path_TPD", NickName = "_path_TPD", Description = "Create a new file path to TAS TPD", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentre", NickName = "_systemEnergyCentre", Description = "SAM Core Systems SystemEnergyCentre", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-
-                global::Grasshopper.Kernel.Parameters.Param_Boolean @boolean = null;
-
-                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                List<GH_SAMParam> result =
+                [
+                    new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_FilePath() { Name = "_path_TPD", NickName = "_path_TPD", Description = "Create a new file path to TAS TPD", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                    new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentre", NickName = "_systemEnergyCentre", Description = "SAM Core Systems SystemEnergyCentre", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                ];
+                
+                global::Grasshopper.Kernel.Parameters.Param_Boolean boolean = new() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
-                return result.ToArray();
+                return [.. result];
             }
         }
 
@@ -69,11 +70,14 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         {
             get
             {
-                List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "SAM Core Systems SystemEnergyCentre", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_FilePath() { Name = "path_TPD", NickName = "path_TPD", Description = "Path to TPD file", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                return result.ToArray();
+                List<GH_SAMParam> result =
+                [
+                    new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "SAM Core Systems SystemEnergyCentre", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                    new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_FilePath() { Name = "path_TPD", NickName = "path_TPD", Description = "Path to TPD file", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                    new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                ];
+
+                return [.. result];
             }
         }
 
@@ -116,7 +120,6 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 return;
             }
 
-
             SystemEnergyCentre systemEnergyCentre = null;
             index = Params.IndexOfInputParam("_systemEnergyCentre");
             if (index == -1 || !dataAccess.GetData(index, ref systemEnergyCentre) || systemEnergyCentre == null)
@@ -126,7 +129,12 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             }
             systemEnergyCentre = new SystemEnergyCentre(systemEnergyCentre);
 
-            SystemEnergyCentreConversionSettings systemEnergyCentreConversionSettings = new SystemEnergyCentreConversionSettings();
+            Log log = Analytical.Systems.Create.Log(systemEnergyCentre);
+            if(log is not null)
+            {
+                log.ToList().FindAll(x => x.LogRecordType == LogRecordType.Warning).ForEach(x => AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, x.ToString()));
+                log.ToList().FindAll(x => x.LogRecordType == LogRecordType.Error).ForEach(x => AddRuntimeMessage(GH_RuntimeMessageLevel.Error, x.ToString()));
+            }
 
             bool successful = Analytical.Tas.TPD.Convert.ToTPD(systemEnergyCentre, path_TPD);
 
@@ -151,7 +159,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
 
         public ToolStripMenuItem AppendOpenTPDAdditionalMenuItem(IGH_SAMComponent gH_SAMComponent, ToolStripDropDown menu)
         {
-            if (!(gH_SAMComponent is GH_Component gH_Component))
+            if (gH_SAMComponent is not GH_Component gH_Component)
             {
                 return null;
             }

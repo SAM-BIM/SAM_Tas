@@ -3,6 +3,7 @@ using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Systems;
 using SAM.Analytical.Grasshopper.Tas.TPD.Properties;
 using SAM.Analytical.Tas.TPD;
+using SAM.Core;
 using SAM.Core.Grasshopper;
 using SAM.Core.Systems;
 using System;
@@ -203,6 +204,13 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not find and create SystemEnergyCentre");
                 return;
+            }
+
+            Log log = Analytical.Systems.Create.Log(systemEnergyCentre);
+            if (log is not null)
+            {
+                log.ToList().FindAll(x => x.LogRecordType == LogRecordType.Warning).ForEach(x => AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, x.ToString()));
+                log.ToList().FindAll(x => x.LogRecordType == LogRecordType.Error).ForEach(x => AddRuntimeMessage(GH_RuntimeMessageLevel.Error, x.ToString()));
             }
 
             bool successful = Analytical.Tas.TPD.Convert.ToTPD(systemEnergyCentre, path_TPD, path_TSD, systemEnergyCentreConversionSettings);
