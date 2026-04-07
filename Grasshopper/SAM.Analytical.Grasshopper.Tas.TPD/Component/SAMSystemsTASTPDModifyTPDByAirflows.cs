@@ -49,7 +49,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         {
             get
             {
-                Param_Boolean param_Boolean = new ()
+                Param_Boolean param_Boolean = new()
                 {
                     Name = "_run",
                     NickName = "_run",
