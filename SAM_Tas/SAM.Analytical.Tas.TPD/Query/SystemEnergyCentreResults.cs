@@ -23,7 +23,7 @@ namespace SAM.Core.Tas.TPD
 
             List<SystemEnergyCentreResult> result = null;
 
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path))
+            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path, true))
             {
                 TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
                 if (tPDDoc == null)
