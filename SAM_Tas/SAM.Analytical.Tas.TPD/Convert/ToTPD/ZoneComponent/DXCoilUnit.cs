@@ -43,7 +43,7 @@ namespace SAM.Analytical.Tas.TPD
                 RefrigerantGroup refrigerantGroup = plantRoom?.RefrigerantGroups()?.Find(x => ((dynamic)x).Name == collectionLink.Name);
                 if (refrigerantGroup != null)
                 {
-                    ((dynamic)dXCoilUnit).SetRefrigeranGroup(refrigerantGroup);
+                    ((dynamic)dXCoilUnit).SetRefrigerantGroup(refrigerantGroup);
                 }
             }
 
