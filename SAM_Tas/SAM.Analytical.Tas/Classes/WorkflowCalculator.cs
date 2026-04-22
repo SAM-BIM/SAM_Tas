@@ -190,6 +190,10 @@ namespace SAM.Analytical.Tas
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Importing gbXML"));
                     t3DDocument.TogbXML(WorkflowSettings.Path_gbXML, true, true, true);
 
+                    //sets the window position to wall 2026.04.22
+
+
+
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating T3D file"));
                     t3DDocument.SetUseBEWidths(WorkflowSettings.UseWidths);
                     result = Query.UpdateT3D(result, t3DDocument);
