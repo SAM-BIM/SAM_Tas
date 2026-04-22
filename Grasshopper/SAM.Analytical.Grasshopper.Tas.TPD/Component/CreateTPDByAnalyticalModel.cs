@@ -2,6 +2,7 @@
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Systems;
 using SAM.Analytical.Grasshopper.Tas.TPD.Properties;
+using SAM.Analytical.Systems;
 using SAM.Analytical.Tas.TPD;
 using SAM.Core;
 using SAM.Core.Grasshopper;
@@ -197,6 +198,11 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 if (unavailableSystemTypeNames != null && unavailableSystemTypeNames.Count != 0)
                 {
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, string.Format("Following system types not defined: {0}", string.Join(", ", unavailableSystemTypeNames)));
+                }
+
+                if(systemEnergyCentre != null)
+                {
+                    systemEnergyCentre.UpdateDesignDays(analyticalModel);
                 }
             }
 
