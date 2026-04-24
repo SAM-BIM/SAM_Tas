@@ -2,13 +2,14 @@
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Collections.Generic;
+using System.Linq;
 using TPD;
 
 namespace SAM.Analytical.Tas
 {
     public static partial class Modify
     {
-        public static void AddComponents(this SystemZone systemZone, EnergyCentre energyCentre, IEnumerable<HeatingSystem> heatingSystems, IEnumerable<CoolingSystem> coolingSystems)
+        public static void AddComponents(this SystemZone systemZone, EnergyCentre energyCentre, AdjacencyCluster adjacencyCluster)
         {
             if (systemZone == null || energyCentre == null)
             {
@@ -20,6 +21,17 @@ namespace SAM.Analytical.Tas
             {
                 return;
             }
+
+            Space space = adjacencyCluster.GetSpaces().Find(x => x.Name == systemZone.GetSystemZoneZoneLoad().Name);
+            if (space == null)
+            {
+                return;
+            }
+
+            CoolingSystem coolingSystem = adjacencyCluster.GetRelatedObjects<CoolingSystem>(space).FirstOrDefault();
+            HeatingSystem heatingSystem = adjacencyCluster.GetRelatedObjects<HeatingSystem>(space).FirstOrDefault();
+            VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
+
             dynamic plantSchedule_System = energyCentre.PlantSchedule("System Schedule");
 
             dynamic electricalGroup_FanCoilUnits = plantRoom.ElectricalGroup("Electrical Group - FanCoil Units");
@@ -31,7 +43,7 @@ namespace SAM.Analytical.Tas
 
             RefrigerantGroup refrigerantGroup = plantRoom.RefrigerantGroup("DXCoil Units Refrigerant Group");
 
-            Query.ComponentTypes(heatingSystems, coolingSystems, out bool radiator, out bool fanCoil_Heating, out bool fanCoil_Cooling, out bool dXCoil_Heating, out bool dXCoil_Cooling, out bool chilledBeam_Heating, out bool chilledBeam_Cooling);
+            Query.ComponentTypes([ heatingSystem ], [coolingSystem], out bool radiator, out bool fanCoil_Heating, out bool fanCoil_Cooling, out bool dXCoil_Heating, out bool dXCoil_Cooling, out bool chilledBeam_Heating, out bool chilledBeam_Cooling);
 
             if (radiator)  //TODO: 2023-09-25 allow other Zone component as Under Floor Heating Floor etc...read from Zone Internal Condition Heating Emitter Name
             {
