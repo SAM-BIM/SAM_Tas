@@ -627,10 +627,25 @@ namespace SAM.Analytical.Tas
                 return false;
             }
 
+            Space space = adjacencyCluster.GetSpaces().Find(x => x.Name == zoneLoads.ElementAt(0).Name);
+            if (space == null)
+            {
+                return false;
+            }
+
+            VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
+
             Point offset = new Point(0, 0);
 
             TPD.System system = plantRoom.AddSystem();
-            system.Name = "UV";
+
+            string name = ventilationSystem?.DisplayName();
+            if(string.IsNullOrWhiteSpace(name))
+            {
+                name = ventilationSystem.Type.Name ?? "UV";
+            }
+            system.Name = name;
+
             system.Multiplicity = 1;//zoneLoads.Count();
 
             dynamic electricalGroup_Lighting = plantRoom.ElectricalGroup("Electrical Group - Lighting");
@@ -718,7 +733,22 @@ namespace SAM.Analytical.Tas
             dynamic dHWGroup = plantRoom.DHWGroup("DHW Circuit Group");
 
             TPD.System system = plantRoom.AddSystem();
-            system.Name = "NV";
+
+            Space space = adjacencyCluster.GetSpaces().Find(x => x.Name == zoneLoads.ElementAt(0).Name);
+            if (space == null)
+            {
+                return false;
+            }
+
+            VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
+
+            string name = ventilationSystem?.DisplayName();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = ventilationSystem.Type.Name ?? "NV";
+            }
+            system.Name = name;
+
             system.Multiplicity = 1;//zoneLoads.Count();
 
             dynamic zone = system.AddSystemZone();
@@ -793,14 +823,15 @@ namespace SAM.Analytical.Tas
             HeatingSystem heatingSystem = adjacencyCluster.GetRelatedObjects<HeatingSystem>(space).FirstOrDefault();
             VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
 
-            string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
-            {
-                name = "EOL";
-            }
-
             TPD.System system = plantRoom.AddSystem();
+
+            string name = ventilationSystem?.DisplayName();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = ventilationSystem.Type.Name ?? "EOL";
+            }
             system.Name = name;
+
             system.Multiplicity = 1;//zoneLoads.Count();
 
             dynamic plantSchedule_System = energyCentre.PlantSchedule("System Schedule");
@@ -956,14 +987,15 @@ namespace SAM.Analytical.Tas
             HeatingSystem heatingSystem = adjacencyCluster.GetRelatedObjects<HeatingSystem>(space).FirstOrDefault();
             VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
 
-            string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
-            {
-                name = "EOC";
-            }
-
             TPD.System system = plantRoom.AddSystem();
+
+            string name = ventilationSystem?.DisplayName();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = ventilationSystem.Type.Name ?? "EOC";
+            }
             system.Name = name;
+
             system.Multiplicity = 1;//zoneLoads.Count();
 
             dynamic plantSchedule = energyCentre.AddSchedule(global::TPD.tpdScheduleType.tpdScheduleFunction);
@@ -1116,13 +1148,14 @@ namespace SAM.Analytical.Tas
 
             dynamic dHWGroup = plantRoom.DHWGroup("DHW Circuit Group");
 
+            TPD.System system = plantRoom.AddSystem();
+
             string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrWhiteSpace(name))
             {
-                name = "CAV";
+                name = ventilationSystem.Type.Name ?? "CAV";
             }
 
-            TPD.System system = plantRoom.AddSystem();
             system.Name = name;
             system.Multiplicity = 1;//zoneLoads.Count();
 
@@ -1422,13 +1455,14 @@ namespace SAM.Analytical.Tas
 
             dynamic dHWGroup = plantRoom.DHWGroup("DHW Circuit Group");
 
+            TPD.System system = plantRoom.AddSystem();
+
             string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrWhiteSpace(name))
             {
-                name = displacementVent ? "DISP" : "VAV";
+                name = ventilationSystem.Type.Name ?? (displacementVent ? "DISP" : "VAV");
             }
 
-            TPD.System system = plantRoom.AddSystem();
             system.Name = name;
             system.Multiplicity = 1;//zoneLoads.Count();
 
@@ -1710,13 +1744,14 @@ namespace SAM.Analytical.Tas
 
             dynamic dHWGroup = plantRoom.DHWGroup("DHW Circuit Group");
 
+            TPD.System system = plantRoom.AddSystem();
+
             string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrWhiteSpace(name))
             {
-                name = displacementVent ? "DISP" : "VAV";
+                name = ventilationSystem.Type.Name ?? (displacementVent ? "DISP" : "VAV");
             }
 
-            TPD.System system = plantRoom.AddSystem();
             system.Name = name;
             system.Multiplicity = 1;//zoneLoads.Count();
 
@@ -1993,13 +2028,14 @@ namespace SAM.Analytical.Tas
 
             dynamic dHWGroup = plantRoom.DHWGroup("DHW Circuit Group");
 
+            TPD.System system = plantRoom.AddSystem();
+
             string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrWhiteSpace(name))
             {
-                name = "MVRE";
+                name = ventilationSystem.Type.Name ?? "MVRE";
             }
 
-            TPD.System system = plantRoom.AddSystem();
             system.Name = name;
             system.Multiplicity = 1;//zoneLoads.Count();
 
@@ -2196,13 +2232,14 @@ namespace SAM.Analytical.Tas
 
             dynamic dHWGroup = plantRoom.DHWGroup("DHW Circuit Group");
 
+            TPD.System system = plantRoom.AddSystem();
+
             string name = ventilationSystem?.DisplayName();
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrWhiteSpace(name))
             {
-                name = "MV";
+                name = ventilationSystem.Type.Name ?? "MVRE";
             }
 
-            TPD.System system = plantRoom.AddSystem();
             system.Name = name;
             system.Multiplicity = 1;//zoneLoads.Count();
 
