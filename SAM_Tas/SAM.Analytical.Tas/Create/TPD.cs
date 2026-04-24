@@ -6,6 +6,7 @@ using SAM.Core.Tas;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
 using TPD;
@@ -15,8 +16,13 @@ namespace SAM.Analytical.Tas
 {
     public static partial class Create
     {
-        public static bool TPD(this string path_TPD, string path_TSD, AnalyticalModel analyticalModel = null)
+        public static bool TPD(this string path_TPD, string path_TSD, AnalyticalModel analyticalModel)
         {
+            if(analyticalModel?.AdjacencyCluster is not AdjacencyCluster adjacencyCluster)
+            {
+                return false;
+            }
+
             Point offset = new Point(0, 0);
             double circuitLength = 10;
 
@@ -30,7 +36,7 @@ namespace SAM.Analytical.Tas
                 return false;
             }
 
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            using (SAMTPDDocument sAMTPDDocument = new (path_TPD))
             {
                 TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
                 if (tPDDoc != null)
@@ -49,7 +55,7 @@ namespace SAM.Analytical.Tas
                     TSDData tSDData = energyCentre.GetTSDData(1);
 
 
-                    Dictionary<string, Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>> dictionary = new Dictionary<string, Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>>();
+                    Dictionary<string, Tuple<VentilationSystem, List<ZoneLoad>>> dictionary = [];
 
                     if (analyticalModel != null)
                     {
@@ -65,16 +71,12 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
-                            CoolingSystem coolingSystem = analyticalModel.GetRelatedObjects<CoolingSystem>(space).FirstOrDefault();
-                            HeatingSystem heatingSystem = analyticalModel.GetRelatedObjects<HeatingSystem>(space).FirstOrDefault();
-                            VentilationSystem ventilationSystem = analyticalModel.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
+                            VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space).FirstOrDefault();
 
                             List<string> names = new List<string>();
                             names.Add(ventilationSystem?.DisplayName());
-                            //names.Add(heatingSystem?.FullName);
-                            //names.Add(coolingSystem?.FullName);
 
-                            names.RemoveAll(x => string.IsNullOrEmpty(x));
+                            names.RemoveAll(string.IsNullOrEmpty);
 
                             string name = string.Join(":", names);
                             if(name == null)
@@ -82,25 +84,13 @@ namespace SAM.Analytical.Tas
                                 name = string.Empty;
                             }
 
-                            if (!dictionary.TryGetValue(name, out Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem> zoneLoads))
+                            if (!dictionary.TryGetValue(name, out Tuple<VentilationSystem, List<ZoneLoad>> tuple))
                             {
-                                zoneLoads = new Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>(new List<ZoneLoad>(), [coolingSystem], [heatingSystem], ventilationSystem);
-                                dictionary[name] = zoneLoads;
-                            }
-                            else
-                            {
-                                if(coolingSystem is not null)
-                                {
-                                    zoneLoads.Item2.Add(coolingSystem);
-                                }
-
-                                if(heatingSystem is not null)
-                                {
-                                    zoneLoads.Item3.Add(heatingSystem);
-                                }
+                                tuple = new Tuple<VentilationSystem, List<ZoneLoad>>(ventilationSystem, []);
+                                dictionary[name] = tuple;
                             }
 
-                            zoneLoads.Item1.Add(zoneLoad);
+                            tuple.Item2.Add(zoneLoad);
                         }
 
                     }
@@ -114,10 +104,10 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
-                            dictionary[zoneLoadGroup.Name] = new Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>(new List<ZoneLoad>(), new List<CoolingSystem>(), new List<HeatingSystem>(), null);
+                            dictionary[zoneLoadGroup.Name] = new Tuple<VentilationSystem, List<ZoneLoad>>(null, []);
                             for (int k = 1; k <= zoneLoadGroup.GetZoneLoadCount(); k++)
                             {
-                                dictionary[zoneLoadGroup.Name].Item1.Add(zoneLoadGroup.GetZoneLoad(k));
+                                dictionary[zoneLoadGroup.Name].Item2.Add(zoneLoadGroup.GetZoneLoad(k));
                             }
                         }
                     }
@@ -479,9 +469,9 @@ namespace SAM.Analytical.Tas
                         plantController_Cooling.AddDayType(plantDayType);
                     }
 
-                    foreach (KeyValuePair<string, Tuple<List<ZoneLoad>, List<CoolingSystem>, List<HeatingSystem>, VentilationSystem>> keyValuePair in dictionary)
+                    foreach (KeyValuePair<string, Tuple<VentilationSystem, List<ZoneLoad>>> keyValuePair in dictionary)
                     {
-                        TPD(energyCentre, keyValuePair.Key, keyValuePair.Value.Item1, analyticalModel.AdjacencyCluster);
+                        TPD(energyCentre, keyValuePair.Key, keyValuePair.Value.Item1, keyValuePair.Value.Item2, analyticalModel.AdjacencyCluster);
                     }
 
                     plantRoom.SimulateEx(1, 8760, 15, energyCentre.ExternalPollutant.Value, 10.0, (int)global::TPD.tpdSimulationData.tpdSimulationDataLoad + (int)global::TPD.tpdSimulationData.tpdSimulationDataPipe + (int)global::TPD.tpdSimulationData.tpdSimulationDataDuct + (int)global::TPD.tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
@@ -570,7 +560,7 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        private static bool TPD(this EnergyCentre energyCentre, string name, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
+        private static bool TPD(this EnergyCentre energyCentre, string name, VentilationSystem ventilationSystem, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
             if(string.IsNullOrWhiteSpace(name) || energyCentre == null || zoneLoads == null || zoneLoads.Count() == 0)
             {
@@ -579,41 +569,52 @@ namespace SAM.Analytical.Tas
 
             energyCentre.Name = name;
 
-            if (name.StartsWith("UV"))
+            List<string> names = [];
+            names.Add(name);
+            names.Add(ventilationSystem?.Type?.Name);
+            names.Add(ventilationSystem?.FullName);
+            names.Add(ventilationSystem?.DisplayName());
+
+            names.RemoveAll(string.IsNullOrWhiteSpace);
+
+            foreach(string name_Temp in names)
             {
-                return TPD_UV(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if(name.StartsWith("NV"))
-            {
-                return TPD_NV(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if (name.StartsWith("EOL"))
-            {
-                return TPD_EOL(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if (name.StartsWith("EOC"))
-            {
-                return TPD_EOC(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if (name.StartsWith("CAV"))
-            {
-                return TPD_CAV(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if (name.StartsWith("MVRE"))
-            {
-                return TPD_MVRE(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if (name.StartsWith("MV"))
-            {
-                return TPD_MV(energyCentre, zoneLoads, adjacencyCluster);
-            }
-            else if (name.StartsWith("DISP"))
-            {
-                return TPD_VAV(energyCentre, zoneLoads, adjacencyCluster, true);
-            }
-            else if (name.StartsWith("VAV"))
-            {
-                return TPD_VAV(energyCentre, zoneLoads, adjacencyCluster, false);
+                if (name_Temp.StartsWith("UV"))
+                {
+                    return TPD_UV(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("NV"))
+                {
+                    return TPD_NV(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("EOL"))
+                {
+                    return TPD_EOL(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("EOC"))
+                {
+                    return TPD_EOC(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("CAV"))
+                {
+                    return TPD_CAV(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("MVRE"))
+                {
+                    return TPD_MVRE(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("MV"))
+                {
+                    return TPD_MV(energyCentre, zoneLoads, adjacencyCluster);
+                }
+                else if (name_Temp.StartsWith("DISP"))
+                {
+                    return TPD_VAV(energyCentre, zoneLoads, adjacencyCluster, true);
+                }
+                else if (name_Temp.StartsWith("VAV"))
+                {
+                    return TPD_VAV(energyCentre, zoneLoads, adjacencyCluster, false);
+                }
             }
 
             return true;
@@ -621,6 +622,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_UV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if(energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if(plantRoom == null)
             {
@@ -719,6 +725,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_NV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
             {
@@ -805,6 +816,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_EOL(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             Point offset = new Point(0, 0);
 
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
@@ -969,6 +985,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_EOC(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             Point offset = new Point(0, 0);
 
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
@@ -1119,6 +1140,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_CAV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
             {
@@ -1427,6 +1453,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_VAV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster, bool displacementVent = false)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
             {
@@ -1715,6 +1746,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_VAV_Special(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster, bool displacementVent = false)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
             {
@@ -2000,6 +2036,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_MVRE(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
             {
@@ -2208,6 +2249,11 @@ namespace SAM.Analytical.Tas
 
         private static bool TPD_MV(this EnergyCentre energyCentre, IEnumerable<ZoneLoad> zoneLoads, AdjacencyCluster adjacencyCluster)
         {
+            if (energyCentre is null || zoneLoads is null || !zoneLoads.Any() || adjacencyCluster is null)
+            {
+                return false;
+            }
+
             PlantRoom plantRoom = energyCentre?.PlantRoom("Main PlantRoom");
             if (plantRoom == null)
             {
@@ -2237,7 +2283,7 @@ namespace SAM.Analytical.Tas
             string name = ventilationSystem?.DisplayName();
             if (string.IsNullOrWhiteSpace(name))
             {
-                name = ventilationSystem.Type.Name ?? "MVRE";
+                name = ventilationSystem.Type.Name ?? "MV";
             }
 
             system.Name = name;
