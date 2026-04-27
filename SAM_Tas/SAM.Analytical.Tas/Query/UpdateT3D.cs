@@ -329,6 +329,43 @@ namespace SAM.Analytical.Tas
                                 window.framePerc = frameFactor * 100;
                             }
 
+                            if(aperture is not null)
+                            {
+                                Panel panel = adjacencyCluster.GetPanel(aperture);
+                                if(panel is not null)
+                                {
+                                    switch(panel.PanelGroup)
+                                    {
+                                        case PanelGroup.Wall:
+                                            
+                                            //Full Wall Height missing to be implemented 2026.04.27
+
+                                            switch(aperture.ApertureType)
+                                            {
+                                                case Analytical.ApertureType.Window:
+                                                    window.positionType = 0;
+                                                    break;
+
+                                                case Analytical.ApertureType.Door:
+                                                    window.positionType = 3;
+                                                    break;
+                                            }
+                                            break;
+
+                                        case PanelGroup.Roof:
+                                            window.positionType = 1; 
+                                            break;
+
+
+                                        case PanelGroup.Floor:
+                                            window.positionType = 2;
+                                            break;
+                                    }
+                                }
+                            }
+
+                            
+
                         }
                     }
                 }
