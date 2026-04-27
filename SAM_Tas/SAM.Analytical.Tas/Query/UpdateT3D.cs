@@ -337,17 +337,17 @@ namespace SAM.Analytical.Tas
                                     switch(panel.PanelGroup)
                                     {
                                         case PanelGroup.Wall:
-                                            
-                                            //Full Wall Height missing to be implemented 2026.04.27
 
-                                            switch(aperture.ApertureType)
+                                            //Full Wall Height (positionType = 3) missing to be implemented 2026.04.27
+
+                                            switch (aperture.ApertureType)
                                             {
                                                 case Analytical.ApertureType.Window:
                                                     window.positionType = 0;
                                                     break;
 
                                                 case Analytical.ApertureType.Door:
-                                                    window.positionType = 3;
+                                                    window.positionType = 2;
                                                     break;
                                             }
                                             break;
@@ -358,7 +358,7 @@ namespace SAM.Analytical.Tas
 
 
                                         case PanelGroup.Floor:
-                                            window.positionType = 2;
+                                            window.positionType = 4;
                                             break;
                                     }
                                 }
