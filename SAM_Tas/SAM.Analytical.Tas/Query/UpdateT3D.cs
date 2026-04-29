@@ -332,43 +332,52 @@ namespace SAM.Analytical.Tas
                                 window.framePerc = frameFactor * 100;
                             }
 
-                            if(updateWindowPositionType && aperture is not null)
+                            if(aperture is not null)
                             {
-                                Panel panel = adjacencyCluster.GetPanel(aperture);
-                                if(panel is not null)
+                                bool update = true;
+                                if(!updateWindowPositionType)
                                 {
-                                    switch(panel.PanelGroup)
+                                    if(!Geometry.Planar.Query.Rectangular(aperture.Face3D.ExternalEdge2D, 0.05))
                                     {
-                                        case PanelGroup.Wall:
+                                        update = false;
+                                    }
+                                }
 
-                                            //Full Wall Height (positionType = 3) missing to be implemented 2026.04.27
+                                if(update)
+                                {
+                                    Panel panel = adjacencyCluster.GetPanel(aperture);
+                                    if (panel is not null)
+                                    {
+                                        switch (panel.PanelGroup)
+                                        {
+                                            case PanelGroup.Wall:
 
-                                            switch (aperture.ApertureType)
-                                            {
-                                                case Analytical.ApertureType.Window:
-                                                    window.positionType = 0;
-                                                    break;
+                                                //Full Wall Height (positionType = 3) missing to be implemented 2026.04.27
 
-                                                case Analytical.ApertureType.Door:
-                                                    window.positionType = 2;
-                                                    break;
-                                            }
-                                            break;
+                                                switch (aperture.ApertureType)
+                                                {
+                                                    case Analytical.ApertureType.Window:
+                                                        window.positionType = 0;
+                                                        break;
 
-                                        case PanelGroup.Roof:
-                                            window.positionType = 1; 
-                                            break;
+                                                    case Analytical.ApertureType.Door:
+                                                        window.positionType = 2;
+                                                        break;
+                                                }
+                                                break;
+
+                                            case PanelGroup.Roof:
+                                                window.positionType = 1;
+                                                break;
 
 
-                                        case PanelGroup.Floor:
-                                            window.positionType = 4;
-                                            break;
+                                            case PanelGroup.Floor:
+                                                window.positionType = 4;
+                                                break;
+                                        }
                                     }
                                 }
                             }
-
-                            
-
                         }
                     }
                 }

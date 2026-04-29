@@ -26,7 +26,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.10";
+        public override string LatestComponentVersion => "1.0.11";
 
         /// <summary>
         /// Provides an Icon for the component.

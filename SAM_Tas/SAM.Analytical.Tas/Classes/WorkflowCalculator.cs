@@ -148,7 +148,7 @@ namespace SAM.Analytical.Tas
                 Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening TBD file"));
                 using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(WorkflowSettings.Path_TBD))
                 {
-                    TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
+                    TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
 
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Weather Data"));
                     if (weatherData != null)
@@ -163,18 +163,18 @@ namespace SAM.Analytical.Tas
 
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating HDD and CDD Day Types"));
 
-                    TBD.Calendar calendar = tBDDocument.Building.GetCalendar();
+                    Calendar calendar = tBDDocument.Building.GetCalendar();
 
-                    List<TBD.dayType> dayTypes = Query.DayTypes(calendar);
+                    List<dayType> dayTypes = Query.DayTypes(calendar);
                     if (dayTypes.Find(x => x.name == "HDD") == null)
                     {
-                        TBD.dayType dayType = calendar.AddDayType();
+                        dayType dayType = calendar.AddDayType();
                         dayType.name = "HDD";
                     }
 
                     if (dayTypes.Find(x => x.name == "CDD") == null)
                     {
-                        TBD.dayType dayType = calendar.AddDayType();
+                        dayType dayType = calendar.AddDayType();
                         dayType.name = "CDD";
                     }
 
@@ -215,7 +215,7 @@ namespace SAM.Analytical.Tas
             Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening TBD"));
             using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(WorkflowSettings.Path_TBD))
             {
-                TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
+                TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
 
                 hasWeatherData = tBDDocument?.Building.GetWeatherYear() != null;
 
@@ -314,7 +314,7 @@ namespace SAM.Analytical.Tas
                 Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening TBD"));
                 using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(WorkflowSettings.Path_TBD))
                 {
-                    TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
+                    TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Surface Output Specs"));
                     Core.Tas.Modify.UpdateSurfaceOutputSpecs(tBDDocument, WorkflowSettings.SurfaceOutputSpecs);
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Assigning Surface Output Specs"));

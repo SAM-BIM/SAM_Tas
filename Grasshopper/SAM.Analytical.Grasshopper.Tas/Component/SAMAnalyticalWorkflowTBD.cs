@@ -8,7 +8,6 @@ using SAM.Analytical.Tas;
 using SAM.Core;
 using SAM.Core.Grasshopper;
 using SAM.Core.Tas;
-using SAM.Core.Windows.Forms;
 using SAM.Weather;
 using System;
 using System.Collections.Generic;
@@ -27,7 +26,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.8";
+        public override string LatestComponentVersion => "1.0.9";
 
         /// <summary>
         /// Provides an Icon for the component.
