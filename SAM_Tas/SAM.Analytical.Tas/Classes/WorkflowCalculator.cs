@@ -199,7 +199,7 @@ namespace SAM.Analytical.Tas
 
                     Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating T3D file"));
                     t3DDocument.SetUseBEWidths(WorkflowSettings.UseWidths);
-                    result = Query.UpdateT3D(result, t3DDocument);
+                    result = Query.UpdateT3D(result, t3DDocument, WorkflowSettings.UpdateWindowPositionType);
 
                     t3DDocument.Building.latitude = float.IsNaN(latitude) ? t3DDocument.Building.latitude : latitude;
                     t3DDocument.Building.longitude = float.IsNaN(longitude) ? t3DDocument.Building.longitude : longitude;

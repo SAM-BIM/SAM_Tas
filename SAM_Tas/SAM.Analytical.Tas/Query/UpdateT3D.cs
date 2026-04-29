@@ -10,7 +10,7 @@ namespace SAM.Analytical.Tas
 {
     public static partial class Query
     {
-        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, string path_T3D)
+        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, string path_T3D, bool updateWindowPositionType = false)
         {
             if (analyticalModel == null || string.IsNullOrWhiteSpace(path_T3D))
                 return null;
@@ -19,7 +19,7 @@ namespace SAM.Analytical.Tas
 
             using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(path_T3D))
             {
-                result = UpdateT3D(analyticalModel, sAMT3DDocument.T3DDocument);
+                result = UpdateT3D(analyticalModel, sAMT3DDocument.T3DDocument, updateWindowPositionType);
                 if (result != null)
                     sAMT3DDocument.Save();
             }
@@ -28,7 +28,7 @@ namespace SAM.Analytical.Tas
 
         }
 
-        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, T3DDocument t3DDocument)
+        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, T3DDocument t3DDocument, bool updateWindowPositionType = false)
         {
             if (analyticalModel == null)
                 return null;
@@ -41,7 +41,7 @@ namespace SAM.Analytical.Tas
             Modify.RemoveUnused(building);
             
             double northAngle = double.NaN;
-            if (analyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.NorthAngle, out northAngle))
+            if (analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.NorthAngle, out northAngle))
             {
                 building.northAngle = global::System.Math.Round(Units.Convert.ToDegrees(northAngle), 1);
                 if(building.northAngle < 0.5)
@@ -264,7 +264,7 @@ namespace SAM.Analytical.Tas
                             else
                             {
                                 System.Drawing.Color color = global::System.Drawing.Color.Empty;
-                                if (!apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.Color, out color))
+                                if (!apertureConstruction.TryGetValue(ApertureConstructionParameter.Color, out color))
                                     color = Analytical.Query.Color(apertureConstruction.ApertureType);
 
                                 if (color != global::System.Drawing.Color.Empty)
@@ -282,7 +282,7 @@ namespace SAM.Analytical.Tas
                             if (materialType == MaterialType.Undefined)
                             {
                                 materialType = MaterialType.Opaque;
-                                if (apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.Transparent, out transparent))
+                                if (apertureConstruction.TryGetValue(ApertureConstructionParameter.Transparent, out transparent))
                                     window.transparent = transparent;
                             }
                             else
@@ -296,7 +296,7 @@ namespace SAM.Analytical.Tas
                                 //InternalShadows
                                 window.internalShadows = false; //Requested by Michal 2021.03.01
                                 bool internalShadows = false;
-                                if (apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.IsInternalShadow, out internalShadows))
+                                if (apertureConstruction.TryGetValue(ApertureConstructionParameter.IsInternalShadow, out internalShadows))
                                 {
                                     window.internalShadows = internalShadows;
                                 }
@@ -314,7 +314,7 @@ namespace SAM.Analytical.Tas
                             //FrameWidth
                             double frameWidth = double.NaN;
                             
-                            if(apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.DefaultFrameWidth, out frameWidth))
+                            if(apertureConstruction.TryGetValue(ApertureConstructionParameter.DefaultFrameWidth, out frameWidth))
                             {
                                 window.frameWidth = frameWidth;
                             }
@@ -332,7 +332,7 @@ namespace SAM.Analytical.Tas
                                 window.framePerc = frameFactor * 100;
                             }
 
-                            if(aperture is not null)
+                            if(updateWindowPositionType && aperture is not null)
                             {
                                 Panel panel = adjacencyCluster.GetPanel(aperture);
                                 if(panel is not null)
@@ -374,7 +374,7 @@ namespace SAM.Analytical.Tas
                 }
             }
 
-            AnalyticalModel result = new AnalyticalModel(analyticalModel, adjacencyCluster);
+            AnalyticalModel result = new (analyticalModel, adjacencyCluster);
 
             return result;
         }

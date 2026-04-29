@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
@@ -76,6 +79,10 @@ namespace SAM.Analytical.Grasshopper.Tas
                 boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_simulate_", NickName = "_simulate_", Description = "Simulates the model from 1 to 365 day.", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(boolean, ParamVisibility.Voluntary));
+
+                boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "T3DWindowsPlacement_", NickName = "T3DWindowsPlacement_", Description = "T3D Windows Placement.\nDefault is false.\nUse false for non-rectangular windows to keep complex shapes such as S, B or D. In this mode the frame is not created, which is normal behaviour.\nSet to true to force window placement by host object such as Wall, Floor, Roof or Door.", Access = GH_ParamAccess.item, Optional = true };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
 
                 boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_runUnmetHours_", NickName = "_runUnmetHours_", Description = "Calculates the amount of hours that the Zone/Space will be outside of the thermostat setpoint (unmet hours).", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
@@ -393,6 +400,16 @@ namespace SAM.Analytical.Grasshopper.Tas
                 }
             }
 
+            bool updateWindowPositionType = false;
+            index = Params.IndexOfInputParam("T3DWindowsPlacement_");
+            if (index != -1)
+            {
+                if (!dataAccess.GetData(index, ref updateWindowPositionType))
+                {
+                    updateWindowPositionType = false;
+                }
+            }
+
             WorkflowSettings workflowSettings = new ()
             {
                 Path_TBD = path_TBD,
@@ -409,7 +426,8 @@ namespace SAM.Analytical.Grasshopper.Tas
                 AddIZAMs = addIZAMs,
                 SimulateFrom = simulate_From,
                 SimulateTo = simulate_To,
-                RemoveExistingTBD = removeExistingTBD
+                RemoveExistingTBD = removeExistingTBD,
+                UpdateWindowPositionType = updateWindowPositionType
             };
 
             analyticalModel.TryGetValue(AnalyticalModelParameter.WeatherData, out WeatherData weatherData_Temp);

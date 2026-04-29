@@ -1,4 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Newtonsoft.Json.Linq;
 using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
@@ -37,6 +40,8 @@ namespace SAM.Analytical.Tas
 
         public bool RemoveExistingTBD { get; set; } = false;
 
+        public bool UpdateWindowPositionType { get; set; } = false;
+
         public WorkflowSettings()
         {
 
@@ -67,6 +72,8 @@ namespace SAM.Analytical.Tas
                 SimulateTo = workflowSettings.SimulateTo;
 
                 RemoveExistingTBD = workflowSettings.RemoveExistingTBD;
+
+                UpdateWindowPositionType = workflowSettings.UpdateWindowPositionType;
             }
         }
 
@@ -177,6 +184,11 @@ namespace SAM.Analytical.Tas
                 RemoveExistingTBD = jObject.Value<bool>("RemoveExistingTBD");
             }
 
+            if (jObject.ContainsKey("UpdateWindowPositionType"))
+            {
+                UpdateWindowPositionType = jObject.Value<bool>("UpdateWindowPositionType");
+            }
+
             return true;
         }
 
@@ -244,6 +256,8 @@ namespace SAM.Analytical.Tas
             jObject.Add("SimulateTo", SimulateTo);
 
             jObject.Add("RemoveExistingTBD", RemoveExistingTBD);
+
+            jObject.Add("UpdateWindowPositionType", UpdateWindowPositionType);
 
             return jObject;
         }

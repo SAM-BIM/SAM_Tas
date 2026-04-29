@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
@@ -73,6 +76,10 @@ namespace SAM.Analytical.Grasshopper.Tas
                 result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
 
                 boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_simulate_", NickName = "_simulate_", Description = "Simulates the model from 1 to 365 day.", Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
+
+                boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "T3DWindowsPlacement_", NickName = "T3DWindowsPlacement_", Description = "T3D Windows Placement.\nDefault is false.\nUse false for non-rectangular windows to keep complex shapes such as S, B or D. In this mode the frame is not created, which is normal behaviour.\nSet to true to force window placement by host object such as Wall, Floor, Roof or Door.", Access = GH_ParamAccess.item, Optional = true };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
 
@@ -314,6 +321,16 @@ namespace SAM.Analytical.Grasshopper.Tas
                 }
             }
 
+            bool updateWindowPositionType = false;
+            index = Params.IndexOfInputParam("T3DWindowsPlacement_");
+            if (index != -1)
+            {
+                if (!dataAccess.GetData(index, ref updateWindowPositionType))
+                {
+                    updateWindowPositionType = false;
+                }
+            }
+
             WorkflowSettings workflowSettings = new WorkflowSettings()
             {
                 Path_TBD = path_TBD,
@@ -331,6 +348,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 SimulateFrom = 1,
                 SimulateTo = 365,
                 RemoveExistingTBD = removeExistingTBD,
+                UpdateWindowPositionType = updateWindowPositionType
             };
 
             analyticalModel = Modify.RunWorkflow(analyticalModel, workflowSettings);
