@@ -141,7 +141,7 @@ namespace SAM.Weather.Tas
                 int hourIndex_Start = i * 24;
                 int hourIndex_End = hourIndex_Start + 24;
 
-                for (int hourIndex = hourIndex_Start; i < hourIndex_End; i++)
+                for (int hourIndex = hourIndex_Start; hourIndex < hourIndex_End; hourIndex++)
                 {
                     int index = hourIndex - hourIndex_Start;
 
