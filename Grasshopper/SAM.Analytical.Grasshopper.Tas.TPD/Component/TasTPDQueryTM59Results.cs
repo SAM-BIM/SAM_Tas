@@ -8,7 +8,6 @@ using SAM.Core;
 using SAM.Core.Grasshopper;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -24,7 +23,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.0";
+        public override string LatestComponentVersion => "1.0.1";
 
         public override GH_Exposure Exposure => GH_Exposure.quinary;
 
@@ -386,12 +385,12 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             base.AppendAdditionalMenuItems(menu);
 
             Menu_AppendSeparator(menu);
-            Menu_AppendItem(menu, "Open TSD", Menu_OpenTSD, Resources.SAM_TasTSD3, true, false);
+            Menu_AppendItem(menu, "Open TPD", Menu_OpenTPD, Resources.SAM_TasTPD3, true, false);
         }
 
-        private void Menu_OpenTSD(object sender, EventArgs e)
+        private void Menu_OpenTPD(object sender, EventArgs e)
         {
-            int index_Path = Params.IndexOfInputParam("_pathTasTSD");
+            int index_Path = Params.IndexOfInputParam("_pathTasTPD");
             if (index_Path == -1)
             {
                 return;
