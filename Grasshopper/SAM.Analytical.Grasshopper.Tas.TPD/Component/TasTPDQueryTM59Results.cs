@@ -256,23 +256,27 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                     string name_MeanRadiantTemperature = Analytical.Tas.SpaceDataType.MeanRadiantTemperature.Text();
 
                     ParameterSet parameterSet = space_TSD_Temp.GetParameterSets().Find(x => x.Contains(name_MeanRadiantTemperature));
-                    if(parameterSet is not null && parameterSet.TryGetValue(name_MeanRadiantTemperature, out JArray jArray))
+                    if(parameterSet is not null)
                     {
-                        IndexedDoubles indexedDoubles = systemSpaceResult[Analytical.Systems.SpaceDataType.ZoneTemperature.ToString()];
-                        if(indexedDoubles is not null)
+                        JArray jArray = parameterSet?.ToObject(name_MeanRadiantTemperature) as JArray;
+                        if(jArray != null)
                         {
-                            JArray jArray_ResultantTemperature = [];
-
-                            List<double> values = indexedDoubles.GetValues(new Range<int>(0, 8760), true);
-                            for(int i =0; i < jArray.Count; i++)
+                            IndexedDoubles indexedDoubles = systemSpaceResult[Analytical.Systems.SpaceDataType.ZoneTemperature.ToString()];
+                            if (indexedDoubles is not null)
                             {
-                                jArray_ResultantTemperature.Add(((double)jArray[i] + values[i]) / 2);
+                                JArray jArray_ResultantTemperature = [];
+
+                                List<double> values = indexedDoubles.GetValues(new Range<int>(0, 8760), true);
+                                for (int i = 0; i < jArray.Count; i++)
+                                {
+                                    jArray_ResultantTemperature.Add(((double)jArray[i] + values[i]) / 2);
+                                }
+
+                                parameterSet.Add(Analytical.Tas.SpaceDataType.ResultantTemperature.Text(), jArray_ResultantTemperature);
+
+                                space_TSD_Temp.Add(parameterSet);
+                                analyticalModel_TSD.AddSpace(space_TSD_Temp);
                             }
-
-                            parameterSet.Add(Analytical.Tas.SpaceDataType.ResultantTemperature.Text(), jArray_ResultantTemperature);
-
-                            space_TSD_Temp.Add(parameterSet);
-                            analyticalModel_TSD.AddSpace(space_TSD_Temp);
                         }
                     }
                 }
