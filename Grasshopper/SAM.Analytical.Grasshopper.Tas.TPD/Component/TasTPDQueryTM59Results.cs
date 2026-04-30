@@ -26,12 +26,13 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// </summary>
         public override string LatestComponentVersion => "1.0.0";
 
-        public override GH_Exposure Exposure => GH_Exposure.quarternary;
+        public override GH_Exposure Exposure => GH_Exposure.quinary;
 
         /// <summary>
         /// Provides an Icon for the component.
         /// </summary>
-        protected override System.Drawing.Bitmap Icon => Resources.SAM_TasTSD3;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_TasTPD3;
+
 
         /// <summary>
         /// Initializes a new instance of the TasTPDQueryTM59Results class.
@@ -197,7 +198,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 }
             }
 
-            List<SystemSpaceResult> systemSpaceResults = Analytical.Tas.TPD.Convert.ToSAM_SpaceSystemResults(path_TPD, out string parth_TSD);
+            List<SystemSpaceResult> systemSpaceResults = Analytical.Tas.TPD.Convert.ToSAM_SpaceSystemResults(path_TPD, out string path_TSD);
             if(systemSpaceResults is null)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
@@ -214,7 +215,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 ConvertZones = true
             };
 
-            AnalyticalModel analyticalModel_TSD = Analytical.Tas.Convert.ToSAM(path_TPD, tSDConversionSettings);
+            AnalyticalModel analyticalModel_TSD = Analytical.Tas.Convert.ToSAM(path_TSD, tSDConversionSettings);
             AdjacencyCluster adjacencyCluster_TSD = analyticalModel_TSD?.AdjacencyCluster;
             if(adjacencyCluster_TSD != null)
             {
@@ -256,7 +257,10 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                         continue;
                     }
 
-                    space_TSD_Temp.SetValue(Analytical.Tas.SpaceDataType.ResultantTemperature, new JArray(indexedDoubles.GetValues(new Range<int>(0, 8760), true)));
+                    ParameterSet parameterSet = new ParameterSet("Tas");
+                    parameterSet.Add(Analytical.Tas.SpaceDataType.ResultantTemperature.Text(), new JArray(indexedDoubles.GetValues(new Range<int>(0, 8760), true)));
+
+                    space_TSD_Temp.Add(parameterSet);
                     analyticalModel_TSD.AddSpace(space_TSD_Temp);
                 }
             }
