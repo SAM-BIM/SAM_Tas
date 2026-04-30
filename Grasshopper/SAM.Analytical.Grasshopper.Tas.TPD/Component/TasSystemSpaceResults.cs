@@ -101,7 +101,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 return;
             }
 
-            List<SystemSpaceResult> systemSpaceResults = Analytical.Tas.TPD.Convert.ToSAM_SpaceSystemResults(path);
+            List<SystemSpaceResult> systemSpaceResults = Analytical.Tas.TPD.Convert.ToSAM_SpaceSystemResults(path, out string parth_TSD);
 
             index = Params.IndexOfOutputParam("results");
             if (index != -1)

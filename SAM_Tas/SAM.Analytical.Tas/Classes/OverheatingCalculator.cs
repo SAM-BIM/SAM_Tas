@@ -261,7 +261,7 @@ namespace SAM.Analytical.Tas
 
         public IndexedDoubles GetMaxIndoorComfortTemperatures(Period period = Period.Hourly)
         {
-            if (!AnalyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.WeatherData, out WeatherData weatherData) || weatherData == null)
+            if (!AnalyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.WeatherData, out WeatherData weatherData) || weatherData == null)
             {
                 return null;
             }
