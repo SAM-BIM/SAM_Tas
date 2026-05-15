@@ -37,6 +37,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
+          $org = 'SAM-BIM'
+
           $deps = @(
             'SAM',
             'SAM_Systems',
