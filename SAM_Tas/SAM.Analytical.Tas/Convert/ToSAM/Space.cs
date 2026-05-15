@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 using System.Collections.Generic;
 
@@ -31,7 +31,7 @@ namespace SAM.Analytical.Tas
                     if (values == null)
                         continue;
 
-                    JArray jArray = new JArray();
+                    JsonArray jArray = new JsonArray();
                     values.ForEach(x => jArray.Add(x));
 
                     parameterSet.Add(spaceDataType.Text(), jArray);

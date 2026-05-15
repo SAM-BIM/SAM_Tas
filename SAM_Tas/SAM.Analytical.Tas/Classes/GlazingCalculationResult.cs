@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -9,10 +9,10 @@ namespace SAM.Analytical.Tas
         private double lightTransmittance;
         private double thermalTransmittance;
 
-        public GlazingCalculationResult(JObject jObject)
+        public GlazingCalculationResult(JsonObject jObject)
             : base(jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
         
 
@@ -73,14 +73,14 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
             if (jObject == null)
             {
                 return false;
             }
 
-            bool result = base.FromJObject(jObject);
+            bool result = base.FromJsonObject(jObject);
             if(!result)
             {
                 return result;
@@ -88,25 +88,25 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("TotalSolarEnergyTransmittance"))
             {
-                totalSolarEnergyTransmittance = jObject.Value<double>("TotalSolarEnergyTransmittance");
+                totalSolarEnergyTransmittance = jObject["TotalSolarEnergyTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("LightTransmittance"))
             {
-                lightTransmittance = jObject.Value<double>("LightTransmittance");
+                lightTransmittance = jObject["LightTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("ThermalTransmittance"))
             {
-                thermalTransmittance = jObject.Value<double>("ThermalTransmittance");
+                thermalTransmittance = jObject["ThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             return result;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = base.ToJObject();
+            JsonObject jObject = base.ToJsonObject();
             if(jObject == null)
             {
                 return null;

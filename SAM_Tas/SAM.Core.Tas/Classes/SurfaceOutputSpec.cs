@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-
+﻿using System.Text.Json.Nodes;
 namespace SAM.Core.Tas
 {
     public class SurfaceOutputSpec : SAMObject
@@ -19,7 +18,7 @@ namespace SAM.Core.Tas
 
         }
 
-        public SurfaceOutputSpec(JObject jObject)
+        public SurfaceOutputSpec(JsonObject jObject)
             : base(jObject)
         {
 
@@ -41,59 +40,59 @@ namespace SAM.Core.Tas
             }
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
-            if(! base.FromJObject(jObject))
+            if(! base.FromJsonObject(jObject))
             {
                 return false;
             }
 
             if(jObject.ContainsKey("Description"))
             {
-                Description = jObject.Value<string>("Description");
+                Description = jObject["Description"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("ApertureData"))
             {
-                ApertureData = jObject.Value<bool>("ApertureData");
+                ApertureData = jObject["ApertureData"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("Condensation"))
             {
-                Condensation = jObject.Value<bool>("Condensation");
+                Condensation = jObject["Condensation"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("Conduction"))
             {
-                Conduction = jObject.Value<bool>("Conduction");
+                Conduction = jObject["Conduction"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("SolarGain"))
             {
-                SolarGain = jObject.Value<bool>("SolarGain");
+                SolarGain = jObject["SolarGain"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("Conduction"))
             {
-                Conduction = jObject.Value<bool>("Conduction");
+                Conduction = jObject["Conduction"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("LongWave"))
             {
-                LongWave = jObject.Value<bool>("LongWave");
+                LongWave = jObject["LongWave"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("Temperature"))
             {
-                Temperature = jObject.Value<bool>("Temperature");
+                Temperature = jObject["Temperature"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public override JObject ToJObject()
+        public override JsonObject ToJsonObject()
         {
-            JObject jObject =  base.ToJObject();
+            JsonObject jObject =  base.ToJsonObject();
             if(jObject == null)
             {
                 return jObject;

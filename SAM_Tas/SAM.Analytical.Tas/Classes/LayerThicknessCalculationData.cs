@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -17,9 +17,9 @@ namespace SAM.Analytical.Tas
 
         }
         
-        public LayerThicknessCalculationData(JObject jObject)
+        public LayerThicknessCalculationData(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public LayerThicknessCalculationData(LayerThicknessCalculationData layerThicknessCalculationData)
@@ -44,7 +44,7 @@ namespace SAM.Analytical.Tas
             External = external;
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -53,35 +53,35 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("ConstructionName"))
             {
-                ConstructionName = jObject.Value<string>("ConstructionName");
+                ConstructionName = jObject["ConstructionName"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("LayerIndex"))
             {
-                LayerIndex = jObject.Value<int>("LayerIndex");
+                LayerIndex = jObject["LayerIndex"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("ThermalTransmittance"))
             {
-                ThermalTransmittance = jObject.Value<double>("ThermalTransmittance");
+                ThermalTransmittance = jObject["ThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("HeatFlowDirection"))
             {
-                HeatFlowDirection = Core.Query.Enum<HeatFlowDirection>(jObject.Value<string>("HeatFlowDirection"));
+                HeatFlowDirection = Core.Query.Enum<HeatFlowDirection>(jObject["HeatFlowDirection"]?.GetValue<string>() ?? null);
             }
 
             if (jObject.ContainsKey("External"))
             {
-                External = jObject.Value<bool>("External");
+                External = jObject["External"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
 
             if(ConstructionName != null)
@@ -105,7 +105,7 @@ namespace SAM.Analytical.Tas
 
             if(ThicknessRange != null)
             {
-                jObject.Add("ThicknessRange", ThicknessRange.ToJObject());
+                jObject.Add("ThicknessRange", ThicknessRange.ToJsonObject());
             }
 
             return jObject;

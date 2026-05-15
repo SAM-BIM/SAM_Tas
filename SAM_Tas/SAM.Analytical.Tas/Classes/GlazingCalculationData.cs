@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -17,9 +17,9 @@ namespace SAM.Analytical.Tas
 
         }
         
-        public GlazingCalculationData(JObject jObject)
+        public GlazingCalculationData(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public GlazingCalculationData(GlazingCalculationData glazingCalculationData)
@@ -59,7 +59,7 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -68,40 +68,40 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("ConstructionGuid"))
             {
-                ConstructionGuid = System.Guid.Parse(jObject.Value<string>("ConstructionGuid"));
+                ConstructionGuid = System.Guid.Parse(jObject["ConstructionGuid"]?.GetValue<string>() ?? null);
             }
 
             if (jObject.ContainsKey("TotalSolarEnergyTransmittance"))
             {
-                TotalSolarEnergyTransmittance = jObject.Value<double>("TotalSolarEnergyTransmittance");
+                TotalSolarEnergyTransmittance = jObject["TotalSolarEnergyTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("TotalSolarEnergyTransmittanceRange"))
             {
-                TotalSolarEnergyTransmittanceRange = new Range<double>(jObject.Value<JObject>("TotalSolarEnergyTransmittanceRange"));
+                TotalSolarEnergyTransmittanceRange = new Range<double>(jObject["TotalSolarEnergyTransmittanceRange"] as JsonObject);
             }
 
             if (jObject.ContainsKey("LightTransmittance"))
             {
-                LightTransmittance = jObject.Value<double>("LightTransmittance");
+                LightTransmittance = jObject["LightTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("LightTransmittanceRange"))
             {
-                LightTransmittanceRange = new Range<double>(jObject.Value<JObject>("LightTransmittanceRange"));
+                LightTransmittanceRange = new Range<double>(jObject["LightTransmittanceRange"] as JsonObject);
             }
 
             if (jObject.ContainsKey("ThicknessRange"))
             {
-                ThicknessRange = new Range<double>(jObject.Value<JObject>("ThicknessRange"));
+                ThicknessRange = new Range<double>(jObject["ThicknessRange"] as JsonObject);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
 
             if(ConstructionGuid != System.Guid.Empty)
@@ -116,7 +116,7 @@ namespace SAM.Analytical.Tas
 
             if(TotalSolarEnergyTransmittanceRange != null)
             {
-                jObject.Add("TotalSolarEnergyTransmittanceRange", TotalSolarEnergyTransmittanceRange.ToJObject());
+                jObject.Add("TotalSolarEnergyTransmittanceRange", TotalSolarEnergyTransmittanceRange.ToJsonObject());
             }
 
             if (!double.IsNaN(LightTransmittance))
@@ -126,12 +126,12 @@ namespace SAM.Analytical.Tas
 
             if (LightTransmittanceRange != null)
             {
-                jObject.Add("LightTransmittanceRange", LightTransmittanceRange.ToJObject());
+                jObject.Add("LightTransmittanceRange", LightTransmittanceRange.ToJsonObject());
             }
 
             if (ThicknessRange != null)
             {
-                jObject.Add("ThicknessRange", ThicknessRange.ToJObject());
+                jObject.Add("ThicknessRange", ThicknessRange.ToJsonObject());
             }
 
             return jObject;

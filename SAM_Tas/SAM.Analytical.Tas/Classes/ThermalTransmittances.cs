@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 using System.Collections.Generic;
 
@@ -8,9 +8,9 @@ namespace SAM.Analytical.Tas
     {
         private Dictionary<string, double> values = new Dictionary<string, double>();
 
-        public ThermalTransmittances(JObject jObject)
+        public ThermalTransmittances(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
         
         public ThermalTransmittances(ThermalTransmittances thermalTransmittances)
@@ -144,7 +144,7 @@ namespace SAM.Analytical.Tas
             return double.NaN;
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if (jObject == null)
             {
@@ -153,11 +153,16 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("Values"))
             {
-                JArray jArray = jObject.Value<JArray>("Values");
+                JsonArray jArray = jObject["Values"] as JsonArray;
                 if(jArray != null)
                 {
-                    foreach(JObject jObject_Value in jArray)
+                    foreach(JsonNode jsonNode_Value in jArray)
                     {
+                        if (!(jsonNode_Value is JsonObject jObject_Value))
+                        {
+                            continue;
+                        }
+
                         if(!jObject_Value.ContainsKey("Key"))
                         {
                             continue;
@@ -168,9 +173,9 @@ namespace SAM.Analytical.Tas
                             continue;
                         }
 
-                        double value = jObject_Value.Value<double>("Value");
+                        double value = jObject_Value["Value"]?.GetValue<double>() ?? default(double);
 
-                        HeatFlowDirection heatFlowDirection = Query.HeatFlowDirection(jObject_Value.Value<string>("Key"), out bool external);
+                        HeatFlowDirection heatFlowDirection = Query.HeatFlowDirection(jObject_Value["Key"]?.GetValue<string>() ?? null, out bool external);
                         if(heatFlowDirection == HeatFlowDirection.Undefined)
                         {
                             SetTransarentValue(value);
@@ -186,14 +191,14 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
 
             if(values != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach(KeyValuePair<string, double> keyValuePair in values)
                 {
                     if(double.IsNaN(keyValuePair.Value))
@@ -201,7 +206,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    JObject jObject_Value = new JObject();
+                    JsonObject jObject_Value = new JsonObject();
                     jObject_Value.Add("Key", keyValuePair.Key);
                     jObject_Value.Add("Value", keyValuePair.Value);
 

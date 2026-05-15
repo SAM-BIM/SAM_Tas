@@ -1,7 +1,7 @@
 ﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Core;
 using SAM.Weather;
 using System.Collections.Generic;
@@ -68,12 +68,12 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.OccupantSensibleGain.Text(), out JArray jArray_OccupantSensibleGain) || jArray_OccupantSensibleGain == null)
+                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.OccupantSensibleGain.Text(), out JsonArray jArray_OccupantSensibleGain) || jArray_OccupantSensibleGain == null)
                 {
                     continue;
                 }
 
-                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.ResultantTemperature.Text(), out JArray jArray_ResultantTemperature) || jArray_ResultantTemperature == null)
+                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.ResultantTemperature.Text(), out JsonArray jArray_ResultantTemperature) || jArray_ResultantTemperature == null)
                 {
                     continue;
                 }
@@ -187,12 +187,12 @@ namespace SAM.Analytical.Tas
                     tM59SpaceApplications = TM59Manager.TM59SpaceApplications(space);
                 }
 
-                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.OccupantSensibleGain.Text(), out JArray jArray_OccupantSensibleGain) || jArray_OccupantSensibleGain == null)
+                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.OccupantSensibleGain.Text(), out JsonArray jArray_OccupantSensibleGain) || jArray_OccupantSensibleGain == null)
                 {
                     continue;
                 }
 
-                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.ResultantTemperature.Text(), out JArray jArray_ResultantTemperature) || jArray_ResultantTemperature == null)
+                if (!Core.Query.TryGetValue(space_Temp, SpaceDataType.ResultantTemperature.Text(), out JsonArray jArray_ResultantTemperature) || jArray_ResultantTemperature == null)
                 {
                     continue;
                 }

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -12,7 +12,7 @@ namespace SAM.Analytical.Tas
         private double initialThermalTransmittance;
         private double thickness;
 
-        public LayerThicknessCalculationResult(JObject jObject)
+        public LayerThicknessCalculationResult(JsonObject jObject)
             :base(jObject)
         {
 
@@ -91,49 +91,49 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
-            if(!base.FromJObject(jObject))
+            if(!base.FromJsonObject(jObject))
             {
                 return false;
             }
 
             if(jObject.ContainsKey("ConstructionName"))
             {
-                constructionName = jObject.Value<string>("ConstructionName");
+                constructionName = jObject["ConstructionName"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("LayerIndex"))
             {
-                layerIndex = jObject.Value<int>("LayerIndex");
+                layerIndex = jObject["LayerIndex"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("InitialThermalTransmittance"))
             {
-                initialThermalTransmittance = jObject.Value<double>("InitialThermalTransmittance");
+                initialThermalTransmittance = jObject["InitialThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("ThermalTransmittance"))
             {
-                thermalTransmittance = jObject.Value<double>("ThermalTransmittance");
+                thermalTransmittance = jObject["ThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("CalculatedThermalTransmittance"))
             {
-                calculatedThermalTransmittance = jObject.Value<double>("CalculatedThermalTransmittance");
+                calculatedThermalTransmittance = jObject["CalculatedThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("Thickness"))
             {
-                thickness = jObject.Value<double>("Thickness");
+                thickness = jObject["Thickness"]?.GetValue<double>() ?? default(double);
             }
 
             return true;
         }
 
-        public override JObject ToJObject()
+        public override JsonObject ToJsonObject()
         {
-            JObject result = base.ToJObject();
+            JsonObject result = base.ToJsonObject();
             if(result == null )
             {
                 return result;

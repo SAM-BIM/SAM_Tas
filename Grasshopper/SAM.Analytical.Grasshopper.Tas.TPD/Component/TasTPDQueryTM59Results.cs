@@ -3,7 +3,7 @@
 
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Analytical.Grasshopper.Tas.TPD.Properties;
 using SAM.Analytical.Systems;
 using SAM.Analytical.Tas;
@@ -258,13 +258,13 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                     ParameterSet parameterSet = space_TSD_Temp.GetParameterSets().Find(x => x.Contains(name_MeanRadiantTemperature));
                     if(parameterSet is not null)
                     {
-                        JArray jArray = parameterSet?.ToObject(name_MeanRadiantTemperature) as JArray;
+                        JsonArray jArray = parameterSet?.ToObject(name_MeanRadiantTemperature) as JsonArray;
                         if(jArray != null)
                         {
                             IndexedDoubles indexedDoubles = systemSpaceResult[Analytical.Systems.SpaceDataType.ZoneTemperature.ToString()];
                             if (indexedDoubles is not null)
                             {
-                                JArray jArray_ResultantTemperature = [];
+                                JsonArray jArray_ResultantTemperature = [];
 
                                 List<double> values = indexedDoubles.GetValues(new Range<int>(0, 8760), true);
                                 for (int i = 0; i < jArray.Count; i++)

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas.TPD
@@ -22,15 +22,15 @@ namespace SAM.Analytical.Tas.TPD
             }
         }
 
-        public LuaModifier(JObject jObject)
+        public LuaModifier(JsonObject jObject)
             : base(jObject)
         {
 
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
-            bool result = base.FromJObject(jObject);
+            bool result = base.FromJsonObject(jObject);
             if (!result)
             {
                 return result;
@@ -38,15 +38,15 @@ namespace SAM.Analytical.Tas.TPD
 
             if (jObject.ContainsKey("Code"))
             {
-                Code = jObject.Value<string>("Code");
+                Code = jObject["Code"]?.GetValue<string>() ?? null;
             }
 
             return result;
         }
 
-        public override JObject ToJObject()
+        public override JsonObject ToJsonObject()
         {
-            JObject result = base.ToJObject();
+            JsonObject result = base.ToJsonObject();
             if (result == null)
             {
                 return null;
