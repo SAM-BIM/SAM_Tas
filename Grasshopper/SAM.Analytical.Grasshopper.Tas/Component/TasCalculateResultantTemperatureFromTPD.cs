@@ -110,7 +110,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 return;
             }
 
-            bool successful = SAM.Analytical.Tas.TPD.Modify();
+            bool successful = Analytical.Tas.TPD.Modify.CalculateResultantTemperature(path_TPD);
 
             if (index_successful != -1)
             {

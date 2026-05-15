@@ -124,6 +124,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.SAP\SAM.Analytical.Tas.SAP.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.TM59\SAM.Analytical.Tas.TM59.csproj" />
+    <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.TPD\SAM.Analytical.Tas.TPD.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas\SAM.Analytical.Tas.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Core.Tas.UKBR\SAM.Core.Tas.UKBR.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Core.Tas\SAM.Core.Tas.csproj" />
