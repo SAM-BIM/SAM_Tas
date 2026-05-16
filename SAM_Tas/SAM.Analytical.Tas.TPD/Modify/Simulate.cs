@@ -22,7 +22,22 @@ namespace SAM.Analytical.Tas.TPD
 
                 if (tPDDoc?.EnergyCentre != null)
                 {
-                    tPDDoc.Simulate(startHour + 1, endHour + 1, 0);
+                    EnergyCentre energyCentre = tPDDoc.EnergyCentre;
+
+                    int count = energyCentre.GetPlantRoomCount();
+                    for (int i = 1; i <= count; i++)
+                    {
+                        energyCentre.GetPlantRoom(i).SimulateEx(
+                            startHour + 1,
+                            endHour + 1,
+                            0,
+                            energyCentre.ExternalPollutant.Value,
+                            10.0,
+                            (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont,
+                            1,
+                            0);
+                    }
+
                     tPDDoc.Save();
                 }
             }
