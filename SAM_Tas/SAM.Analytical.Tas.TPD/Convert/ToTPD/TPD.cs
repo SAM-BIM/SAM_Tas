@@ -58,18 +58,10 @@ namespace SAM.Analytical.Tas.TPD
 
                 if (systemEnergyCentreConversionSettings.Simulate)
                 {
-                    foreach (PlantRoom plantRoom in energyCentre.PlantRooms())
-                    {
-                        plantRoom.SimulateEx(
-                            systemEnergyCentreConversionSettings.StartHour + 1,
-                            systemEnergyCentreConversionSettings.EndHour + 1,
-                            15,
-                            energyCentre.ExternalPollutant.Value,
-                            10.0,
-                            (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont,
-                            1,
-                            0);
-                    }
+                    tPDDoc.Simulate(
+                        systemEnergyCentreConversionSettings.StartHour + 1,
+                        systemEnergyCentreConversionSettings.EndHour + 1,
+                        0);
 
                     if (systemEnergyCentreConversionSettings.IncludeComponentResults)
                     {

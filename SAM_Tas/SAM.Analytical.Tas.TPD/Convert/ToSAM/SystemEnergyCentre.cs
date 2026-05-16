@@ -122,19 +122,10 @@ namespace SAM.Analytical.Tas.TPD
 
             if (systemEnergyCentreConversionSettings.Simulate)
             {
-                int count = energyCentre.GetPlantRoomCount();
-                for (int i = 1; i <= count; i++)
-                {
-                    energyCentre.GetPlantRoom(i).SimulateEx(
-                        systemEnergyCentreConversionSettings.StartHour + 1,
-                        systemEnergyCentreConversionSettings.EndHour + 1,
-                        15,
-                        energyCentre.ExternalPollutant.Value,
-                        10.0,
-                        (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont,
-                        1,
-                        0);
-                }
+                tPDDoc.Simulate(
+                    systemEnergyCentreConversionSettings.StartHour + 1,
+                    systemEnergyCentreConversionSettings.EndHour + 1,
+                    0);
                 tPDDoc.Save();
             }
 
