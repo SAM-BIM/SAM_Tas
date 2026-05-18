@@ -1,7 +1,9 @@
-﻿using Grasshopper;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
 using SAM.Core;
@@ -266,7 +268,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
                         space = space_AdjacencyCluster;
                     }
 
-                    if (!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JArray jArray) || jArray == null)
+                    if (!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JsonArray jArray) || jArray == null)
                     {
                         continue;
                     }
@@ -332,7 +334,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
                         space = space_AdjacencyCluster;
                     }
 
-                    if (!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JArray jArray) || jArray == null)
+                    if (!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JsonArray jArray) || jArray == null)
                     {
                         continue;
                     }

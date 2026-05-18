@@ -1,5 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 namespace SAM.Analytical.Tas
 {
     public class ApertureGlazingCalculationResult : GlazingCalculationResult
@@ -8,10 +9,10 @@ namespace SAM.Analytical.Tas
         private double frameLightTransmittance;
         private double frameThermalTransmittance;
 
-        public ApertureGlazingCalculationResult(JObject jObject)
+        public ApertureGlazingCalculationResult(JsonObject jObject)
             : base(jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
         
 
@@ -66,14 +67,14 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
             if (jObject == null)
             {
                 return false;
             }
 
-            bool result = base.FromJObject(jObject);
+            bool result = base.FromJsonObject(jObject);
             if(!result)
             {
                 return result;
@@ -81,25 +82,25 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("FrameTotalSolarEnergyTransmittance"))
             {
-                frameTotalSolarEnergyTransmittance = jObject.Value<double>("FrameTotalSolarEnergyTransmittance");
+                frameTotalSolarEnergyTransmittance = jObject["FrameTotalSolarEnergyTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("FrameLightTransmittance"))
             {
-                frameLightTransmittance = jObject.Value<double>("FrameLightTransmittance");
+                frameLightTransmittance = jObject["FrameLightTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("FrameThermalTransmittance"))
             {
-                frameThermalTransmittance = jObject.Value<double>("FrameThermalTransmittance");
+                frameThermalTransmittance = jObject["FrameThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             return result;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = base.ToJObject();
+            JsonObject jObject = base.ToJsonObject();
             if(jObject == null)
             {
                 return null;

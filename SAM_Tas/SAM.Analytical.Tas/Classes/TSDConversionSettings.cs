@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 using System.Collections.Generic;
 
@@ -23,9 +25,9 @@ namespace SAM.Analytical.Tas
 
         }
 
-        public TSDConversionSettings(JObject jObject)
+        public TSDConversionSettings(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public TSDConversionSettings(TSDConversionSettings tSDConversionSettings)
@@ -41,7 +43,7 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -50,7 +52,7 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("SpaceDataTypes"))
             {
-                JArray jArray = jObject.Value<JArray>("SpaceDataTypes");
+                JsonArray jArray = jObject["SpaceDataTypes"] as JsonArray;
                 if(jArray != null)
                 {
                     SpaceDataTypes = new HashSet<SpaceDataType>();
@@ -66,7 +68,7 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("PanelDataTypes"))
             {
-                JArray jArray = jObject.Value<JArray>("PanelDataTypes");
+                JsonArray jArray = jObject["PanelDataTypes"] as JsonArray;
                 if (jArray != null)
                 {
                     PanelDataTypes = new HashSet<PanelDataType>();
@@ -82,7 +84,7 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("SpaceNames"))
             {
-                JArray jArray = jObject.Value<JArray>("SpaceNames");
+                JsonArray jArray = jObject["SpaceNames"] as JsonArray;
                 if (jArray != null)
                 {
                     SpaceNames = new HashSet<string>();
@@ -95,7 +97,7 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("ZoneNames"))
             {
-                JArray jArray = jObject.Value<JArray>("ZoneNames");
+                JsonArray jArray = jObject["ZoneNames"] as JsonArray;
                 if (jArray != null)
                 {
                     ZoneNames = new HashSet<string>();
@@ -108,25 +110,25 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("ConvertWeaterData"))
             {
-                ConvertWeaterData = jObject.Value<bool>("ConvertWeaterData");
+                ConvertWeaterData = jObject["ConvertWeaterData"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("ConvertZones"))
             {
-                ConvertZones = jObject.Value<bool>("ConvertZones");
+                ConvertZones = jObject["ConvertZones"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
 
             if (SpaceDataTypes != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach (SpaceDataType spaceDataType in SpaceDataTypes)
                 {
                     jArray.Add(spaceDataType.ToString());
@@ -137,7 +139,7 @@ namespace SAM.Analytical.Tas
 
             if (PanelDataTypes != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach (PanelDataType panelDataType in PanelDataTypes)
                 {
                     jArray.Add(panelDataType.ToString());
@@ -148,7 +150,7 @@ namespace SAM.Analytical.Tas
 
             if (SpaceNames != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach (string spaceName in SpaceNames)
                 {
                     if(spaceName == null)
@@ -164,7 +166,7 @@ namespace SAM.Analytical.Tas
 
             if (ZoneNames != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach (string zoneName in ZoneNames)
                 {
                     if (zoneName == null)

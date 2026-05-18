@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 using System.Collections.Generic;
 
@@ -18,9 +20,9 @@ namespace SAM.Analytical.Tas
 
         }
         
-        public ConstructionCalculationData(JObject jObject)
+        public ConstructionCalculationData(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public ConstructionCalculationData(ConstructionCalculationData constructionCalculationData)
@@ -54,7 +56,7 @@ namespace SAM.Analytical.Tas
             External = external;
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -63,12 +65,12 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("ConstructionName"))
             {
-                ConstructionName = jObject.Value<string>("ConstructionName");
+                ConstructionName = jObject["ConstructionName"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("ConstructionNames"))
             {
-                JArray jArray = jObject.Value<JArray>("ConstructionNames");
+                JsonArray jArray = jObject["ConstructionNames"] as JsonArray;
                 if(jArray != null)
                 {
                     ConstructionNames = new HashSet<string>();
@@ -81,25 +83,25 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("ThermalTransmittance"))
             {
-                ThermalTransmittance = jObject.Value<double>("ThermalTransmittance");
+                ThermalTransmittance = jObject["ThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("HeatFlowDirection"))
             {
-                HeatFlowDirection = Core.Query.Enum<HeatFlowDirection>(jObject.Value<string>("HeatFlowDirection"));
+                HeatFlowDirection = Core.Query.Enum<HeatFlowDirection>(jObject["HeatFlowDirection"]?.GetValue<string>() ?? null);
             }
 
             if (jObject.ContainsKey("External"))
             {
-                External = jObject.Value<bool>("External");
+                External = jObject["External"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
 
             if(ConstructionName != null)
@@ -109,7 +111,7 @@ namespace SAM.Analytical.Tas
 
             if(ConstructionNames != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach(string constructionName in ConstructionNames)
                 {
                     jArray.Add(constructionName);
@@ -132,7 +134,7 @@ namespace SAM.Analytical.Tas
 
             if(ThicknessRange != null)
             {
-                jObject.Add("ThicknessRange", ThicknessRange.ToJObject());
+                jObject.Add("ThicknessRange", ThicknessRange.ToJsonObject());
             }
 
             return jObject;

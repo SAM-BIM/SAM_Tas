@@ -1,7 +1,7 @@
 ﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Core;
 using SAM.Core.Tas;
 using SAM.Weather;
@@ -17,9 +17,9 @@ namespace SAM.Analytical.Tas
 
         }
 
-        public WorkflowCalculator(JObject jObject)
+        public WorkflowCalculator(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public WorkflowCalculator(WorkflowSettings workflowSettings)
@@ -382,7 +382,7 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if (jObject == null)
             {
@@ -391,20 +391,20 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("WorkflowSettings"))
             {
-                WorkflowSettings = new WorkflowSettings(jObject.Value<JObject>("WorkflowSettings"));
+                WorkflowSettings = new WorkflowSettings(jObject["WorkflowSettings"] as JsonObject);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
 
             if (jObject.ContainsKey("WorkflowSettings"))
             {
-                WorkflowSettings = new WorkflowSettings(jObject.Value<JObject>("WorkflowSettings"));
+                WorkflowSettings = new WorkflowSettings(jObject["WorkflowSettings"] as JsonObject);
             }
 
             return jObject;

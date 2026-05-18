@@ -1,5 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 namespace SAM.Core.Tas
 {
     public class ZoneSurfaceReference : IJSAMObject
@@ -14,9 +15,9 @@ namespace SAM.Core.Tas
             ZoneGuid = zoneGuid;
         }
 
-        public ZoneSurfaceReference(JObject jObject)
+        public ZoneSurfaceReference(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public ZoneSurfaceReference(ZoneSurfaceReference zoneSurfaceReference)
@@ -28,24 +29,24 @@ namespace SAM.Core.Tas
             }
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject.ContainsKey("SurfaceNumber"))
             {
-                SurfaceNumber = jObject.Value<int>("SurfaceNumber");
+                SurfaceNumber = jObject["SurfaceNumber"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("ZoneGuid"))
             {
-                ZoneGuid = jObject.Value<string>("ZoneGuid");
+                ZoneGuid = jObject["ZoneGuid"]?.GetValue<string>() ?? null;
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject result =  new JObject();
+            JsonObject result =  new JsonObject();
             result.Add("_type", Core.Query.FullTypeName(this));
 
             if(SurfaceNumber != -1)

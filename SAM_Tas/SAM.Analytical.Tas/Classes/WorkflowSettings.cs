@@ -1,7 +1,7 @@
 ﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
@@ -47,9 +47,9 @@ namespace SAM.Analytical.Tas
 
         }
 
-        public WorkflowSettings(JObject jObject)
+        public WorkflowSettings(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public WorkflowSettings(WorkflowSettings workflowSettings)
@@ -77,7 +77,7 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -86,27 +86,32 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("Path_TBD"))
             {
-                Path_TBD = jObject.Value<string>("Path_TBD");
+                Path_TBD = jObject["Path_TBD"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("Path_gbXML"))
             {
-                Path_gbXML = jObject.Value<string>("Path_gbXML");
+                Path_gbXML = jObject["Path_gbXML"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("WeatherData"))
             {
-                WeatherData = new Weather.WeatherData(jObject.Value<JObject>("WeatherData"));
+                WeatherData = new Weather.WeatherData(jObject["WeatherData"] as JsonObject);
             }
 
             if (jObject.ContainsKey("DesignDays_Heating"))
             {
-                JArray jArray = jObject.Value<JArray>("DesignDays_Heating");
+                JsonArray jArray = jObject["DesignDays_Heating"] as JsonArray;
                 if(jArray != null)
                 {
                     DesignDays_Heating = new List<DesignDay>();
-                    foreach(JObject jObject_DesignDay in jArray)
+                    foreach(JsonNode jsonNode_DesignDay in jArray)
                     {
+                        if (!(jsonNode_DesignDay is JsonObject jObject_DesignDay))
+                        {
+                            continue;
+                        }
+
                         DesignDays_Heating.Add(new DesignDay(jObject_DesignDay));
                     }
                 }
@@ -114,12 +119,17 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("DesignDays_Cooling"))
             {
-                JArray jArray = jObject.Value<JArray>("DesignDays_Cooling");
+                JsonArray jArray = jObject["DesignDays_Cooling"] as JsonArray;
                 if (jArray != null)
                 {
                     DesignDays_Cooling = new List<DesignDay>();
-                    foreach (JObject jObject_DesignDay in jArray)
+                    foreach (JsonNode jsonNode_DesignDay in jArray)
                     {
+                        if (!(jsonNode_DesignDay is JsonObject jObject_DesignDay))
+                        {
+                            continue;
+                        }
+
                         DesignDays_Cooling.Add(new DesignDay(jObject_DesignDay));
                     }
                 }
@@ -127,12 +137,17 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("SurfaceOutputSpecs"))
             {
-                JArray jArray = jObject.Value<JArray>("SurfaceOutputSpecs");
+                JsonArray jArray = jObject["SurfaceOutputSpecs"] as JsonArray;
                 if (jArray != null)
                 {
                     SurfaceOutputSpecs = new List<SurfaceOutputSpec>();
-                    foreach (JObject jObject_SurfaceOutputSpec in jArray)
+                    foreach (JsonNode jsonNode_SurfaceOutputSpec in jArray)
                     {
+                        if (!(jsonNode_SurfaceOutputSpec is JsonObject jObject_SurfaceOutputSpec))
+                        {
+                            continue;
+                        }
+
                         SurfaceOutputSpecs.Add(new SurfaceOutputSpec(jObject_SurfaceOutputSpec));
                     }
                 }
@@ -141,60 +156,60 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("UnmetHours"))
             {
-                UnmetHours = jObject.Value<bool>("UnmetHours");
+                UnmetHours = jObject["UnmetHours"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("Simulate"))
             {
-                Simulate = jObject.Value<bool>("Simulate");
+                Simulate = jObject["Simulate"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("Sizing"))
             {
-                Sizing = jObject.Value<bool>("Sizing");
+                Sizing = jObject["Sizing"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("UpdateZones"))
             {
-                UpdateZones = jObject.Value<bool>("UpdateZones");
+                UpdateZones = jObject["UpdateZones"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("UseWidths"))
             {
-                UseWidths = jObject.Value<bool>("UseWidths");
+                UseWidths = jObject["UseWidths"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("AddIZAMs"))
             {
-                AddIZAMs = jObject.Value<bool>("AddIZAMs");
+                AddIZAMs = jObject["AddIZAMs"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("SimulateFrom"))
             {
-                SimulateFrom = jObject.Value<int>("SimulateFrom");
+                SimulateFrom = jObject["SimulateFrom"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("SimulateTo"))
             {
-                SimulateTo = jObject.Value<int>("SimulateTo");
+                SimulateTo = jObject["SimulateTo"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("RemoveExistingTBD"))
             {
-                RemoveExistingTBD = jObject.Value<bool>("RemoveExistingTBD");
+                RemoveExistingTBD = jObject["RemoveExistingTBD"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("UpdateWindowPositionType"))
             {
-                UpdateWindowPositionType = jObject.Value<bool>("UpdateWindowPositionType");
+                UpdateWindowPositionType = jObject["UpdateWindowPositionType"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
             
             if(Path_TBD != null)
@@ -209,15 +224,15 @@ namespace SAM.Analytical.Tas
 
             if (WeatherData != null)
             {
-                jObject.Add("WeatherData", WeatherData.ToJObject());
+                jObject.Add("WeatherData", WeatherData.ToJsonObject());
             }
 
             if (DesignDays_Heating != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach(DesignDay designDay in DesignDays_Heating)
                 {
-                    jArray.Add(designDay.ToJObject());
+                    jArray.Add(designDay.ToJsonObject());
                 }
 
                 jObject.Add("DesignDays_Heating", jArray);
@@ -225,10 +240,10 @@ namespace SAM.Analytical.Tas
 
             if (DesignDays_Cooling != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach (DesignDay designDay in DesignDays_Cooling)
                 {
-                    jArray.Add(designDay.ToJObject());
+                    jArray.Add(designDay.ToJsonObject());
                 }
 
                 jObject.Add("DesignDays_Cooling", jArray);
@@ -236,10 +251,10 @@ namespace SAM.Analytical.Tas
 
             if (SurfaceOutputSpecs != null)
             {
-                JArray jArray = new JArray();
+                JsonArray jArray = new JsonArray();
                 foreach (SurfaceOutputSpec surfaceOutputSpec in SurfaceOutputSpecs)
                 {
-                    jArray.Add(surfaceOutputSpec.ToJObject());
+                    jArray.Add(surfaceOutputSpec.ToJsonObject());
                 }
 
                 jObject.Add("SurfaceOutputSpecs", jArray);

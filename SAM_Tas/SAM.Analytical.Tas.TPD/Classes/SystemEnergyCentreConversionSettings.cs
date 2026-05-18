@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas.TPD
@@ -16,9 +18,9 @@ namespace SAM.Analytical.Tas.TPD
         { 
         }
 
-        public SystemEnergyCentreConversionSettings(JObject jObject)
+        public SystemEnergyCentreConversionSettings(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public SystemEnergyCentreConversionSettings(SystemEnergyCentreConversionSettings systemEnergyCentreConversionSettings)
@@ -39,7 +41,7 @@ namespace SAM.Analytical.Tas.TPD
             return new ComponentConversionSettings() { StartHour = StartHour, EndHour = EndHour, IncludeComponentResults = IncludeComponentResults, IncludeControllerResults = IncludeControllerResults };
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -48,40 +50,40 @@ namespace SAM.Analytical.Tas.TPD
 
             if (jObject.ContainsKey("Simulate"))
             {
-                Simulate = jObject.Value<bool>("Simulate");
+                Simulate = jObject["Simulate"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("StartHour"))
             {
-                StartHour = jObject.Value<int>("StartHour");
+                StartHour = jObject["StartHour"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("EndHour"))
             {
-                EndHour = jObject.Value<int>("EndHour");
+                EndHour = jObject["EndHour"]?.GetValue<int>() ?? default(int);
             }
 
             if (jObject.ContainsKey("IncludeComponentResults"))
             {
-                IncludeComponentResults = jObject.Value<bool>("IncludeComponentResults");
+                IncludeComponentResults = jObject["IncludeComponentResults"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("IncludeControllerResults"))
             {
-                IncludeControllerResults = jObject.Value<bool>("IncludeControllerResults");
+                IncludeControllerResults = jObject["IncludeControllerResults"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("RenameAirSystemGroups"))
             {
-                RenameAirSystemGroups = jObject.Value<bool>("RenameAirSystemGroups");
+                RenameAirSystemGroups = jObject["RenameAirSystemGroups"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject result = new JObject();
+            JsonObject result = new JsonObject();
             result.Add("_type", Core.Query.FullTypeName(this));
 
             result.Add("Simulate", Simulate);
