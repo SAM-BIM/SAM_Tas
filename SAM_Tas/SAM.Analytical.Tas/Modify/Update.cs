@@ -470,6 +470,25 @@ namespace SAM.Analytical.Tas
 
             Dictionary<Guid, List<Tuple<zoneSurface, bool>>> dictionary_Panel = new Dictionary<Guid, List<Tuple<zoneSurface, bool>>>();
             Dictionary<Guid, List<Tuple<AperturePart, zoneSurface, bool>>> dictionary_Aperture = new Dictionary<Guid, List<Tuple<AperturePart, zoneSurface, bool>>>();
+
+            // Hoist these out of the per-space loop. They were being refetched via COM PER SPACE and then
+            // linear-scanned per panel (lines below) — O(spaces * panels * existingElements).
+            // The lists are appended to inside the inner panel loop, so we mirror that in the dictionaries.
+            List<buildingElement> buildingElements = building.BuildingElements() ?? new List<buildingElement>();
+            List<TBD.Construction> constructions = building.Constructions() ?? new List<TBD.Construction>();
+            Dictionary<string, buildingElement> buildingElementsByName = new Dictionary<string, buildingElement>(buildingElements.Count);
+            foreach (buildingElement be in buildingElements)
+            {
+                if (!string.IsNullOrEmpty(be?.name))
+                    buildingElementsByName[be.name] = be;
+            }
+            Dictionary<string, TBD.Construction> constructionsByName = new Dictionary<string, TBD.Construction>(constructions.Count);
+            foreach (TBD.Construction c in constructions)
+            {
+                if (!string.IsNullOrEmpty(c?.name))
+                    constructionsByName[c.name] = c;
+            }
+
             foreach (Space space in spaces)
             {
                 Shell shell = adjacencyCluster.Shell(space);
@@ -511,9 +530,6 @@ namespace SAM.Analytical.Tas
                 }
 
                 room room = zone.AddRoom();
-
-                List<buildingElement> buildingElements = building.BuildingElements();
-                List<TBD.Construction> constructions = building.Constructions();
 
                 int index_Space = adjacencyCluster.GetIndex(space);
 
@@ -618,7 +634,7 @@ namespace SAM.Analytical.Tas
 
                         PanelType panelType = panel.PanelType;
 
-                        buildingElement buildingElement_Panel = buildingElements.Find(x => x.name == name_Panel);
+                        buildingElementsByName.TryGetValue(name_Panel, out buildingElement buildingElement_Panel);
                         if (buildingElement_Panel == null)
                         {
                             TBD.Construction construction_TBD = null;
@@ -628,7 +644,7 @@ namespace SAM.Analytical.Tas
                                 Construction construction = panel.Construction;
                                 if (construction != null)
                                 {
-                                    construction_TBD = constructions.Find(x => x.name == construction.Name);
+                                    constructionsByName.TryGetValue(construction.Name ?? string.Empty, out construction_TBD);
                                     if (construction_TBD == null)
                                     {
                                         construction_TBD = building.AddConstruction(null);
@@ -662,6 +678,8 @@ namespace SAM.Analytical.Tas
                                         }
 
                                         constructions.Add(construction_TBD);
+                                        if (!string.IsNullOrEmpty(construction_TBD.name))
+                                            constructionsByName[construction_TBD.name] = construction_TBD;
                                     }
 
                                     if (panelType == PanelType.Undefined && construction != null)
@@ -682,6 +700,8 @@ namespace SAM.Analytical.Tas
                             buildingElement_Panel.AssignConstruction(construction_TBD);
                             buildingElement_Panel.ghost = panelType == PanelType.Air ? 1 : 0;
                             buildingElements.Add(buildingElement_Panel);
+                            if (!string.IsNullOrEmpty(buildingElement_Panel.name))
+                                buildingElementsByName[buildingElement_Panel.name] = buildingElement_Panel;
                         }
 
                         if (buildingElement_Panel != null)
@@ -847,7 +867,7 @@ namespace SAM.Analytical.Tas
 
                                 foreach (KeyValuePair<string, Tuple<AperturePart, List<zoneSurface>>> keyValuePair in dictionary)
                                 {
-                                    buildingElement buildingElement_Aperture = buildingElements.Find(x => x.name == keyValuePair.Key);
+                                    buildingElementsByName.TryGetValue(keyValuePair.Key, out buildingElement buildingElement_Aperture);
                                     if (buildingElement_Aperture == null)
                                     {
 
@@ -860,7 +880,7 @@ namespace SAM.Analytical.Tas
                                         {
                                             string constructionName = string.Format("{0} {1}", Query.Name(aperture.UniqueName(), false, true, false, false), aperturePart.Sufix());
 
-                                            construction_TBD = constructions.Find(x => x.name == constructionName);
+                                            constructionsByName.TryGetValue(constructionName ?? string.Empty, out construction_TBD);
                                             if (construction_TBD == null)
                                             {
                                                 construction_TBD = building.AddConstruction(null);
@@ -894,6 +914,8 @@ namespace SAM.Analytical.Tas
                                                 }
 
                                                 constructions.Add(construction_TBD);
+                                                if (!string.IsNullOrEmpty(construction_TBD.name))
+                                                    constructionsByName[construction_TBD.name] = construction_TBD;
                                             }
                                         }
 
@@ -909,6 +931,8 @@ namespace SAM.Analytical.Tas
                                             buildingElement_Aperture.BEType = Query.BEType(keyValuePair.Value.Item1);
                                             buildingElement_Aperture.AssignConstruction(construction_TBD);
                                             buildingElements.Add(buildingElement_Aperture);
+                                            if (!string.IsNullOrEmpty(buildingElement_Aperture.name))
+                                                buildingElementsByName[buildingElement_Aperture.name] = buildingElement_Aperture;
                                         }
 
 

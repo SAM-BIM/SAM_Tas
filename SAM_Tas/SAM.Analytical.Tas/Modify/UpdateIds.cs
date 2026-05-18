@@ -34,9 +34,26 @@ namespace SAM.Analytical.Tas
                 List<TBD.zone> zones = building.Zones();
                 if (zones != null && zones.Count != 0)
                 {
+                    // Index zones by GUID and by name once; the original `space.Match(zones)` did two linear
+                    // scans (.ToList().Find()) per space, giving O(spaces * zones) — 67 s on a 625-zone model.
+                    Dictionary<string, TBD.zone> zonesByGuid = new Dictionary<string, TBD.zone>(zones.Count);
+                    Dictionary<string, TBD.zone> zonesByName = new Dictionary<string, TBD.zone>(zones.Count);
+                    foreach (TBD.zone z in zones)
+                    {
+                        if (z == null) continue;
+                        if (!string.IsNullOrWhiteSpace(z.GUID))
+                            zonesByGuid[z.GUID] = z;
+                        if (!string.IsNullOrWhiteSpace(z.name))
+                            zonesByName[z.name] = z;
+                    }
+
                     foreach(Space space in spaces)
                     {
-                        TBD.zone zone = space.Match(zones);
+                        TBD.zone zone = null;
+                        if (space.TryGetValue(SpaceParameter.ZoneGuid, out string spaceZoneGuid) && !string.IsNullOrWhiteSpace(spaceZoneGuid))
+                            zonesByGuid.TryGetValue(spaceZoneGuid, out zone);
+                        if (zone == null && !string.IsNullOrWhiteSpace(space?.Name))
+                            zonesByName.TryGetValue(space.Name, out zone);
                         if(zone == null)
                         {
                             continue;

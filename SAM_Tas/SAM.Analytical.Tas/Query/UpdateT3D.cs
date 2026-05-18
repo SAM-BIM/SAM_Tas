@@ -176,6 +176,9 @@ namespace SAM.Analytical.Tas
                                     string_BEType = null;
                             }
 
+                            // Hoist GetPanels(construction) once — was being called up to three times for the same construction.
+                            List<Panel> panels_Construction = adjacencyCluster.GetPanels(construction);
+
                             if(!string.IsNullOrEmpty(string_BEType))
                             {
                                 int bEType = BEType(string_BEType);
@@ -189,18 +192,16 @@ namespace SAM.Analytical.Tas
                             {
                                 panelType = Analytical.PanelType.Undefined;
 
-                                List<Panel> panels_Construction =  adjacencyCluster.GetPanels(construction);
                                 if(panels_Construction != null && panels_Construction.Count > 0)
                                 {
                                     Panel panel = panels_Construction.Find(x => x.PanelType != Analytical.PanelType.Undefined);
                                     if (panel != null)
                                         panelType = panel.PanelType;
-                                }    
+                                }
                             }
 
                             if (panelType == Analytical.PanelType.Undefined)
                             {
-                                List<Panel> panels_Construction = adjacencyCluster.GetPanels(construction);
                                 if (panels_Construction != null && panels_Construction.Count != 0)
                                     element.zoneFloorArea = panels_Construction.Find(x => x.PanelType.PanelGroup() == PanelGroup.Floor) != null;
                             }
@@ -218,13 +219,12 @@ namespace SAM.Analytical.Tas
                             if(construction.TryGetValue(Analytical.ConstructionParameter.IsAir, out air))
                                 element.ghost = air;
 
-                            List<Panel> panels = adjacencyCluster.GetPanels(construction);
-                            if(panels != null && panels.Count > 0)
+                            if(panels_Construction != null && panels_Construction.Count > 0)
                             {
                                 ParameterSet parameterSet = Create.ParameterSet(ActiveSetting.Setting, element);
                                 construction.Add(parameterSet);
 
-                                foreach(Panel panel in panels)
+                                foreach(Panel panel in panels_Construction)
                                 {
                                     Panel panel_New = Analytical.Create.Panel(panel, construction);
                                     adjacencyCluster.AddObject(panel_New);

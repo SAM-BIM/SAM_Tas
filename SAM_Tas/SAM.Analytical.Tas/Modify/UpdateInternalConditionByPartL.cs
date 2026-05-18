@@ -31,9 +31,25 @@ namespace SAM.Analytical.Tas
 
             List<TIC.InternalCondition> internalConditions_TIC = Query.InternalConditions(tICDocument);
 
-            List<TBD.InternalCondition> internalConditions_TBD;
+            // Pre-fetch and index zones by normalized name (matches space.Match(zones) semantics).
+            // Was doing a linear .Find via space.Match() per space -> O(spaces * zones).
+            Dictionary<string, TBD.zone> zonesByKey = new Dictionary<string, TBD.zone>(zones.Count);
+            foreach (TBD.zone z in zones)
+            {
+                string n = z?.name;
+                if (!string.IsNullOrWhiteSpace(n))
+                    zonesByKey[n.Trim().ToUpper()] = z;
+            }
 
-            List<TBD.InternalCondition> internalConditions_TBD_New = new List<TBD.InternalCondition>();
+            // Pre-fetch building dayTypes once. Was being re-fetched (COM rebuild) per space.
+            List<TBD.dayType> dayTypes_Building = tBDDocument.Building.DayTypes();
+
+            // Track existing internal conditions in a single in-memory list that we keep in sync as we add new ones,
+            // so we never re-call Query.InternalConditions(tBDDocument) inside the per-space loop.
+            List<TBD.InternalCondition> internalConditions_TBD = Query.InternalConditions(tBDDocument) ?? new List<TBD.InternalCondition>();
+
+            // Names of newly-added ICs — HashSet for O(1) "did we add this?" check after the loop.
+            HashSet<string> internalConditionNames_New = new HashSet<string>();
 
             bool result = false;
             foreach (Space space in spaces)
@@ -55,13 +71,14 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                TBD.zone zone = space.Match(zones);
+                TBD.zone zone = null;
+                if (!string.IsNullOrEmpty(space?.Name))
+                    zonesByKey.TryGetValue(space.Name.Trim().ToUpper(), out zone);
                 if(zone == null)
                 {
                     continue;
                 }
 
-                internalConditions_TBD = Query.InternalConditions(tBDDocument);
                 TBD.InternalCondition internalCondition_TBD = null;
 
                 List<TBD.InternalCondition> internalConditions_TBD_Temp = internalConditions_TBD.FindAll(x => x.name.StartsWith(name));
@@ -80,6 +97,8 @@ namespace SAM.Analytical.Tas
                         TIC.InternalCondition internalCondition_TIC = internalConditions_TIC_Temp[0];
                         dynamic @dynamic = tICDocument.ToGlobalMem(internalCondition_TIC);
                         internalCondition_TBD = tBDDocument.Building.AddInternalConditionFromGlobal(@dynamic);
+                        if (internalCondition_TBD != null)
+                            internalConditions_TBD.Add(internalCondition_TBD); // keep our list in sync
                     }
                 }
 
@@ -88,14 +107,14 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                internalConditions_TBD_New.Add(internalCondition_TBD);
+                if (!string.IsNullOrEmpty(internalCondition_TBD.name))
+                    internalConditionNames_New.Add(internalCondition_TBD.name);
 
                 zone.AssignIC(internalCondition_TBD, true);
 
-                dayTypes = tBDDocument.Building.DayTypes();
-                if (dayTypes != null && dayTypes.Count != 0)
+                if (dayTypes_Building != null && dayTypes_Building.Count != 0)
                 {
-                    foreach(TBD.dayType dayType in dayTypes)
+                    foreach(TBD.dayType dayType in dayTypes_Building)
                     {
                         bool add = !(dayType.name == "HDD" || dayType.name == "CDD");
                         internalCondition_TBD.SetDayType(dayType, add);
@@ -111,7 +130,7 @@ namespace SAM.Analytical.Tas
                 List<string> names = new List<string>();
                 foreach (TBD.InternalCondition internalCondition_TBD in internalConditions_TBD)
                 {
-                    if(internalConditions_TBD_New.Find(x => x.name == internalCondition_TBD.name) != null)
+                    if (internalConditionNames_New.Contains(internalCondition_TBD.name))
                     {
                         continue;
                     }

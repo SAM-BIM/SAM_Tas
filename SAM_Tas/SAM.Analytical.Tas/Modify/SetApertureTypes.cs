@@ -45,6 +45,15 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            Dictionary<string, buildingElement> buildingElementsByGuid = new Dictionary<string, buildingElement>(buildingElements.Count);
+            foreach (buildingElement be in buildingElements)
+            {
+                if (!string.IsNullOrWhiteSpace(be?.GUID))
+                {
+                    buildingElementsByGuid[be.GUID] = be;
+                }
+            }
+
             List<TBD.ApertureType> result = new List<TBD.ApertureType>();
 
             foreach(Panel panel_Temp in panels_Temp)
@@ -76,8 +85,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    buildingElement buildingElement = buildingElements.Find(x => x.GUID == GUID);
-                    if(buildingElement == null)
+                    if(!buildingElementsByGuid.TryGetValue(GUID, out buildingElement buildingElement) || buildingElement == null)
                     {
                         continue;
                     }

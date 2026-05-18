@@ -33,7 +33,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public TasTSDAddResults()
           : base("Tas.TSDAddResults", "Tas.TSDAddResults",
-              "Updates an AdjacencyCluster from a TSD file with results. \n Cooling/Heating load and all variables per Space, Zone and Model \n *click "+" on inputs to add UnmetHours and UnmetHoursMargin",
+              "Reads space-, zone-, and model-level simulation results from a TasTSD file and attaches them to an AdjacencyCluster (cooling/heating loads plus all sampled variables).\nClick \"+\" on the inputs to also compute UnmetHours and UnmetHoursMargin.",
               "SAM", "Tas")
         {
         }

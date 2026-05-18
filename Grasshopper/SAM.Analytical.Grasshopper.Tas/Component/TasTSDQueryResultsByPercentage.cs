@@ -41,7 +41,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// </summary>
         public TasTSDQueryResultsByPercentage()
           : base("Tas.TSDQueryResultsByPercentage", "Tas.TSDQueryResultsByPercentage",
-              "Query Results by Percentage.\n*Each space is treated indepedently. Results will be presented for all spaces. \n To avoid zeros use min value 0.1",
+              "Reads space-level results from a TasTSD file at a given percentile of the simulated period.\nEach space is treated independently; results are returned for every space.\nUse a minimum value of 0.1 to avoid zeros.",
               "SAM", "Tas")
         {
         }

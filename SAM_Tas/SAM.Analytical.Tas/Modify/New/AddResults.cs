@@ -55,9 +55,24 @@ namespace SAM.Analytical.Tas
             List<Space> spaces = buildingModel.GetSpaces();
             if(spaces != null && spaces.Count > 0)
             {
+                // Pre-bucket SpaceSimulationResults by Name once so the per-space loop is O(spaces) instead of O(spaces * results).
+                Dictionary<string, List<SpaceSimulationResult>> spaceResultsByName = new Dictionary<string, List<SpaceSimulationResult>>();
+                foreach (Core.Result r in results)
+                {
+                    if (r is SpaceSimulationResult sr && !string.IsNullOrEmpty(sr.Name))
+                    {
+                        if (!spaceResultsByName.TryGetValue(sr.Name, out List<SpaceSimulationResult> bucket))
+                        {
+                            bucket = new List<SpaceSimulationResult>();
+                            spaceResultsByName[sr.Name] = bucket;
+                        }
+                        bucket.Add(sr);
+                    }
+                }
+
                 foreach (Space space in spaces)
                 {
-                    List<SpaceSimulationResult> spaceSimulationResults_Space = results.FindAll(x => x is SpaceSimulationResult && space.Name.Equals(x.Name)).ConvertAll(x => (SpaceSimulationResult)x);
+                    List<SpaceSimulationResult> spaceSimulationResults_Space = (space.Name != null && spaceResultsByName.TryGetValue(space.Name, out List<SpaceSimulationResult> matched)) ? new List<SpaceSimulationResult>(matched) : new List<SpaceSimulationResult>();
                     dictionary[space.Guid] = spaceSimulationResults_Space;
                     if(spaceSimulationResults_Space != null && spaceSimulationResults_Space.Count > 0)
                     {

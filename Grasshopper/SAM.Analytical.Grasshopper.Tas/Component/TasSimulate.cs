@@ -20,7 +20,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.5";
+        public override string LatestComponentVersion => "1.0.6";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -34,7 +34,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public TasSimulate()
           : base("Tas.Simulate", "Tas.Simulate",
-              "Simulates the TasTBD file. \n The TPD file will be saved after the simulation.",
+              "Runs a Tas simulation on a TasTBD file and writes the results to the given TasTSD path.\nOptional sizing-type and surface-output-spec inputs are applied to the TBD before the simulation in a single pass.",
               "SAM", "Tas")
         {
         }
@@ -49,7 +49,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             index = inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
             inputParamManager[index].WireDisplay = GH_ParamWireDisplay.hidden;
             
-            index = inputParamManager.AddTextParameter("_pathTasTSD", "pathTasTSD", "The string path to a TasTSD file.", GH_ParamAccess.item);
+            index = inputParamManager.AddTextParameter("_pathTasTSD", "_pathTasTSD", "The string path to a TasTSD file.", GH_ParamAccess.item);
             inputParamManager[index].WireDisplay = GH_ParamWireDisplay.hidden;
 
             global::Grasshopper.Kernel.Parameters.Param_GenericObject genericObject = new global::Grasshopper.Kernel.Parameters.Param_GenericObject() { Name = "_surfaceOutputSpec", NickName = "_surfaceOutputSpec", Description = "Surface Output Spec.", Access = GH_ParamAccess.list, Optional = true };
@@ -174,31 +174,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 }
             }
 
-            if(sizingType != Analytical.Tas.SizingType.Undefined)
-            {
-                using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
-                {
-                    TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
-
-                    Analytical.Tas.Modify.SetSizingTypes(tBDDocument?.Building, sizingType);
-                    sAMTBDDocument.Save();
-                }
-            }
-
-            
-            if (surfaceOutputSpecs != null && surfaceOutputSpecs.Count > 0)
-            {
-                using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
-                {
-                    TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
-
-                    Core.Tas.Modify.UpdateSurfaceOutputSpecs(tBDDocument, surfaceOutputSpecs);
-                    Core.Tas.Modify.AssignSurfaceOutputSpecs(tBDDocument, surfaceOutputSpecs[0].Name);
-                    sAMTBDDocument.Save();
-                }
-            }
-
-            bool result = Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, day_First, day_Last);
+            bool result = Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, day_First, day_Last, sizingType, surfaceOutputSpecs);
 
             dataAccess.SetData(0, result);
         }

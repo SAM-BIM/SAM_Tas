@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Text.Json.Nodes;
@@ -6,6 +6,7 @@ using SAM.Core;
 using SAM.Core.Tas;
 using SAM.Weather;
 using System.Collections.Generic;
+using System.Diagnostics;
 using TBD;
 
 namespace SAM.Analytical.Tas
@@ -31,8 +32,58 @@ namespace SAM.Analytical.Tas
         public event WorkflowCalculatorStartedEventHandler Started;
         public event WorkflowCalculatorStepsCountedEventHandler StepsCounted;
         public event WorkflowCalculatorUpdatingEventHandler Updating;
-        
+
+        private readonly Stopwatch stepStopwatch = new Stopwatch();
+        private string currentStepName;
+        private readonly List<KeyValuePair<string, double>> timings = new List<KeyValuePair<string, double>>();
+
+        public IReadOnlyList<KeyValuePair<string, double>> Timings => timings;
+
         public WorkflowSettings WorkflowSettings { get; set; }
+
+        private void Step(string description)
+        {
+            FinalizeCurrentStep();
+            currentStepName = description;
+            stepStopwatch.Restart();
+            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs(description));
+        }
+
+        private void FinalizeCurrentStep()
+        {
+            if (currentStepName == null)
+                return;
+
+            stepStopwatch.Stop();
+            timings.Add(new KeyValuePair<string, double>(currentStepName, stepStopwatch.Elapsed.TotalMilliseconds));
+            currentStepName = null;
+        }
+
+        private void WriteTimingsCsv(string directory, string fileName)
+        {
+            FinalizeCurrentStep();
+            if (timings.Count == 0 || string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(fileName))
+                return;
+
+            try
+            {
+                string path = System.IO.Path.Combine(directory, fileName + ".timing.csv");
+                List<string> lines = new List<string> { "step,milliseconds" };
+                double total = 0.0;
+                foreach (KeyValuePair<string, double> entry in timings)
+                {
+                    string safeName = entry.Key?.Replace("\"", "\"\"") ?? string.Empty;
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "\"{0}\",{1:F1}", safeName, entry.Value));
+                    total += entry.Value;
+                }
+                lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "\"TOTAL\",{0:F1}", total));
+                System.IO.File.WriteAllLines(path, lines);
+            }
+            catch
+            {
+                // Timing instrumentation must never break the workflow.
+            }
+        }
         
         public AnalyticalModel Calculate(AnalyticalModel analyticalModel)
         {
@@ -133,27 +184,33 @@ namespace SAM.Analytical.Tas
                     }
                 }
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Extracting GUID"));
+                // Only worth opening the T3D to read its GUID if a previous run left one on disk.
+                // The unconditional delete above means this is currently always skipped (~8.8 s on a real model),
+                // but the block stays in place so that making the delete conditional later restores GUID preservation for free.
                 string guid = null;
-                using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(path_T3D))
+                if (System.IO.File.Exists(path_T3D))
                 {
-                    TAS3D.T3DDocument t3DDocument = sAMT3DDocument.T3DDocument;
-                    guid = t3DDocument.Building.GUID;
-                    sAMT3DDocument.Save();
+                    Step("Extracting GUID");
+                    using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(path_T3D))
+                    {
+                        TAS3D.T3DDocument t3DDocument = sAMT3DDocument.T3DDocument;
+                        guid = t3DDocument.Building.GUID;
+                        sAMT3DDocument.Save();
+                    }
                 }
 
                 float latitude = float.NaN;
                 float longitude = float.NaN;
                 float timeZone = float.NaN;
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening TBD file"));
+                Step("Opening TBD file");
                 using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(WorkflowSettings.Path_TBD))
                 {
                     TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
 
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Weather Data"));
+                    Step("Updating Weather Data");
                     if (weatherData != null)
                     {
-                        Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, adjacencyCluster.BuildingHeight());
+                        Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, result.AdjacencyCluster.BuildingHeight());
                     }
 
                     if (!string.IsNullOrWhiteSpace(guid))
@@ -161,7 +218,7 @@ namespace SAM.Analytical.Tas
                         tBDDocument.Building.GUID = guid;
                     }
 
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating HDD and CDD Day Types"));
+                    Step("Updating HDD and CDD Day Types");
 
                     Calendar calendar = tBDDocument.Building.GetCalendar();
 
@@ -185,19 +242,19 @@ namespace SAM.Analytical.Tas
                     sAMTBDDocument.Save();
                 }
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening T3D file"));
+                Step("Opening T3D file");
                 using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(path_T3D))
                 {
                     TAS3D.T3DDocument t3DDocument = sAMT3DDocument.T3DDocument;
 
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Importing gbXML"));
+                    Step("Importing gbXML");
                     t3DDocument.TogbXML(WorkflowSettings.Path_gbXML, true, true, true);
 
                     //sets the window position to wall 2026.04.22
 
 
 
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating T3D file"));
+                    Step("Updating T3D file");
                     t3DDocument.SetUseBEWidths(WorkflowSettings.UseWidths);
                     result = Query.UpdateT3D(result, t3DDocument, WorkflowSettings.UpdateWindowPositionType);
 
@@ -207,62 +264,62 @@ namespace SAM.Analytical.Tas
 
                     sAMT3DDocument.Save();
 
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("T3D to TBD -> Shading"));
+                    Step("T3D to TBD -> Shading");
                     Convert.ToTBD(t3DDocument, WorkflowSettings.Path_TBD, 1, 365, 15, true, false);
                 }
             }
 
-            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening TBD"));
+            Step("Opening TBD");
             using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(WorkflowSettings.Path_TBD))
             {
                 TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
 
                 hasWeatherData = tBDDocument?.Building.GetWeatherYear() != null;
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Facing External Elements"));
+                Step("Updating Facing External Elements");
                 result = Query.UpdateFacingExternal(result, tBDDocument);
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Assigning Adiabatic Constructions"));
+                Step("Assigning Adiabatic Constructions");
                 Modify.AssignAdiabaticConstruction(tBDDocument, "Adiabatic", new string[] { "-unzoned", "-internal", "-exposed" }, false, true);
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Setting Adiabatic"));
+                Step("Setting Adiabatic");
                 Modify.UpdateAdiabatic(tBDDocument, result, Tolerance.MacroDistance);
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Building Elements"));
+                Step("Updating Building Elements");
                 Modify.UpdateBuildingElements(tBDDocument, result);
 
                 adjacencyCluster = result.AdjacencyCluster;
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Ids"));
+                Step("Updating Ids");
                 Modify.UpdateIds(adjacencyCluster, tBDDocument.Building);
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Thermal Parameters"));
+                Step("Updating Thermal Parameters");
                 Modify.UpdateThermalParameters(adjacencyCluster, tBDDocument.Building);
                 result = new AnalyticalModel(result, adjacencyCluster);
 
                 if (WorkflowSettings.UpdateZones)
                 {
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Updating Zones"));
+                    Step("Updating Zones");
                     Modify.UpdateZones(tBDDocument.Building, result, true);
                 }
 
                 if (coolingDesignDays != null || heatingDesignDays != null)
                 {
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Adding Design Days"));
+                    Step("Adding Design Days");
                     Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
                 }
 
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Creating Zone Groups"));
+                Step("Creating Zone Groups");
                 Modify.AddDefaultZoneGroups(tBDDocument?.Building, adjacencyCluster);
 
                 if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
                 {
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Aperture Types"));
+                    Step("Updating Aperture Types");
                     Modify.SetApertureTypes(tBDDocument.Building, adjacencyCluster, Tolerance.MacroDistance);
                 }
 
                 if (WorkflowSettings.AddIZAMs)
                 {
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Add IZAMs"));
+                    Step("Add IZAMs");
                     Modify.UpdateIZAMs(tBDDocument, adjacencyCluster);
                 }
 
@@ -300,24 +357,27 @@ namespace SAM.Analytical.Tas
 
             if (!hasWeatherData)
             {
+                WriteTimingsCsv(directory, fileName);
                 return result;
             }
 
             if (WorkflowSettings.Sizing)
             {
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Sizing"));
+                Step("Sizing");
                 Query.Sizing(WorkflowSettings.Path_TBD, new SizingSettings() { ExcludeOutdoorAir = false, ExcludePositiveInternalGains = true }, result);
             }
 
-            if (WorkflowSettings.SurfaceOutputSpecs != null && WorkflowSettings.SurfaceOutputSpecs.Count > 0)
+            bool hasSurfaceOutputSpecs = WorkflowSettings.SurfaceOutputSpecs != null && WorkflowSettings.SurfaceOutputSpecs.Count > 0;
+
+            if (hasSurfaceOutputSpecs && !WorkflowSettings.Simulate)
             {
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Opening TBD"));
+                Step("Opening TBD");
                 using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(WorkflowSettings.Path_TBD))
                 {
                     TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Surface Output Specs"));
+                    Step("Updating Surface Output Specs");
                     Core.Tas.Modify.UpdateSurfaceOutputSpecs(tBDDocument, WorkflowSettings.SurfaceOutputSpecs);
-                    Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Assigning Surface Output Specs"));
+                    Step("Assigning Surface Output Specs");
                     Core.Tas.Modify.AssignSurfaceOutputSpecs(tBDDocument, WorkflowSettings.SurfaceOutputSpecs[0].Name);
                     sAMTBDDocument.Save();
                 }
@@ -325,22 +385,23 @@ namespace SAM.Analytical.Tas
 
             if (WorkflowSettings.Simulate)
             {
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Simulating Model"));
-                Modify.Simulate(WorkflowSettings.Path_TBD, path_TSD, WorkflowSettings.SimulateFrom, WorkflowSettings.SimulateTo);
+                Step("Simulating Model");
+                Modify.Simulate(WorkflowSettings.Path_TBD, path_TSD, WorkflowSettings.SimulateFrom, WorkflowSettings.SimulateTo, SizingType.Undefined, hasSurfaceOutputSpecs ? WorkflowSettings.SurfaceOutputSpecs : null);
             }
 
             if (!WorkflowSettings.Simulate)
             {
+                WriteTimingsCsv(directory, fileName);
                 return result;
             }
 
-            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Adding Results"));
+            Step("Adding Results");
             adjacencyCluster = result.AdjacencyCluster;
             List<Result> results = Modify.AddResults(path_TSD, adjacencyCluster);
 
             if (WorkflowSettings.UnmetHours)
             {
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Calculating Unmet Hours"));
+                Step("Calculating Unmet Hours");
                 List<Result> results_UnmetHours = Query.UnmetHours(path_TSD, WorkflowSettings.Path_TBD, 0.5);
                 if (results_UnmetHours != null && results_UnmetHours.Count > 0)
                 {
@@ -364,18 +425,20 @@ namespace SAM.Analytical.Tas
                 }
             }
 
-            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Updating Design Loads"));
+            Step("Updating Design Loads");
             adjacencyCluster = Modify.UpdateDesignLoads(WorkflowSettings.Path_TBD, adjacencyCluster);
 
             result = new AnalyticalModel(result, adjacencyCluster);
 
             if(result != null)
             {
-                Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs("Saving Model"));
+                Step("Saving Model");
                 string path_Json = System.IO.Path.Combine(directory, string.Format("{0}.{1}", fileName, "json"));
 
                 Core.Convert.ToFile(result, path_Json, SAMFileType.Json);
             }
+
+            WriteTimingsCsv(directory, fileName);
 
             Ended?.Invoke(this, new System.EventArgs());
 

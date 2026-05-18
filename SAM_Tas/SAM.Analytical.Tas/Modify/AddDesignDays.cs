@@ -49,26 +49,38 @@ namespace SAM.Analytical.Tas
             TBD.Calendar calendar = building.GetCalendar();
 
             List<TBD.dayType> dayTypes = Query.DayTypes(calendar);
-            if (dayTypes.Find(x => x.name == "HDD") == null)
+            Dictionary<string, TBD.dayType> dayTypesByName = BuildDayTypeIndex(dayTypes);
+            if (!dayTypesByName.ContainsKey("HDD"))
             {
                 TBD.dayType dayType = calendar.AddDayType();
                 dayType.name = "HDD";
             }
 
-            if (dayTypes.Find(x => x.name == "CDD") == null)
+            if (!dayTypesByName.ContainsKey("CDD"))
             {
                 TBD.dayType dayType = calendar.AddDayType();
                 dayType.name = "CDD";
             }
 
             dayTypes = building.DayTypes();
+            dayTypesByName = BuildDayTypeIndex(dayTypes);
 
             List<Guid> result = new List<Guid>();
 
             if(coolingDesignDays != null && coolingDesignDays.Count() != 0)
             {
-                TBD.dayType dayType = dayTypes?.Find(x => x.name == "CDD");
+                dayTypesByName.TryGetValue("CDD", out TBD.dayType dayType);
                 List<TBD.CoolingDesignDay> coolingDesignDays_TBD = building.CoolingDesignDays();
+                Dictionary<string, TBD.CoolingDesignDay> coolingByName = new Dictionary<string, TBD.CoolingDesignDay>(coolingDesignDays_TBD?.Count ?? 0);
+                if (coolingDesignDays_TBD != null)
+                {
+                    foreach (TBD.CoolingDesignDay c in coolingDesignDays_TBD)
+                    {
+                        if (!string.IsNullOrEmpty(c?.name))
+                            coolingByName[c.name] = c;
+                    }
+                }
+
                 foreach(DesignDay designDay in coolingDesignDays)
                 {
                     if(designDay == null)
@@ -76,8 +88,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    TBD.CoolingDesignDay coolingDesignDay_TBD = coolingDesignDays_TBD?.Find(x => x.name == designDay.Name);
-                    if(coolingDesignDay_TBD == null)
+                    if (designDay.Name == null || !coolingByName.TryGetValue(designDay.Name, out TBD.CoolingDesignDay coolingDesignDay_TBD) || coolingDesignDay_TBD == null)
                     {
                         coolingDesignDay_TBD = building.AddCoolingDesignDay();
                     }
@@ -89,9 +100,19 @@ namespace SAM.Analytical.Tas
 
             if (heatingDesignDays != null && heatingDesignDays.Count() != 0)
             {
-                TBD.dayType dayType = dayTypes?.Find(x => x.name == "HDD");
+                dayTypesByName.TryGetValue("HDD", out TBD.dayType dayType);
 
                 List<TBD.HeatingDesignDay> heatingDesignDays_TBD = building.HeatingDesignDays();
+                Dictionary<string, TBD.HeatingDesignDay> heatingByName = new Dictionary<string, TBD.HeatingDesignDay>(heatingDesignDays_TBD?.Count ?? 0);
+                if (heatingDesignDays_TBD != null)
+                {
+                    foreach (TBD.HeatingDesignDay h in heatingDesignDays_TBD)
+                    {
+                        if (!string.IsNullOrEmpty(h?.name))
+                            heatingByName[h.name] = h;
+                    }
+                }
+
                 foreach (DesignDay designDay in heatingDesignDays)
                 {
                     if (designDay == null)
@@ -99,8 +120,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    TBD.HeatingDesignDay heatingDesignDay_TBD = heatingDesignDays_TBD?.Find(x => x.name == designDay.Name);
-                    if (heatingDesignDay_TBD == null)
+                    if (designDay.Name == null || !heatingByName.TryGetValue(designDay.Name, out TBD.HeatingDesignDay heatingDesignDay_TBD) || heatingDesignDay_TBD == null)
                     {
                         heatingDesignDay_TBD = building.AddHeatingDesignDay();
                     }
@@ -112,6 +132,19 @@ namespace SAM.Analytical.Tas
 
             return result;
 
+        }
+
+        private static Dictionary<string, TBD.dayType> BuildDayTypeIndex(IEnumerable<TBD.dayType> dayTypes)
+        {
+            Dictionary<string, TBD.dayType> result = new Dictionary<string, TBD.dayType>();
+            if (dayTypes == null)
+                return result;
+            foreach (TBD.dayType d in dayTypes)
+            {
+                if (!string.IsNullOrEmpty(d?.name))
+                    result[d.name] = d;
+            }
+            return result;
         }
     }
 }

@@ -32,7 +32,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public SAMAnalyticalFromTBD()
           : base("SAMAnalytical.FromTBD", "SAMAnalytical.FromTBD",
-              "Create AnalyticalModel From TBD File",
+              "Creates a SAM AnalyticalModel by reading the geometry, constructions, and building data from a TasTBD file.",
               "SAM", "Tas")
         {
         }

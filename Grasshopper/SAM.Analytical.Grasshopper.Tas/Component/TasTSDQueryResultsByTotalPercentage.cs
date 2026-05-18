@@ -39,7 +39,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// </summary>
         public TasTSDQueryResultsByTotalPercentage()
           : base("Tas.TSDQueryResultsByTotalPercentage", "Tas.TSDQueryResultsByTotalPercentage",
-              "Query Results by Total Percentage.\nIt will search all spaces and return ONE and hour index for this space only",
+              "Reads space-level results from a TasTSD file at a single percentile evaluated across the entire model.\nReturns one hour-of-year index that satisfies the percentile when all spaces are pooled.",
               "SAM", "Tas")
         {
         }

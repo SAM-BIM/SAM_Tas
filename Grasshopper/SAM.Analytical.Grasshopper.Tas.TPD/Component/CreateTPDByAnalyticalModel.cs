@@ -40,8 +40,8 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// Initializes a new instance of the SAM_point3D class.
         /// </summary>
         public CreateTPDByAnalyticalModel()
-          : base("SAMAnalytical.TPDByAnalyticalModel ", "SAMAnalytical.TPDByAnalyticalModel ",
-              "Creates TPD from AnalyticalModel",
+          : base("SAMAnalytical.TPDByAnalyticalModel", "SAMAnalytical.TPDByAnalyticalModel",
+              "Creates a TPD plant-room file from a SAM AnalyticalModel, ready for simulation by Tas.",
               "SAM", "Tas")
         {
         }

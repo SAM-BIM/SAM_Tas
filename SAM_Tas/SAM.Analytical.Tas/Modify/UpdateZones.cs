@@ -46,6 +46,16 @@ namespace SAM.Analytical.Tas
             //Removes Internal Conditions with given names. Names are taken from Space Name (assumption Space Name equals InternalCondtion Name)
             RemoveInternalConditions(building, dictionary_Spaces.Keys);
 
+            // Hoist Query.ZoneGroups once and index it by name so the per-space ventilation lookup is O(1)
+            // instead of rebuilding the list and scanning it linearly for every space.
+            List<TBD.ZoneGroup> zoneGroups = Query.ZoneGroups(building) ?? new List<TBD.ZoneGroup>();
+            Dictionary<string, TBD.ZoneGroup> zoneGroupsByName = new Dictionary<string, TBD.ZoneGroup>(zoneGroups.Count);
+            foreach (TBD.ZoneGroup zg in zoneGroups)
+            {
+                if (!string.IsNullOrWhiteSpace(zg?.name))
+                    zoneGroupsByName[zg.name] = zg;
+            }
+
             List<TBD.zone> result = new List<TBD.zone>();
             foreach (Space space in spaces)
             {
@@ -66,12 +76,12 @@ namespace SAM.Analytical.Tas
                     string ventilationSystemTypeName = (ventilationSystem.Type as VentilationSystemType)?.Name;
                     if(!string.IsNullOrWhiteSpace(ventilationSystemTypeName))
                     {
-                        TBD.ZoneGroup zoneGroup = Query.ZoneGroups(building)?.Find(x => ventilationSystemTypeName.Equals(x.name));
-                        if (zoneGroup == null)
+                        if (!zoneGroupsByName.TryGetValue(ventilationSystemTypeName, out TBD.ZoneGroup zoneGroup) || zoneGroup == null)
                         {
                             zoneGroup = building.AddZoneGroup();
                             zoneGroup.name = ventilationSystemTypeName;
                             zoneGroup.type = (int)TBD.ZoneGroupType.tbdHVACZG;
+                            zoneGroupsByName[ventilationSystemTypeName] = zoneGroup;
                         }
 
                         if (zoneGroup != null)

@@ -58,9 +58,33 @@ namespace SAM.Analytical.Tas
             {
                 adjacencyCluster.GetPanels()?.ForEach(x => adjacencyCluster.GetRelatedObjects<SurfaceSimulationResult>(x.Guid)?.ForEach(y => adjacencyCluster.RemoveObject<SurfaceSimulationResult>(y.Guid)));
 
+                // Pre-bucket results by name (for SpaceSimulationResult lookup) and by type (for the per-space SurfaceSimulationResult scan)
+                // so the per-space loop is O(spaces) instead of O(spaces * results).
+                Dictionary<string, List<SpaceSimulationResult>> spaceResultsByName = new Dictionary<string, List<SpaceSimulationResult>>();
+                List<SurfaceSimulationResult> surfaceResults = new List<SurfaceSimulationResult>();
+                foreach (Core.Result r in results)
+                {
+                    if (r is SpaceSimulationResult sr)
+                    {
+                        if (!string.IsNullOrEmpty(sr.Name))
+                        {
+                            if (!spaceResultsByName.TryGetValue(sr.Name, out List<SpaceSimulationResult> bucket))
+                            {
+                                bucket = new List<SpaceSimulationResult>();
+                                spaceResultsByName[sr.Name] = bucket;
+                            }
+                            bucket.Add(sr);
+                        }
+                    }
+                    else if (r is SurfaceSimulationResult ssr)
+                    {
+                        surfaceResults.Add(ssr);
+                    }
+                }
+
                 foreach (Space space in spaces)
                 {
-                    List<SpaceSimulationResult> spaceSimulationResults_Space = results.FindAll(x => x is SpaceSimulationResult && space.Name.Equals(x.Name)).ConvertAll(x => (SpaceSimulationResult)x);
+                    List<SpaceSimulationResult> spaceSimulationResults_Space = (space.Name != null && spaceResultsByName.TryGetValue(space.Name, out List<SpaceSimulationResult> matched)) ? new List<SpaceSimulationResult>(matched) : new List<SpaceSimulationResult>();
                     dictionary[space.Guid] = spaceSimulationResults_Space;
                     if(spaceSimulationResults_Space != null && spaceSimulationResults_Space.Count != 0)
                     {
@@ -86,14 +110,10 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    foreach(Core.Result result_Temp in results)
-                    {
-                        SurfaceSimulationResult surfaceSimulationResult = result_Temp as SurfaceSimulationResult;
-                        if(surfaceSimulationResult == null)
-                        {
-                            continue;
-                        }
+                    List<Panel> panels = adjacencyCluster.GetPanels(space);
 
+                    foreach(SurfaceSimulationResult surfaceSimulationResult in surfaceResults)
+                    {
                         if(!surfaceSimulationResult.TryGetValue(SurfaceSimulationResultParameter.ZoneSurfaceReference, out ZoneSurfaceReference zoneSurfaceReference) || zoneSurfaceReference == null || !zoneGuid.Equals(zoneSurfaceReference.ZoneGuid))
                         {
                             continue;
@@ -101,7 +121,6 @@ namespace SAM.Analytical.Tas
 
                         adjacencyCluster.AddObject(surfaceSimulationResult);
 
-                        List<Panel> panels = adjacencyCluster.GetPanels(space);
                         if(panels != null && panels.Count != 0)
                         {
                             foreach(Panel panel in panels)
