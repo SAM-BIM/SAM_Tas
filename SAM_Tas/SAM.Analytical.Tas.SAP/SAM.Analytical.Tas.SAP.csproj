@@ -3,6 +3,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Deterministic>false</Deterministic>
     <AssemblyTitle>SAM.Analytical.Tas.SAP</AssemblyTitle>
     <Product>SAM.Analytical.Tas.SAP</Product>
     <Copyright>Copyright ©  2023</Copyright>
@@ -34,6 +35,6 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="System.Text.Json" Version="10.0.8" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 </Project>

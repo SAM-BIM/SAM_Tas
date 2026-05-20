@@ -3,6 +3,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Deterministic>false</Deterministic>
     <AssemblyTitle>SAM.Analytical.Tas.TPD</AssemblyTitle>
     <Product>SAM.Analytical.Tas.TPD</Product>
     <Copyright>Copyright ©  2023</Copyright>
@@ -54,7 +55,7 @@
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
     <PackageReference Include="Microsoft.NETCore.Platforms" Version="7.0.4" />
-    <PackageReference Include="System.Text.Json" Version="10.0.8" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SAM.Core.Tas\SAM.Core.Tas.csproj" />

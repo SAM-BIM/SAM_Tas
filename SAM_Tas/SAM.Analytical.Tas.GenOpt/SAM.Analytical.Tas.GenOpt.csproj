@@ -3,6 +3,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Deterministic>false</Deterministic>
     <OutputPath>..\..\build\</OutputPath>
     <AssemblyTitle>SAM.Analytical.Tas.GenOpt</AssemblyTitle>
     <Product>SAM.Analytical.Tas.GenOpt</Product>
