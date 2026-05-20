@@ -56,6 +56,12 @@ namespace SAM.Analytical.Tas
                     zoneGroupsByName[zg.name] = zg;
             }
 
+            // Hoist the non-HDD dayType list once. AddInternalCondition would otherwise walk
+            // building.DayTypes() (GetDayTypeCount + per-index dayTypes(i) + .name COM access) per space.
+            List<TBD.dayType> dayTypes_NonHDD = Query.DayTypes(building);
+            if (dayTypes_NonHDD != null)
+                dayTypes_NonHDD.RemoveAll(x => x.name.Equals("HDD"));
+
             List<TBD.zone> result = new List<TBD.zone>();
             foreach (Space space in spaces)
             {
@@ -68,7 +74,7 @@ namespace SAM.Analytical.Tas
                 if (!dictionary_Zones.TryGetValue(name, out zone) || zone == null)
                     continue;
 
-                zone = building.UpdateZone(zone, space, profileLibrary, adjacencyCluster);
+                zone = building.UpdateZone(zone, space, profileLibrary, dayTypes_NonHDD, adjacencyCluster);
 
                 VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space)?.FirstOrDefault();
                 if(ventilationSystem != null)

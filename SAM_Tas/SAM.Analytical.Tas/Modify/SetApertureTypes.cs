@@ -1,4 +1,5 @@
 ﻿using SAM.Geometry.Spatial;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TBD;
@@ -54,6 +55,10 @@ namespace SAM.Analytical.Tas
                 }
             }
 
+            // Build once; replaces a per-aperture AdjacencyCluster.Apertures(point, ...) call that
+            // re-walked every panel each time (O(apertures * panels) on a 625-zone TM59 model).
+            List<Tuple<BoundingBox3D, Aperture>> aperturesIndex = adjacencyCluster.AperturesWithBoundingBoxes();
+
             List<TBD.ApertureType> result = new List<TBD.ApertureType>();
 
             foreach(Panel panel_Temp in panels_Temp)
@@ -74,7 +79,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    Aperture aperture = adjacencyCluster.Apertures(point3D, 1, Core.Tolerance.MacroDistance)?.FirstOrDefault();
+                    Aperture aperture = aperturesIndex.Apertures(point3D, 1, Core.Tolerance.MacroDistance)?.FirstOrDefault();
                     if(aperture == null)
                     {
                         continue;

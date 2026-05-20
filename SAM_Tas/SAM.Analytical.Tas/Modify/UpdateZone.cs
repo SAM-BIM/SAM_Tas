@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
 {
@@ -6,10 +6,16 @@ namespace SAM.Analytical.Tas
     {
         public static TBD.zone UpdateZone(this TBD.Building building, TBD.zone zone, Space space, ProfileLibrary profileLibrary, AdjacencyCluster adjacencyCluster = null)
         {
+            return UpdateZone(building, zone, space, profileLibrary, null, adjacencyCluster);
+        }
+
+        // dayTypes_NonHDD threads a pre-computed list down to AddInternalCondition. See that method.
+        public static TBD.zone UpdateZone(this TBD.Building building, TBD.zone zone, Space space, ProfileLibrary profileLibrary, IEnumerable<TBD.dayType> dayTypes_NonHDD, AdjacencyCluster adjacencyCluster = null)
+        {
             if (space == null || profileLibrary == null || building == null || zone == null)
                 return null;
 
-            TBD.InternalCondition internalCondition_TBD = AddInternalCondition(building, space, profileLibrary, adjacencyCluster);
+            TBD.InternalCondition internalCondition_TBD = AddInternalCondition(building, space, profileLibrary, dayTypes_NonHDD, adjacencyCluster);
             if (internalCondition_TBD == null)
                 return null;
 

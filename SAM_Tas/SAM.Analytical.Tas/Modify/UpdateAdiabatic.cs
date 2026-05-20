@@ -91,7 +91,7 @@ namespace SAM.Analytical.Tas
             {
                 return true;
             }
-            
+
             foreach(zone zone in zones)
             {
                 List<IZoneSurface> zoneSurfaces = zone?.ZoneSurfaces();
@@ -110,7 +110,38 @@ namespace SAM.Analytical.Tas
 
                     foreach(IRoomSurface roomSurface in roomSurfaces)
                     {
-                        Face3D face3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter());
+                        TBD.Perimeter perimeter = roomSurface?.GetPerimeter();
+                        if (perimeter == null)
+                        {
+                            continue;
+                        }
+
+                        // Cheap AABB from the perimeter's outer polygon. Skip the full ToSAM (plane
+                        // + Face2D construction) when no adiabatic panel could possibly match. Tested
+                        // against each tuple individually rather than against a union envelope, because
+                        // adiabatic panels in residential models (party walls) are scattered through
+                        // the building and the union AABB ends up covering ~everything.
+                        BoundingBox3D boundingBox3D_RoomSurface = Geometry.Tas.Query.BoundingBox3D(perimeter);
+                        if (boundingBox3D_RoomSurface == null)
+                        {
+                            continue;
+                        }
+
+                        bool intersectsAdiabatic = false;
+                        foreach (Tuple<BoundingBox3D, Face3D> candidate in tuples)
+                        {
+                            if (candidate.Item1.InRange(boundingBox3D_RoomSurface, tolerance))
+                            {
+                                intersectsAdiabatic = true;
+                                break;
+                            }
+                        }
+                        if (!intersectsAdiabatic)
+                        {
+                            continue;
+                        }
+
+                        Face3D face3D = Geometry.Tas.Convert.ToSAM(perimeter);
                         if(face3D == null)
                         {
                             continue;

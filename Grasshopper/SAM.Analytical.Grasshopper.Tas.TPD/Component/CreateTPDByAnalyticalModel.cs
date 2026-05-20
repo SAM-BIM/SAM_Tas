@@ -13,6 +13,7 @@ using SAM.Core.Systems;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
 
 namespace SAM.Analytical.Grasshopper.Tas.TPD
@@ -205,10 +206,17 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
 
                 if (systemEnergyCentre != null)
                 {
+                    string test = Core.Convert.ToString(systemEnergyCentre);
+
+                    //Core.Convert.ToFile(systemEnergyCentre, @"C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-05-19-MigrationTest\test-copy-debug.JSON");
                     systemEnergyCentre.UpdateDesignDays(analyticalModel);
                 }
             }
-            
+            else
+            {
+                //SAM.Core.Convert.ToFile(systemEnergyCentre, @"C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-05-19-MigrationTest\test-debug.JSON");
+            }
+
             if (systemEnergyCentre == null)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not find and create SystemEnergyCentre");
