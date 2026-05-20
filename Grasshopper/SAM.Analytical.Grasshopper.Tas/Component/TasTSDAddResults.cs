@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Core.Grasshopper;
@@ -33,7 +36,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public TasTSDAddResults()
           : base("Tas.TSDAddResults", "Tas.TSDAddResults",
-              "Updates an AdjacencyCluster from a TSD file with results. \n Cooling/Heating load and all variables per Space, Zone and Model \n *click "+" on inputs to add UnmetHours and UnmetHoursMargin",
+              "Reads space-, zone-, and model-level simulation results from a TasTSD file and attaches them to an AdjacencyCluster (cooling/heating loads plus all sampled variables).\nClick \"+\" on the inputs to also compute UnmetHours and UnmetHoursMargin.",
               "SAM", "Tas")
         {
         }

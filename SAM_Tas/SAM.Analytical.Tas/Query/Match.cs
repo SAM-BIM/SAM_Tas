@@ -1,4 +1,7 @@
-﻿using SAM.Geometry.Spatial;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -222,24 +225,29 @@ namespace SAM.Analytical.Tas
 
                 foreach(Panel panel in panels)
                 {
-                    Face3D face3D = panel?.GetFace3D(false);
-                    if(face3D == null)
-                    {
-                        continue;
-                    }
-
-                    BoundingBox3D boundingBox3D = panel.GetBoundingBox();
+                    BoundingBox3D boundingBox3D = panel?.GetBoundingBox();
                     if(boundingBox3D == null)
                     {
                         continue;
                     }
 
-                    if(boundingBox3D.InRange(boundingBox3D, tolerance))
+                    // Bounding box vs. room-surface internal point — guards the expensive Face3D.InRange
+                    // point-in-face test on the next line. Previously compared the panel bbox to itself,
+                    // which is a tautology, defeating the prefilter.
+                    if (!boundingBox3D.InRange(point3D, tolerance))
                     {
-                        if (face3D.InRange(point3D, tolerance))
-                        {
-                            return panel;
-                        }
+                        continue;
+                    }
+
+                    Face3D face3D = panel.GetFace3D(false);
+                    if(face3D == null)
+                    {
+                        continue;
+                    }
+
+                    if (face3D.InRange(point3D, tolerance))
+                    {
+                        return panel;
                     }
                 }
             }
@@ -330,12 +338,16 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
-                            if (boundingBox3D.InRange(boundingBox3D, tolerance))
+                            // Bounding box vs. room-surface internal point; previously compared the
+                            // aperture face bbox to itself (always true), defeating the prefilter.
+                            if (!boundingBox3D.InRange(point3D, tolerance))
                             {
-                                if (face3D_AperturePart.InRange(point3D, tolerance))
-                                {
-                                    return aperture;
-                                }
+                                continue;
+                            }
+
+                            if (face3D_AperturePart.InRange(point3D, tolerance))
+                            {
+                                return aperture;
                             }
                         }
                     }

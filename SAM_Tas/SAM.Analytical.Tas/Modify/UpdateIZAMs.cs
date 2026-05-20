@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System.Collections.Generic;
 using TBD;
 using System.Linq;
@@ -48,8 +51,6 @@ namespace SAM.Analytical.Tas
 
             Building building = tBDDocument.Building;
 
-            List<zone> zones = building.Zones();
-
             List<Space> spaces = adjacencyCluster.GetSpaces();
             if(spaces == null)
             {
@@ -76,36 +77,113 @@ namespace SAM.Analytical.Tas
                 elevation = boundingBox3D.Min.Z - height -  1;
             }
 
-            
+            // Pre-fetch and index zones once. Was being refetched (full COM rebuild) inside the AHU loop
+            // AND linear-scanned via zones.Match() per AHU / per space / per movement.
+            // Lookup key matches zones.Match(name, caseSensitive: false, trim: true) semantics.
+            List<zone> zonesList = building.Zones() ?? new List<zone>();
+            Dictionary<string, zone> zonesByKey = new Dictionary<string, zone>(zonesList.Count);
+            foreach (zone z in zonesList)
+            {
+                string n = z?.name;
+                if (!string.IsNullOrWhiteSpace(n))
+                    zonesByKey[n.Trim().ToUpper()] = z;
+            }
+
+            // Pre-resolve everything the loops need so we can:
+            //  (a) bulk-remove all to-be-replaced ICs and IZAMs in two calls (was per-iteration → O(N^2)),
+            //  (b) avoid re-fetching GetRelatedObjects / GetObjects inside the modify loops.
+            Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement> ahuMovements = new Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement>();
+            HashSet<string> icNamesToReplace = new HashSet<string>();
+            HashSet<string> izamNamesToReplace = new HashSet<string>();
+
+            foreach (AirHandlingUnit ahu in airHandlingUnits)
+            {
+                AirHandlingUnitAirMovement m = adjacencyCluster.GetRelatedObjects<AirHandlingUnitAirMovement>(ahu)?.FirstOrDefault();
+                if (m == null)
+                    continue;
+                ahuMovements[ahu] = m;
+                if (!string.IsNullOrEmpty(m.Name))
+                {
+                    icNamesToReplace.Add(m.Name);
+                    izamNamesToReplace.Add(string.Format("IZAM {0} FROM OUTSIDE", m.Name));
+                }
+            }
+
+            // Resolved space-air-movement metadata, keyed by Space so the loop is O(spaces).
+            Dictionary<Space, List<SpaceMovementInfo>> spaceMovements = new Dictionary<Space, List<SpaceMovementInfo>>();
+            foreach (Space space in spaces)
+            {
+                List<SpaceAirMovement> sams = adjacencyCluster.GetRelatedObjects<SpaceAirMovement>(space);
+                if (sams == null || sams.Count == 0)
+                    continue;
+
+                List<SpaceMovementInfo> infos = new List<SpaceMovementInfo>(sams.Count);
+                foreach (SpaceAirMovement sam in sams)
+                {
+                    ObjectReference refFrom = Core.Convert.ComplexReference<ObjectReference>(sam.From);
+                    ObjectReference refTo = Core.Convert.ComplexReference<ObjectReference>(sam.To);
+
+                    SAMObject sFrom = adjacencyCluster.GetObjects<SAMObject>(refFrom)?.FirstOrDefault();
+                    SAMObject sTo = adjacencyCluster.GetObjects<SAMObject>(refTo)?.FirstOrDefault();
+
+                    if (sFrom == null)
+                        continue;
+
+                    string izamName = string.Format("IZAM {0}", sFrom.Name);
+                    izamName = sTo == null ? string.Format("{0} TO OUTSIDE", izamName) : string.Format("{0} TO {1}", izamName, sTo.Name);
+
+                    izamNamesToReplace.Add(izamName);
+                    infos.Add(new SpaceMovementInfo { Movement = sam, From = sFrom, To = sTo, IZAMName = izamName });
+                }
+                if (infos.Count > 0)
+                    spaceMovements[space] = infos;
+            }
+
+            // Single bulk remove instead of per-iteration removes (which each scanned the full IC/IZAM list).
+            // Note: this assumes distinct names per AHU / movement — the original code would have only kept
+            // the last-added when names collide; with bulk-remove + simple adds, colliding names would yield
+            // duplicates. In practice these names derive from unique AirHandlingUnitAirMovement / SAMObject
+            // names so collisions don't occur.
+            if (icNamesToReplace.Count > 0)
+                RemoveInternalConditions(building, icNamesToReplace);
+            if (izamNamesToReplace.Count > 0)
+                RemoveIZAMs(building, izamNamesToReplace);
 
             foreach (AirHandlingUnit airHandlingUnit in airHandlingUnits)
             {
-                AirHandlingUnitAirMovement airHandlingUnitAirMovement = adjacencyCluster.GetRelatedObjects<AirHandlingUnitAirMovement>(airHandlingUnit)?.FirstOrDefault();
-                if(airHandlingUnitAirMovement == null)
-                {
+                if (!ahuMovements.TryGetValue(airHandlingUnit, out AirHandlingUnitAirMovement airHandlingUnitAirMovement) || airHandlingUnitAirMovement == null)
                     continue;
-                }
 
                 AdjacencyCluster adjacencyCluster_Temp = Create.AdjacencyCluster(elevation, 3, height, 3);
                 elevation -= height - 1;
 
+                int zoneCountBefore = zonesList.Count;
                 Update(building, adjacencyCluster_Temp, Analytical.Query.DefaultMaterialLibrary(), true);
 
                 Space space = adjacencyCluster_Temp.GetSpaces().FirstOrDefault();
-
-                zones = building.Zones();
-                zone zone = zones.Match(space.Name, false, true);
-                if(zone == null)
-                {
+                if (space == null || string.IsNullOrWhiteSpace(space.Name))
                     continue;
+
+                // Refresh local zone tracking. Update() appends one new zone — pick it up and add to the dict
+                // without doing a per-iteration zones.Match scan over hundreds of zones.
+                zonesList = building.Zones() ?? new List<zone>();
+                for (int i = zoneCountBefore; i < zonesList.Count; i++)
+                {
+                    zone newZ = zonesList[i];
+                    string n = newZ?.name;
+                    if (!string.IsNullOrWhiteSpace(n))
+                        zonesByKey[n.Trim().ToUpper()] = newZ;
                 }
 
+                if (!zonesByKey.TryGetValue(space.Name.Trim().ToUpper(), out zone zone) || zone == null)
+                    continue;
+
                 zone.name = airHandlingUnit.Name;
+                if (!string.IsNullOrWhiteSpace(airHandlingUnit.Name))
+                    zonesByKey[airHandlingUnit.Name.Trim().ToUpper()] = zone;
                 zone.sizeHeating = (int)TBD.SizingType.tbdSizing;
 
                 string name = string.Format("{0}", airHandlingUnitAirMovement.Name);
-
-                RemoveInternalConditions(building, new string[] { name });
 
                 TBD.InternalCondition internalCondition = building.AddIC(null);
                 internalCondition.name = name;
@@ -165,7 +243,6 @@ namespace SAM.Analytical.Tas
                 if(profile_AirHandlingUnit != null)
                 {
                     name = string.Format("IZAM {0} FROM OUTSIDE", airHandlingUnitAirMovement.Name);
-                    RemoveIZAMs(building, new string[] { name });
 
                     IZAM iZAM = building.AddIZAM(null);
                     iZAM.fromOutside = 1;
@@ -185,38 +262,20 @@ namespace SAM.Analytical.Tas
 
             }
 
-            List<Tuple<IZAM, SAMObject>> tuples = new List<Tuple<IZAM, SAMObject>>();
             foreach(Space space in spaces)
             {
-                zone zone = zones.Match(space.Name, false, true);
-                if (zone == null)
-                {
+                if (string.IsNullOrWhiteSpace(space?.Name))
                     continue;
-                }
+                if (!zonesByKey.TryGetValue(space.Name.Trim().ToUpper(), out zone zone) || zone == null)
+                    continue;
 
                 zone.sizeHeating = (int)TBD.SizingType.tbdNoSizing;
 
-                List<SpaceAirMovement> spaceAirMovements = adjacencyCluster.GetRelatedObjects<SpaceAirMovement>(space);
-                if (spaceAirMovements == null || spaceAirMovements.Count == 0)
-                {
+                if (!spaceMovements.TryGetValue(space, out List<SpaceMovementInfo> movements) || movements == null)
                     continue;
-                }
 
-                ObjectReference objectReference_Space = new ObjectReference(space);
-
-                foreach(SpaceAirMovement spaceAirMovement in spaceAirMovements)
+                foreach (SpaceMovementInfo info in movements)
                 {
-                    ObjectReference objectReference_From = Core.Convert.ComplexReference<ObjectReference>(spaceAirMovement.From);
-                    ObjectReference objectReference_To = Core.Convert.ComplexReference<ObjectReference>(spaceAirMovement.To);
-
-                    SAMObject sAMObject_From = adjacencyCluster.GetObjects<SAMObject>(objectReference_From)?.FirstOrDefault();
-                    SAMObject sAMObject_To = adjacencyCluster.GetObjects<SAMObject>(objectReference_To)?.FirstOrDefault();
-
-                    string name = string.Format("IZAM {0}", sAMObject_From.Name);
-                    name = sAMObject_To == null ? string.Format("{0} TO OUTSIDE", name) : string.Format("{0} TO {1}", name, sAMObject_To.Name);
-
-                    RemoveIZAMs(building, new string[] { name });
-
                     IZAM iZAM = building.AddIZAM(null);
 
                     foreach (dayType dayType in dayTypes)
@@ -224,27 +283,34 @@ namespace SAM.Analytical.Tas
                         iZAM.SetDayType(dayType, true);
                     }
 
-                    iZAM.name = name;
+                    iZAM.name = info.IZAMName;
                     iZAM.fromOutside = 0;
                     result.Add(iZAM.name);
 
                     profile profile = iZAM.GetProfile();
-                    profile.Update(spaceAirMovement.Profile, spaceAirMovement.AirFlow);
+                    profile.Update(info.Movement.Profile, info.Movement.AirFlow);
 
                     zone.AssignIZAM(iZAM, true);
 
-                    if (sAMObject_From != null && sAMObject_From.Guid != space.Guid)
+                    if (info.From != null && info.From.Guid != space.Guid && !string.IsNullOrWhiteSpace(info.From.Name))
                     {
-                        zone zone_From = zones.Match(sAMObject_From.Name, false, true);
-                        if(zone_From != null)
+                        if (zonesByKey.TryGetValue(info.From.Name.Trim().ToUpper(), out zone zoneFrom) && zoneFrom != null)
                         {
-                            iZAM.SetSourceZone(zone_From);
+                            iZAM.SetSourceZone(zoneFrom);
                         }
                     }
                 }
             }
 
             return result;
+        }
+
+        private sealed class SpaceMovementInfo
+        {
+            public SpaceAirMovement Movement;
+            public SAMObject From;
+            public SAMObject To;
+            public string IZAMName;
         }
     }
 }

@@ -26,7 +26,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.11";
+        public override string LatestComponentVersion => "1.0.12";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -41,8 +41,8 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public SAMAnalyticalWorkflowgbXML()
           : base("SAMAnalytical.WorkflowgbXML", "SAMAnalytical.WorkflowgbXML",
-              "To run the Tas workflow with gbXML, make sure to generate the gbXML file beforehand. \n* Use SAMAnalytical.Check to verify that your model is error-free. ",
-              "SAM WIP", "Tas")
+              "Runs the full Tas workflow from a gbXML file: imports geometry into T3D, builds a TBD, applies weather, design days, IZAMs, sizing and surface-output specs, then simulates and writes results back to the AnalyticalModel.\nGenerate the gbXML beforehand and use SAMAnalytical.Check to verify the model is error-free.",
+              "SAM", "Tas")
         {
         }
 
@@ -352,6 +352,24 @@ namespace SAM.Analytical.Grasshopper.Tas
             };
 
             analyticalModel = Modify.RunWorkflow(analyticalModel, workflowSettings);
+
+            try
+            {
+                string timingDirectory = System.IO.Path.GetDirectoryName(path_TBD);
+                string timingFileName = System.IO.Path.GetFileNameWithoutExtension(path_TBD);
+                if (!string.IsNullOrWhiteSpace(timingDirectory) && !string.IsNullOrWhiteSpace(timingFileName))
+                {
+                    string path_Timing = System.IO.Path.Combine(timingDirectory, timingFileName + ".timing.csv");
+                    if (System.IO.File.Exists(path_Timing))
+                    {
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Per-step timings: " + path_Timing);
+                    }
+                }
+            }
+            catch
+            {
+                // Surfacing the timing path is best-effort and must never break the component.
+            }
 
             bool saveWeather = false;
             index = Params.IndexOfInputParam("saveWeather_");

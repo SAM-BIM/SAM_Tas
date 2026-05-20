@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using SAM.Core;
 using SAM.Core.Systems;
 using SAM.Geometry.Planar;
@@ -2366,10 +2369,24 @@ namespace SAM.Analytical.Tas.TPD
                 result.Name = fluidType.Name;
             }
 
-            result.SpecificHeatCapacity = fluidType.SpecificHeatCapacity;
-            result.Density = fluidType.Density;
+            // Only overwrite TAS's built-in fluid defaults when SAM has real values. Legacy
+            // SystemEnergyCentre JSON templates (deployed before 2026-05) omit SpecificHeatCapacity
+            // and Density entirely, which deserialize to 0 and would otherwise clobber TAS's known-
+            // good defaults (Water = 4181.3 J/(kg·K), 1000 kg/m^3), causing TPD to flag the fluid
+            // as invalid and the downstream circuit analysis to misbehave.
+            if (!double.IsNaN(fluidType.SpecificHeatCapacity) && fluidType.SpecificHeatCapacity > 0)
+            {
+                result.SpecificHeatCapacity = fluidType.SpecificHeatCapacity;
+            }
+            if (!double.IsNaN(fluidType.Density) && fluidType.Density > 0)
+            {
+                result.Density = fluidType.Density;
+            }
+            if (!double.IsNaN(fluidType.FreezingPoint))
+            {
+                result.FreezingPoint = fluidType.FreezingPoint;
+            }
             result.Description = fluidType.Description;
-            result.FreezingPoint = fluidType.FreezingPoint;
 
             return result;
         }

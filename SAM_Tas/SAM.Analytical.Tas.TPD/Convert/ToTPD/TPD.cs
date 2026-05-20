@@ -36,40 +36,53 @@ namespace SAM.Analytical.Tas.TPD
                 System.IO.File.Delete(path_TPD);
             }
 
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            TPDProfiler profiler = new TPDProfiler();
+            try
             {
-                TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
-                if (tPDDoc == null)
+                profiler.Step("Opening TPD file");
+                using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
                 {
-                    return false;
-                }
-
-                EnergyCentre energyCentre = tPDDoc.EnergyCentre;
-                energyCentre.AddTSDData(path_TSD, 1);
-
-                TSDData tSDData = energyCentre.GetTSDData(1);
-
-                ToTPD(systemEnergyCentre, tPDDoc);
-
-                if (systemEnergyCentreConversionSettings == null)
-                {
-                    systemEnergyCentreConversionSettings = new SystemEnergyCentreConversionSettings();
-                }
-
-                if (systemEnergyCentreConversionSettings.Simulate)
-                {
-                    tPDDoc.Simulate(
-                        systemEnergyCentreConversionSettings.StartHour + 1,
-                        systemEnergyCentreConversionSettings.EndHour + 1,
-                        0);
-
-                    if (systemEnergyCentreConversionSettings.IncludeComponentResults)
+                    TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
+                    if (tPDDoc == null)
                     {
-                        Modify.CopyResults(energyCentre, systemEnergyCentre, systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1);
+                        return false;
                     }
-                }
 
-                tPDDoc.Save();
+                    profiler.Step("Loading TSD data");
+                    EnergyCentre energyCentre = tPDDoc.EnergyCentre;
+                    energyCentre.AddTSDData(path_TSD, 1);
+
+                    TSDData tSDData = energyCentre.GetTSDData(1);
+
+                    ToTPD(systemEnergyCentre, tPDDoc, profiler);
+
+                    if (systemEnergyCentreConversionSettings == null)
+                    {
+                        systemEnergyCentreConversionSettings = new SystemEnergyCentreConversionSettings();
+                    }
+
+                    if (systemEnergyCentreConversionSettings.Simulate)
+                    {
+                        profiler.Step("Simulating");
+                        tPDDoc.Simulate(
+                            systemEnergyCentreConversionSettings.StartHour + 1,
+                            systemEnergyCentreConversionSettings.EndHour + 1,
+                            0);
+
+                        if (systemEnergyCentreConversionSettings.IncludeComponentResults)
+                        {
+                            profiler.Step("Copying component results");
+                            Modify.CopyResults(energyCentre, systemEnergyCentre, systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1);
+                        }
+                    }
+
+                    profiler.Step("Saving TPD");
+                    tPDDoc.Save();
+                }
+            }
+            finally
+            {
+                profiler.WriteCsv(path_TPD);
             }
 
             return true;
@@ -77,8 +90,17 @@ namespace SAM.Analytical.Tas.TPD
 
         public static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc)
         {
+            return ToTPD(systemEnergyCentre, tPDDoc, null);
+        }
+
+        // The profiler param threads per-section timing through the build. Null = no-op; otherwise
+        // each Step("name") accumulates against that bucket so plantroom-loop work shows up as a
+        // single summed row in the CSV.
+        internal static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc, TPDProfiler profiler)
+        {
             EnergyCentre energyCentre = tPDDoc.EnergyCentre;
 
+            profiler?.Step("Adding properties (schedules/fluids/design conditions)");
             AnalyticalSystemsProperties analyticalSystemsProperties = systemEnergyCentre.GetValue<AnalyticalSystemsProperties>(SystemEnergyCentreParameter.AnalyticalSystemsProperties);
             if (analyticalSystemsProperties != null)
             {
@@ -110,6 +132,7 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            profiler?.Step("Adding energy sources");
             List<SystemEnergySource> systemEnergySources = systemEnergyCentre.GetSystemEnergySources();
             if (systemEnergySources != null && systemEnergySources.Count != 0)
             {
@@ -124,6 +147,7 @@ namespace SAM.Analytical.Tas.TPD
             {
                 foreach (SystemPlantRoom systemPlantRoom in systemPlantRooms)
                 {
+                    profiler?.Step("Plantroom: setup");
                     PlantRoom plantRoom = energyCentre.PlantRoom(systemPlantRoom.Name);
                     if (plantRoom == null)
                     {
@@ -133,6 +157,7 @@ namespace SAM.Analytical.Tas.TPD
 
                     List<Core.Systems.SystemLabel> systemLabels = systemPlantRoom.GetSystemObjects<Core.Systems.SystemLabel>();
 
+                    profiler?.Step("Plantroom: liquid systems");
                     List<LiquidSystem> liquidSystems = systemPlantRoom.GetSystems<LiquidSystem>();
                     if (liquidSystems != null && liquidSystems.Count != 0)
                     {
@@ -375,6 +400,7 @@ namespace SAM.Analytical.Tas.TPD
                         }
                     }
 
+                    profiler?.Step("Plantroom: standalone components (wind / PV)");
                     List<Core.Systems.ISystemComponent> systemComponents_All = systemPlantRoom.GetSystemComponents<Core.Systems.ISystemComponent>();
                     if (systemComponents_All != null)
                     {
@@ -407,6 +433,7 @@ namespace SAM.Analytical.Tas.TPD
                         }
                     }
 
+                    profiler?.Step("Plantroom: air systems");
                     List<AirSystem> airSystems = systemPlantRoom.GetSystems<AirSystem>();
                     if (airSystems != null && airSystems.Count != 0)
                     {

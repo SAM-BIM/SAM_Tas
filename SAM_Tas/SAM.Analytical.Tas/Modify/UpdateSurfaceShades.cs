@@ -1,4 +1,7 @@
-﻿using SAM.Geometry.Spatial;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -110,16 +113,24 @@ namespace SAM.Analytical.Tas
                 dictionary_Temp[tuple.Item2] = tuple.Item3;
             }
 
+            // Index existing DaysShades by day so the lookup is O(1) instead of a linear .Find per dictionary key.
+            Dictionary<int, TBD.DaysShade> daysShadesByDay = new Dictionary<int, TBD.DaysShade>(daysShades.Count);
+            foreach (TBD.DaysShade ds in daysShades)
+            {
+                if (ds != null)
+                    daysShadesByDay[ds.day] = ds;
+            }
+
             foreach (KeyValuePair<int, Dictionary<short, float>> keyValuePair in dictionary)
             {
-                TBD.DaysShade daysShade = daysShades.Find(x => x.day == keyValuePair.Key);
-                if (daysShade == null)
+                if (!daysShadesByDay.TryGetValue(keyValuePair.Key, out TBD.DaysShade daysShade) || daysShade == null)
                 {
                     daysShade = building.AddDaysShade();
 
                     daysShade.day = keyValuePair.Key;
-                    
+
                     daysShades.Add(daysShade);
+                    daysShadesByDay[keyValuePair.Key] = daysShade;
                 }
 
                 foreach (KeyValuePair<short, float> keyValuePair_Temp in keyValuePair.Value)

@@ -40,7 +40,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// </summary>
         public TasTSDQueryZoneResultsByHourOfYear()
           : base("Tas.TSDQueryZoneResultsByHourOfYear", "Tas.TSDQueryZoneResultsByHourOfYear",
-              "Query Zone Results by HourOfYear.",
+              "Reads zone-level simulation results from a TasTSD file for a specific hour of the year (1-8760).",
               "SAM", "Tas")
         {
         }

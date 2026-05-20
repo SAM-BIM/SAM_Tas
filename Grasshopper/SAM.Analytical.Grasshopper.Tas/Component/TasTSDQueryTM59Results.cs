@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
@@ -35,8 +38,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public TasTSDQueryTM59Results()
           : base("Tas.TSDQueryTM59Results", "Tas.TSDQueryTM59Results",
-              "Query TSD for TM59Results" +
-               "this node will query results for summer 01 May to 30 September for a given space or zone and output when inspect results",
+              "Reads TM59 overheating-criteria results from a TasTSD file for the given space or zone.\nThe assessment covers the summer period (1 May - 30 September). Use Inspect on the output to see the individual criterion outcomes.",
               "SAM", "Tas")
         {
         }

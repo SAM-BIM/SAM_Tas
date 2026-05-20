@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
@@ -35,8 +38,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public TasTSDQueryTM52Results()
           : base("Tas.TSDQueryTM52Results", "Tas.TSDQueryTM52Results",
-              "Query TSD for TM52Results from Space or Zone" +
-               "this node will query results for given space or zone and output when inspect results",
+              "Reads TM52 overheating-criteria results from a TasTSD file for the given space or zone.\nUse Inspect on the output to see the individual criterion outcomes.",
               "SAM", "Tas")
         {
         }

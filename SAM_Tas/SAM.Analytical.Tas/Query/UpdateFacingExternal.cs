@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
@@ -85,14 +88,17 @@ namespace SAM.Analytical.Tas
                 if (zoneSurface.buildingElement != null)
                 {
                     string name = zoneSurface.buildingElement.name;
-                    if (!string.IsNullOrEmpty(name) && name.ToUpper().Contains("ADIABATIC"))
+                    // Cache the uppercased name once per surface — was being recomputed up to 4 times via name.ToUpper().Contains(...).
+                    string nameUpper = string.IsNullOrEmpty(name) ? null : name.ToUpper();
+
+                    if (nameUpper != null && nameUpper.Contains("ADIABATIC"))
                         zoneSurface.type = TBD.SurfaceType.tbdNullLink;
 
-                    if (!facingExternal)
-                        facingExternal = !string.IsNullOrEmpty(name) && name.ToUpper().Contains("EXT") && !name.ToUpper().Contains("GRD");
+                    if (!facingExternal && nameUpper != null)
+                        facingExternal = nameUpper.Contains("EXT") && !nameUpper.Contains("GRD");
 
-                    if (!facingExternalGlazing)
-                        facingExternalGlazing = !string.IsNullOrEmpty(name) && name.ToUpper().Contains("EXT_GLZ");
+                    if (!facingExternalGlazing && nameUpper != null)
+                        facingExternalGlazing = nameUpper.Contains("EXT_GLZ");
                 }
 
                 if (facingExternal && facingExternalGlazing)

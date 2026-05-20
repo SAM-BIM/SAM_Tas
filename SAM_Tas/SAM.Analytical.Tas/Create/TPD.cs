@@ -682,6 +682,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int i = 1;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -690,9 +692,9 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableNone;
                 //systemZone.FlowRate.Method = TPD.tpdSizeFlowMethod.tpdSizeFlowDeltaT;
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableNone;
-                for (int j = 1; j <= energyCentre.GetDesignConditionCount(); j++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(j));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 if (electricalGroup_SmallPower != null)
@@ -773,6 +775,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int i = 1;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -781,9 +785,9 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableNone;
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableNone;
 
-                for (int j = 1; j <= energyCentre.GetDesignConditionCount(); j++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(j));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 if (electricalGroup_SmallPower != null)
@@ -934,6 +938,8 @@ namespace SAM.Analytical.Tas
             //    names.Add((systemComponent as dynamic)?.name);
             //}
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int i = 1;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -961,9 +967,9 @@ namespace SAM.Analytical.Tas
 
                 SizedFlowVariable sizedFlowVariable_FreshAir = systemZone_Group.FreshAir;
                 sizedFlowVariable_FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableNone;
-                for (int j = 1; j <= energyCentre.GetDesignConditionCount(); j++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(j));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 //Damper damper_Zone = componentGroup.GetComponent((i * 3) + 1) as Damper;
@@ -1091,6 +1097,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int i = 1;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -1117,9 +1125,9 @@ namespace SAM.Analytical.Tas
 
                 SizedFlowVariable sizedFlowVariable_FreshAir = systemZone_Group.FreshAir;
                 sizedFlowVariable_FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableNone;
-                for (int j = 1; j <= energyCentre.GetDesignConditionCount(); j++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(j));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 Damper damper_Zone = componentGroup.GetComponent(i + 3) as Damper;
@@ -1401,6 +1409,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int index = 0;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -1428,16 +1438,16 @@ namespace SAM.Analytical.Tas
 
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowDeltaT;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FreshAir.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FreshAir.AddDesignCondition(designCondition);
                 }
 
                 Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, adjacencyCluster);
@@ -1692,6 +1702,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int index = 0;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -1718,9 +1730,9 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FlowRate.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 systemZone_Group.DisplacementVent = displacementVent ? 1 : 0;
@@ -1728,9 +1740,9 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FreshAir.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FreshAir.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FreshAir.AddDesignCondition(designCondition);
                 }
 
                 Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, adjacencyCluster);
@@ -1982,6 +1994,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int index = 0;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -2008,9 +2022,9 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FlowRate.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 systemZone_Group.DisplacementVent = displacementVent ? 1 : 0;
@@ -2018,9 +2032,9 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FreshAir.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FreshAir.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FreshAir.AddDesignCondition(designCondition);
                 }
 
                 Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, adjacencyCluster);
@@ -2197,6 +2211,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int index = 0;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -2223,17 +2239,17 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FlowRate.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FreshAir.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FreshAir.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FreshAir.AddDesignCondition(designCondition);
                 }
 
                 Modify.AddComponents(systemZone_Group as SystemZone, energyCentre, adjacencyCluster);
@@ -2396,6 +2412,8 @@ namespace SAM.Analytical.Tas
             ComponentGroup componentGroup = system.AddGroup(systemComponents, controllers);
             componentGroup.SetMultiplicity(zoneLoads.Count());
 
+            object[] designConditions = energyCentre.DesignConditionArray();
+
             int index = 0;
             foreach (ZoneLoad zoneLoad in zoneLoads)
             {
@@ -2423,17 +2441,17 @@ namespace SAM.Analytical.Tas
                 systemZone_Group.FlowRate.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FlowRate.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FlowRate.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FlowRate.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FlowRate.AddDesignCondition(designCondition);
                 }
 
                 systemZone_Group.FreshAir.Type = global::TPD.tpdSizedVariable.tpdSizedVariableSize;
                 systemZone_Group.FreshAir.Method = global::TPD.tpdSizeFlowMethod.tpdSizeFlowPeakInternalCondition;
                 //systemZone_Group.FreshAir.Value = 100;
-                for (int i = 1; i <= energyCentre.GetDesignConditionCount(); i++)
+                foreach (object designCondition in designConditions)
                 {
-                    systemZone_Group.FreshAir.AddDesignCondition(energyCentre.GetDesignCondition(i));
+                    systemZone_Group.FreshAir.AddDesignCondition(designCondition);
                 }
 
                 //TODO: Implement Flags   if ventilation profile Untick tpdSystemZoneFlagModelVentFlow, this will use TBD and not system
@@ -2458,5 +2476,17 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
+        private static object[] DesignConditionArray(this EnergyCentre energyCentre)
+        {
+            if (energyCentre == null)
+                return new object[0];
+
+            int count = energyCentre.GetDesignConditionCount();
+            object[] result = new object[count];
+            for (int i = 0; i < count; i++)
+                result[i] = energyCentre.GetDesignCondition(i + 1);
+
+            return result;
+        }
     }
 }
