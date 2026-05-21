@@ -44,7 +44,7 @@ namespace SAM.Analytical.Tas
                 result.type = (int)zoneGroupType;
             }
 
-            if (spaces != null || spaces.Count() != 0)
+            if (spaces.Any())
             {
                 foreach (Space space in spaces)
                 {

@@ -7,7 +7,7 @@ namespace SAM.Analytical.Tas
 {
     public static partial class Query
     {
-        public static Dictionary<string, Tuple<double, int, CoolingDesignData>> MaxValueDictionary(this IEnumerable<CoolingDesignData> coolingDesignDatas, tsdZoneArray tsdZoneArray) 
+        public static Dictionary<string, Tuple<double, int, CoolingDesignData>> MaxValueDictionary(this IEnumerable<CoolingDesignData> coolingDesignDatas, tsdZoneArray tsdZoneArray)
         {
             if(coolingDesignDatas == null)
             {
@@ -16,12 +16,13 @@ namespace SAM.Analytical.Tas
 
             Dictionary<string, Tuple<double, int, CoolingDesignData>> result = new Dictionary<string, Tuple<double, int, CoolingDesignData>>();
 
-            if(coolingDesignDatas.Count() == 0)
+            IList<CoolingDesignData> dataList = coolingDesignDatas as IList<CoolingDesignData> ?? coolingDesignDatas.ToList();
+            if (dataList.Count == 0)
             {
                 return result;
             }
 
-            CoolingDesignData coolingDesignData = coolingDesignDatas.ElementAt(0);
+            CoolingDesignData coolingDesignData = dataList[0];
             if(coolingDesignData == null)
             {
                 return result;
@@ -45,9 +46,11 @@ namespace SAM.Analytical.Tas
                 result[id] = new Tuple<double, int, CoolingDesignData>(value, index, coolingDesignData);
             }
 
-            for (int i = 1; i < coolingDesignDatas.Count(); i++)
+            int count = dataList.Count;
+            for (int i = 1; i < count; i++)
             {
-                values = coolingDesignDatas.ElementAt(i).GetPeakZoneGains(new short[1] { (short)tsdZoneArray }) as dynamic;
+                CoolingDesignData current = dataList[i];
+                values = current.GetPeakZoneGains(new short[1] { (short)tsdZoneArray }) as dynamic;
                 for (int j = 0; j < zoneDatas.Count; j++)
                 {
                     string id = zoneDatas[j].zoneGUID;
@@ -56,11 +59,11 @@ namespace SAM.Analytical.Tas
 
                     if (!result.TryGetValue(id, out Tuple<double, int, CoolingDesignData> tuple))
                     {
-                        result[id] = new Tuple<double, int, CoolingDesignData>(value, index, coolingDesignData);
+                        result[id] = new Tuple<double, int, CoolingDesignData>(value, index, current);
                     }
                     else if(tuple.Item1 < value)
                     {
-                        tuple = new Tuple<double, int, CoolingDesignData>(value, index, coolingDesignDatas.ElementAt(i));
+                        tuple = new Tuple<double, int, CoolingDesignData>(value, index, current);
                         result[id] = tuple;
                     }
                 }
@@ -78,12 +81,13 @@ namespace SAM.Analytical.Tas
 
             Dictionary<string, Tuple<double, int, HeatingDesignData>> result = new Dictionary<string, Tuple<double, int, HeatingDesignData>>();
 
-            if (heatingDesignDatas.Count() == 0)
+            IList<HeatingDesignData> dataList = heatingDesignDatas as IList<HeatingDesignData> ?? heatingDesignDatas.ToList();
+            if (dataList.Count == 0)
             {
                 return result;
             }
 
-            HeatingDesignData heatingDesignData = heatingDesignDatas.ElementAt(0);
+            HeatingDesignData heatingDesignData = dataList[0];
             if (heatingDesignData == null)
             {
                 return result;
@@ -107,9 +111,11 @@ namespace SAM.Analytical.Tas
                 result[id] = new Tuple<double, int, HeatingDesignData>(value, index, heatingDesignData);
             }
 
-            for (int i = 1; i < heatingDesignDatas.Count(); i++)
+            int count = dataList.Count;
+            for (int i = 1; i < count; i++)
             {
-                values = heatingDesignDatas.ElementAt(i).GetPeakZoneGains(new short[1] { (short)tsdZoneArray }) as dynamic;
+                HeatingDesignData current = dataList[i];
+                values = current.GetPeakZoneGains(new short[1] { (short)tsdZoneArray }) as dynamic;
                 for (int j = 0; j < zoneDatas.Count; j++)
                 {
                     string id = zoneDatas[j].zoneGUID;
@@ -118,11 +124,11 @@ namespace SAM.Analytical.Tas
 
                     if (!result.TryGetValue(id, out Tuple<double, int, HeatingDesignData> tuple))
                     {
-                        result[id] = new Tuple<double, int, HeatingDesignData>(value, index, heatingDesignData);
+                        result[id] = new Tuple<double, int, HeatingDesignData>(value, index, current);
                     }
                     else if (tuple.Item1 < value)
                     {
-                        tuple = new Tuple<double, int, HeatingDesignData>(value, index, heatingDesignDatas.ElementAt(i));
+                        tuple = new Tuple<double, int, HeatingDesignData>(value, index, current);
                         result[id] = tuple;
                     }
                 }

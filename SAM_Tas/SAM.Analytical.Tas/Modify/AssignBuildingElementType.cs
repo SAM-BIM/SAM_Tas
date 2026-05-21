@@ -44,7 +44,7 @@ namespace SAM.Analytical.Tas
 
             List<Guid> result = new List<Guid>();
 
-            if (names.Count() == 0)
+            if (!names.Any())
                 return result;
 
             List<TBD.buildingElement> buildingElements = building.BuildingElements();

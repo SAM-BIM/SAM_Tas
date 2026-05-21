@@ -35,7 +35,7 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                if(spaceNames != null && spaceNames.Count() == 0)
+                if(spaceNames != null && !spaceNames.Any())
                 {
                     bool contains = false;                    
                     List<TBD.zone> zones = internalCondition.Zones();

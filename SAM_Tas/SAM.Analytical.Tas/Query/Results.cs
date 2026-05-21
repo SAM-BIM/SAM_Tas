@@ -7,7 +7,7 @@ namespace SAM.Analytical.Tas
     {
         public static List<T> Results<T>(this IEnumerable<Core.IResult> results, T result) where T : Core.Result
         {
-            if (results == null || results.Count() == 0 || result == null)
+            if (results == null || !results.Any() || result == null)
                 return null;
 
             LoadType loadType = Analytical.Query.LoadType(result as dynamic);

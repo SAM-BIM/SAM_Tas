@@ -528,7 +528,7 @@ namespace SAM.Analytical.Tas
 
         public List<LayerThicknessCalculationResult> Calculate(IEnumerable<LayerThicknessCalculationData> layerThicknessCalculationDatas)
         {
-            if(ConstructionManager == null || layerThicknessCalculationDatas == null || layerThicknessCalculationDatas.Count() == 0)
+            if(ConstructionManager == null || layerThicknessCalculationDatas == null || !layerThicknessCalculationDatas.Any())
             {
                 return null;
             }
@@ -553,7 +553,7 @@ namespace SAM.Analytical.Tas
 
         public List<ConstructionCalculationResult> Calculate(IEnumerable<ConstructionCalculationData> constructionCalculationDatas)
         {
-            if (ConstructionManager == null || constructionCalculationDatas == null || constructionCalculationDatas.Count() == 0)
+            if (ConstructionManager == null || constructionCalculationDatas == null || !constructionCalculationDatas.Any())
             {
                 return null;
             }
@@ -578,7 +578,7 @@ namespace SAM.Analytical.Tas
 
         public List<IThermalTransmittanceCalculationResult> Calculate(IEnumerable<IThermalTransmittanceCalculationData> thermalTransmittanceCalculationDatas)
         {
-            if (ConstructionManager == null || thermalTransmittanceCalculationDatas == null || thermalTransmittanceCalculationDatas.Count() == 0)
+            if (ConstructionManager == null || thermalTransmittanceCalculationDatas == null || !thermalTransmittanceCalculationDatas.Any())
             {
                 return null;
             }
