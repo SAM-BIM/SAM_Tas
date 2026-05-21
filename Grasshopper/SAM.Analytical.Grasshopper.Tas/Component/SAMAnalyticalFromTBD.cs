@@ -50,6 +50,7 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
             inputParamManager.AddBooleanParameter("_importUnused_", "_importUnused_", "Import Unused IC", GH_ParamAccess.item, false);
+            inputParamManager.AddBooleanParameter("_importSurfaceShades_", "_importSurfaceShades_", "Import surface shades", GH_ParamAccess.item, false);
             inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
         }
 
@@ -71,7 +72,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             dataAccess.SetData(1, false);
 
             bool run = false;
-            if (!dataAccess.GetData(2, ref run))
+            if (!dataAccess.GetData(3, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -92,7 +93,13 @@ namespace SAM.Analytical.Grasshopper.Tas
                 importUnused = false;
             }
 
-            AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused);
+            bool importSurfaceShades = false;
+            if (!dataAccess.GetData(2, ref importSurfaceShades))
+            {
+                importSurfaceShades = false;
+            }
+
+            AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused, importSurfaceShades);
 
             dataAccess.SetData(0, analyticalModel);
             dataAccess.SetData(1, analyticalModel != null);
