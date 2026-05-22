@@ -118,6 +118,16 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
+        /// <summary>
+        /// Backwards-compatible 2-arg overload — forwards to the 3-arg variant with
+        /// <paramref name="importSurfaceShades"/> defaulted to <c>false</c> so callers
+        /// compiled against the previous signature keep working.
+        /// </summary>
+        public static AnalyticalModel ToSAM(string path_TBD, bool importUnused)
+        {
+            return ToSAM(path_TBD, importUnused, false);
+        }
+
         public static AnalyticalModel ToSAM(string path_TBD, bool importUnused, bool importSurfaceShades)
         {
             AnalyticalModel result = null;

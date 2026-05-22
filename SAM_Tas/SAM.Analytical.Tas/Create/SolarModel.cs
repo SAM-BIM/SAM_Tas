@@ -20,6 +20,24 @@ namespace SAM.Analytical.Tas
             }
 
             Core.Location location = new(building.name, building.longitude, building.latitude, 0);
+            // Preserve the TBD timezone on the SAM Location — mirrors
+            // ToSAM_AnalyticalModel so downstream nodes see consistent metadata.
+            string timeZoneDescription = Core.Query.Description(Core.Query.UTC(building.timeZone));
+            if (!string.IsNullOrEmpty(timeZoneDescription))
+            {
+                location.SetValue(Core.LocationParameter.TimeZone, timeZoneDescription);
+            }
+
+            // Resolve a numeric UTC offset (hours) for the SolarTimes sunrise/sunset
+            // filter below. TAS hour slots are stored in the building's local time
+            // (yearStart.AddDays(dayIndex - 1).AddHours(hour)); evaluating SolarTimes
+            // with offset = 0 silently shifts the daytime window by the site's UTC offset.
+            int timeZoneOffset = 0;
+            Core.UTC uTC = Core.Query.UTC(building.timeZone);
+            if (uTC != Core.UTC.Undefined)
+            {
+                timeZoneOffset = System.Convert.ToInt32(Core.Query.Double(uTC));
+            }
 
             SolarModel result = new(location);
 
@@ -78,7 +96,7 @@ namespace SAM.Analytical.Tas
 
                     // Filter to daytime hours using the same sunrise/sunset boundary that
                     // Query.SunDirection enforces internally (returns null outside that range).
-                    SolarTimes solarTimes = new(shiftedDT, 0, latitudeAngle, longitudeAngle);
+                    SolarTimes solarTimes = new(shiftedDT, timeZoneOffset, latitudeAngle, longitudeAngle);
                     if (shiftedDT < solarTimes.Sunrise || shiftedDT > solarTimes.Sunset)
                     {
                         continue;
@@ -181,7 +199,12 @@ namespace SAM.Analytical.Tas
 
                                     if (result.Add(linkedFace3D))
                                     {
-                                        coverage.RemoveAll(x => x.Item2 <= 0);
+                                        // Coverage series is kept INTACT — including zeros and
+                                        // negative-clip samples — so the per-face DateTime grid
+                                        // exactly matches the source TAS shade-day/hour grid.
+                                        // Dropping <= 0 entries would discard valid "fully
+                                        // unshaded" timesteps and bias error metrics in the
+                                        // comparison node toward only-shaded moments.
 
                                         // Reference = linkedFace3D.Guid.ToString() so coverage
                                         // results can be matched back to faces by the same
