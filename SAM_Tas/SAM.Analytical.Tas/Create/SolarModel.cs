@@ -88,6 +88,8 @@ namespace SAM.Analytical.Tas
                 }
             }
 
+            Dictionary<string, LinkedFace3D> dictionary = [];
+
             int i = 0;
             while (building.GetZone(i) is TBD.zone zone)
             {
@@ -101,6 +103,12 @@ namespace SAM.Analytical.Tas
                     if (zoneSurface.type != TBD.SurfaceType.tbdExposed)
                     {
                         j++;
+                        continue;
+                    }
+
+                    string reference = zoneSurface.buildingElement.GUID;
+                    if(dictionary.ContainsKey(reference))
+                    {
                         continue;
                     }
 
@@ -169,7 +177,7 @@ namespace SAM.Analytical.Tas
                                 {
                                     Face3D face3D = new(polygon3D);
                                     Guid faceGuid = Guid.NewGuid();
-                                    LinkedFace3D linkedFace3D = new(faceGuid, face3D, zoneSurface.GUID);
+                                    LinkedFace3D linkedFace3D = new(faceGuid, face3D, reference);
 
                                     if (result.Add(linkedFace3D))
                                     {
@@ -183,7 +191,7 @@ namespace SAM.Analytical.Tas
                                         SolarCoverageSimulationResult solarCoverageSimulationResult = new(
                                             zoneSurface.GUID,
                                             "TAS",
-                                            faceGuid.ToString(),
+                                            reference,
                                             coverage);
 
                                         result.Add(solarCoverageSimulationResult, faceGuid);

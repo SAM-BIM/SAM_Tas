@@ -136,11 +136,9 @@ namespace SAM.Analytical.Tas
                     if (solarModel != null)
                     {
                         //UpdateReferences
+                        result = result.CopyResults(solarModel);
 
-
-
-
-                        result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        //result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
                     }
                 }
             }
