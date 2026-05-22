@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
+using Innovative.SolarCalculator;
 using System;
 using System.Collections.Generic;
 using SAM.Geometry.Object.Spatial;
@@ -58,7 +59,14 @@ namespace SAM.Analytical.Tas
             // ─────────────────────────────────────────────────────────────────────────
             const double timeShiftMinutes = -30.0;
 
-            // Ordered list so TAS surface-hour loops can index directly via (dayIndex, hour).
+            // Use Innovative.SolarCalculator.SolarTimes directly (the same library that
+            // SAM.Geometry.SolarCalculator.Query.SunDirection delegates to under the hood).
+            // Calling SolarTimes here keeps this method independent of the upstream
+            // SAM.Geometry.SolarCalculator.dll signature — the project reference is a
+            // HintPath and a stale build of that dll would otherwise break compilation.
+            Innovative.Geometry.Angle latitudeAngle = new(location.Latitude);
+            Innovative.Geometry.Angle longitudeAngle = new(location.Longitude);
+
             // The dictionary maps (dayIndex, hour) → shiftedDateTime for the valid timesteps.
             Dictionary<(int day, int hour), DateTime> validShiftedMap = new(dayList.Count * 24);
             foreach (int dayIndex in dayList)
@@ -68,16 +76,10 @@ namespace SAM.Analytical.Tas
                 {
                     DateTime shiftedDT = dayStart.AddHours(hour).AddMinutes(timeShiftMinutes);
 
-                    // Mirror the horizon filter from Weather.SolarCalculator.Modify.Simulate:
-                    // sunDirection points FROM sun TO surface; Z > 0 ⇒ sun below horizon.
-                    Vector3D sunDirection = Geometry.SolarCalculator.Query.SunDirection(location, shiftedDT, false);
-                    if (sunDirection == null || !sunDirection.IsValid() || sunDirection.Z > 0)
-                    {
-                        continue;
-                    }
-
-                    double elevationAngle = Plane.WorldXY.Project(sunDirection).SmallestAngle(sunDirection);
-                    if (elevationAngle < Core.Tolerance.Angle)
+                    // Filter to daytime hours using the same sunrise/sunset boundary that
+                    // Query.SunDirection enforces internally (returns null outside that range).
+                    SolarTimes solarTimes = new(shiftedDT, 0, latitudeAngle, longitudeAngle);
+                    if (shiftedDT < solarTimes.Sunrise || shiftedDT > solarTimes.Sunset)
                     {
                         continue;
                     }
