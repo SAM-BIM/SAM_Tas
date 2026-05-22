@@ -42,6 +42,50 @@ namespace SAM.Analytical.Tas
 
             DateTime yearStart = new(building.year, 1, 1);
 
+            // ── DateTime alignment ────────────────────────────────────────────────────
+            // SAMAnalytical.SolarSimulation applies a –30 min time-shift so "hour 9"
+            // is evaluated using the 8:30 sun position (same convention as Tas EDSL).
+            // The result is stored against the SHIFTED DateTime (08:30).
+            //
+            // To produce identical DateTime keys in both models we must:
+            //   1. Apply the same –30 min shift to each TAS hour's storage key.
+            //   2. Keep only hours where the sun is above the horizon
+            //      (same filter as Weather.SolarCalculator.Modify.Simulate lines 66-78:
+            //      skip when sunDirection.Z > 0 OR elevation < minHorizonAngle).
+            //
+            // Pre-computing the valid shifted DateTimes once (26 shade-days × 24 h = ~624
+            // sun-direction queries) avoids repeating the calculation per surface.
+            // ─────────────────────────────────────────────────────────────────────────
+            const double timeShiftMinutes = -30.0;
+
+            // Ordered list so TAS surface-hour loops can index directly via (dayIndex, hour).
+            // The dictionary maps (dayIndex, hour) → shiftedDateTime for the valid timesteps.
+            Dictionary<(int day, int hour), DateTime> validShiftedMap = new(dayList.Count * 24);
+            foreach (int dayIndex in dayList)
+            {
+                DateTime dayStart = yearStart.AddDays(dayIndex - 1);
+                for (int hour = 0; hour < 24; hour++)
+                {
+                    DateTime shiftedDT = dayStart.AddHours(hour).AddMinutes(timeShiftMinutes);
+
+                    // Mirror the horizon filter from Weather.SolarCalculator.Modify.Simulate:
+                    // sunDirection points FROM sun TO surface; Z > 0 ⇒ sun below horizon.
+                    Vector3D sunDirection = Query.SunDirection(location, shiftedDT, false);
+                    if (sunDirection == null || !sunDirection.IsValid() || sunDirection.Z > 0)
+                    {
+                        continue;
+                    }
+
+                    double elevationAngle = Plane.WorldXY.Project(sunDirection).SmallestAngle(sunDirection);
+                    if (elevationAngle < Core.Tolerance.Angle)
+                    {
+                        continue;
+                    }
+
+                    validShiftedMap[(dayIndex, hour)] = shiftedDT;
+                }
+            }
+
             int i = 0;
             while (building.GetZone(i) is TBD.zone zone)
             {
@@ -61,7 +105,11 @@ namespace SAM.Analytical.Tas
                     // Pull shade data BEFORE doing geometry conversion. If a surface has
                     // no coverage we skip the (expensive, per-vertex COM-marshalled)
                     // polygon conversion below.
-                    List<Tuple<DateTime, float>> coverage = new(dayList.Count * 24);
+                    //
+                    // Coverage is built with shifted DateTimes and filtered to daytime-only
+                    // hours — same convention as SAMAnalytical.SolarSimulation so the two
+                    // SolarModels share identical DateTime key sets and list lengths.
+                    List<Tuple<DateTime, float>> coverage = new(validShiftedMap.Count);
                     foreach (int dayIndex in dayList)
                     {
                         dynamic values = building.GetShadeProportion(i, j, dayIndex);
@@ -74,7 +122,11 @@ namespace SAM.Analytical.Tas
                         int hour = 0;
                         foreach (float value in values)
                         {
-                            coverage.Add(Tuple.Create(dayStart.AddHours(hour), value));
+                            if (validShiftedMap.TryGetValue((dayIndex, hour), out DateTime shiftedDT))
+                            {
+                                coverage.Add(Tuple.Create(shiftedDT, value));
+                            }
+
                             hour++;
                         }
                     }
