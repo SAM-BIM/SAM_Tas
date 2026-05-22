@@ -196,6 +196,7 @@ namespace SAM.Analytical.Tas
                                     Face3D face3D = new(polygon3D);
                                     Guid faceGuid = Guid.NewGuid();
                                     LinkedFace3D linkedFace3D = new(faceGuid, face3D, reference);
+                                    dictionary[reference] = linkedFace3D;
 
                                     if (result.Add(linkedFace3D))
                                     {
