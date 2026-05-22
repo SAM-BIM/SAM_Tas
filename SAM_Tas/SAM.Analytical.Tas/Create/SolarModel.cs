@@ -173,6 +173,8 @@ namespace SAM.Analytical.Tas
 
                                     if (result.Add(linkedFace3D))
                                     {
+                                        coverage.RemoveAll(x => x.Item2 <= 0);
+
                                         // Reference = linkedFace3D.Guid.ToString() so coverage
                                         // results can be matched back to faces by the same
                                         // convention used by the SAM solar engine. The TBD

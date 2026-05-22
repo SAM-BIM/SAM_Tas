@@ -135,7 +135,12 @@ namespace SAM.Analytical.Tas
                     SolarModel solarModel = ToSAM_SolarModel(sAMTBDDocument);
                     if (solarModel != null)
                     {
-                        result.SetValue(SAM.Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        //UpdateReferences
+
+
+
+
+                        result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
                     }
                 }
             }
