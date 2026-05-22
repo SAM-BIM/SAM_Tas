@@ -94,8 +94,20 @@ namespace SAM.Analytical.Tas
 
                             if (result.Add(linkedFace3D))
                             {
-                                // Pull every TAS-reported shade-proportion value, NO filtering.
-                                // Each value is stored against (dayStart + hour) - 30min.
+                                // Pull every TAS-reported shade-proportion value.
+                                //
+                                // Sentinel handling: TAS returns -1f for hours where it has
+                                // no computed shade data (observed by Duncan/EDSL — debug
+                                // session showed building.GetShadeProportion(0, 2, 1) ⇒
+                                // 24× -1f on a 'SIM_EXT_SLD' surface). These are NOT valid
+                                // coverage values in [0, 1] and must not be stored as such;
+                                // we drop them so the SolarCoverageSimulationResult only
+                                // carries hours where TAS actually has data.
+                                //
+                                // TODO(EDSL): the (i, j) index convention that yields real
+                                // shade data is still under investigation — Duncan emailed
+                                // re. the correct API surface. Until then the function may
+                                // produce empty coverage lists for many faces.
                                 List<Tuple<DateTime, float>> coverage = new(dayList.Count * 24);
                                 foreach (int dayIndex in dayList)
                                 {
@@ -109,6 +121,15 @@ namespace SAM.Analytical.Tas
                                     int hour = 0;
                                     foreach (float value in values)
                                     {
+                                        // -1 sentinel ⇒ "no shade data for this hour".
+                                        // Anything outside [0, 1] is also rejected as a
+                                        // safety net (TAS is documented to emit fractions).
+                                        if (value < 0f || value > 1f)
+                                        {
+                                            hour++;
+                                            continue;
+                                        }
+
                                         DateTime shiftedDT = dayStart.AddHours(hour).AddMinutes(timeShiftMinutes);
                                         coverage.Add(Tuple.Create(shiftedDT, value));
                                         hour++;
