@@ -167,61 +167,45 @@ namespace SAM.Analytical.Tas
                     }
 
                     // Heavy work only happens for surfaces that actually have shade data.
-                    // We read TBD polygon vertices inline (one COM call per GetPoint + 3 per
-                    // x/y/z) and construct Polygon3D directly. The standard SAM helper
-                    // Spatial.Create.Polygon3D fits a plane AND projects every point onto it
-                    // *before* the Polygon3D ctor fits the plane again — wasted work for TBD
-                    // polygons whose vertices are guaranteed coplanar by TAS.
+                    // Use the standard Geometry.Tas helper — it fits a best-fit plane AND
+                    // projects every TBD point onto it before constructing Polygon3D, which
+                    // is essential for handling the slight non-coplanarity that TAS COM
+                    // polygons can carry due to floating-point representation. A direct
+                    // `new Polygon3D(points)` call fails silently (GetPlane() == null) on
+                    // those near-planar inputs, producing an empty SolarModel.
                     int roomSurfaceIndex = 0;
                     TBD.IRoomSurface roomSurface = zoneSurface.GetRoomSurface(roomSurfaceIndex);
                     while (roomSurface != null)
                     {
-                        TBD.Polygon polygon = roomSurface.GetPerimeter()?.GetFace();
-                        if (polygon != null)
+                        Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+                        if (polygon3D != null && polygon3D.GetPlane() != null)
                         {
-                            List<Point3D> point3Ds = new(8);
-                            int pointIndex = 0;
-                            TBD.TasPoint tasPoint = polygon.GetPoint(pointIndex);
-                            while (tasPoint != null)
+                            Face3D face3D = new(polygon3D);
+                            Guid faceGuid = Guid.NewGuid();
+                            LinkedFace3D linkedFace3D = new(faceGuid, face3D, reference);
+                            dictionary[reference] = linkedFace3D;
+
+                            if (result.Add(linkedFace3D))
                             {
-                                point3Ds.Add(new Point3D(tasPoint.x, tasPoint.y, tasPoint.z));
-                                pointIndex++;
-                                tasPoint = polygon.GetPoint(pointIndex);
-                            }
+                                // Coverage series is kept INTACT — including zeros and
+                                // negative-clip samples — so the per-face DateTime grid
+                                // exactly matches the source TAS shade-day/hour grid.
+                                // Dropping <= 0 entries would discard valid "fully
+                                // unshaded" timesteps and bias error metrics in the
+                                // comparison node toward only-shaded moments.
 
-                            if (point3Ds.Count >= 3)
-                            {
-                                Polygon3D polygon3D = new(point3Ds);
-                                if (polygon3D.GetPlane() != null)
-                                {
-                                    Face3D face3D = new(polygon3D);
-                                    Guid faceGuid = Guid.NewGuid();
-                                    LinkedFace3D linkedFace3D = new(faceGuid, face3D, reference);
-                                    dictionary[reference] = linkedFace3D;
+                                // SolarCoverageSimulationResult.Reference = buildingElement.GUID
+                                // so faces from the TAS-imported SolarModel can be cross-
+                                // referenced back to TAS for traceability. The matching key
+                                // used by SAMAnalytical.CompareSolarCoverage is the
+                                // linkedFace3D.Guid embedded in the per-face relation graph.
+                                SolarCoverageSimulationResult solarCoverageSimulationResult = new(
+                                    zoneSurface.GUID,
+                                    "TAS",
+                                    reference,
+                                    coverage);
 
-                                    if (result.Add(linkedFace3D))
-                                    {
-                                        // Coverage series is kept INTACT — including zeros and
-                                        // negative-clip samples — so the per-face DateTime grid
-                                        // exactly matches the source TAS shade-day/hour grid.
-                                        // Dropping <= 0 entries would discard valid "fully
-                                        // unshaded" timesteps and bias error metrics in the
-                                        // comparison node toward only-shaded moments.
-
-                                        // Reference = linkedFace3D.Guid.ToString() so coverage
-                                        // results can be matched back to faces by the same
-                                        // convention used by the SAM solar engine. The TBD
-                                        // zoneSurface.GUID is retained on linkedFace3D.Reference
-                                        // (external provenance, separate from the matching key).
-                                        SolarCoverageSimulationResult solarCoverageSimulationResult = new(
-                                            zoneSurface.GUID,
-                                            "TAS",
-                                            reference,
-                                            coverage);
-
-                                        result.Add(solarCoverageSimulationResult, faceGuid);
-                                    }
-                                }
+                                result.Add(solarCoverageSimulationResult, faceGuid);
                             }
                         }
 
