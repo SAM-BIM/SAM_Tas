@@ -42,10 +42,10 @@ namespace SAM.Analytical.Tas
 
             DateTime yearStart = new(building.year, 1, 1);
 
-            int i = 1;
+            int i = 0;
             while (building.GetZone(i) is TBD.zone zone)
             {
-                int j = 1;
+                int j = 0;
                 while (zone.GetSurface(j) is TBD.zoneSurface zoneSurface)
                 {
                     // Only exposed (sun-facing) surfaces carry shade data in TAS.
