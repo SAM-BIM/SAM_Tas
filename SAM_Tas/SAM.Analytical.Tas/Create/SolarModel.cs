@@ -70,7 +70,7 @@ namespace SAM.Analytical.Tas
 
                     // Mirror the horizon filter from Weather.SolarCalculator.Modify.Simulate:
                     // sunDirection points FROM sun TO surface; Z > 0 ⇒ sun below horizon.
-                    Vector3D sunDirection = Query.SunDirection(location, shiftedDT, false);
+                    Vector3D sunDirection = Geometry.SolarCalculator.Query.SunDirection(location, shiftedDT, false);
                     if (sunDirection == null || !sunDirection.IsValid() || sunDirection.Z > 0)
                     {
                         continue;
