@@ -41,7 +41,7 @@ namespace SAM.Analytical.Tas
             foreach(Panel panel in panels)
             {
                 string reference = panel?.GetValue<string>(PanelParameter.BuildingElementGuid);
-                if(!string.IsNullOrWhiteSpace(reference))
+                if(string.IsNullOrWhiteSpace(reference))
                 {
                     continue;
                 }
@@ -59,7 +59,7 @@ namespace SAM.Analytical.Tas
             foreach(ISolarSimulationResult solarSimulationResult in solarSimulationResults)
             {
                 string reference = solarSimulationResult?.Reference;
-                if (!string.IsNullOrWhiteSpace(reference))
+                if (string.IsNullOrWhiteSpace(reference))
                 {
                     continue;
                 }
@@ -75,7 +75,11 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                adjacencyCluster.AddRelation(keyValuePair.Value, solarSimulationResult);
+                Panel panel = keyValuePair.Value;
+
+                SolarCoverageSimulationResult solarCoverageSimulationResult = new SolarCoverageSimulationResult(panel.Name, "TAS", panel.Guid.ToString(), solarSimulationResult as SolarCoverageSimulationResult);
+
+                adjacencyCluster.AddRelation(keyValuePair.Value, solarCoverageSimulationResult);
             }
 
             return new AnalyticalModel(analyticalModel, adjacencyCluster);
