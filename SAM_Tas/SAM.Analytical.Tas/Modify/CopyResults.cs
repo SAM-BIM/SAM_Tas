@@ -79,6 +79,8 @@ namespace SAM.Analytical.Tas
 
                 SolarCoverageSimulationResult solarCoverageSimulationResult = new SolarCoverageSimulationResult(panel.Name, "TAS", panel.Guid.ToString(), solarSimulationResult as SolarCoverageSimulationResult);
 
+                adjacencyCluster.AddObject(solarCoverageSimulationResult);
+
                 adjacencyCluster.AddRelation(keyValuePair.Value, solarCoverageSimulationResult);
             }
 

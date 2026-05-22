@@ -127,6 +127,7 @@ namespace SAM.Analytical.Tas
                     string reference = zoneSurface.buildingElement.GUID;
                     if(dictionary.ContainsKey(reference))
                     {
+                        j++;
                         continue;
                     }
 
