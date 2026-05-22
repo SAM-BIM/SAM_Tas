@@ -35,7 +35,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public SAMAnalyticalFromTBD()
           : base("SAMAnalytical.FromTBD", "SAMAnalytical.FromTBD",
-              "Creates a SAM AnalyticalModel by reading the geometry, constructions, and building data from a TasTBD file.",
+              "Creates a SAM AnalyticalModel by reading the geometry, constructions, and building data from a TasTBD file.\nWith _importSurfaceShades_ = true, also extracts TAS-computed shade-proportion data (per zoneSurface × shade-day × hour) and attaches it to the model as a SolarModel under AnalyticalModelParameter.SolarModel — enabling apples-to-apples comparison against SAM's own solar engine via SAMAnalytical.CompareSolarCoverage.",
               "SAM", "Tas")
         {
         }
@@ -50,7 +50,7 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
             inputParamManager.AddBooleanParameter("_importUnused_", "_importUnused_", "Import Unused IC", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_importSurfaceShades_", "_importSurfaceShades_", "Import surface shades", GH_ParamAccess.item, false);
+            inputParamManager.AddBooleanParameter("_importSurfaceShades_", "_importSurfaceShades_", "If true, reads TAS-computed shade proportions for every exposed zoneSurface and attaches a populated SolarModel to the AnalyticalModel (via AnalyticalModelParameter.SolarModel). Required input for SAMAnalytical.CompareSolarCoverage. Adds a few seconds to import time.", GH_ParamAccess.item, false);
             inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
         }
 
