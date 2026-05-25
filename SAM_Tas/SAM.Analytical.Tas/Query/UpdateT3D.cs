@@ -108,9 +108,17 @@ namespace SAM.Analytical.Tas
                     List<Element> elements = building.Elements();
                     if(elements != null)
                     {
+                        // Build the construction lookup ONCE for the entire elements loop.
+                        // Previously element.Match(constructions) materialised the list and
+                        // ran a null/blank-name RemoveAll on every call — N × O(M) allocation
+                        // plus N × M × 3 .Trim() calls. With the pre-built state, pass 1 and
+                        // pass 3 are O(1) dictionary lookups and pass 2 is a single O(M) scan
+                        // over an already-trimmed list.
+                        BuildConstructionLookup(constructions, out Dictionary<string, Construction> constructionsByName, out List<KeyValuePair<Construction, string>> constructions_Trimmed);
+
                         foreach (Element element in elements)
                         {
-                            Construction construction = element.Match(constructions);
+                            Construction construction = element.Match(constructionsByName, constructions_Trimmed);
                             if (construction == null)
                             {
                                 element.ghost = true;
@@ -241,12 +249,15 @@ namespace SAM.Analytical.Tas
                     List<window> windows = building.Windows();
                     if (windows != null)
                     {
+                        // Same one-shot lookup-build pattern as the constructions loop above.
+                        BuildApertureConstructionLookup(apertureConstructions, out Dictionary<string, ApertureConstruction> apertureConstructionsByName, out List<KeyValuePair<ApertureConstruction, string>> apertureConstructions_Trimmed);
+
                         foreach(window window in windows)
                         {
                             if (window == null)
                                 continue;
 
-                            ApertureConstruction apertureConstruction = window.Match(apertureConstructions);
+                            ApertureConstruction apertureConstruction = window.Match(apertureConstructionsByName, apertureConstructions_Trimmed);
                             if (apertureConstruction == null)
                                 continue;
 

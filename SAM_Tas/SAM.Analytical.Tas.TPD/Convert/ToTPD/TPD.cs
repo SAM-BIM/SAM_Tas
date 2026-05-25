@@ -197,7 +197,12 @@ namespace SAM.Analytical.Tas.TPD
 
                                     if (systemComponents != null)
                                     {
-                                        systemComponents.RemoveAll(x => x is ISystemCollection && ((dynamic)x).Guid == ((dynamic)x).Guid);
+                                        // Correctness fix: previously compared `((dynamic)x).Guid` to itself,
+                                        // which was always true and wiped EVERY ISystemCollection from
+                                        // systemComponents on the first outer iteration. Compare against the
+                                        // current systemCollection being processed instead.
+                                        string systemCollectionGuid = (systemCollection as dynamic)?.Guid as string;
+                                        systemComponents.RemoveAll(x => x is ISystemCollection && ((x as dynamic)?.Guid as string) == systemCollectionGuid);
                                     }
                                 }
                             }
@@ -626,16 +631,20 @@ namespace SAM.Analytical.Tas.TPD
                                             systemComponents_SAM.RemoveAt(i);
                                         }
 
+                                        // Hoist Keys.Max() out of the loop: this fallback loop only ever
+                                        // appends to the highest existing group, and the max key cannot
+                                        // change inside the loop (TryGetValue below succeeds after the
+                                        // first iteration adds the bucket). SortedDictionary.Keys.Max()
+                                        // is O(n) LINQ; per-iteration calls were O(n²) overall.
+                                        int fallbackGroupIndex = sortedDictionary_SystemComponent.Count == 0 ? 0 : sortedDictionary_SystemComponent.Keys.Max();
                                         for (int i = systemComponents_SAM.Count - 1; i >= 0; i--)
                                         {
                                             Core.Systems.ISystemComponent systemComponent_SAM_Temp = systemComponents_SAM[i];
 
-                                            int groupIndex = sortedDictionary_SystemComponent.Count == 0 ? 0 : sortedDictionary_SystemComponent.Keys.Max();
-
-                                            if (!sortedDictionary_SystemComponent.TryGetValue(groupIndex, out List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples))
+                                            if (!sortedDictionary_SystemComponent.TryGetValue(fallbackGroupIndex, out List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples))
                                             {
                                                 tuples = new List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>>();
-                                                sortedDictionary_SystemComponent[groupIndex] = tuples;
+                                                sortedDictionary_SystemComponent[fallbackGroupIndex] = tuples;
                                             }
 
                                             if (!dictionary_SystemComponent.TryGetValue((systemComponent_SAM_Temp as dynamic).Guid, out global::TPD.ISystemComponent systemComponent_TPD_Temp))
@@ -706,16 +715,16 @@ namespace SAM.Analytical.Tas.TPD
                                                 systemControllers_SAM.RemoveAt(i);
                                             }
 
+                                            // Same Keys.Max() hoist as the SystemComponent fallback loop above.
+                                            int fallbackControllerGroupIndex = sortedDictionary_Controller.Count == 0 ? 0 : sortedDictionary_Controller.Keys.Max();
                                             for (int i = systemControllers_SAM.Count - 1; i >= 0; i--)
                                             {
                                                 SystemController systemController_SAM_Temp = systemControllers_SAM[i];
 
-                                                int groupIndex = sortedDictionary_Controller.Count == 0 ? 0 : sortedDictionary_Controller.Keys.Max();
-
-                                                if (!sortedDictionary_Controller.TryGetValue(groupIndex, out List<Tuple<SystemController, Controller>> tuples))
+                                                if (!sortedDictionary_Controller.TryGetValue(fallbackControllerGroupIndex, out List<Tuple<SystemController, Controller>> tuples))
                                                 {
                                                     tuples = new List<Tuple<SystemController, Controller>>();
-                                                    sortedDictionary_Controller[groupIndex] = tuples;
+                                                    sortedDictionary_Controller[fallbackControllerGroupIndex] = tuples;
                                                 }
 
                                                 if (!dictionary_Controller.TryGetValue(systemController_SAM_Temp.Guid, out Controller controller_TPD_Temp))
@@ -772,7 +781,10 @@ namespace SAM.Analytical.Tas.TPD
 
                                             if (sortedDictionary_SystemComponent.TryGetValue(index, out List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples) && tuples != null && tuples.Count != 0)
                                             {
-                                                int index_Temp = tuples.FindIndex(x => (x.Item2 as dynamic)?.GUID == ((dynamic)systemComponent_TPD_New).GUID);
+                                                // Cache the outer GUID once per outer iteration so the FindIndex
+                                                // lambda doesn't re-dispatch the dynamic .GUID per tuple.
+                                                string systemComponent_TPD_New_GUID = ((dynamic)systemComponent_TPD_New)?.GUID as string;
+                                                int index_Temp = tuples.FindIndex(x => ((x.Item2 as dynamic)?.GUID as string) == systemComponent_TPD_New_GUID);
                                                 if (index_Temp != -1)
                                                 {
                                                     Core.Systems.ISystemComponent systemComponent_SAM = tuples[index_Temp].Item1;

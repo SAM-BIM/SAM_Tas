@@ -2338,10 +2338,18 @@ namespace SAM.Analytical.Tas.TPD
 
                 YearlySchedule yearlySchedule = (YearlySchedule)schedule;
                 double[] values = yearlySchedule.Values;
+
+                // Bulk-write via PlantSchedule.SetYearlyValues(Object) — single COM call vs
+                // 8760 per-index round-trips. Same pattern as the UpdateACCI fix on
+                // TBD.profileClass. The per-index setter signature is (Int32, Int32), so the
+                // SAFEARRAY element type the marshaller expects is Int32 → pass int[].
+                int[] intValues = new int[values.Length];
                 for (int i = 0; i < values.Length; i++)
                 {
-                    result.SetYearlyValue(i + 1, System.Convert.ToInt32(values[i]));
+                    intValues[i] = System.Convert.ToInt32(values[i]);
                 }
+
+                result.SetYearlyValues(intValues);
             }
 
             if (result == null)
