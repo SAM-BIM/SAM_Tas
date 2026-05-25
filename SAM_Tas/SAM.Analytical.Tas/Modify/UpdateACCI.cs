@@ -40,6 +40,7 @@ namespace SAM.Analytical.Tas
             float[] lowerLimitYear = new float[8760];
             bool[] hourHasRange = new bool[8760];
             bool allHoursHaveRange = true;
+            bool anyHourHasRange = false;
             for (int h = 0; h < 8760; h++)
             {
                 Range<double> range = Weather.Query.DryBulbTemperatureRange(dryBulbTemperatures[h]);
@@ -52,6 +53,17 @@ namespace SAM.Analytical.Tas
                 upperLimitYear[h] = System.Convert.ToSingle(range.Max);
                 lowerLimitYear[h] = System.Convert.ToSingle(range.Min);
                 hourHasRange[h] = true;
+                anyHourHasRange = true;
+            }
+
+            // Preserve the original "return false when no hours were writable" contract: the
+            // previous per-hour loop set `result = true` only inside the if-range-not-null branch,
+            // so a year with every DryBulbTemperatureRange null returned false and the path-based
+            // overload skipped Save(). Early-exit here keeps that semantics — even if every IC
+            // passes the filter and profile guards downstream, there is nothing to write.
+            if (!anyHourHasRange)
+            {
+                return false;
             }
 
             // O(1) lookup for the per-IC zone-name filter (was `IEnumerable.Contains` per zone).
@@ -156,8 +168,9 @@ namespace SAM.Analytical.Tas
         }
 
         // Coerce the boxed SAFEARRAY returned by TBD.profile.GetYearlyValues() into a float[].
-        // The interop typically marshals to System.Single[] directly; cast first, fall back to
-        // element-wise copy if a different numeric array type comes back.
+        // The interop typically marshals to System.Single[] (a zero-based managed float[]); cast
+        // first, fall back to bound-aware element-wise copy if a different numeric array type
+        // or a non-zero-lower-bound SAFEARRAY comes back.
         private static float[] ToFloatArray(object yearlyValues)
         {
             if (yearlyValues == null)
@@ -165,20 +178,27 @@ namespace SAM.Analytical.Tas
                 return new float[8760];
             }
 
+            // Fast path: marshalled to a zero-based float[]. The vast majority of TBD interop
+            // calls produce exactly this.
             if (yearlyValues is float[] floats && floats.Length >= 8760)
             {
                 return floats;
             }
 
-            // Conservative fallback: pad/truncate to exactly 8760 to keep the indexing contract
-            // with the rest of UpdateACCI stable.
+            // Defensive fallback: a System.Array projection of a SAFEARRAY can have a non-zero
+            // lower bound (e.g. [1..8760] is valid in COM and shows up for some TAS APIs). Use
+            // GetLowerBound / GetUpperBound and copy element-by-element so this path can't
+            // throw IndexOutOfRangeException on a 1-based SAFEARRAY.
             float[] result = new float[8760];
             if (yearlyValues is System.Array array)
             {
-                int copyLength = global::System.Math.Min(array.Length, 8760);
+                int lowerBound = array.GetLowerBound(0);
+                int upperBound = array.GetUpperBound(0);
+                int sourceLength = upperBound - lowerBound + 1;
+                int copyLength = global::System.Math.Min(sourceLength, 8760);
                 for (int i = 0; i < copyLength; i++)
                 {
-                    result[i] = global::System.Convert.ToSingle(array.GetValue(i));
+                    result[i] = global::System.Convert.ToSingle(array.GetValue(lowerBound + i));
                 }
             }
             return result;
