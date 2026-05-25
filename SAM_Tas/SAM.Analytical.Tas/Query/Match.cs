@@ -67,7 +67,7 @@ namespace SAM.Analytical.Tas
 
         public static Space Match(this IEnumerable<Space> spaces, string name, bool caseSensitive = true, bool trim = false)
         {
-            if (spaces == null || spaces.Count() == 0)
+            if (spaces == null || !spaces.Any())
             {
                 return null;
             }
@@ -118,7 +118,7 @@ namespace SAM.Analytical.Tas
 
         public static TBD.zone Match(this IEnumerable<TBD.zone> zones, string name, bool caseSensitive = true, bool trim = false)
         {
-            if (zones == null || zones.Count() == 0)
+            if (zones == null || !zones.Any())
                 return null;
 
             if (string.IsNullOrWhiteSpace(name))
@@ -360,7 +360,7 @@ namespace SAM.Analytical.Tas
         public static Aperture Match(this Core.Tas.ZoneSurfaceReference zoneSurfaceReference, IEnumerable<Aperture> apertures, out AperturePart aperturePart)
         {
             aperturePart = Analytical.AperturePart.Undefined;
-            if (zoneSurfaceReference == null || apertures == null || apertures.Count() == 0)
+            if (zoneSurfaceReference == null || apertures == null || !apertures.Any())
             {
                 return null;
             }

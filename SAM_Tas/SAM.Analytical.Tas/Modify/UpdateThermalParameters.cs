@@ -255,7 +255,7 @@ namespace SAM.Analytical.Tas
 
         public static Dictionary<Panel, double> UpdateThermalParameters(this IEnumerable<Panel> panels, IEnumerable<TCD.Construction> constructions)
         {
-            if (panels == null || constructions == null || panels.Count() == 0)
+            if (panels == null || constructions == null || !panels.Any())
             {
                 return null;
             }

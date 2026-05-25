@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
 {
@@ -44,24 +46,20 @@ namespace SAM.Analytical.Tas
                 result.type = (int)zoneGroupType;
             }
 
-            if (spaces != null || spaces.Count() != 0)
+            foreach (Space space in spaces)
             {
-                foreach (Space space in spaces)
+                if (string.IsNullOrWhiteSpace(space?.Name))
                 {
-                    if (string.IsNullOrWhiteSpace(space?.Name))
-                    {
-                        continue;
-                    }
-
-                    TBD.zone zone_TBD = building.Zone(space.Name);
-                    if (zone_TBD == null)
-                    {
-                        continue;
-                    }
-
-
-                    result.InsertZone(zone_TBD);
+                    continue;
                 }
+
+                TBD.zone zone_TBD = building.Zone(space.Name);
+                if (zone_TBD == null)
+                {
+                    continue;
+                }
+
+                result.InsertZone(zone_TBD);
             }
 
             return result;

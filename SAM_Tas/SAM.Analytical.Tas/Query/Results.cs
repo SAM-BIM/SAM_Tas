@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using System.Collections.Generic;
 using System.Linq;
 
 namespace SAM.Analytical.Tas
@@ -7,7 +10,7 @@ namespace SAM.Analytical.Tas
     {
         public static List<T> Results<T>(this IEnumerable<Core.IResult> results, T result) where T : Core.Result
         {
-            if (results == null || results.Count() == 0 || result == null)
+            if (results == null || !results.Any() || result == null)
                 return null;
 
             LoadType loadType = Analytical.Query.LoadType(result as dynamic);

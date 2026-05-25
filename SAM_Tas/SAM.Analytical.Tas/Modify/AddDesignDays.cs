@@ -70,7 +70,7 @@ namespace SAM.Analytical.Tas
 
             List<Guid> result = new List<Guid>();
 
-            if(coolingDesignDays != null && coolingDesignDays.Count() != 0)
+            if(coolingDesignDays != null && coolingDesignDays.Any())
             {
                 dayTypesByName.TryGetValue("CDD", out TBD.dayType dayType);
                 List<TBD.CoolingDesignDay> coolingDesignDays_TBD = building.CoolingDesignDays();
@@ -101,7 +101,7 @@ namespace SAM.Analytical.Tas
                 }
             }
 
-            if (heatingDesignDays != null && heatingDesignDays.Count() != 0)
+            if (heatingDesignDays != null && heatingDesignDays.Any())
             {
                 dayTypesByName.TryGetValue("HDD", out TBD.dayType dayType);
 

@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,7 +47,7 @@ namespace SAM.Analytical.Tas
 
             List<Guid> result = new List<Guid>();
 
-            if (constructionNames_Sufixes.Count() == 0)
+            if (!constructionNames_Sufixes.Any())
                 return result;
 
             List<TBD.buildingElement> buildingElements = building.BuildingElements();

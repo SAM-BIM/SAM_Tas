@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using SAM.Core;
 using SAM.Core.Systems;
 using SAM.Geometry.Planar;
@@ -43,6 +46,20 @@ namespace SAM.Analytical.Tas.TPD
 
             HashSet<string> pipeReferences = new HashSet<string>();
 
+            Dictionary<string, Core.Systems.ISystemComponent> systemComponentByReference = new Dictionary<string, Core.Systems.ISystemComponent>();
+            List<Core.Systems.ISystemComponent> allSystemComponents = systemPlantRoom.GetSystemComponents<Core.Systems.ISystemComponent>();
+            if (allSystemComponents != null)
+            {
+                foreach (Core.Systems.ISystemComponent component in allSystemComponents)
+                {
+                    string reference = component?.Reference();
+                    if (!string.IsNullOrWhiteSpace(reference))
+                    {
+                        systemComponentByReference[reference] = component;
+                    }
+                }
+            }
+
             plantComponents = new List<PlantComponent>(dictionary_PlantComponent.Values);
             if (plantComponents != null && plantComponents.Count != 0)
             {
@@ -62,7 +79,7 @@ namespace SAM.Analytical.Tas.TPD
 
                     string reference_1 = (plantComponent_TPD as dynamic).GUID;
 
-                    Core.Systems.ISystemComponent systemComponent_SAM_1 = systemPlantRoom.Find<Core.Systems.ISystemComponent>(x => x.Reference() == reference_1);
+                    Core.Systems.ISystemComponent systemComponent_SAM_1 = reference_1 != null && systemComponentByReference.TryGetValue(reference_1, out Core.Systems.ISystemComponent found_1) ? found_1 : null;
 
                     List<LiquidSystem> liquidSystems_1 = systemPlantRoom.GetSystems<LiquidSystem>(systemComponent_SAM_1);
                     if (liquidSystems_1 == null || liquidSystems_1.Count == 0)
@@ -90,7 +107,7 @@ namespace SAM.Analytical.Tas.TPD
 
                             string reference_2 = (direction == Direction.In ? pipe.GetUpstreamComponent() : pipe.GetDownstreamComponent() as dynamic)?.GUID;
 
-                            Core.Systems.ISystemComponent systemComponent_SAM_2 = systemPlantRoom.Find<Core.Systems.ISystemComponent>(x => x.Reference() == reference_2);
+                            Core.Systems.ISystemComponent systemComponent_SAM_2 = reference_2 != null && systemComponentByReference.TryGetValue(reference_2, out Core.Systems.ISystemComponent found_2) ? found_2 : null;
                             if (systemComponent_SAM_2 == null)
                             {
                                 continue;
@@ -383,6 +400,20 @@ namespace SAM.Analytical.Tas.TPD
 
             List<ComponentGroup> componentGroups = null;
 
+            Dictionary<string, Core.Systems.ISystemComponent> systemComponentByReference = new Dictionary<string, Core.Systems.ISystemComponent>();
+            List<Core.Systems.ISystemComponent> allSystemComponents = systemPlantRoom.GetSystemComponents<Core.Systems.ISystemComponent>();
+            if (allSystemComponents != null)
+            {
+                foreach (Core.Systems.ISystemComponent component in allSystemComponents)
+                {
+                    string reference = component?.Reference();
+                    if (!string.IsNullOrWhiteSpace(reference))
+                    {
+                        systemComponentByReference[reference] = component;
+                    }
+                }
+            }
+
             List<global::TPD.SystemComponent> systemComponents = Query.SystemComponents<global::TPD.SystemComponent>(system, true);
             if(systemComponents != null && systemComponents.Count != 0)
             {
@@ -404,7 +435,7 @@ namespace SAM.Analytical.Tas.TPD
 
                     string reference_1 = (systemComponent_TPD as dynamic).GUID;
 
-                    Core.Systems.ISystemComponent systemComponent_SAM_1 = systemPlantRoom.Find<Core.Systems.ISystemComponent>(x => x.Reference() == reference_1);
+                    Core.Systems.ISystemComponent systemComponent_SAM_1 = reference_1 != null && systemComponentByReference.TryGetValue(reference_1, out Core.Systems.ISystemComponent found_1) ? found_1 : null;
 
                     foreach (Direction direction in new Direction[] { Direction.In, Direction.Out })
                     {
@@ -426,7 +457,7 @@ namespace SAM.Analytical.Tas.TPD
 
                             string reference_2 = ((direction == Direction.Out ? duct.GetDownstreamComponent() : duct.GetUpstreamComponent()) as dynamic)?.GUID;
 
-                            Core.Systems.ISystemComponent systemComponent_SAM_2 = systemPlantRoom.Find<Core.Systems.ISystemComponent>(x => x.Reference() == reference_2);
+                            Core.Systems.ISystemComponent systemComponent_SAM_2 = reference_2 != null && systemComponentByReference.TryGetValue(reference_2, out Core.Systems.ISystemComponent found_2) ? found_2 : null;
                             if (systemComponent_SAM_2 == null)
                             {
                                 continue;
@@ -1316,6 +1347,20 @@ namespace SAM.Analytical.Tas.TPD
 
             List<ISystemConnection> result = new List<ISystemConnection>();
 
+            Dictionary<string, Core.Systems.ISystemComponent> systemComponentByReference = new Dictionary<string, Core.Systems.ISystemComponent>();
+            List<Core.Systems.ISystemComponent> allSystemComponents = systemPlantRoom.GetSystemComponents<Core.Systems.ISystemComponent>();
+            if (allSystemComponents != null)
+            {
+                foreach (Core.Systems.ISystemComponent component in allSystemComponents)
+                {
+                    string reference = component?.Reference();
+                    if (!string.IsNullOrWhiteSpace(reference))
+                    {
+                        systemComponentByReference[reference] = component;
+                    }
+                }
+            }
+
             //Connect componentGroup with the rest of the system
             foreach (global::TPD.SystemComponent systemComponent_Temp in systemComponents)
             {
@@ -1344,7 +1389,8 @@ namespace SAM.Analytical.Tas.TPD
 
                 foreach (global::TPD.SystemComponent systemComponent_In in systemComponents_In)
                 {
-                    Core.Systems.ISystemComponent systemComponent_In_SAM = systemPlantRoom.Find<Core.Systems.ISystemComponent>(x => x?.Reference() == (systemComponent_In as dynamic).GUID);
+                    string reference_In = (systemComponent_In as dynamic)?.GUID as string;
+                    Core.Systems.ISystemComponent systemComponent_In_SAM = reference_In != null && systemComponentByReference.TryGetValue(reference_In, out Core.Systems.ISystemComponent found_In) ? found_In : null;
                     if (systemComponent_In_SAM == null)
                     {
                         continue;
@@ -1352,7 +1398,8 @@ namespace SAM.Analytical.Tas.TPD
 
                     foreach (global::TPD.SystemComponent systemComponent_Out in systemComponents_Out)
                     {
-                        Core.Systems.ISystemComponent systemComponent_Out_SAM = systemPlantRoom.Find<Core.Systems.ISystemComponent>(x => x?.Reference() == (systemComponent_Out as dynamic).GUID);
+                        string reference_Out = (systemComponent_Out as dynamic)?.GUID as string;
+                        Core.Systems.ISystemComponent systemComponent_Out_SAM = reference_Out != null && systemComponentByReference.TryGetValue(reference_Out, out Core.Systems.ISystemComponent found_Out) ? found_Out : null;
                         if (systemComponent_Out_SAM == null)
                         {
                             continue;
