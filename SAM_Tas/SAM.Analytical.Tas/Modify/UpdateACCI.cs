@@ -38,9 +38,15 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                if(spaceNames != null && !spaceNames.Any())
+                // BEHAVIOUR-CHANGE: previously the predicate was `spaceNames != null && !spaceNames.Any()`
+                // (post-PR #8) / `spaceNames != null && spaceNames.Count() == 0` (pre-PR #8), which
+                // only ran the filter when the supplied list was EMPTY — meaning callers passing a
+                // populated list got NO filtering and callers passing an empty list got everything
+                // skipped. The intent (matching the method's parameter name and the sibling overloads)
+                // is "apply the filter when names were supplied". Flipped to `.Any()`.
+                if(spaceNames != null && spaceNames.Any())
                 {
-                    bool contains = false;                    
+                    bool contains = false;
                     List<TBD.zone> zones = internalCondition.Zones();
                     if(zones != null)
                     {
