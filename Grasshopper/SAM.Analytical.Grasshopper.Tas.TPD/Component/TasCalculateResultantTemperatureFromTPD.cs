@@ -65,6 +65,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             {
                 List<GH_SAMParam> result = [];
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "path_TSD", NickName = "path_TSD", Description = "A file path to a Tas file TSD", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "path_TBD", NickName = "path_TBD", Description = "A file path to a Tas file TBD", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
                 global::Grasshopper.Kernel.Parameters.Param_Boolean @boolean = new() { Name = "successful", NickName = "successful", Description = "successful", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
@@ -108,17 +109,23 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 return;
             }
 
-            bool successful = Analytical.Tas.TPD.Modify.CalculateResultantTemperature(path_TPD);
+            bool successful = Analytical.Tas.TPD.Modify.CalculateResultantTemperature(path_TPD, out string path_TBD, out string path_TSD);
 
             if (index_successful != -1)
             {
                 dataAccess.SetData(index_successful, successful);
             }
 
+            index = Params.IndexOfOutputParam("path_TBD");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, path_TBD);
+            }
+
             index = Params.IndexOfOutputParam("path_TSD");
             if (index != -1)
             {
-                dataAccess.SetData(index, false);
+                dataAccess.SetData(index, path_TSD);
             }
         }
 

@@ -18,6 +18,9 @@
     <None Remove="Interfaces\**" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Interop.TBD">
+      <HintPath>..\..\references_buildonly\Interop.TBD.dll</HintPath>
+    </Reference>
     <Reference Include="Interop.TPD">
       <HintPath>..\..\references_buildonly\Interop.TPD.dll</HintPath>
 		<EmbedInteropTypes>True</EmbedInteropTypes>
