@@ -58,12 +58,12 @@ namespace SAM.Analytical.Tas.TPD
 
                 foreach(SystemSpaceResult systemSpaceResult in systemSpaceResults)
                 {
-                    if(string.IsNullOrWhiteSpace(systemSpaceResult?.Reference))
+                    if(string.IsNullOrWhiteSpace(systemSpaceResult?.Name))
                     {
                         continue;
                     }
 
-                    dictionary[systemSpaceResult.Reference] = systemSpaceResult[SpaceDataType.ZoneTemperature];
+                    dictionary[systemSpaceResult.Name] = systemSpaceResult[SpaceDataType.ZoneTemperature.ToString()];
                 }
             }
 
@@ -78,7 +78,7 @@ namespace SAM.Analytical.Tas.TPD
 
             string path_TSD_New = System.IO.Path.Combine(directory, fileName + suffix + ".tsd");
 
-            System.IO.File.Copy(path_TBD_Existing, path_TBD_New);
+            System.IO.File.Copy(path_TBD_Existing, path_TBD_New, true);
 
             using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD_New))
             {
@@ -92,7 +92,7 @@ namespace SAM.Analytical.Tas.TPD
                 {
                     index_Zone++;
 
-                    if(!dictionary.TryGetValue(zone.GUID, out IndexedDoubles indexedDoubles) || indexedDoubles == null)
+                    if(!dictionary.TryGetValue(zone.name, out IndexedDoubles indexedDoubles) || indexedDoubles == null)
                     {
                         continue;
                     }
@@ -102,13 +102,13 @@ namespace SAM.Analytical.Tas.TPD
                     {
                         index_IC++;
 
-                        InternalGain internalGain = internalCondition.GetInternalGain();
-                        if(internalGain is null)
+                        Thermostat thermostat = internalCondition.GetThermostat();
+                        if(thermostat is null)
                         {
                             continue;
                         }
 
-                        profile[] profiles = new profile[] { internalGain.GetProfile((int)Profiles.ticUL), internalGain.GetProfile((int)Profiles.ticLL) };
+                        profile[] profiles = new profile[] { thermostat.GetProfile((int)Profiles.ticUL), thermostat.GetProfile((int)Profiles.ticLL) };
 
                         foreach(profile profile in profiles)
                         {
@@ -117,8 +117,8 @@ namespace SAM.Analytical.Tas.TPD
 
                             List<double> values = indexedDoubles.GetValues(new Range<int>(0, 8759));
 
-                            float[] values_float = new float[values.Count];
-                            for (int i = 0; i < values_float.Length; i++)
+                            float[] values_float = new float[values.Count + 1];
+                            for (int i = 1; i < values_float.Length; i++)
                             {
                                 values_float[i] = System.Convert.ToSingle(values[i]);
                             }
