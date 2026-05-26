@@ -139,6 +139,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             Menu_AppendSeparator(menu);
             Menu_AppendItem(menu, "Open TSD", Menu_OpenTSD, Resources.SAM_TasTSD3, true, false);
             Menu_AppendItem(menu, "Open TPD", Menu_OpenTPD, Resources.SAM_TasTPD3, true, false);
+            Menu_AppendItem(menu, "Open TBD", Menu_OpenTBD, Resources.SAM_TasTPD3, true, false);
         }
 
         private void Menu_OpenTSD(object sender, EventArgs e)
@@ -149,6 +150,11 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         private void Menu_OpenTPD(object sender, EventArgs e)
         {
             Open("_path_TPD");
+        }
+
+        private void Menu_OpenTBD(object sender, EventArgs e)
+        {
+            Open("path_TBD");
         }
 
         private void Open(string parameterName)
