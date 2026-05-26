@@ -120,7 +120,7 @@ namespace SAM.Analytical.Tas.TPD
                             float[] values_float = new float[values.Count + 1];
                             for (int i = 1; i < values_float.Length; i++)
                             {
-                                values_float[i] = System.Convert.ToSingle(values[i]);
+                                values_float[i] = System.Convert.ToSingle(values[i - 1]);
                             }
 
                             profile.SetYearlyValues(values_float);
