@@ -22,7 +22,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.0";
+        public override string LatestComponentVersion => "1.0.1";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -36,7 +36,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// </summary>
         public TasCalculateResultantTemperatureFromTPD()
           : base("Tas.CalculateResultantTemperatureFromTPD", "Tas.CalculateResultantTemperatureFromTPD",
-              "Calculate resultant Temperature from TPD",
+              "Runs a follow-up Tas simulation from a TPD file to calculate resultant temperatures. The component copies the matching TBD, writes TPD zone-temperature profiles into zone thermostat limits, simulates the copied model, and returns the generated TSD and TBD paths.",
               "SAM WIP", "Tas")
         {
         }
@@ -49,9 +49,9 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_path_TPD", NickName = "_path_TPD", Description = "A file path to a Tas file TPD", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_path_TPD", NickName = "_path_TPD", Description = "Path to the source Tas TPD file. A TBD file with the same name must exist in the same folder.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
-                global::Grasshopper.Kernel.Parameters.Param_Boolean  @boolean = new() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                global::Grasshopper.Kernel.Parameters.Param_Boolean  @boolean = new() { Name = "_run", NickName = "_run", Description = "Set to True to create the thermostat-driven TBD copy and run the Tas simulation.", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
@@ -67,10 +67,10 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "path_TSD", NickName = "path_TSD", Description = "A file path to a Tas file TSD", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "path_TBD", NickName = "path_TBD", Description = "A file path to a Tas file TBD", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "path_TSD", NickName = "path_TSD", Description = "Path to the generated Tas TSD results file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "path_TBD", NickName = "path_TBD", Description = "Path to the generated Tas TBD model copy with thermostat profiles from the TPD results.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
-                global::Grasshopper.Kernel.Parameters.Param_Boolean @boolean = new() { Name = "successful", NickName = "successful", Description = "successful", Access = GH_ParamAccess.item };
+                global::Grasshopper.Kernel.Parameters.Param_Boolean @boolean = new() { Name = "successful", NickName = "successful", Description = "True when the TPD was converted, the copied TBD was simulated, and the TSD file was unlocked after simulation.", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
@@ -143,7 +143,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
 
         private void Menu_OpenTSD(object sender, EventArgs e)
         {
-            Open("_path_TSD");
+            Open("path_TSD");
         }
 
         private void Menu_OpenTPD(object sender, EventArgs e)
@@ -151,17 +151,26 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             Open("_path_TPD");
         }
 
-        private void Open(string inputName)
+        private void Open(string parameterName)
         {
-            int index_Path = Params.IndexOfInputParam(inputName);
-            if (index_Path == -1)
+            object @object = null;
+
+            int index_Path = Params.IndexOfInputParam(parameterName);
+            if (index_Path != -1)
             {
-                return;
+                @object = Params.Input[index_Path].VolatileData.AllData(true)?.OfType<object>()?.ElementAt(0);
+            }
+
+            if (@object == null)
+            {
+                index_Path = Params.IndexOfOutputParam(parameterName);
+                if (index_Path != -1)
+                {
+                    @object = Params.Output[index_Path].VolatileData.AllData(true)?.OfType<object>()?.ElementAt(0);
+                }
             }
 
             string path = null;
-
-            object @object = Params.Input[index_Path].VolatileData.AllData(true)?.OfType<object>()?.ElementAt(0);
             if (@object is IGH_Goo)
             {
                 path = (@object as dynamic).Value?.ToString();
