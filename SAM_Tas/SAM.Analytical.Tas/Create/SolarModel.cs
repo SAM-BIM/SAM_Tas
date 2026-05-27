@@ -52,7 +52,7 @@ namespace SAM.Analytical.Tas
                         List<Tuple<DateTime, float>> coverage = new();
                         for (int day = 1; day <= 365; day++)
                         {
-                            dynamic shadeProp = building.GetShadeProportion(tbdZone.number, j, day);
+                            dynamic shadeProp = building.GetShadeProportion(tbdZone.number, tbdZoneSurface.number, day);
                             if (shadeProp == null)
                             {
                                 continue;
