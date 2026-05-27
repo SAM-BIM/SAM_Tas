@@ -48,6 +48,11 @@ namespace SAM.Analytical.Tas.TPD
             Dictionary<string, IndexedDoubles> dictionary = new Dictionary<string, IndexedDoubles>();
 
             List<SystemPlantRoom> systemPlantRooms = systemEnergyCentre.GetSystemPlantRooms();
+            if(systemPlantRooms is null)
+            {
+                return false;
+            }
+
             foreach(SystemPlantRoom systemPlantRoom in systemPlantRooms)
             {
                 List<SystemSpaceResult> systemSpaceResults = systemPlantRoom.GetSystemResults<SystemSpaceResult>();
@@ -112,6 +117,11 @@ namespace SAM.Analytical.Tas.TPD
 
                         foreach(profile profile in profiles)
                         {
+                            if(profile is null)
+                            {
+                                continue;
+                            }
+
                             profile.type = ProfileTypes.ticYearlyProfile;
                             profile.factor = 1;
 

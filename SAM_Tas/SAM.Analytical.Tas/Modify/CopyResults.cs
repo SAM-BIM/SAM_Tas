@@ -37,7 +37,7 @@ namespace SAM.Analytical.Tas
                 return new AnalyticalModel(analyticalModel);
             }
 
-            Dictionary<string, Panel> dictionary_Panels = [];
+            Dictionary<string, List<Panel>> dictionary_Panels = [];
             foreach(Panel panel in panels)
             {
                 string reference = panel?.GetValue<string>(PanelParameter.BuildingElementGuid);
@@ -46,7 +46,12 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                dictionary_Panels[reference] = panel;
+                if(!dictionary_Panels.TryGetValue(reference, out List<Panel> panelList))
+                {
+                    panelList = [];
+                    dictionary_Panels[reference] = panelList;
+                }
+                panelList.Add(panel);
             }
 
             List<ISolarSimulationResult> solarSimulationResults = solarModel.GetSolarSimulationResults<ISolarSimulationResult>();
@@ -67,21 +72,21 @@ namespace SAM.Analytical.Tas
                 dictionary_SolarSimulationResults[reference] = solarSimulationResult;
             }
 
-
-            foreach(KeyValuePair<string, Panel> keyValuePair in dictionary_Panels)
+            foreach(KeyValuePair<string, List<Panel>> keyValuePair in dictionary_Panels)
             {
                 if(!dictionary_SolarSimulationResults.TryGetValue(keyValuePair.Key, out ISolarSimulationResult solarSimulationResult) || solarSimulationResult is null)
                 {
                     continue;
                 }
 
-                Panel panel = keyValuePair.Value;
+                foreach(Panel panel in keyValuePair.Value)
+                {
+                    SolarCoverageSimulationResult solarCoverageSimulationResult = new SolarCoverageSimulationResult(panel.Name, "TAS", panel.Guid.ToString(), solarSimulationResult as SolarCoverageSimulationResult);
 
-                SolarCoverageSimulationResult solarCoverageSimulationResult = new SolarCoverageSimulationResult(panel.Name, "TAS", panel.Guid.ToString(), solarSimulationResult as SolarCoverageSimulationResult);
+                    adjacencyCluster.AddObject(solarCoverageSimulationResult);
 
-                adjacencyCluster.AddObject(solarCoverageSimulationResult);
-
-                adjacencyCluster.AddRelation(keyValuePair.Value, solarCoverageSimulationResult);
+                    adjacencyCluster.AddRelation(panel, solarCoverageSimulationResult);
+                }
             }
 
             return new AnalyticalModel(analyticalModel, adjacencyCluster);
