@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,6 +30,47 @@ namespace SAM.Analytical.Tas
                 return false;
             }
 
+            // Pre-compute the upper/lower-limit arrays for the entire year ONCE outside the
+            // internal-condition loop. The mapping is `DryBulbTemperature → Range<double>`, which
+            // depends only on weather, not on the IC. Previously each matching IC re-ran the
+            // mapping 8760 times AND allocated a `Range<double>` per hour. With ~14 matching ICs
+            // that was ~245k function calls and ~245k allocations for values that are constant
+            // across ICs.
+            float[] upperLimitYear = new float[8760];
+            float[] lowerLimitYear = new float[8760];
+            bool[] hourHasRange = new bool[8760];
+            bool allHoursHaveRange = true;
+            bool anyHourHasRange = false;
+            for (int h = 0; h < 8760; h++)
+            {
+                Range<double> range = Weather.Query.DryBulbTemperatureRange(dryBulbTemperatures[h]);
+                if (range == null)
+                {
+                    allHoursHaveRange = false;
+                    continue;
+                }
+
+                upperLimitYear[h] = System.Convert.ToSingle(range.Max);
+                lowerLimitYear[h] = System.Convert.ToSingle(range.Min);
+                hourHasRange[h] = true;
+                anyHourHasRange = true;
+            }
+
+            // Preserve the original "return false when no hours were writable" contract: the
+            // previous per-hour loop set `result = true` only inside the if-range-not-null branch,
+            // so a year with every DryBulbTemperatureRange null returned false and the path-based
+            // overload skipped Save(). Early-exit here keeps that semantics — even if every IC
+            // passes the filter and profile guards downstream, there is nothing to write.
+            if (!anyHourHasRange)
+            {
+                return false;
+            }
+
+            // O(1) lookup for the per-IC zone-name filter (was `IEnumerable.Contains` per zone).
+            HashSet<string> spaceNameSet = (spaceNames != null && spaceNames.Any())
+                ? new HashSet<string>(spaceNames)
+                : null;
+
             bool result = false;
             foreach (TBD.InternalCondition internalCondition in internalConditions)
             {
@@ -35,15 +79,23 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                if(spaceNames != null && spaceNames.Count() == 0)
+                // BEHAVIOUR-CHANGE (from earlier Stage 2 commit): the original predicate was
+                // `spaceNames != null && spaceNames.Count() == 0`, which only ran the filter
+                // when the supplied list was EMPTY — meaning callers passing a populated list
+                // got NO filtering and callers passing an empty list got everything skipped.
+                // The intent (matching the method's parameter name and the sibling overloads)
+                // is "apply the filter when names were supplied". Flipped to `.Any()` and now
+                // backed by a HashSet for O(1) zone-name membership tests.
+                if (spaceNameSet != null)
                 {
-                    bool contains = false;                    
+                    bool contains = false;
                     List<TBD.zone> zones = internalCondition.Zones();
-                    if(zones != null)
+                    if (zones != null)
                     {
-                        foreach(TBD.zone zone in zones)
+                        foreach (TBD.zone zone in zones)
                         {
-                            if(spaceNames.Contains(zone?.name))
+                            string zoneName = zone?.name;
+                            if (zoneName != null && spaceNameSet.Contains(zoneName))
                             {
                                 contains = true;
                                 break;
@@ -51,7 +103,7 @@ namespace SAM.Analytical.Tas
                         }
                     }
 
-                    if(!contains)
+                    if (!contains)
                     {
                         continue;
                     }
@@ -72,21 +124,83 @@ namespace SAM.Analytical.Tas
                 profile_UpperLimit.type = TBD.ProfileTypes.ticYearlyProfile;
                 profile_LowerLimit.type = TBD.ProfileTypes.ticYearlyProfile;
 
-                for (int i = 1; i <= 8760; i++)
+                // HOT PATH FIX: the previous per-hour loop did 8760 COM-property assignments
+                // PER PROFILE (×2 profiles per IC). Each `profile.yearlyValues[i] = …` is a
+                // marshalled COM round-trip. For ~14 matching ICs that's ~245k COM calls and
+                // dominated runtime (user-observed ~60 s for 14 spaces).
+                //
+                // `TBD.profileClass` exposes a bulk `SetYearlyValues(Object)` method that takes
+                // a `float[]` in a SINGLE COM call — the same pattern already used in
+                // SAM.Analytical.Tas/Modify/Update.cs:55. Switching cuts the work to 2 COM
+                // round-trips per IC (or 4 in the rare splice path), which is the same shape as
+                // GetYearlyValues elsewhere in the codebase.
+                if (allHoursHaveRange)
                 {
-                    Range<double> dryBulbTemperatureRange = Weather.Query.DryBulbTemperatureRange(dryBulbTemperatures[i - 1]);
-                    if(dryBulbTemperatureRange == null)
+                    // Fast path: every weather hour mapped to a valid range. Write directly.
+                    profile_UpperLimit.SetYearlyValues(upperLimitYear);
+                    profile_LowerLimit.SetYearlyValues(lowerLimitYear);
+                }
+                else
+                {
+                    // Sparse path: some hours had no range (DryBulbTemperatureRange returned null).
+                    // Preserve the previous per-hour `continue` semantics by reading the existing
+                    // array, splicing only the valid hours, and writing back.
+                    float[] upperArray = ToFloatArray(profile_UpperLimit.GetYearlyValues());
+                    float[] lowerArray = ToFloatArray(profile_LowerLimit.GetYearlyValues());
+                    for (int h = 0; h < 8760; h++)
                     {
-                        continue;
-                    }
+                        if (!hourHasRange[h])
+                        {
+                            continue;
+                        }
 
-                    profile_UpperLimit.yearlyValues[i] = System.Convert.ToSingle(dryBulbTemperatureRange.Max);
-                    profile_LowerLimit.yearlyValues[i] = System.Convert.ToSingle(dryBulbTemperatureRange.Min);
-                    result = true;
+                        upperArray[h] = upperLimitYear[h];
+                        lowerArray[h] = lowerLimitYear[h];
+                    }
+                    profile_UpperLimit.SetYearlyValues(upperArray);
+                    profile_LowerLimit.SetYearlyValues(lowerArray);
                 }
 
+                result = true;
             }
 
+            return result;
+        }
+
+        // Coerce the boxed SAFEARRAY returned by TBD.profile.GetYearlyValues() into a float[].
+        // The interop typically marshals to System.Single[] (a zero-based managed float[]); cast
+        // first, fall back to bound-aware element-wise copy if a different numeric array type
+        // or a non-zero-lower-bound SAFEARRAY comes back.
+        private static float[] ToFloatArray(object yearlyValues)
+        {
+            if (yearlyValues == null)
+            {
+                return new float[8760];
+            }
+
+            // Fast path: marshalled to a zero-based float[]. The vast majority of TBD interop
+            // calls produce exactly this.
+            if (yearlyValues is float[] floats && floats.Length >= 8760)
+            {
+                return floats;
+            }
+
+            // Defensive fallback: a System.Array projection of a SAFEARRAY can have a non-zero
+            // lower bound (e.g. [1..8760] is valid in COM and shows up for some TAS APIs). Use
+            // GetLowerBound / GetUpperBound and copy element-by-element so this path can't
+            // throw IndexOutOfRangeException on a 1-based SAFEARRAY.
+            float[] result = new float[8760];
+            if (yearlyValues is System.Array array)
+            {
+                int lowerBound = array.GetLowerBound(0);
+                int upperBound = array.GetUpperBound(0);
+                int sourceLength = upperBound - lowerBound + 1;
+                int copyLength = global::System.Math.Min(sourceLength, 8760);
+                for (int i = 0; i < copyLength; i++)
+                {
+                    result[i] = global::System.Convert.ToSingle(array.GetValue(lowerBound + i));
+                }
+            }
             return result;
         }
 

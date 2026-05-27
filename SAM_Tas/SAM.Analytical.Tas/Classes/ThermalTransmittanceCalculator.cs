@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -528,7 +531,7 @@ namespace SAM.Analytical.Tas
 
         public List<LayerThicknessCalculationResult> Calculate(IEnumerable<LayerThicknessCalculationData> layerThicknessCalculationDatas)
         {
-            if(ConstructionManager == null || layerThicknessCalculationDatas == null || layerThicknessCalculationDatas.Count() == 0)
+            if(ConstructionManager == null || layerThicknessCalculationDatas == null || !layerThicknessCalculationDatas.Any())
             {
                 return null;
             }
@@ -553,7 +556,7 @@ namespace SAM.Analytical.Tas
 
         public List<ConstructionCalculationResult> Calculate(IEnumerable<ConstructionCalculationData> constructionCalculationDatas)
         {
-            if (ConstructionManager == null || constructionCalculationDatas == null || constructionCalculationDatas.Count() == 0)
+            if (ConstructionManager == null || constructionCalculationDatas == null || !constructionCalculationDatas.Any())
             {
                 return null;
             }
@@ -578,7 +581,7 @@ namespace SAM.Analytical.Tas
 
         public List<IThermalTransmittanceCalculationResult> Calculate(IEnumerable<IThermalTransmittanceCalculationData> thermalTransmittanceCalculationDatas)
         {
-            if (ConstructionManager == null || thermalTransmittanceCalculationDatas == null || thermalTransmittanceCalculationDatas.Count() == 0)
+            if (ConstructionManager == null || thermalTransmittanceCalculationDatas == null || !thermalTransmittanceCalculationDatas.Any())
             {
                 return null;
             }

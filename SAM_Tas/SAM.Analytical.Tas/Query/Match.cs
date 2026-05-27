@@ -67,7 +67,7 @@ namespace SAM.Analytical.Tas
 
         public static Space Match(this IEnumerable<Space> spaces, string name, bool caseSensitive = true, bool trim = false)
         {
-            if (spaces == null || spaces.Count() == 0)
+            if (spaces == null || !spaces.Any())
             {
                 return null;
             }
@@ -118,7 +118,7 @@ namespace SAM.Analytical.Tas
 
         public static TBD.zone Match(this IEnumerable<TBD.zone> zones, string name, bool caseSensitive = true, bool trim = false)
         {
-            if (zones == null || zones.Count() == 0)
+            if (zones == null || !zones.Any())
                 return null;
 
             if (string.IsNullOrWhiteSpace(name))
@@ -360,7 +360,7 @@ namespace SAM.Analytical.Tas
         public static Aperture Match(this Core.Tas.ZoneSurfaceReference zoneSurfaceReference, IEnumerable<Aperture> apertures, out AperturePart aperturePart)
         {
             aperturePart = Analytical.AperturePart.Undefined;
-            if (zoneSurfaceReference == null || apertures == null || apertures.Count() == 0)
+            if (zoneSurfaceReference == null || apertures == null || !apertures.Any())
             {
                 return null;
             }
@@ -424,32 +424,44 @@ namespace SAM.Analytical.Tas
             if (constructions == null || element == null)
                 return null;
 
+            // Build the per-call lookup state, then delegate to the internal overload so the
+            // single-call API stays equivalent to the previous in-line implementation.
+            BuildConstructionLookup(constructions, out Dictionary<string, Construction> constructionsByName, out List<KeyValuePair<Construction, string>> constructions_Trimmed);
+            return Match(element, constructionsByName, constructions_Trimmed);
+        }
+
+        /// <summary>
+        /// Pre-built-state overload: callers that loop over many <see cref="TAS3D.Element"/>s
+        /// against the same construction set should build the lookup tables once and reuse
+        /// them across iterations to avoid per-call <c>.ToList()</c> + <c>RemoveAll</c> +
+        /// <c>.Trim()</c> work. Use <see cref="BuildConstructionLookup(IEnumerable{Construction}, out Dictionary{string, Construction}, out List{KeyValuePair{Construction, string}})"/>
+        /// to populate the inputs.
+        /// </summary>
+        internal static Construction Match(this TAS3D.Element element, Dictionary<string, Construction> constructionsByName, List<KeyValuePair<Construction, string>> constructions_Trimmed)
+        {
+            if (element == null || constructionsByName == null || constructions_Trimmed == null)
+                return null;
+
             string name = Name(element);
             if (string.IsNullOrWhiteSpace(name))
                 return null;
 
-            List<Construction> constructions_Temp = constructions.ToList();
-            constructions_Temp.RemoveAll(x => x == null || string.IsNullOrWhiteSpace(x.Name));
+            // Pass 1: exact match on trimmed construction name.
+            if (constructionsByName.TryGetValue(name, out Construction construction_Exact))
+                return construction_Exact;
 
-            foreach (Construction construction in constructions_Temp)
+            // Pass 2: element name ends with ": {trimmedName}".
+            foreach (KeyValuePair<Construction, string> entry in constructions_Trimmed)
             {
-                if (name.Equals(construction.Name.Trim()))
-                    return construction;
+                if (name.EndsWith(string.Format(": {0}", entry.Value)))
+                    return entry.Key;
             }
 
-            foreach(Construction construction in constructions_Temp)
-            {
-                if (name.EndsWith(string.Format(": {0}", construction.Name.Trim())))
-                    return construction;
-            }
-
+            // Pass 3: try the UniqueNameDecomposition-stripped name as exact match.
             if (UniqueNameDecomposition(element.name, out string prefix, out name, out Guid? guid, out int id))
             {
-                foreach (Construction construction in constructions_Temp)
-                {
-                    if (name.Equals(construction.Name.Trim()))
-                        return construction;
-                }
+                if (constructionsByName.TryGetValue(name, out Construction construction_Decomposed))
+                    return construction_Decomposed;
             }
 
             return null;
@@ -460,35 +472,92 @@ namespace SAM.Analytical.Tas
             if (apertureConstructions == null || window == null)
                 return null;
 
+            BuildApertureConstructionLookup(apertureConstructions, out Dictionary<string, ApertureConstruction> apertureConstructionsByName, out List<KeyValuePair<ApertureConstruction, string>> apertureConstructions_Trimmed);
+            return Match(window, apertureConstructionsByName, apertureConstructions_Trimmed);
+        }
+
+        /// <summary>
+        /// Pre-built-state overload — see <see cref="Match(TAS3D.Element, Dictionary{string, Construction}, List{KeyValuePair{Construction, string}})"/>
+        /// for the rationale.
+        /// </summary>
+        internal static ApertureConstruction Match(this TAS3D.window window, Dictionary<string, ApertureConstruction> apertureConstructionsByName, List<KeyValuePair<ApertureConstruction, string>> apertureConstructions_Trimmed)
+        {
+            if (window == null || apertureConstructionsByName == null || apertureConstructions_Trimmed == null)
+                return null;
+
             string name = Name(window);
             if (string.IsNullOrWhiteSpace(name))
                 return null;
 
-            List<ApertureConstruction> apertureConstructions_Temp = apertureConstructions.ToList();
-            apertureConstructions_Temp.RemoveAll(x => x == null || string.IsNullOrWhiteSpace(x.Name));
+            if (apertureConstructionsByName.TryGetValue(name, out ApertureConstruction apertureConstruction_Exact))
+                return apertureConstruction_Exact;
 
-            foreach (ApertureConstruction apertureConstruction in apertureConstructions_Temp)
+            foreach (KeyValuePair<ApertureConstruction, string> entry in apertureConstructions_Trimmed)
             {
-                if (name.Equals(apertureConstruction.Name.Trim()))
-                    return apertureConstruction;
-            }
-
-            foreach (ApertureConstruction apertureConstruction in apertureConstructions_Temp)
-            {
-                if (name.EndsWith(string.Format(": {0}", apertureConstruction.Name.Trim())))
-                    return apertureConstruction;
+                if (name.EndsWith(string.Format(": {0}", entry.Value)))
+                    return entry.Key;
             }
 
             if (UniqueNameDecomposition(window.name, out string prefix, out name, out Guid? guid, out int id))
             {
-                foreach (ApertureConstruction apertureConstruction in apertureConstructions_Temp)
-                {
-                    if (name.Equals(apertureConstruction.Name.Trim()))
-                        return apertureConstruction;
-                }
+                if (apertureConstructionsByName.TryGetValue(name, out ApertureConstruction apertureConstruction_Decomposed))
+                    return apertureConstruction_Decomposed;
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Build a name → Construction lookup and a (Construction, trimmedName) list once,
+        /// suitable for reuse across many <see cref="Match(TAS3D.Element, Dictionary{string, Construction}, List{KeyValuePair{Construction, string}})"/>
+        /// calls. Mirrors the in-line filter that <see cref="Match(TAS3D.Element, IEnumerable{Construction})"/>
+        /// used to do per-call. First-wins on duplicate trimmed names, matching the
+        /// previous foreach order.
+        /// </summary>
+        internal static void BuildConstructionLookup(IEnumerable<Construction> constructions, out Dictionary<string, Construction> constructionsByName, out List<KeyValuePair<Construction, string>> constructions_Trimmed)
+        {
+            constructionsByName = new Dictionary<string, Construction>();
+            constructions_Trimmed = new List<KeyValuePair<Construction, string>>();
+
+            if (constructions == null)
+                return;
+
+            foreach (Construction construction in constructions)
+            {
+                if (construction == null || string.IsNullOrWhiteSpace(construction.Name))
+                    continue;
+
+                string trimmedName = construction.Name.Trim();
+                constructions_Trimmed.Add(new KeyValuePair<Construction, string>(construction, trimmedName));
+
+                if (!constructionsByName.ContainsKey(trimmedName))
+                    constructionsByName[trimmedName] = construction;
+            }
+        }
+
+        /// <summary>
+        /// Mirror of <see cref="BuildConstructionLookup(IEnumerable{Construction}, out Dictionary{string, Construction}, out List{KeyValuePair{Construction, string}})"/>
+        /// for <see cref="ApertureConstruction"/>.
+        /// </summary>
+        internal static void BuildApertureConstructionLookup(IEnumerable<ApertureConstruction> apertureConstructions, out Dictionary<string, ApertureConstruction> apertureConstructionsByName, out List<KeyValuePair<ApertureConstruction, string>> apertureConstructions_Trimmed)
+        {
+            apertureConstructionsByName = new Dictionary<string, ApertureConstruction>();
+            apertureConstructions_Trimmed = new List<KeyValuePair<ApertureConstruction, string>>();
+
+            if (apertureConstructions == null)
+                return;
+
+            foreach (ApertureConstruction apertureConstruction in apertureConstructions)
+            {
+                if (apertureConstruction == null || string.IsNullOrWhiteSpace(apertureConstruction.Name))
+                    continue;
+
+                string trimmedName = apertureConstruction.Name.Trim();
+                apertureConstructions_Trimmed.Add(new KeyValuePair<ApertureConstruction, string>(apertureConstruction, trimmedName));
+
+                if (!apertureConstructionsByName.ContainsKey(trimmedName))
+                    apertureConstructionsByName[trimmedName] = apertureConstruction;
+            }
         }
     }
 }

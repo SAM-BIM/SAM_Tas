@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +25,7 @@ namespace SAM.Analytical.Tas
                 return null;
 
             List<TAS3D.Element> elements_ToRemove = elements.FindAll(x => x.isUsed == 0);
-            if(excludedNames != null && excludedNames.Count() != 0)
+            if(excludedNames != null && excludedNames.Any())
             {
                 for(int i = elements_ToRemove.Count - 1; i >= 0; i--)
                 {
