@@ -73,6 +73,13 @@ namespace SAM.Analytical.Tas
                 int j = 0;
                 while (zone.GetSurface(j) is TBD.zoneSurface zoneSurface)
                 {
+                    // Only exposed surfaces carry shade data in TAS (per Duncan/EDSL example).
+                    if (zoneSurface.type != TBD.SurfaceType.tbdExposed)
+                    {
+                        j++;
+                        continue;
+                    }
+
                     // External reference for traceability. buildingElement may be null on
                     // certain surfaces (link/null-link), so fall back to zoneSurface.GUID.
                     string reference = zoneSurface.buildingElement?.GUID;
@@ -94,24 +101,19 @@ namespace SAM.Analytical.Tas
 
                             if (result.Add(linkedFace3D))
                             {
-                                // Pull every TAS-reported shade-proportion value.
+                                // GetShadeProportion's FIRST argument is the zone's internal
+                                // Number (zone.Number), NOT the GetZone loop index — confirmed
+                                // by Duncan/EDSL:
+                                //     tbdBuild.GetShadeProportion(tbdZone.Number, j, day)
+                                // The second argument is the 0-based surface index within the
+                                // zone (our j), the third is the day-of-year.
                                 //
-                                // Sentinel handling: TAS returns -1f for hours where it has
-                                // no computed shade data (observed by Duncan/EDSL — debug
-                                // session showed building.GetShadeProportion(0, 2, 1) ⇒
-                                // 24× -1f on a 'SIM_EXT_SLD' surface). These are NOT valid
-                                // coverage values in [0, 1] and must not be stored as such;
-                                // we drop them so the SolarCoverageSimulationResult only
-                                // carries hours where TAS actually has data.
-                                //
-                                // TODO(EDSL): the (i, j) index convention that yields real
-                                // shade data is still under investigation — Duncan emailed
-                                // re. the correct API surface. Until then the function may
-                                // produce empty coverage lists for many faces.
+                                // -1f is the sentinel for "no computed value at this hour" and
+                                // is dropped below so coverage carries only real fractions.
                                 List<Tuple<DateTime, float>> coverage = new(dayList.Count * 24);
                                 foreach (int dayIndex in dayList)
                                 {
-                                    dynamic values = building.GetShadeProportion(i, j, dayIndex);
+                                    dynamic values = building.GetShadeProportion(zone.number, j, dayIndex);
                                     if (values == null)
                                     {
                                         continue;
