@@ -1,4 +1,8 @@
-﻿using SAM.Core.Tas;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
+using SAM.Geometry.SolarCalculator;
 using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
@@ -114,7 +118,17 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
+        /// <summary>
+        /// Backwards-compatible 2-arg overload — forwards to the 3-arg variant with
+        /// <paramref name="importSurfaceShades"/> defaulted to <c>false</c> so callers
+        /// compiled against the previous signature keep working.
+        /// </summary>
         public static AnalyticalModel ToSAM(string path_TBD, bool importUnused)
+        {
+            return ToSAM(path_TBD, importUnused, false);
+        }
+
+        public static AnalyticalModel ToSAM(string path_TBD, bool importUnused, bool importSurfaceShades)
         {
             AnalyticalModel result = null;
             using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
@@ -124,26 +138,36 @@ namespace SAM.Analytical.Tas
                     Modify.RemoveUnusedInternalConditions(sAMTBDDocument?.TBDDocument?.Building);
                 }
 
-                result = ToSAM(sAMTBDDocument);
+                result = ToSAM_AnalyticalModel(sAMTBDDocument);
+
+                if (importSurfaceShades && result != null)
+                {
+                    SolarModel solarModel = ToSAM_SolarModel(sAMTBDDocument);
+                    if (solarModel != null)
+                    {
+                        result = result.CopyResults(solarModel);
+                        result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                    }
+                }
             }
 
             return result;
         }
 
-        public static AnalyticalModel ToSAM(this SAMTBDDocument sAMTBDDocument)
+        public static AnalyticalModel ToSAM_AnalyticalModel(this SAMTBDDocument sAMTBDDocument)
         {
-            if(sAMTBDDocument == null)
+            if (sAMTBDDocument == null)
             {
                 return null;
             }
 
-            return ToSAM(sAMTBDDocument.TBDDocument);
+            return ToSAM_AnalyticalModel(sAMTBDDocument.TBDDocument);
 
         }
 
-        public static AnalyticalModel ToSAM(this TBD.TBDDocument tBDDocument)
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.TBDDocument tBDDocument)
         {
-            if(tBDDocument == null)
+            if (tBDDocument == null)
             {
                 return null;
             }
@@ -167,6 +191,37 @@ namespace SAM.Analytical.Tas
             Core.Address address = new Core.Address(null, null, null, Core.CountryCode.Undefined);
 
             return new AnalyticalModel(building.name, null, location, address, ToSAM(building), materialLibrary, profileLibrary);
+        }
+
+        public static SolarModel ToSAM_SolarModel(this SAMTBDDocument sAMTBDDocument)
+        {
+            if(sAMTBDDocument == null)
+            {
+                return null;
+            }
+
+            return ToSAM_SolarModel(sAMTBDDocument.TBDDocument);
+
+        }
+
+        public static SolarModel ToSAM_SolarModel(this TBD.TBDDocument tBDDocument)
+        {
+            if(tBDDocument == null)
+            {
+                return null;
+            }
+
+            return ToSAM_SolarModel(tBDDocument.Building);
+        }
+        
+        public static SolarModel ToSAM_SolarModel(this TBD.Building building)
+        {
+            if (building == null)
+            {
+                return null;
+            }
+
+            return Create.SolarModel(building);
         }
     }
 }

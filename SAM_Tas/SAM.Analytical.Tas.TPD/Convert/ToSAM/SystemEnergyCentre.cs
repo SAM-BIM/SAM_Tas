@@ -19,7 +19,7 @@ namespace SAM.Analytical.Tas.TPD
             }
 
             SystemEnergyCentre result = null;
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD, true))
             {
 
                 result = ToSAM(sAMTPDDocument, systemEnergyCentreConversionSettings);

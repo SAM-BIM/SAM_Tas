@@ -35,7 +35,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public SAMAnalyticalFromTBD()
           : base("SAMAnalytical.FromTBD", "SAMAnalytical.FromTBD",
-              "Creates a SAM AnalyticalModel by reading the geometry, constructions, and building data from a TasTBD file.",
+              "Creates a SAM AnalyticalModel by reading the geometry, constructions, and building data from a TasTBD file.\nWith _importSurfaceShades_ = true, also extracts TAS-computed shade-proportion data (per zoneSurface × shade-day × hour) and attaches it to the model as a SolarModel under AnalyticalModelParameter.SolarModel — enabling apples-to-apples comparison against SAM's own solar engine via SAMAnalytical.CompareSolarCoverage.",
               "SAM", "Tas")
         {
         }
@@ -48,9 +48,14 @@ namespace SAM.Analytical.Grasshopper.Tas
             //int aIndex = -1;
             //Param_Boolean booleanParameter = null;
 
+            // Input order is preserved from the previous public release — new optional inputs
+            // are appended AFTER _run so existing Grasshopper definitions wired against the
+            // 3-input (_pathTasTBD / _importUnused_ / _run) signature keep their wires
+            // correctly mapped instead of having _run silently shift right.
             inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
             inputParamManager.AddBooleanParameter("_importUnused_", "_importUnused_", "Import Unused IC", GH_ParamAccess.item, false);
             inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
+            inputParamManager.AddBooleanParameter("_importSurfaceShades_", "_importSurfaceShades_", "If true, reads TAS-computed shade proportions for every exposed zoneSurface and attaches a populated SolarModel to the AnalyticalModel (via AnalyticalModelParameter.SolarModel). Required input for SAMAnalytical.CompareSolarCoverage. Adds a few seconds to import time.", GH_ParamAccess.item, false);
         }
 
         /// <summary>
@@ -70,6 +75,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         {
             dataAccess.SetData(1, false);
 
+            // Input indices: 0 = _pathTasTBD, 1 = _importUnused_, 2 = _run, 3 = _importSurfaceShades_
             bool run = false;
             if (!dataAccess.GetData(2, ref run))
             {
@@ -92,7 +98,13 @@ namespace SAM.Analytical.Grasshopper.Tas
                 importUnused = false;
             }
 
-            AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused);
+            bool importSurfaceShades = false;
+            if (!dataAccess.GetData(3, ref importSurfaceShades))
+            {
+                importSurfaceShades = false;
+            }
+
+            AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused, importSurfaceShades);
 
             dataAccess.SetData(0, analyticalModel);
             dataAccess.SetData(1, analyticalModel != null);
