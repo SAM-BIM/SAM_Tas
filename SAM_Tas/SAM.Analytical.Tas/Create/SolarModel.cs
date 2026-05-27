@@ -49,9 +49,19 @@ namespace SAM.Analytical.Tas
                 return result;
             }
 
+            // GetShadeDays() returns a fixed-length COM array padded with -1 in the
+            // unused slots (and any other non-positive value is not a valid day-of-year).
+            // Passing those straight into GetShadeProportion as a day index returns junk /
+            // the -1 sentinel, so we exclude them here — only real day-of-year values
+            // (1..366) make it into dayList.
             List<int> dayList = new();
             foreach (int dayIndex in dayIndexes)
             {
+                if (dayIndex < 1 || dayIndex > 366)
+                {
+                    continue;
+                }
+
                 dayList.Add(dayIndex);
             }
 
