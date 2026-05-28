@@ -59,7 +59,7 @@ namespace SAM.Analytical.Tas
                             }
 
                             DateTime dayStart = yearStart.AddDays(day - 1);
-                            int hour = 0;
+                            int hour = 1;
                             foreach (float value in shadeProp)
                             {
                                 if (value >= 0f)
