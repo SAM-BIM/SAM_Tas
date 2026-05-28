@@ -73,6 +73,8 @@ namespace SAM.Analytical.Tas
 
                         if (coverage.Count != 0)
                         {
+                            string reference = tbdZoneSurface.buildingElement.GUID;
+
                             int roomSurfaceIndex = 0;
                             TBD.IRoomSurface roomSurface = tbdZoneSurface.GetRoomSurface(roomSurfaceIndex);
                             while (roomSurface != null)
@@ -80,19 +82,18 @@ namespace SAM.Analytical.Tas
                                 Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
                                 if (polygon3D != null && polygon3D.GetPlane() != null)
                                 {
-                                    Face3D face3D = new(polygon3D);
-                                    Guid faceGuid = Guid.NewGuid();
-                                    LinkedFace3D linkedFace3D = new(faceGuid, face3D, tbdZoneSurface.GUID);
+                                    Guid guid = Guid.NewGuid();
+                                    LinkedFace3D linkedFace3D = new(guid, new(polygon3D), reference);
 
                                     if (result.Add(linkedFace3D))
                                     {
                                         SolarCoverageSimulationResult solarCoverageSimulationResult = new(
                                             tbdZoneSurface.GUID,
                                             "TAS",
-                                            faceGuid.ToString(),
+                                            guid.ToString(),
                                             coverage);
 
-                                        result.Add(solarCoverageSimulationResult, faceGuid);
+                                        result.Add(solarCoverageSimulationResult, guid);
                                     }
                                 }
 

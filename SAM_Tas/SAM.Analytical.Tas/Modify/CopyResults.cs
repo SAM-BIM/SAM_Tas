@@ -63,7 +63,9 @@ namespace SAM.Analytical.Tas
             Dictionary<string, ISolarSimulationResult> dictionary_SolarSimulationResults = [];
             foreach(ISolarSimulationResult solarSimulationResult in solarSimulationResults)
             {
-                string reference = solarSimulationResult?.Reference;
+                LinkedFace3D linkedFace3D = solarModel.GetLinkedFace3D(solarSimulationResult);
+
+                string reference = linkedFace3D?.Reference;
                 if (string.IsNullOrWhiteSpace(reference))
                 {
                     continue;
