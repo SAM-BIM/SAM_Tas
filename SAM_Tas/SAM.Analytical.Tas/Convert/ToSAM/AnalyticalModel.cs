@@ -3,6 +3,7 @@
 
 using SAM.Core.Tas;
 using SAM.Geometry.SolarCalculator;
+using SAM.Geometry.Spatial;
 using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
@@ -130,6 +131,11 @@ namespace SAM.Analytical.Tas
 
         public static AnalyticalModel ToSAM(string path_TBD, bool importUnused, bool importSurfaceShades)
         {
+            // Shared polygon3D cache across AdjacencyCluster build + Create.SolarModel.
+            // Saves redundant COM polygon conversions for the exposed surfaces that get
+            // processed by both phases (~50 polygons, ~400 ms on a real building).
+            Dictionary<string, Polygon3D> polygonCache = new Dictionary<string, Polygon3D>();
+
             AnalyticalModel result = null;
             using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
             {
@@ -138,11 +144,12 @@ namespace SAM.Analytical.Tas
                     Modify.RemoveUnusedInternalConditions(sAMTBDDocument?.TBDDocument?.Building);
                 }
 
-                result = ToSAM_AnalyticalModel(sAMTBDDocument);
+                TBD.Building building = sAMTBDDocument?.TBDDocument?.Building;
+                result = ToSAM_AnalyticalModel(building, polygonCache);
 
                 if (importSurfaceShades && result != null)
                 {
-                    SolarModel solarModel = ToSAM_SolarModel(sAMTBDDocument);
+                    SolarModel solarModel = Create.SolarModel(building, polygonCache);
                     if (solarModel != null)
                     {
                         result = result.CopyResults(solarModel);
@@ -177,6 +184,17 @@ namespace SAM.Analytical.Tas
 
         public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building)
         {
+            return ToSAM_AnalyticalModel(building, null);
+        }
+
+        /// <summary>
+        /// AnalyticalModel build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> so that subsequent calls (e.g. <c>Create.SolarModel</c>)
+        /// can reuse the already-converted Polygon3D objects instead of re-marshaling them
+        /// over the TBD COM boundary.
+        /// </summary>
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
             if (building == null)
             {
                 return null;
@@ -190,7 +208,9 @@ namespace SAM.Analytical.Tas
 
             Core.Address address = new Core.Address(null, null, null, Core.CountryCode.Undefined);
 
-            return new AnalyticalModel(building.name, null, location, address, ToSAM(building), materialLibrary, profileLibrary);
+            AdjacencyCluster adjacencyCluster = ToSAM(building, polygonCache);
+
+            return new AnalyticalModel(building.name, null, location, address, adjacencyCluster, materialLibrary, profileLibrary);
         }
 
         public static SolarModel ToSAM_SolarModel(this SAMTBDDocument sAMTBDDocument)

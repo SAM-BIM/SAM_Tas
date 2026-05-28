@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
 using TSD;
@@ -102,6 +105,17 @@ namespace SAM.Analytical.Tas
 
         public static AdjacencyCluster ToSAM(this TBD.Building building)
         {
+            return ToSAM(building, null);
+        }
+
+        /// <summary>
+        /// AdjacencyCluster build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> to share converted Polygon3D objects with downstream
+        /// callers (e.g. <c>Create.SolarModel</c>) — same roomSurface won't be re-marshaled
+        /// over COM. Key format: <c>zoneSurface.GUID + "/" + roomSurfaceIndex</c>.
+        /// </summary>
+        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
             if (building == null)
             {
                 return null;
@@ -117,7 +131,7 @@ namespace SAM.Analytical.Tas
             Dictionary<string, Space> dictionary_Space = new Dictionary<string, Space>();
             Dictionary<string, List<Panel>> dictionary_Panel = new Dictionary<string, List<Panel>>();
 
-            //Dictionary<string, List<Tuple<string, string>>> dictionary_Relations = new Dictionary<string, List<Tuple<string, string>>>(); 
+            //Dictionary<string, List<Tuple<string, string>>> dictionary_Relations = new Dictionary<string, List<Tuple<string, string>>>();
 
             foreach (TBD.zone zone in building.Zones())
             {
@@ -202,9 +216,11 @@ namespace SAM.Analytical.Tas
 
                     ZoneSurfaceReference zoneSurfaceReference = new ZoneSurfaceReference(zoneSurface.number, zone.GUID);
 
+                    int roomSurfaceIndex_panel = 0;
                     foreach (TBD.IRoomSurface roomSurface in zoneSurface.RoomSurfaces())
                     {
-                        Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+                        Polygon3D polygon3D = GetOrConvertPolygon(polygonCache, zoneSurface.GUID, roomSurfaceIndex_panel, roomSurface);
+                        roomSurfaceIndex_panel++;
                         if (polygon3D == null)
                         {
                             continue;
@@ -326,9 +342,11 @@ namespace SAM.Analytical.Tas
                         return null;
                     }
 
+                    int roomSurfaceIndex_aperture = 0;
                     foreach (TBD.IRoomSurface roomSurface in zoneSurface.RoomSurfaces())
                     {
-                        Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+                        Polygon3D polygon3D = GetOrConvertPolygon(polygonCache, zoneSurface.GUID, roomSurfaceIndex_aperture, roomSurface);
+                        roomSurfaceIndex_aperture++;
                         if (polygon3D == null)
                         {
                             continue;
@@ -515,6 +533,27 @@ namespace SAM.Analytical.Tas
             //adjacencyCluster.UpdatePanelTypes(groundElevation);
 
             return adjacencyCluster;
+        }
+
+        /// <summary>
+        /// Convert a TAS roomSurface perimeter to a SAM Polygon3D, consulting the optional
+        /// shared cache first. Key format: <c>zoneSurfaceGuid + "/" + roomSurfaceIndex</c>.
+        /// If <paramref name="polygonCache"/> is null, performs the conversion uncached.
+        /// </summary>
+        private static Polygon3D GetOrConvertPolygon(Dictionary<string, Polygon3D> polygonCache, string zoneSurfaceGuid, int roomSurfaceIndex, TBD.IRoomSurface roomSurface)
+        {
+            string cacheKey = zoneSurfaceGuid + "/" + roomSurfaceIndex;
+            if (polygonCache != null && polygonCache.TryGetValue(cacheKey, out Polygon3D cached))
+            {
+                return cached;
+            }
+
+            Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+            if (polygonCache != null && polygon3D != null)
+            {
+                polygonCache[cacheKey] = polygon3D;
+            }
+            return polygon3D;
         }
     }
 }
