@@ -185,7 +185,11 @@ namespace SAM.Analytical.Tas
                     PanelType panelType = Query.PanelType(buildingElement.BEType);
                     if (panelType == PanelType.Undefined)
                     {
-                        continue;
+                        if(buildingElement.BEType != 0)
+                        {
+                            continue;
+                        }
+                        panelType = PanelType.Air;
                     }
 
                     //bool ground = Analytical.Query.Ground(panelType);
@@ -237,6 +241,14 @@ namespace SAM.Analytical.Tas
                         if (panels_Link != null && panels_Link.Count != 0)
                         {
                             panel = panels_Link.Find(x => face3D.InRange(x.GetInternalPoint3D()));
+                            if(panel is null)
+                            {
+                                panel = panels_Link.Find(x => face3D.InRange(x.GetInternalPoint3D(), Tolerance.MacroDistance));
+                                if (panel is null && panels_Link.Count == 1)
+                                {
+                                    panel = panels_Link[0];
+                                }
+                            }
                         }
 
                         if (panel == null)
