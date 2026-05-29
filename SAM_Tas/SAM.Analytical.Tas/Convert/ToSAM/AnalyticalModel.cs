@@ -134,10 +134,10 @@ namespace SAM.Analytical.Tas
             // Shared polygon3D cache across AdjacencyCluster build + Create.SolarModel.
             // Saves redundant COM polygon conversions for the exposed surfaces that get
             // processed by both phases (~50 polygons, ~400 ms on a real building).
-            Dictionary<string, Polygon3D> polygonCache = new Dictionary<string, Polygon3D>();
+            Dictionary<string, Polygon3D> polygonCache = [];
 
             AnalyticalModel result = null;
-            using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
+            using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
             {
                 if (!importUnused)
                 {
@@ -147,13 +147,35 @@ namespace SAM.Analytical.Tas
                 TBD.Building building = sAMTBDDocument?.TBDDocument?.Building;
                 result = ToSAM_AnalyticalModel(building, polygonCache);
 
-                if (importSurfaceShades && result != null)
+                if(result is not null)
                 {
-                    SolarModel solarModel = Create.SolarModel(building, polygonCache);
-                    if (solarModel != null)
+                    Weather.WeatherData weatherData = Weather.Tas.Convert.ToSAM_WeatherData(building);
+                    if(weatherData is not null)
                     {
-                        result = result.CopyResults(solarModel);
-                        result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        List<DesignDay> coolingDesignDays = null;
+                        List<DesignDay> heatingDesignDays = null;
+
+                        if(weatherData.CoolingDesignDay() is DesignDay coolingDesignDay)
+                        {
+                            coolingDesignDays = [coolingDesignDay];
+                        }
+
+                        if (weatherData.HeatingDesignDay() is DesignDay heatingDesignDay)
+                        {
+                            heatingDesignDays = [heatingDesignDay];
+                        }
+
+                        result.UpdateWeather(weatherData, coolingDesignDays, heatingDesignDays);
+                    }
+                    
+                    if (importSurfaceShades)
+                    {
+                        SolarModel solarModel = Create.SolarModel(building, polygonCache);
+                        if (solarModel != null)
+                        {
+                            result = result.CopyResults(solarModel);
+                            result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        }
                     }
                 }
             }
@@ -206,7 +228,7 @@ namespace SAM.Analytical.Tas
             Core.Location location = new Core.Location(building.name, building.longitude, building.latitude, 0);
             location.SetValue(Core.LocationParameter.TimeZone, Core.Query.Description(Core.Query.UTC(building.timeZone)));
 
-            Core.Address address = new Core.Address(null, null, null, Core.CountryCode.Undefined);
+            Core.Address address = new (null, null, null, Core.CountryCode.Undefined);
 
             AdjacencyCluster adjacencyCluster = ToSAM(building, polygonCache);
 

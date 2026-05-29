@@ -121,15 +121,15 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            AdjacencyCluster adjacencyCluster = new ();
 
-            Dictionary<string, Construction> dictionary_Construction = new Dictionary<string, Construction>();
-            List<ApertureConstruction> apertureConstructions = new List<ApertureConstruction>();
+            Dictionary<string, Construction> dictionary_Construction = [];
+            List<ApertureConstruction> apertureConstructions = [];
 
             //double groundElevation = 0;
 
-            Dictionary<string, Space> dictionary_Space = new Dictionary<string, Space>();
-            Dictionary<string, List<Panel>> dictionary_Panel = new Dictionary<string, List<Panel>>();
+            Dictionary<string, Space> dictionary_Space = [];
+            Dictionary<string, List<Panel>> dictionary_Panel = [];
 
             //Dictionary<string, List<Tuple<string, string>>> dictionary_Relations = new Dictionary<string, List<Tuple<string, string>>>();
 
@@ -214,7 +214,7 @@ namespace SAM.Analytical.Tas
 
                     bool adiabatic = zoneSurface.type == TBD.SurfaceType.tbdNullLink;
 
-                    ZoneSurfaceReference zoneSurfaceReference = new ZoneSurfaceReference(zoneSurface.number, zone.GUID);
+                    ZoneSurfaceReference zoneSurfaceReference = new (zoneSurface.number, zone.GUID);
 
                     int roomSurfaceIndex_panel = 0;
                     foreach (TBD.IRoomSurface roomSurface in zoneSurface.RoomSurfaces())
@@ -263,7 +263,7 @@ namespace SAM.Analytical.Tas
 
                         if(!dictionary_Panel.TryGetValue(zoneSurface.GUID, out List<Panel>  panels))
                         {
-                            panels = new List<Panel>();
+                            panels = [];
                             dictionary_Panel[zoneSurface.GUID] = panels;
                         }
 
@@ -360,7 +360,7 @@ namespace SAM.Analytical.Tas
 
                         if(!dictionary.TryGetValue(apertureConstruction.Guid, out List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples) || tuples == null)
                         {
-                            tuples = new List<Tuple<Polygon3D, TBD.IZoneSurface>>();
+                            tuples = [];
                             dictionary[apertureConstruction.Guid] = tuples;
                         }
 
