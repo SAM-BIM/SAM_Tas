@@ -351,7 +351,7 @@ namespace SAM.Analytical.Tas
 
                     if(apertureConstruction == null)
                     {
-                        return null;
+                        continue;
                     }
 
                     int roomSurfaceIndex_aperture = 0;
