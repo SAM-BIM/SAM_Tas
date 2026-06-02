@@ -127,7 +127,8 @@ namespace SAM.Analytical.Tas
             //   * the TAS frame surface is the OUTER opening (larger area), the pane the inner
             //     glazing (smaller area);
             //   * the SAM aperture face sits at a different height than the TAS surface (a known,
-            //     constant vertical offset), so we compare HORIZONTAL (X,Y) distance and ignore Z.
+            //     constant vertical offset), so we gate on HORIZONTAL (X,Y) distance, then anchor on
+            //     the nearest candidate's Z to keep only the same floor (see stacked-window note below).
             //
             // Runs BEFORE the panel loop so each aperture claims its own two (small) window
             // surfaces first; the larger wall surfaces are left for the panels.
@@ -150,8 +151,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    // Unclaimed candidates co-located with this aperture (horizontal distance),
-                    // sorted by area ascending.
+                    // Unclaimed candidates co-located with this aperture (horizontal distance).
                     List<Tuple<Guid, Point3D, string, double>> nearby = new List<Tuple<Guid, Point3D, string, double>>();
                     foreach (Tuple<Guid, Point3D, string, double> candidate in candidates)
                     {
@@ -169,14 +169,40 @@ namespace SAM.Analytical.Tas
                         }
                     }
 
-                    nearby.Sort((x, y) => x.Item4.CompareTo(y.Item4));
-                    Log("  nearby(co-located, unclaimed)=" + nearby.Count + (nearby.Count == 0 ? "" : " areas=[" + string.Join(", ", nearby.Select(x => x.Item4.ToString("0.###"))) + "]"));
+                    // Disambiguate vertically-stacked windows (same plan location, different floors):
+                    // anchor on the height (Z) of the NEAREST-in-3D co-located surface — that is THIS
+                    // window's surface, since other floors are a storey height away — and keep only
+                    // candidates within tolerance of that height. A window's own pane and frame share
+                    // this Z, so they stay; other floors are dropped and can't steal coverage. The
+                    // constant SAM<->TAS vertical offset cancels out because we anchor on the nearest
+                    // actual candidate rather than on an absolute height.
+                    List<Tuple<Guid, Point3D, string, double>> sameFloor = new List<Tuple<Guid, Point3D, string, double>>();
+                    if (nearby.Count != 0)
+                    {
+                        Tuple<Guid, Point3D, string, double> nearest = null;
+                        double nearestDistance = double.MaxValue;
+                        foreach (Tuple<Guid, Point3D, string, double> candidate in nearby)
+                        {
+                            double distance = aperturePoint.Distance(candidate.Item2);
+                            if (distance < nearestDistance)
+                            {
+                                nearestDistance = distance;
+                                nearest = candidate;
+                            }
+                        }
 
-                    // pane = smallest co-located surface; frame = next smallest, but only if it is
+                        double anchorZ = nearest.Item2.Z;
+                        sameFloor = nearby.FindAll(x => Math.Abs(x.Item2.Z - anchorZ) <= tolerance);
+                        sameFloor.Sort((x, y) => x.Item4.CompareTo(y.Item4));
+                    }
+
+                    Log("  co-located=" + nearby.Count + " sameFloor=" + sameFloor.Count + (sameFloor.Count == 0 ? "" : " areas=[" + string.Join(", ", sameFloor.Select(x => x.Item4.ToString("0.###"))) + "]"));
+
+                    // pane = smallest same-floor surface; frame = next smallest, but only if it is
                     // still window-sized (<= 3x the pane area) so a co-located WALL surface — far
                     // larger — is never mistaken for a frame.
-                    Tuple<Guid, Point3D, string, double> paneCandidate = nearby.Count >= 1 ? nearby[0] : null;
-                    Tuple<Guid, Point3D, string, double> frameCandidate = (nearby.Count >= 2 && nearby[1].Item4 <= nearby[0].Item4 * 3.0) ? nearby[1] : null;
+                    Tuple<Guid, Point3D, string, double> paneCandidate = sameFloor.Count >= 1 ? sameFloor[0] : null;
+                    Tuple<Guid, Point3D, string, double> frameCandidate = (sameFloor.Count >= 2 && sameFloor[1].Item4 <= sameFloor[0].Item4 * 3.0) ? sameFloor[1] : null;
 
                     Tuple<AperturePart, Tuple<Guid, Point3D, string, double>>[] assignments = new Tuple<AperturePart, Tuple<Guid, Point3D, string, double>>[]
                     {
