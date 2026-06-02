@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System;
 using System.Collections.Generic;
 using SAM.Geometry.Spatial;
@@ -44,6 +47,14 @@ namespace SAM.Analytical.Tas
             {
                 return false;
             }
+
+            // Optional diagnostics (SAMAnalytical.TBD _debug_ toggle / SAM_DEBUG env var) — appended
+            // to %TEMP%\SAM_ToTBD.log. This is the authoritative shading writer (it ClearShadingData()s
+            // first), so its log reflects what actually lands in the TBD.
+            bool logEnabled = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SAM_DEBUG"));
+            string logPath = logEnabled ? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_ToTBD.log") : null;
+            void LogShade(string message) { if (logPath != null) { try { System.IO.File.AppendAllText(logPath, message + Environment.NewLine); } catch { } } }
+            LogShade("=== UpdateShading ===");
 
             List<TBD.zone> zones = building.Zones();
             if (zones == null)
@@ -93,18 +104,59 @@ namespace SAM.Analytical.Tas
                 {
                     foreach (Aperture aperture in apertures)
                     {
-                        Face3D face3D_Aperture = aperture.Face3D;
-                        if (face3D_Aperture == null || !face3D_Aperture.IsValid())
+                        // Prefer the aperture's OWN per-part coverage (attached on import by
+                        // Modify.CopyResults as "… -pane" / "… -frame"). Feed each to its OWN sub-face
+                        // so the geometric match routes pane coverage to the pane surface and frame
+                        // coverage to the frame ring. (The old code applied the PARENT PANEL's result
+                        // via the aperture centre, which only hit the pane and used the wrong data.)
+                        List<SolarCoverageSimulationResult> apertureCoverageResults = analyticalModel.GetResults<SolarCoverageSimulationResult>(aperture);
+                        SolarCoverageSimulationResult paneCoverage = apertureCoverageResults?.Find(x => x?.Name != null && x.Name.EndsWith(AperturePart.Pane.Sufix()));
+                        SolarCoverageSimulationResult frameCoverage = apertureCoverageResults?.Find(x => x?.Name != null && x.Name.EndsWith(AperturePart.Frame.Sufix()));
+
+                        if (paneCoverage != null || frameCoverage != null)
                         {
-                            continue;
+                            LogShade("Aperture \"" + aperture.Name + "\" ownCoverage pane=" + (paneCoverage != null) + " frame=" + (frameCoverage != null));
+
+                            List<Tuple<AperturePart, SolarCoverageSimulationResult>> partCoverages = new List<Tuple<AperturePart, SolarCoverageSimulationResult>>();
+                            if (paneCoverage != null) { partCoverages.Add(new Tuple<AperturePart, SolarCoverageSimulationResult>(AperturePart.Pane, paneCoverage)); }
+                            if (frameCoverage != null) { partCoverages.Add(new Tuple<AperturePart, SolarCoverageSimulationResult>(AperturePart.Frame, frameCoverage)); }
+
+                            foreach (Tuple<AperturePart, SolarCoverageSimulationResult> partCoverage in partCoverages)
+                            {
+                                List<Face3D> face3Ds_Part = aperture.GetFace3Ds(partCoverage.Item1);
+                                if (face3Ds_Part == null)
+                                {
+                                    continue;
+                                }
+
+                                foreach (Face3D face3D_Part in face3Ds_Part)
+                                {
+                                    if (face3D_Part == null || !face3D_Part.IsValid())
+                                    {
+                                        continue;
+                                    }
+
+                                    tuples_solarSimulationResult.Add(new Tuple<Face3D, Point3D, BoundingBox3D, Core.SolarCalculator.ISolarSimulationResult>(face3D_Part, face3D_Part.GetInternalPoint3D(tolerance), face3D_Part.GetBoundingBox(), partCoverage.Item2));
+                                }
+                            }
                         }
-
-                        BoundingBox3D boundingBox3D_Aperture = face3D_Aperture.GetBoundingBox();
-                        Point3D point3D_Aperture = face3D_Aperture.GetInternalPoint3D(tolerance);
-
-                        foreach (Core.SolarCalculator.ISolarSimulationResult solarSimulationResult in solarSimulationResults)
+                        else
                         {
-                            tuples_solarSimulationResult.Add(new Tuple<Face3D, Point3D, BoundingBox3D, Core.SolarCalculator.ISolarSimulationResult>(face3D_Aperture, point3D_Aperture, boundingBox3D, solarSimulationResult));
+                            // Fallback (e.g. SAM-computed model with no per-part coverage): keep the
+                            // original behaviour — apply the panel's results to the whole aperture face.
+                            Face3D face3D_Aperture = aperture.Face3D;
+                            if (face3D_Aperture == null || !face3D_Aperture.IsValid())
+                            {
+                                continue;
+                            }
+
+                            BoundingBox3D boundingBox3D_Aperture = face3D_Aperture.GetBoundingBox();
+                            Point3D point3D_Aperture = face3D_Aperture.GetInternalPoint3D(tolerance);
+
+                            foreach (Core.SolarCalculator.ISolarSimulationResult solarSimulationResult in solarSimulationResults)
+                            {
+                                tuples_solarSimulationResult.Add(new Tuple<Face3D, Point3D, BoundingBox3D, Core.SolarCalculator.ISolarSimulationResult>(face3D_Aperture, point3D_Aperture, boundingBox3D_Aperture, solarSimulationResult));
+                            }
                         }
                     }
                 }
@@ -193,7 +245,14 @@ namespace SAM.Analytical.Tas
                 }
 
                 List<Tuple<Face3D, BoundingBox3D, TBD.IZoneSurface>> tuples_ZoneSurfaces_BoundingBox = tuples_ZoneSurfaces.FindAll(x => x.Item2.InRange(tuple.Item3, Core.Tolerance.MacroDistance));
-                List<Tuple<Face3D, BoundingBox3D, TBD.IZoneSurface>> tuples_ZoneSurfaces_Temp = tuples_ZoneSurfaces_BoundingBox?.FindAll(x => x.Item1.On(tuple.Item2, Core.Tolerance.MacroDistance));
+
+                // Match on coplanar containment AND area similarity. Without the area gate the
+                // point-On-surface test cross-bleeds between the concentric/overlapping surfaces of
+                // one opening: a wall result (area ~16) would land on the pane (1.68), and the pane's
+                // centre sits on every surface that contains it. Requiring the candidate zoneSurface's
+                // area to be close to the fed face's area routes wall->wall, pane->pane, frame->frame.
+                double area_Result = tuple.Item1.GetArea();
+                List<Tuple<Face3D, BoundingBox3D, TBD.IZoneSurface>> tuples_ZoneSurfaces_Temp = tuples_ZoneSurfaces_BoundingBox?.FindAll(x => x.Item1.On(tuple.Item2, Core.Tolerance.MacroDistance) && System.Math.Abs(x.Item1.GetArea() - area_Result) <= 0.5 * System.Math.Max(x.Item1.GetArea(), area_Result));
                 if(tuples_ZoneSurfaces_Temp == null || tuples_ZoneSurfaces_Temp.Count == 0)
                 {
                     continue;
@@ -201,7 +260,20 @@ namespace SAM.Analytical.Tas
 
                 foreach(Tuple<Face3D, BoundingBox3D, TBD.IZoneSurface> tuple_ZoneSurface in tuples_ZoneSurfaces_Temp)
                 {
-                    UpdateSurfaceShades(building, daysShades, (TBD.zoneSurface)tuple_ZoneSurface.Item3, solarSimulationResult);
+                    TBD.zoneSurface zoneSurface = (TBD.zoneSurface)tuple_ZoneSurface.Item3;
+
+                    // Coverage results carry per-hour proportions; write them with correct hour/day
+                    // mapping (the generic UpdateSurfaceShades does Hour-1, which corrupts the day
+                    // whose 24th hour rolled to Hour 0 of the next day — see WriteImportedCoverageShades).
+                    if (solarSimulationResult is SolarCoverageSimulationResult coverageResult)
+                    {
+                        List<TBD.SurfaceShade> coverageShades = WriteImportedCoverageShades(building, daysShades, zoneSurface, coverageResult);
+                        LogShade("  wrote " + (coverageShades == null ? 0 : coverageShades.Count) + " coverage shades to surface area=" + tuple_ZoneSurface.Item1.GetArea().ToString("0.###"));
+                    }
+                    else
+                    {
+                        UpdateSurfaceShades(building, daysShades, zoneSurface, solarSimulationResult);
+                    }
                 }
             }
 

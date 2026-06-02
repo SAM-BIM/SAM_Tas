@@ -66,8 +66,23 @@ namespace SAM.Analytical.Tas
                 }
             }
 
-            // Collect candidate (LinkedFace3D guid, internalPoint) pairs that have an SCSR.
-            List<Tuple<Guid, Point3D>> candidates = new List<Tuple<Guid, Point3D>>();
+            // Optional diagnostic log written to %TEMP%\SAM_CopyResults.log (overwritten each run)
+            // so we can see which apertures/panels matched which SolarModel surface and why a part
+            // was skipped. OFF by default: set environment variable SAM_DEBUG (to any non-empty
+            // value) to enable it. When disabled, `log` is null and Log(...) is a no-op — no IO.
+            bool logEnabled = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SAM_DEBUG"));
+            System.Text.StringBuilder log = logEnabled ? new System.Text.StringBuilder() : null;
+            void Log(string message) { if (log != null) { log.Append(message); log.Append(Environment.NewLine); } }
+
+            Log("=== CopyResults " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " ===");
+
+            // Collect candidate (LinkedFace3D guid, internalPoint, reference, area) tuples that have
+            // an SCSR. The reference is the TAS buildingElement.GUID stamped by Create.SolarModel.
+            // NOTE: that GUID is actually the *construction* GUID (shared across all surfaces using
+            // the same construction), so it only separates pane-construction from frame-construction
+            // — it does NOT uniquely identify a single window. Area is carried so the geometry
+            // fallback can tell a pane sub-face from the concentric frame sub-face.
+            List<Tuple<Guid, Point3D, string, double>> candidates = new List<Tuple<Guid, Point3D, string, double>>();
             foreach (LinkedFace3D linkedFace3D in linkedFace3Ds)
             {
                 if (linkedFace3D?.Face3D == null)
@@ -86,12 +101,117 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                candidates.Add(Tuple.Create(linkedFace3D.Guid, internalPoint3D));
+                candidates.Add(Tuple.Create(linkedFace3D.Guid, internalPoint3D, linkedFace3D.Reference, linkedFace3D.Face3D.GetArea()));
             }
 
-            // Greedy nearest-neighbour match: each LinkedFace3D is claimed by at most one panel.
+            Log("Panels: " + panels.Count + "   Candidates (LinkedFace3D w/ SCSR): " + candidates.Count);
+            Log("-- Candidates --");
+            foreach (Tuple<Guid, Point3D, string, double> candidate in candidates)
+            {
+                Log("  [" + candidate.Item1.ToString().Substring(0, 8) + "] area=" + candidate.Item4.ToString("0.###") + " ref=" + (candidate.Item3 ?? "<null>") + " centroid=" + candidate.Item2);
+            }
+
             double tolerance = 0.5;
             HashSet<Guid> claimed = new HashSet<Guid>();
+            int paneMatched = 0;
+            int frameMatched = 0;
+            int panelMatched = 0;
+
+            // Apertures (window/door) are exposed zoneSurfaces too, so Create.SolarModel emits a
+            // LinkedFace3D + SCSR for each "… -pane" and "… -frame" surface — but a single SAM
+            // Aperture carries BOTH. We match by GEOMETRY, NOT the stored building-element GUIDs:
+            // logged testing showed the import sometimes swaps/duplicates the pane & frame GUIDs
+            // between mirrored windows, so a GUID match drops some frames and places others on the
+            // wrong window. Geometry is the reliable signal:
+            //   * a window's pane and frame surfaces share the same horizontal (X,Y) position;
+            //   * the TAS frame surface is the OUTER opening (larger area), the pane the inner
+            //     glazing (smaller area);
+            //   * the SAM aperture face sits at a different height than the TAS surface (a known,
+            //     constant vertical offset), so we compare HORIZONTAL (X,Y) distance and ignore Z.
+            //
+            // Runs BEFORE the panel loop so each aperture claims its own two (small) window
+            // surfaces first; the larger wall surfaces are left for the panels.
+            List<Aperture> apertures = adjacencyCluster.GetApertures();
+            Log("-- Apertures: " + (apertures == null ? 0 : apertures.Count) + " --");
+            if (apertures != null && apertures.Count != 0)
+            {
+                foreach (Aperture aperture in apertures)
+                {
+                    if (aperture == null)
+                    {
+                        continue;
+                    }
+
+                    Point3D aperturePoint = aperture.GetFace3D()?.InternalPoint3D();
+                    Log("Aperture \"" + aperture.Name + "\" guid=" + aperture.Guid.ToString().Substring(0, 8) + " center=" + aperturePoint);
+                    if (aperturePoint == null)
+                    {
+                        Log("  SKIP pane+frame — aperture has no internal point");
+                        continue;
+                    }
+
+                    // Unclaimed candidates co-located with this aperture (horizontal distance),
+                    // sorted by area ascending.
+                    List<Tuple<Guid, Point3D, string, double>> nearby = new List<Tuple<Guid, Point3D, string, double>>();
+                    foreach (Tuple<Guid, Point3D, string, double> candidate in candidates)
+                    {
+                        if (claimed.Contains(candidate.Item1))
+                        {
+                            continue;
+                        }
+
+                        double dX = aperturePoint.X - candidate.Item2.X;
+                        double dY = aperturePoint.Y - candidate.Item2.Y;
+                        double horizontalDistance = Math.Sqrt((dX * dX) + (dY * dY));
+                        if (horizontalDistance <= tolerance)
+                        {
+                            nearby.Add(candidate);
+                        }
+                    }
+
+                    nearby.Sort((x, y) => x.Item4.CompareTo(y.Item4));
+                    Log("  nearby(co-located, unclaimed)=" + nearby.Count + (nearby.Count == 0 ? "" : " areas=[" + string.Join(", ", nearby.Select(x => x.Item4.ToString("0.###"))) + "]"));
+
+                    // pane = smallest co-located surface; frame = next smallest, but only if it is
+                    // still window-sized (<= 3x the pane area) so a co-located WALL surface — far
+                    // larger — is never mistaken for a frame.
+                    Tuple<Guid, Point3D, string, double> paneCandidate = nearby.Count >= 1 ? nearby[0] : null;
+                    Tuple<Guid, Point3D, string, double> frameCandidate = (nearby.Count >= 2 && nearby[1].Item4 <= nearby[0].Item4 * 3.0) ? nearby[1] : null;
+
+                    Tuple<AperturePart, Tuple<Guid, Point3D, string, double>>[] assignments = new Tuple<AperturePart, Tuple<Guid, Point3D, string, double>>[]
+                    {
+                        Tuple.Create(AperturePart.Pane, paneCandidate),
+                        Tuple.Create(AperturePart.Frame, frameCandidate),
+                    };
+
+                    foreach (Tuple<AperturePart, Tuple<Guid, Point3D, string, double>> assignment in assignments)
+                    {
+                        AperturePart part = assignment.Item1;
+                        Tuple<Guid, Point3D, string, double> chosen = assignment.Item2;
+
+                        if (chosen == null)
+                        {
+                            Log("  " + part + " -> SKIP (no suitable co-located candidate)");
+                            continue;
+                        }
+
+                        claimed.Add(chosen.Item1);
+                        SolarCoverageSimulationResult source = dictionary_CoverageByLinkedFace3DGuid[chosen.Item1];
+                        SolarCoverageSimulationResult newCoverageResult = new SolarCoverageSimulationResult(string.Format("{0} {1}", aperture.Name, part.Sufix()), "TAS", aperture.Guid.ToString(), source);
+
+                        adjacencyCluster.AddObject(aperture);
+                        adjacencyCluster.AddObject(newCoverageResult);
+                        adjacencyCluster.AddRelation(aperture, newCoverageResult);
+
+                        if (part == AperturePart.Pane) { paneMatched++; } else if (part == AperturePart.Frame) { frameMatched++; }
+
+                        Log("  " + part + " -> matched [" + chosen.Item1.ToString().Substring(0, 8) + "] area=" + chosen.Item4.ToString("0.###") + " ref=" + (chosen.Item3 ?? "<null>"));
+                    }
+                }
+            }
+
+            // Greedy nearest-neighbour match: each remaining (wall) LinkedFace3D is claimed by at
+            // most one panel.
             foreach (Panel panel in panels)
             {
                 Point3D panelPoint = panel?.GetInternalPoint3D();
@@ -102,7 +222,7 @@ namespace SAM.Analytical.Tas
 
                 Guid bestGuid = Guid.Empty;
                 double bestDistance = double.MaxValue;
-                foreach (Tuple<Guid, Point3D> candidate in candidates)
+                foreach (Tuple<Guid, Point3D, string, double> candidate in candidates)
                 {
                     if (claimed.Contains(candidate.Item1))
                     {
@@ -128,6 +248,23 @@ namespace SAM.Analytical.Tas
 
                 adjacencyCluster.AddObject(newCoverageResult);
                 adjacencyCluster.AddRelation(panel, newCoverageResult);
+                panelMatched++;
+            }
+
+            Log("-- Summary --");
+            Log("paneMatched=" + paneMatched + "  frameMatched=" + frameMatched + "  panelMatched=" + panelMatched + "  claimed=" + claimed.Count + "/" + candidates.Count);
+
+            if (logEnabled)
+            {
+                try
+                {
+                    string logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_CopyResults.log");
+                    System.IO.File.WriteAllText(logPath, log.ToString());
+                }
+                catch
+                {
+                    // Diagnostics must never break the import.
+                }
             }
 
             return new AnalyticalModel(analyticalModel, adjacencyCluster);

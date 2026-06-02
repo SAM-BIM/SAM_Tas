@@ -319,34 +319,18 @@ namespace SAM.Analytical.Tas
                     }
                     else
                     {
-                        apertureConstruction = new ApertureConstruction(apertureConstructions[index].Guid, apertureConstruction, apertureConstruction.Name);
+                        // A Tas window/door is two building elements sharing a base name: one
+                        // "… -pane", one "… -frame". Each converts to an ApertureConstruction
+                        // carrying only its own layer list. Combine the two sides — keeping
+                        // whichever side already has layers and filling the empty side from the
+                        // just-converted construction — so neither pane nor frame is dropped.
+                        ApertureConstruction apertureConstruction_Existing = apertureConstructions[index];
+
+                        List<ConstructionLayer> paneConstructionLayers = apertureConstruction_Existing.HasPaneConstructionLayers() ? apertureConstruction_Existing.PaneConstructionLayers : apertureConstruction.PaneConstructionLayers;
+                        List<ConstructionLayer> frameConstructionLayers = apertureConstruction_Existing.HasFrameConstructionLayers() ? apertureConstruction_Existing.FrameConstructionLayers : apertureConstruction.FrameConstructionLayers;
+
+                        apertureConstruction = new ApertureConstruction(apertureConstruction_Existing.Guid, apertureConstruction_Existing.Name, apertureConstruction_Existing.ApertureType, paneConstructionLayers, frameConstructionLayers);
                         apertureConstructions[index] = apertureConstruction;
-
-                        //apertureConstruction = apertureConstructions[index];
-
-                        List<ConstructionLayer> constructionLayers = null;
-
-                        constructionLayers = apertureConstruction.FrameConstructionLayers;
-                        if (constructionLayers == null || constructionLayers.Count == 0)
-                        {
-                            if (construction_TBD.name.EndsWith(AperturePart.Frame.Sufix()))
-                            {
-                                constructionLayers = ToSAM_ConstructionLayers(construction_TBD);
-                                apertureConstruction = new ApertureConstruction(apertureConstruction, apertureConstruction.PaneConstructionLayers, constructionLayers);
-                                apertureConstructions[index] = apertureConstruction;
-                            }
-                        }
-
-                        constructionLayers = apertureConstruction.PaneConstructionLayers;
-                        if (constructionLayers == null || constructionLayers.Count == 0)
-                        {
-                            if (construction_TBD.name.EndsWith(AperturePart.Pane.Sufix()))
-                            {
-                                constructionLayers = ToSAM_ConstructionLayers(construction_TBD);
-                                apertureConstruction = new ApertureConstruction(apertureConstruction, constructionLayers, apertureConstruction.FrameConstructionLayers);
-                                apertureConstructions[index] = apertureConstruction;
-                            }
-                        }
                     }
 
                     if(apertureConstruction == null)

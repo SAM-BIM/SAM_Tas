@@ -456,6 +456,71 @@ namespace SAM.Analytical.Tas
             return false;
         }
 
+        /// <summary>
+        /// Writes an imported TAS shade coverage (per zoneSurface, attached on import as a
+        /// SolarCoverageSimulationResult) back onto a TBD zoneSurface as DaysShade/SurfaceShade
+        /// rows. Unlike the generic UpdateSurfaceShades(ISolarSimulationResult) overload — which
+        /// does AddSurfaceShade(dateTime.Hour - 1) — this correctly undoes the import's
+        /// AddHours(1..24) storage: the 24th hour rolls to the next day at Hour 0, so a plain
+        /// "Hour - 1" yields AddSurfaceShade(-1) and corrupts that day's row (the whole grid then
+        /// reads zero in Tas). Here Hour 0 maps back to slot 23 of the ORIGINAL day.
+        /// </summary>
+        private static List<SurfaceShade> WriteImportedCoverageShades(Building building, List<DaysShade> daysShades, zoneSurface zoneSurface, Geometry.SolarCalculator.SolarCoverageSimulationResult coverageResult)
+        {
+            List<SurfaceShade> result = new List<SurfaceShade>();
+            if (building == null || daysShades == null || zoneSurface == null || coverageResult?.DateTimes == null)
+            {
+                return result;
+            }
+
+            Dictionary<int, DaysShade> daysShadeByDay = new Dictionary<int, DaysShade>();
+            foreach (DaysShade daysShade_Existing in daysShades)
+            {
+                if (daysShade_Existing != null)
+                {
+                    daysShadeByDay[daysShade_Existing.day] = daysShade_Existing;
+                }
+            }
+
+            foreach (DateTime dateTime in coverageResult.DateTimes)
+            {
+                int dayIndex = dateTime.DayOfYear;
+                int hourIndex = dateTime.Hour;
+
+                // Import stored value[i] (i = 0..23, TAS hours 1..24) at AddHours(i + 1):
+                //   Hour 1..23 -> slot 0..22 (same day); Hour 0 (== the rolled-over hour 24) -> slot 23 of the previous day.
+                if (hourIndex == 0)
+                {
+                    hourIndex = 23;
+                    dayIndex -= 1;
+                }
+                else
+                {
+                    hourIndex -= 1;
+                }
+
+                if (dayIndex < 1)
+                {
+                    continue;
+                }
+
+                if (!daysShadeByDay.TryGetValue(dayIndex, out DaysShade daysShade) || daysShade == null)
+                {
+                    daysShade = building.AddDaysShade();
+                    daysShade.day = dayIndex;
+                    daysShades.Add(daysShade);
+                    daysShadeByDay[dayIndex] = daysShade;
+                }
+
+                SurfaceShade surfaceShade = daysShade.AddSurfaceShade(System.Convert.ToInt16(hourIndex));
+                surfaceShade.proportion = System.Convert.ToSingle(coverageResult.GetCoverage(dateTime));
+                surfaceShade.surface = zoneSurface;
+                result.Add(surfaceShade);
+            }
+
+            return result;
+        }
+
         public static void Update(this Building building, AdjacencyCluster adjacencyCluster, MaterialLibrary materialLibrary, bool updateGuids = false)
         {
             adjacencyCluster = adjacencyCluster.UpdateNormals(true, false, false);
@@ -792,6 +857,12 @@ namespace SAM.Analytical.Tas
                                 }
 
                                 string name = Query.Name(aperture.UniqueName(), false, true, true, false);
+
+                                // Tas stores window/door building elements with a leading
+                                // "Windows: " / "Doors: " prefix (see native .tbd naming). Mirror
+                                // that here so exported -pane/-frame elements match the convention.
+                                string prefix = aperture.ApertureType == ApertureType.Door ? "Doors: " : "Windows: ";
+                                name = string.Concat(prefix, name);
 
                                 Dictionary<string, Tuple<AperturePart, List<zoneSurface>>> dictionary = new Dictionary<string, Tuple<AperturePart, List<zoneSurface>>>();
 
