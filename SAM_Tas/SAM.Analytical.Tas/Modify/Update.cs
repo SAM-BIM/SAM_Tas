@@ -868,41 +868,9 @@ namespace SAM.Analytical.Tas
 
                                 double thickness = double.NaN;
 
-                                thickness = aperture.GetThickness(AperturePart.Pane);
-                                if (!double.IsNaN(thickness) && thickness > 0)
-                                {
-                                    List<Face3D> face3Ds_Pane = aperture.GetFace3Ds(AperturePart.Pane);
-                                    if (face3Ds_Pane != null)
-                                    {
-                                        string apertureName_Pane = string.Format("{0} {1}", name, AperturePart.Pane.Sufix());
-                                        dictionary[apertureName_Pane] = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Pane, new List<zoneSurface>());
-                                        foreach (Face3D face3D_Pane in face3Ds_Pane)
-                                        {
-                                            // here we added fix so Pane/Frame on secnd side will be correctyl shaded...
-                                            if (dictionary_Panel.ContainsKey(panel.Guid))
-                                            {
-                                                face3D_Pane.FlipNormal(false);
-                                            }
-                                            face3D_Pane.Normalize(Geometry.Orientation.Clockwise);
-
-                                            zoneSurface zoneSurface = func.Invoke(face3D_Pane);
-                                            if (zoneSurface != null)
-                                            {
-                                                dictionary[apertureName_Pane].Item2.Add(zoneSurface);
-
-                                                if (updateGuids)
-                                                {
-                                                    Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
-                                                    ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.PaneZoneSurfaceReference_1) ? ApertureParameter.PaneZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_1;
-                                                    aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
-                                                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
-                                                    panel_Temp.AddAperture(aperture_Temp);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
+                                // Frame is created BEFORE pane so the exported surfaces match native
+                                // Tas ordering (frame then pane within each window/door), which makes
+                                // the exported TBD's surface list line up with an imported one.
                                 thickness = aperture.GetThickness(AperturePart.Frame);
                                 if (!double.IsNaN(thickness) && thickness > 0)
                                 {
@@ -930,6 +898,41 @@ namespace SAM.Analytical.Tas
                                                 {
                                                     Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
                                                     ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.FrameZoneSurfaceReference_1) ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.FrameZoneSurfaceReference_1;
+                                                    aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
+                                                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
+                                                    panel_Temp.AddAperture(aperture_Temp);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                thickness = aperture.GetThickness(AperturePart.Pane);
+                                if (!double.IsNaN(thickness) && thickness > 0)
+                                {
+                                    List<Face3D> face3Ds_Pane = aperture.GetFace3Ds(AperturePart.Pane);
+                                    if (face3Ds_Pane != null)
+                                    {
+                                        string apertureName_Pane = string.Format("{0} {1}", name, AperturePart.Pane.Sufix());
+                                        dictionary[apertureName_Pane] = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Pane, new List<zoneSurface>());
+                                        foreach (Face3D face3D_Pane in face3Ds_Pane)
+                                        {
+                                            // here we added fix so Pane/Frame on secnd side will be correctyl shaded...
+                                            if (dictionary_Panel.ContainsKey(panel.Guid))
+                                            {
+                                                face3D_Pane.FlipNormal(false);
+                                            }
+                                            face3D_Pane.Normalize(Geometry.Orientation.Clockwise);
+
+                                            zoneSurface zoneSurface = func.Invoke(face3D_Pane);
+                                            if (zoneSurface != null)
+                                            {
+                                                dictionary[apertureName_Pane].Item2.Add(zoneSurface);
+
+                                                if (updateGuids)
+                                                {
+                                                    Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
+                                                    ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.PaneZoneSurfaceReference_1) ? ApertureParameter.PaneZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_1;
                                                     aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
                                                     panel_Temp.RemoveAperture(aperture_Temp.Guid);
                                                     panel_Temp.AddAperture(aperture_Temp);
