@@ -94,7 +94,15 @@ namespace SAM.Analytical.Tas
 
                         if (coverage.Count != 0)
                         {
-                            string reference = tbdZoneSurface.buildingElement.GUID;
+                            // An exposed surface may have shade data but no attached buildingElement;
+                            // fall back to the zoneSurface GUID rather than throwing and aborting the
+                            // whole import for those models. (CopyResults matches by geometry, so the
+                            // exact reference string here is not load-bearing.)
+                            string reference = tbdZoneSurface.buildingElement?.GUID;
+                            if (string.IsNullOrEmpty(reference))
+                            {
+                                reference = tbdZoneSurface.GUID;
+                            }
 
                             int roomSurfaceIndex = 0;
                             TBD.IRoomSurface roomSurface = tbdZoneSurface.GetRoomSurface(roomSurfaceIndex);
