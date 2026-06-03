@@ -1,4 +1,7 @@
-﻿namespace SAM.Analytical.Tas
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+namespace SAM.Analytical.Tas
 {
     public static partial class Modify
     {
@@ -7,7 +10,13 @@
             if (internalCondition_TBD == null || internalCondition == null)
                 return false;
 
-            internalCondition_TBD.description = internalCondition.Name + " - HDD";
+            // Use the captured description (e.g. NCM activity "S37_OfficeCell") so the HDD condition
+            // reads "S37_OfficeCell - HDD" rather than "Cell 1 - HDD"; fall back to the name.
+            string description = internalCondition.Name;
+            if (internalCondition.TryGetValue(InternalConditionParameter.Description, out string description_Temp) && !string.IsNullOrWhiteSpace(description_Temp))
+                description = description_Temp;
+
+            internalCondition_TBD.description = description + " - HDD";
 
             internalCondition_TBD.includeSolarInMRT = 0;
 
@@ -35,7 +44,7 @@
             }
 
             TBD.InternalGain internalGain = internalCondition_TBD.GetInternalGain();
-            internalGain.name = internalCondition.Name + " - HDD";
+            internalGain.name = description + " - HDD";
 
             Profile profile = null;
 
