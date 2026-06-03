@@ -98,7 +98,9 @@ namespace SAM.Weather.Tas
             if (weatherYear != null)
             {
                 weatherYear_TBD.year = weatherYear.Year;
+                building.year = System.Convert.ToInt16(weatherYear.Year);
             }
+
 
             return Update(weatherYear_TBD, weatherYear);
         }

@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
 using TSD;
@@ -102,22 +105,33 @@ namespace SAM.Analytical.Tas
 
         public static AdjacencyCluster ToSAM(this TBD.Building building)
         {
+            return ToSAM(building, null);
+        }
+
+        /// <summary>
+        /// AdjacencyCluster build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> to share converted Polygon3D objects with downstream
+        /// callers (e.g. <c>Create.SolarModel</c>) — same roomSurface won't be re-marshaled
+        /// over COM. Key format: <c>zoneSurface.GUID + "/" + roomSurfaceIndex</c>.
+        /// </summary>
+        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
             if (building == null)
             {
                 return null;
             }
 
-            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            AdjacencyCluster adjacencyCluster = new ();
 
-            Dictionary<string, Construction> dictionary_Construction = new Dictionary<string, Construction>();
-            List<ApertureConstruction> apertureConstructions = new List<ApertureConstruction>();
+            Dictionary<string, Construction> dictionary_Construction = [];
+            List<ApertureConstruction> apertureConstructions = [];
 
             //double groundElevation = 0;
 
-            Dictionary<string, Space> dictionary_Space = new Dictionary<string, Space>();
-            Dictionary<string, List<Panel>> dictionary_Panel = new Dictionary<string, List<Panel>>();
+            Dictionary<string, Space> dictionary_Space = [];
+            Dictionary<string, List<Panel>> dictionary_Panel = [];
 
-            //Dictionary<string, List<Tuple<string, string>>> dictionary_Relations = new Dictionary<string, List<Tuple<string, string>>>(); 
+            //Dictionary<string, List<Tuple<string, string>>> dictionary_Relations = new Dictionary<string, List<Tuple<string, string>>>();
 
             foreach (TBD.zone zone in building.Zones())
             {
@@ -171,7 +185,11 @@ namespace SAM.Analytical.Tas
                     PanelType panelType = Query.PanelType(buildingElement.BEType);
                     if (panelType == PanelType.Undefined)
                     {
-                        continue;
+                        if(buildingElement.BEType != 0)
+                        {
+                            continue;
+                        }
+                        panelType = PanelType.Air;
                     }
 
                     //bool ground = Analytical.Query.Ground(panelType);
@@ -200,11 +218,13 @@ namespace SAM.Analytical.Tas
 
                     bool adiabatic = zoneSurface.type == TBD.SurfaceType.tbdNullLink;
 
-                    ZoneSurfaceReference zoneSurfaceReference = new ZoneSurfaceReference(zoneSurface.number, zone.GUID);
+                    ZoneSurfaceReference zoneSurfaceReference = new (zoneSurface.number, zone.GUID);
 
+                    int roomSurfaceIndex_panel = 0;
                     foreach (TBD.IRoomSurface roomSurface in zoneSurface.RoomSurfaces())
                     {
-                        Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+                        Polygon3D polygon3D = GetOrConvertPolygon(polygonCache, zoneSurface.GUID, roomSurfaceIndex_panel, roomSurface);
+                        roomSurfaceIndex_panel++;
                         if (polygon3D == null)
                         {
                             continue;
@@ -221,6 +241,14 @@ namespace SAM.Analytical.Tas
                         if (panels_Link != null && panels_Link.Count != 0)
                         {
                             panel = panels_Link.Find(x => face3D.InRange(x.GetInternalPoint3D()));
+                            if(panel is null)
+                            {
+                                panel = panels_Link.Find(x => face3D.InRange(x.GetInternalPoint3D(), Tolerance.MacroDistance));
+                                if (panel is null && panels_Link.Count == 1)
+                                {
+                                    panel = panels_Link[0];
+                                }
+                            }
                         }
 
                         if (panel == null)
@@ -247,7 +275,7 @@ namespace SAM.Analytical.Tas
 
                         if(!dictionary_Panel.TryGetValue(zoneSurface.GUID, out List<Panel>  panels))
                         {
-                            panels = new List<Panel>();
+                            panels = [];
                             dictionary_Panel[zoneSurface.GUID] = panels;
                         }
 
@@ -291,44 +319,30 @@ namespace SAM.Analytical.Tas
                     }
                     else
                     {
-                        apertureConstruction = new ApertureConstruction(apertureConstructions[index].Guid, apertureConstruction, apertureConstruction.Name);
+                        // A Tas window/door is two building elements sharing a base name: one
+                        // "… -pane", one "… -frame". Each converts to an ApertureConstruction
+                        // carrying only its own layer list. Combine the two sides — keeping
+                        // whichever side already has layers and filling the empty side from the
+                        // just-converted construction — so neither pane nor frame is dropped.
+                        ApertureConstruction apertureConstruction_Existing = apertureConstructions[index];
+
+                        List<ConstructionLayer> paneConstructionLayers = apertureConstruction_Existing.HasPaneConstructionLayers() ? apertureConstruction_Existing.PaneConstructionLayers : apertureConstruction.PaneConstructionLayers;
+                        List<ConstructionLayer> frameConstructionLayers = apertureConstruction_Existing.HasFrameConstructionLayers() ? apertureConstruction_Existing.FrameConstructionLayers : apertureConstruction.FrameConstructionLayers;
+
+                        apertureConstruction = new ApertureConstruction(apertureConstruction_Existing.Guid, apertureConstruction_Existing.Name, apertureConstruction_Existing.ApertureType, paneConstructionLayers, frameConstructionLayers);
                         apertureConstructions[index] = apertureConstruction;
-
-                        //apertureConstruction = apertureConstructions[index];
-
-                        List<ConstructionLayer> constructionLayers = null;
-
-                        constructionLayers = apertureConstruction.FrameConstructionLayers;
-                        if (constructionLayers == null || constructionLayers.Count == 0)
-                        {
-                            if (construction_TBD.name.EndsWith(AperturePart.Frame.Sufix()))
-                            {
-                                constructionLayers = ToSAM_ConstructionLayers(construction_TBD);
-                                apertureConstruction = new ApertureConstruction(apertureConstruction, apertureConstruction.PaneConstructionLayers, constructionLayers);
-                                apertureConstructions[index] = apertureConstruction;
-                            }
-                        }
-
-                        constructionLayers = apertureConstruction.PaneConstructionLayers;
-                        if (constructionLayers == null || constructionLayers.Count == 0)
-                        {
-                            if (construction_TBD.name.EndsWith(AperturePart.Pane.Sufix()))
-                            {
-                                constructionLayers = ToSAM_ConstructionLayers(construction_TBD);
-                                apertureConstruction = new ApertureConstruction(apertureConstruction, constructionLayers, apertureConstruction.FrameConstructionLayers);
-                                apertureConstructions[index] = apertureConstruction;
-                            }
-                        }
                     }
 
                     if(apertureConstruction == null)
                     {
-                        return null;
+                        continue;
                     }
 
+                    int roomSurfaceIndex_aperture = 0;
                     foreach (TBD.IRoomSurface roomSurface in zoneSurface.RoomSurfaces())
                     {
-                        Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+                        Polygon3D polygon3D = GetOrConvertPolygon(polygonCache, zoneSurface.GUID, roomSurfaceIndex_aperture, roomSurface);
+                        roomSurfaceIndex_aperture++;
                         if (polygon3D == null)
                         {
                             continue;
@@ -342,7 +356,7 @@ namespace SAM.Analytical.Tas
 
                         if(!dictionary.TryGetValue(apertureConstruction.Guid, out List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples) || tuples == null)
                         {
-                            tuples = new List<Tuple<Polygon3D, TBD.IZoneSurface>>();
+                            tuples = [];
                             dictionary[apertureConstruction.Guid] = tuples;
                         }
 
@@ -465,6 +479,15 @@ namespace SAM.Analytical.Tas
                                 if (buildingElement != null)
                                 {
                                     aperture.SetValue(ApertureParameter.PaneBuildingElementGuid, buildingElement.GUID);
+
+                                    // Import the operable aperture types (TBD ApertureType) assigned to
+                                    // the pane building element into SAM OpeningProperties, so they
+                                    // round-trip back out via Modify.SetApertureTypes on export.
+                                    IOpeningProperties openingProperties = Convert.ToSAM_OpeningProperties(buildingElement);
+                                    if (openingProperties != null)
+                                    {
+                                        aperture.SetValue(Analytical.ApertureParameter.OpeningProperties, openingProperties);
+                                    }
                                 }
                             }
                         }
@@ -515,6 +538,27 @@ namespace SAM.Analytical.Tas
             //adjacencyCluster.UpdatePanelTypes(groundElevation);
 
             return adjacencyCluster;
+        }
+
+        /// <summary>
+        /// Convert a TAS roomSurface perimeter to a SAM Polygon3D, consulting the optional
+        /// shared cache first. Key format: <c>zoneSurfaceGuid + "/" + roomSurfaceIndex</c>.
+        /// If <paramref name="polygonCache"/> is null, performs the conversion uncached.
+        /// </summary>
+        private static Polygon3D GetOrConvertPolygon(Dictionary<string, Polygon3D> polygonCache, string zoneSurfaceGuid, int roomSurfaceIndex, TBD.IRoomSurface roomSurface)
+        {
+            string cacheKey = zoneSurfaceGuid + "/" + roomSurfaceIndex;
+            if (polygonCache != null && polygonCache.TryGetValue(cacheKey, out Polygon3D cached))
+            {
+                return cached;
+            }
+
+            Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+            if (polygonCache != null && polygon3D != null)
+            {
+                polygonCache[cacheKey] = polygon3D;
+            }
+            return polygon3D;
         }
     }
 }

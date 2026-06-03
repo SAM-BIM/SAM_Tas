@@ -1,8 +1,12 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
 using System.IO;
 using TAS3D;
+using TBD;
 
 namespace SAM.Analytical.Tas
 {
@@ -123,7 +127,7 @@ namespace SAM.Analytical.Tas
 
                 if(coolingDesignDays == null)
                 {
-                    if(analyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.CoolingDesignDays, out SAMCollection<DesignDay> designDays, true))
+                    if(analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.CoolingDesignDays, out SAMCollection<DesignDay> designDays, true))
                     {
                         coolingDesignDays = designDays;
                     }
@@ -131,7 +135,7 @@ namespace SAM.Analytical.Tas
 
                 if (heatingDesignDays == null)
                 {
-                    if (analyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.HeatingDesignDays, out SAMCollection<DesignDay> designDays, true))
+                    if (analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.HeatingDesignDays, out SAMCollection<DesignDay> designDays, true))
                     {
                         heatingDesignDays = designDays;
                     }
@@ -141,6 +145,8 @@ namespace SAM.Analytical.Tas
                 {
                     Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
                 }
+
+                Modify.UpdateShading(tBDDocument.Building, analyticalModel);
 
                 sAMTBDDocument.Save();
             }

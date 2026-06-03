@@ -3,6 +3,7 @@
 
 using SAM.Core.Tas;
 using SAM.Geometry.SolarCalculator;
+using SAM.Geometry.Spatial;
 using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
@@ -130,23 +131,51 @@ namespace SAM.Analytical.Tas
 
         public static AnalyticalModel ToSAM(string path_TBD, bool importUnused, bool importSurfaceShades)
         {
+            // Shared polygon3D cache across AdjacencyCluster build + Create.SolarModel.
+            // Saves redundant COM polygon conversions for the exposed surfaces that get
+            // processed by both phases (~50 polygons, ~400 ms on a real building).
+            Dictionary<string, Polygon3D> polygonCache = [];
+
             AnalyticalModel result = null;
-            using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
+            using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
             {
                 if (!importUnused)
                 {
                     Modify.RemoveUnusedInternalConditions(sAMTBDDocument?.TBDDocument?.Building);
                 }
 
-                result = ToSAM_AnalyticalModel(sAMTBDDocument);
+                TBD.Building building = sAMTBDDocument?.TBDDocument?.Building;
+                result = ToSAM_AnalyticalModel(building, polygonCache);
 
-                if (importSurfaceShades && result != null)
+                if(result is not null)
                 {
-                    SolarModel solarModel = ToSAM_SolarModel(sAMTBDDocument);
-                    if (solarModel != null)
+                    Weather.WeatherData weatherData = Weather.Tas.Convert.ToSAM_WeatherData(building);
+                    if(weatherData is not null)
                     {
-                        result = result.CopyResults(solarModel);
-                        result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        List<DesignDay> coolingDesignDays = null;
+                        List<DesignDay> heatingDesignDays = null;
+
+                        if(weatherData.CoolingDesignDay() is DesignDay coolingDesignDay)
+                        {
+                            coolingDesignDays = [coolingDesignDay];
+                        }
+
+                        if (weatherData.HeatingDesignDay() is DesignDay heatingDesignDay)
+                        {
+                            heatingDesignDays = [heatingDesignDay];
+                        }
+
+                        result.UpdateWeather(weatherData, coolingDesignDays, heatingDesignDays);
+                    }
+                    
+                    if (importSurfaceShades)
+                    {
+                        SolarModel solarModel = Create.SolarModel(building, polygonCache);
+                        if (solarModel != null)
+                        {
+                            result = result.CopyResults(solarModel);
+                            result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        }
                     }
                 }
             }
@@ -177,6 +206,17 @@ namespace SAM.Analytical.Tas
 
         public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building)
         {
+            return ToSAM_AnalyticalModel(building, null);
+        }
+
+        /// <summary>
+        /// AnalyticalModel build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> so that subsequent calls (e.g. <c>Create.SolarModel</c>)
+        /// can reuse the already-converted Polygon3D objects instead of re-marshaling them
+        /// over the TBD COM boundary.
+        /// </summary>
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
             if (building == null)
             {
                 return null;
@@ -188,9 +228,11 @@ namespace SAM.Analytical.Tas
             Core.Location location = new Core.Location(building.name, building.longitude, building.latitude, 0);
             location.SetValue(Core.LocationParameter.TimeZone, Core.Query.Description(Core.Query.UTC(building.timeZone)));
 
-            Core.Address address = new Core.Address(null, null, null, Core.CountryCode.Undefined);
+            Core.Address address = new (null, null, null, Core.CountryCode.Undefined);
 
-            return new AnalyticalModel(building.name, null, location, address, ToSAM(building), materialLibrary, profileLibrary);
+            AdjacencyCluster adjacencyCluster = ToSAM(building, polygonCache);
+
+            return new AnalyticalModel(building.name, null, location, address, adjacencyCluster, materialLibrary, profileLibrary);
         }
 
         public static SolarModel ToSAM_SolarModel(this SAMTBDDocument sAMTBDDocument)

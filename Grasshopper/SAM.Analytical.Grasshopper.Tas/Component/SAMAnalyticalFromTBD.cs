@@ -21,7 +21,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.3";
+        public override string LatestComponentVersion => "1.0.4";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -56,6 +56,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             inputParamManager.AddBooleanParameter("_importUnused_", "_importUnused_", "Import Unused IC", GH_ParamAccess.item, false);
             inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
             inputParamManager.AddBooleanParameter("_importSurfaceShades_", "_importSurfaceShades_", "If true, reads TAS-computed shade proportions for every exposed zoneSurface and attaches a populated SolarModel to the AnalyticalModel (via AnalyticalModelParameter.SolarModel). Required input for SAMAnalytical.CompareSolarCoverage. Adds a few seconds to import time.", GH_ParamAccess.item, false);
+            inputParamManager.AddBooleanParameter("_debug_", "_debug_", "If true, writes a per-run diagnostic of the SolarModel→AnalyticalModel result copy (which TAS surface each aperture pane/frame and panel matched, and why any was skipped) to %TEMP%\\SAM_CopyResults.log, and returns its text on the 'debugLog' output. Off by default.", GH_ParamAccess.item, false);
         }
 
         /// <summary>
@@ -65,6 +66,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         {
             outputParamManager.AddParameter(new GooAnalyticalModelParam(), "analyticalModel", "analyticalModel", "SAM AnalyticalModel", GH_ParamAccess.list);
             outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            outputParamManager.AddTextParameter("debugLog", "debugLog", "Diagnostic log for the pane/frame/panel result matching. Populated only when _debug_ is true (otherwise empty).", GH_ParamAccess.item);
         }
 
         /// <summary>
@@ -104,10 +106,38 @@ namespace SAM.Analytical.Grasshopper.Tas
                 importSurfaceShades = false;
             }
 
+            bool debug = false;
+            if (!dataAccess.GetData(4, ref debug))
+            {
+                debug = false;
+            }
+
+            // Toggle the CopyResults diagnostic log (Modify.CopyResults reads SAM_DEBUG) for this
+            // Rhino process. Setting it to null clears it, so unchecking _debug_ turns logging off.
+            Environment.SetEnvironmentVariable("SAM_DEBUG", debug ? "1" : null);
+
             AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused, importSurfaceShades);
 
             dataAccess.SetData(0, analyticalModel);
             dataAccess.SetData(1, analyticalModel != null);
+
+            string debugLog = null;
+            if (debug)
+            {
+                try
+                {
+                    string logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_CopyResults.log");
+                    if (System.IO.File.Exists(logPath))
+                    {
+                        debugLog = System.IO.File.ReadAllText(logPath);
+                    }
+                }
+                catch
+                {
+                    // Reading the diagnostic must never fail the component.
+                }
+            }
+            dataAccess.SetData(2, debugLog);
         }
 
         public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
