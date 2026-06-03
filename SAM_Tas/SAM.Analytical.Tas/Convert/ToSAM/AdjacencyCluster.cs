@@ -479,6 +479,15 @@ namespace SAM.Analytical.Tas
                                 if (buildingElement != null)
                                 {
                                     aperture.SetValue(ApertureParameter.PaneBuildingElementGuid, buildingElement.GUID);
+
+                                    // Import the operable aperture types (TBD ApertureType) assigned to
+                                    // the pane building element into SAM OpeningProperties, so they
+                                    // round-trip back out via Modify.SetApertureTypes on export.
+                                    IOpeningProperties openingProperties = Convert.ToSAM_OpeningProperties(buildingElement);
+                                    if (openingProperties != null)
+                                    {
+                                        aperture.SetValue(Analytical.ApertureParameter.OpeningProperties, openingProperties);
+                                    }
                                 }
                             }
                         }
