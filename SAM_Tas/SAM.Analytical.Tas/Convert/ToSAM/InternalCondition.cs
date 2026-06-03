@@ -14,6 +14,15 @@ namespace SAM.Analytical.Tas
 
             InternalCondition result = new InternalCondition(internalCondition.name);
 
+            // Preserve the TBD internal-condition description (e.g. the NCM activity "S37_OfficeCell").
+            // The SAM name carries the instance name ("Cell 1"); without this the description is lost
+            // and the export rebuilds it from the name on round-trip.
+            string description = internalCondition.description;
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                result.SetValue(InternalConditionParameter.Description, description);
+            }
+
             TBD.Emitter emitter = null;
 
             emitter = internalCondition.GetHeatingEmitter();

@@ -108,6 +108,10 @@ namespace SAM.Analytical.Tas
                     building.UpdateZone_HDD(zone, space, profileLibrary);
             }
 
+            //Write unused/library internal conditions (templates not assigned to any space) so an
+            //importUnused round-trip keeps them. Their gains come from stored parameters, not a space.
+            building.AddUnusedInternalConditions(adjacencyCluster, profileLibrary, dayTypes_NonHDD);
+
             //Updating Builidng Information
             building.description = string.Format("Delivered by SAM https://github.com/HoareLea/SAM [{0}]", System.DateTime.Now.ToString("yyyy/MM/dd"));
 
