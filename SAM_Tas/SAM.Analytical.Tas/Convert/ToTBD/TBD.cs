@@ -123,6 +123,12 @@ namespace SAM.Analytical.Tas
                 }
 
                 ToTBD(analyticalModel, tBDDocument, updateGuids);
+
+                // ToTBD only writes constructions referenced by a panel/aperture; add the unused
+                // library templates (e.g. Air_Glass, the Null element's construction) so they
+                // round-trip on this export path too. (UpdateZones below handles the IC templates.)
+                Modify.AddUnusedConstructions(tBDDocument.Building, analyticalModel.AdjacencyCluster, analyticalModel.MaterialLibrary);
+
                 Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
 
                 if(coolingDesignDays == null)

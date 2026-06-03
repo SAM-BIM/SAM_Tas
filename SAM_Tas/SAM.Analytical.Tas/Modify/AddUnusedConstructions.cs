@@ -149,5 +149,40 @@ namespace SAM.Analytical.Tas
 
             return result;
         }
+
+        /// <summary>
+        /// Writes the unused (library) construction templates held in <paramref name="adjacencyCluster"/>
+        /// into <paramref name="building"/>. Export-side counterpart to
+        /// <see cref="AddUnusedConstructions(AdjacencyCluster, TBD.Building)"/>.
+        /// <para/>
+        /// <see cref="Convert.ToTBD(AnalyticalModel, TBD.TBDDocument, bool, string, string)"/> only
+        /// emits constructions referenced by a panel/aperture, so standalone templates (e.g.
+        /// <c>Air_Glass</c>, the Null building element's construction) would otherwise be dropped on
+        /// this export path — unlike the gbXML workflow, which writes the full library via
+        /// <see cref="UpdateConstructions(TBD.TBDDocument, AnalyticalModel)"/>. Standalone templates
+        /// are exactly the <c>Construction</c>/<c>ApertureConstruction</c> objects held in the cluster
+        /// (used constructions live on their panels), so they are written here through the existing
+        /// per-name <see cref="UpdateConstructions(TBD.Building, System.Collections.Generic.IEnumerable{Construction}, MaterialLibrary)"/>
+        /// overloads, which reuse a same-named TBD construction or add a new one — no duplicates.
+        /// </summary>
+        public static void AddUnusedConstructions(this TBD.Building building, AdjacencyCluster adjacencyCluster, Core.MaterialLibrary materialLibrary)
+        {
+            if (building == null || adjacencyCluster == null)
+            {
+                return;
+            }
+
+            List<Construction> constructions = adjacencyCluster.GetObjects<Construction>();
+            if (constructions != null && constructions.Count != 0)
+            {
+                building.UpdateConstructions(constructions, materialLibrary);
+            }
+
+            List<ApertureConstruction> apertureConstructions = adjacencyCluster.GetObjects<ApertureConstruction>();
+            if (apertureConstructions != null && apertureConstructions.Count != 0)
+            {
+                building.UpdateConstructions(apertureConstructions, materialLibrary);
+            }
+        }
     }
 }
