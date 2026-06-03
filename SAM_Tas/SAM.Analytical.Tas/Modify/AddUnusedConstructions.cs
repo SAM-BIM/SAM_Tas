@@ -20,12 +20,14 @@ namespace SAM.Analytical.Tas
         /// exported TBD keeps the same library it started with.
         /// <para/>
         /// Constructions already present (matched by name) are left untouched; only the missing
-        /// ones are added. Transparent constructions become <see cref="ApertureConstruction"/>
-        /// templates (pane/frame sides sharing a base name are combined), opaque ones become
-        /// <see cref="Construction"/> templates. Both surface back through
-        /// <c>AdjacencyCluster.GetConstructions</c>/<c>GetApertureConstructions</c>, which the
-        /// exporter (<see cref="UpdateConstructions(TBD.TBDDocument, AnalyticalModel)"/>) already
-        /// writes out in full.
+        /// ones are added. Glazing parts — TBD's "… -pane" / "… -frame" pairs — become
+        /// <see cref="ApertureConstruction"/> templates (the two sides sharing a base name are
+        /// combined); every other construction, including unsuffixed transparent ones such as the
+        /// <c>Air_Glass</c> sizing placeholder, becomes a <see cref="Construction"/> template so the
+        /// export preserves its exact name (transparency is re-derived from its materials). Both
+        /// surface back through <c>AdjacencyCluster.GetConstructions</c>/<c>GetApertureConstructions</c>,
+        /// which the exporter (<see cref="UpdateConstructions(TBD.TBDDocument, AnalyticalModel)"/>)
+        /// already writes out in full.
         /// </summary>
         /// <returns>The construction/aperture-construction templates added, or null on invalid input.</returns>
         public static List<SAMObject> AddUnusedConstructions(this AdjacencyCluster adjacencyCluster, TBD.Building building)
@@ -84,13 +86,16 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                // A glazing's frame side is opaque-typed but still belongs to an aperture (named
-                // "… -frame"); route it down the aperture path by suffix so it combines with its
-                // pane rather than landing as a stray opaque construction.
+                // Only genuine glazing parts — TBD stores them as a "… -pane" / "… -frame" pair —
+                // become ApertureConstruction templates. An unsuffixed construction (even a
+                // transparent one like the Air_Glass sizing placeholder) is kept as an ordinary
+                // Construction template: the opaque export path writes it back under its exact name
+                // and re-derives transparent/opaque from its materials, whereas the aperture export
+                // path would rename it to a pane/frame construction and lose the original name.
                 string name_TBD = construction_TBD.name.Trim();
                 bool aperturePart = name_TBD.EndsWith(AperturePart.Pane.Sufix()) || name_TBD.EndsWith(AperturePart.Frame.Sufix());
 
-                if (construction_TBD.type == TBD.ConstructionTypes.tcdTransparentConstruction || aperturePart)
+                if (aperturePart)
                 {
                     ApertureConstruction apertureConstruction = construction_TBD.ToSAM_ApertureConstruction(ApertureType.Window);
                     if (apertureConstruction == null || string.IsNullOrWhiteSpace(apertureConstruction.Name))
