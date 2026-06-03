@@ -14,8 +14,16 @@ namespace SAM.Analytical.Tas
             if (internalCondition == null)
                 return false;
 
+            // Restore the original internal-condition description (e.g. NCM activity "S37_OfficeCell")
+            // captured on import; fall back to the name for models that never carried one.
+            string description = internalCondition.Name;
+            if (internalCondition.TryGetValue(InternalConditionParameter.Description, out string description_Temp) && !string.IsNullOrWhiteSpace(description_Temp))
+            {
+                description = description_Temp;
+            }
+
             internalCondition_TBD.name = space.Name;
-            internalCondition_TBD.description = internalCondition.Name;
+            internalCondition_TBD.description = description;
 
             internalCondition_TBD.includeSolarInMRT = 1;
 
@@ -114,7 +122,7 @@ namespace SAM.Analytical.Tas
 
             internalGain.domesticHotWater = (float)0.197;
 
-            internalGain.name = internalCondition.Name;
+            internalGain.name = description;
             internalGain.description = internalCondition.GetSystemTypeName<VentilationSystemType>();
 
             if (internalCondition.TryGetValue(InternalConditionParameter.LightingLevel, out value))

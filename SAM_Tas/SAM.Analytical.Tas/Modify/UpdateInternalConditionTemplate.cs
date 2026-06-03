@@ -31,8 +31,15 @@ namespace SAM.Analytical.Tas
                 return false;
             }
 
+            // Restore the captured description (e.g. NCM activity name); fall back to the name.
+            string description = internalCondition.Name;
+            if (internalCondition.TryGetValue(InternalConditionParameter.Description, out string description_Temp) && !string.IsNullOrWhiteSpace(description_Temp))
+            {
+                description = description_Temp;
+            }
+
             internalCondition_TBD.name = internalCondition.Name;
-            internalCondition_TBD.description = internalCondition.Name;
+            internalCondition_TBD.description = description;
             internalCondition_TBD.includeSolarInMRT = 1;
 
             double value = double.NaN;
@@ -99,7 +106,7 @@ namespace SAM.Analytical.Tas
                 }
 
                 internalGain.domesticHotWater = (float)0.197;
-                internalGain.name = internalCondition.Name;
+                internalGain.name = description;
 
                 // No space, so no per-person metabolic rate to recover — see fidelity note.
                 internalGain.personGain = 0;
