@@ -47,7 +47,17 @@ namespace SAM.Analytical.Tas
             Core.Location location = new(building.name, building.longitude, building.latitude, 0);
             SolarModel result = new(location);
 
-            DateTime yearStart = new(building.year, 1, 1);
+            // building.year can be 0 / unset for some TBDs, which would make new DateTime(year, 1, 1)
+            // throw ArgumentOutOfRangeException. The coverage comparison aligns on (month, day, hour)
+            // and ignores the year, so the exact value is immaterial — fall back to a valid default
+            // (2018, matching SAMAnalytical.SolarSimulation's default _year_) when out of range.
+            int year = building.year;
+            if (year < 1 || year > 9999)
+            {
+                year = 2018;
+            }
+
+            DateTime yearStart = new(year, 1, 1);
 
             // Read only the representative shade days from TAS's calendar (the "yellow days"
             // in TBD's UI — default 15-day step, user-customisable). TAS only computes
