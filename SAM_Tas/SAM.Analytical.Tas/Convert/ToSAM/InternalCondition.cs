@@ -55,29 +55,67 @@
                 }
 
                 double personGain = internalGain.personGain;
-                double gain = 0;
+
+                // TBD occupancy sensible/latent gains are per floor-area (W/m2); personGain is the
+                // per-person metabolic rate (W/p). Read the per-area gains, derive the occupancy from
+                // them + personGain, then store the gains PER PERSON (perArea * areaPerPerson) so a
+                // round-trip reproduces the original per-area gains AND the metabolic rate (the
+                // per-person sensible+latent sums back to personGain).
+                double sensiblePerArea = double.NaN;
+                double latentPerArea = double.NaN;
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticOSG);
                 if (profile_TBD != null)
                 {
-                    double value = profile_TBD.GetExtremeValue(true);
-                    result.SetValue(InternalConditionParameter.OccupancySensibleGainPerPerson, value);
-                    gain += value;
+                    sensiblePerArea = profile_TBD.GetExtremeValue(true);
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticOLG);
                 if (profile_TBD != null)
                 {
-                    double value = profile_TBD.GetExtremeValue(true);
+                    latentPerArea = profile_TBD.GetExtremeValue(true);
                     result.SetValue(InternalConditionParameter.OccupancyProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
-                    result.SetValue(InternalConditionParameter.OccupancyLatentGainPerPerson, value);
-                    gain += value;
                 }
 
-                if(!double.IsNaN(area) && !double.IsNaN(gain))
+                double gainPerArea = (double.IsNaN(sensiblePerArea) ? 0 : sensiblePerArea) + (double.IsNaN(latentPerArea) ? 0 : latentPerArea);
+                if (!double.IsNaN(area) && !double.IsNaN(personGain) && personGain > 0 && gainPerArea > 0)
                 {
-                    double occupancy = (gain * area) / personGain;
-                    result.SetValue(InternalConditionParameter.AreaPerPerson, area / occupancy);
+                    double occupancy = (gainPerArea * area) / personGain;
+                    double areaPerPerson = occupancy > 0 ? area / occupancy : double.NaN;   // == personGain / gainPerArea
+                    if (!double.IsNaN(areaPerPerson))
+                    {
+                        result.SetValue(InternalConditionParameter.AreaPerPerson, areaPerPerson);
+
+                        if (!double.IsNaN(sensiblePerArea))
+                        {
+                            result.SetValue(InternalConditionParameter.OccupancySensibleGainPerPerson, sensiblePerArea * areaPerPerson);
+                        }
+
+                        if (!double.IsNaN(latentPerArea))
+                        {
+                            result.SetValue(InternalConditionParameter.OccupancyLatentGainPerPerson, latentPerArea * areaPerPerson);
+                        }
+                    }
+                }
+                else
+                {
+                    // No usable personGain/area — keep the raw per-area values rather than nothing.
+                    if (!double.IsNaN(sensiblePerArea))
+                    {
+                        result.SetValue(InternalConditionParameter.OccupancySensibleGainPerPerson, sensiblePerArea);
+                    }
+                    if (!double.IsNaN(latentPerArea))
+                    {
+                        result.SetValue(InternalConditionParameter.OccupancyLatentGainPerPerson, latentPerArea);
+                    }
+                }
+
+                // Outside air per person. TBD freshAirRate is l/s/p; SAM stores SupplyAirFlowPerPerson
+                // in m3/s/p (export multiplies back by 1000). Without this the import kept SAM's default
+                // (8 l/s/p) and dropped the source value (e.g. 40).
+                if (!float.IsNaN(internalGain.freshAirRate))
+                {
+                    result.SetValue(InternalConditionParameter.SupplyAirFlowPerPerson, internalGain.freshAirRate / 1000.0);
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticESG);
@@ -179,29 +217,65 @@
                 }
 
                 double personGain = internalGain.personGain;
-                double gain = 0;
+
+                // TBD occupancy sensible/latent gains are per floor-area (W/m2); personGain is the
+                // per-person metabolic rate (W/p). Read the per-area gains, derive the occupancy from
+                // them + personGain, then store the gains PER PERSON (perArea * areaPerPerson) so a
+                // round-trip reproduces the original per-area gains AND the metabolic rate.
+                double sensiblePerArea = double.NaN;
+                double latentPerArea = double.NaN;
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticOSG);
                 if (profile_TIC != null)
                 {
-                    double value = profile_TIC.GetExtremeValue(true);
-                    result.SetValue(InternalConditionParameter.OccupancySensibleGainPerPerson, value);
-                    gain += value;
+                    sensiblePerArea = profile_TIC.GetExtremeValue(true);
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticOLG);
                 if (profile_TIC != null)
                 {
-                    double value = profile_TIC.GetExtremeValue(true);
+                    latentPerArea = profile_TIC.GetExtremeValue(true);
                     result.SetValue(InternalConditionParameter.OccupancyProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.OccupancyLatentGainPerPerson, value);
-                    gain += value;
                 }
 
-                if (!double.IsNaN(area) && !double.IsNaN(gain))
+                double gainPerArea = (double.IsNaN(sensiblePerArea) ? 0 : sensiblePerArea) + (double.IsNaN(latentPerArea) ? 0 : latentPerArea);
+                if (!double.IsNaN(area) && !double.IsNaN(personGain) && personGain > 0 && gainPerArea > 0)
                 {
-                    double occupancy = (gain * area) / personGain;
-                    result.SetValue(InternalConditionParameter.AreaPerPerson, area / occupancy);
+                    double occupancy = (gainPerArea * area) / personGain;
+                    double areaPerPerson = occupancy > 0 ? area / occupancy : double.NaN;   // == personGain / gainPerArea
+                    if (!double.IsNaN(areaPerPerson))
+                    {
+                        result.SetValue(InternalConditionParameter.AreaPerPerson, areaPerPerson);
+
+                        if (!double.IsNaN(sensiblePerArea))
+                        {
+                            result.SetValue(InternalConditionParameter.OccupancySensibleGainPerPerson, sensiblePerArea * areaPerPerson);
+                        }
+
+                        if (!double.IsNaN(latentPerArea))
+                        {
+                            result.SetValue(InternalConditionParameter.OccupancyLatentGainPerPerson, latentPerArea * areaPerPerson);
+                        }
+                    }
+                }
+                else
+                {
+                    // No usable personGain/area — keep the raw per-area values rather than nothing.
+                    if (!double.IsNaN(sensiblePerArea))
+                    {
+                        result.SetValue(InternalConditionParameter.OccupancySensibleGainPerPerson, sensiblePerArea);
+                    }
+                    if (!double.IsNaN(latentPerArea))
+                    {
+                        result.SetValue(InternalConditionParameter.OccupancyLatentGainPerPerson, latentPerArea);
+                    }
+                }
+
+                // Outside air per person. TBD freshAirRate is l/s/p; SAM stores SupplyAirFlowPerPerson
+                // in m3/s/p (export multiplies back by 1000).
+                if (!float.IsNaN(internalGain.freshAirRate))
+                {
+                    result.SetValue(InternalConditionParameter.SupplyAirFlowPerPerson, internalGain.freshAirRate / 1000.0);
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticESG);
