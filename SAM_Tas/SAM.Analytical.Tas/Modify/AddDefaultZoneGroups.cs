@@ -65,10 +65,19 @@ namespace SAM.Analytical.Tas
 
                     List<Space> spacesInZone = adjacencyCluster.GetRelatedObjects<Space>(zone_Temp);
 
-                    string key = zone_Temp.Name + "|" + (int)TBD.ZoneGroupType.tbdDefaultZG;
+                    // Honour the zone's original TBD zone-group category (captured on import as
+                    // ZoneParameter.TBDZoneGroup) instead of forcing tbdDefaultZG, so e.g. a
+                    // "Zone Set" zone is re-created under Zone Sets rather than Zone Collections.
+                    TBD.ZoneGroupType zoneGroupType = TBD.ZoneGroupType.tbdDefaultZG;
+                    if (zone_Temp.TryGetValue(ZoneParameter.TBDZoneGroup, out string tbdZoneGroupCategory) && !string.IsNullOrWhiteSpace(tbdZoneGroupCategory))
+                    {
+                        zoneGroupType = Query.TBDZoneGroupType(tbdZoneGroupCategory);
+                    }
+
+                    string key = zone_Temp.Name + "|" + (int)zoneGroupType;
                     if (!zoneGroupsByKey.TryGetValue(key, out TBD.ZoneGroup zg) || zg == null)
                     {
-                        zg = CreateZoneGroupCached(building, zone_Temp.Name, spacesInZone, tbdZonesByName, TBD.ZoneGroupType.tbdDefaultZG);
+                        zg = CreateZoneGroupCached(building, zone_Temp.Name, spacesInZone, tbdZonesByName, zoneGroupType);
                         if (zg != null)
                             zoneGroupsByKey[key] = zg;
                     }
