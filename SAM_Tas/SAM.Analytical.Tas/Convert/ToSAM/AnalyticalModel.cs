@@ -145,7 +145,7 @@ namespace SAM.Analytical.Tas
                 }
 
                 TBD.Building building = sAMTBDDocument?.TBDDocument?.Building;
-                result = ToSAM_AnalyticalModel(building, polygonCache);
+                result = ToSAM_AnalyticalModel(building, polygonCache, importUnused);
 
                 if(result is not null)
                 {
@@ -217,6 +217,25 @@ namespace SAM.Analytical.Tas
         /// </summary>
         public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
         {
+            return ToSAM_AnalyticalModel(building, polygonCache, false);
+        }
+
+        /// <summary>
+        /// AnalyticalModel build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> so that subsequent calls (e.g. <c>Create.SolarModel</c>)
+        /// can reuse the already-converted Polygon3D objects instead of re-marshaling them
+        /// over the TBD COM boundary.
+        /// <para/>
+        /// With <paramref name="importUnused"/> = true the building's full construction library is
+        /// imported — including constructions not attached to any surface (e.g. the transparent
+        /// <c>Air_Glass</c> sizing placeholder or the Null building element's construction) — as
+        /// standalone templates, so the library round-trips back out on export. The geometry-driven
+        /// import alone only captures constructions referenced by a zone surface. Internal conditions
+        /// not assigned to any zone are likewise added as templates (model-side only — see
+        /// <see cref="AddUnusedInternalConditions(AdjacencyCluster, TBD.Building)"/> for the export caveat).
+        /// </summary>
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache, bool importUnused)
+        {
             if (building == null)
             {
                 return null;
@@ -231,6 +250,12 @@ namespace SAM.Analytical.Tas
             Core.Address address = new (null, null, null, Core.CountryCode.Undefined);
 
             AdjacencyCluster adjacencyCluster = ToSAM(building, polygonCache);
+
+            if (importUnused)
+            {
+                adjacencyCluster.AddUnusedConstructions(building);
+                adjacencyCluster.AddUnusedInternalConditions(building);
+            }
 
             return new AnalyticalModel(building.name, null, location, address, adjacencyCluster, materialLibrary, profileLibrary);
         }
