@@ -24,7 +24,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.3";
+        public override string LatestComponentVersion => "1.0.4";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -85,6 +85,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
                 result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM Analytical Model", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "pathTasTBD", NickName = "pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "debugLog", NickName = "debugLog", Description = "Diagnostic log for the export shade calculation. Populated only when _debug_ is true (otherwise empty).", Access = GH_ParamAccess.item }, ParamVisibility.Voluntary));
                 return result.ToArray();
@@ -258,7 +259,15 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             index = Params.IndexOfOutputParam("analyticalModel");
             if (index != -1)
+            {
                 dataAccess.SetData(index, analyticalModel);
+            }
+
+            index = Params.IndexOfOutputParam("pathTasTBD");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, path);
+            }
 
             if (index_successful != -1)
             {
