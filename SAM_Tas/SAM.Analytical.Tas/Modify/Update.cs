@@ -485,19 +485,17 @@ namespace SAM.Analytical.Tas
             foreach (DateTime dateTime in coverageResult.DateTimes)
             {
                 int dayIndex = dateTime.DayOfYear;
-                int hourIndex = dateTime.Hour;
 
-                // Import stored value[i] (i = 0..23, TAS hours 1..24) at AddHours(i + 1):
-                //   Hour 1..23 -> slot 0..22 (same day); Hour 0 (== the rolled-over hour 24) -> slot 23 of the previous day.
-                if (hourIndex == 0)
-                {
-                    hourIndex = 23;
-                    dayIndex -= 1;
-                }
-                else
-                {
-                    hourIndex -= 1;
-                }
+                // Write coverage for DateTime hour H at TAS shade-slot H (0..23). Through the
+                // SAMAnalytical.FromTBD read path the TBD is opened read-WRITE, and a manually-written
+                // SurfaceShade at slot s reads back at hour s — so slot = H round-trips to hour H.
+                // The previous slot = (H-1) read back one hour EARLY through that path: the via-TBD model
+                // (ModelB-SAMToTasFromTas) lagged the TAS benchmark by exactly 1 h, which was the entire
+                // ~0.106 CompareSolarCoverage gap. TAS-native shade is written by TAS itself and is
+                // unaffected. (A read-ONLY reopen instead maps slot s -> hour s+1, which is why the
+                // in-process round-trip check looked lossless — see SAM_SolarCalculator
+                // ViaTBD_hour_shift_probe / Modify.LogShadeRoundTrip.)
+                int hourIndex = dateTime.Hour;
 
                 if (dayIndex < 1)
                 {

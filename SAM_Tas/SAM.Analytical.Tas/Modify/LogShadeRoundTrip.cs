@@ -59,9 +59,12 @@ namespace SAM.Analytical.Tas
 
                 List<ShadeRoundTripSurface> sourceSurfaces = ShadeRoundTripSurfaces(sourceSolarModel);
 
-                // Re-open the saved TBD exactly as FromTBD does and read its shading back.
+                // Re-open the saved TBD exactly as FromTBD does — read-WRITE (readOnly = false), NOT
+                // read-only. This matters: TAS's read-write open processes manually-written SurfaceShade
+                // (shifting it vs a read-only reopen), so only this mode reproduces the real FromTBD read.
+                // Dispose only close()s (never save()s), so the file is not modified.
                 List<ShadeRoundTripSurface> readBackSurfaces = null;
-                using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path, true))
+                using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path, false))
                 {
                     TBD.Building building = sAMTBDDocument?.TBDDocument?.Building;
                     SolarModel readBackSolarModel = building == null ? null : Create.SolarModel(building);
