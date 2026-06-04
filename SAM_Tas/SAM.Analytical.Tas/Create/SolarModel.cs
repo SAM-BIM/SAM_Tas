@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 using SAM.Geometry.Object.Spatial;
 using SAM.Geometry.SolarCalculator;
 using SAM.Geometry.Spatial;
@@ -66,11 +67,24 @@ namespace SAM.Analytical.Tas
             // days drops the COM call count ~14× (e.g. 25 days × N surfaces instead of 365).
             // Falls back to the full 1..365 loop if GetShadeDays() returns nothing usable.
             List<int> shadeDays = GetShadeDayNumbers(building);
-            if (shadeDays.Count == 0)
+            bool shadeDaysFallback = shadeDays.Count == 0;
+            if (shadeDaysFallback)
             {
                 shadeDays = new List<int>(365);
                 for (int d = 1; d <= 365; d++) shadeDays.Add(d);
             }
+
+            // Optional read-side diagnostic (SAM_DEBUG; surfaced on SAMAnalytical.FromTBD's debugLog
+            // alongside the CopyResults log). Records exactly what coverage the import pulled from the
+            // TBD per surface — the read half of the option-2 round-trip. Never throws.
+            bool logEnabled = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SAM_DEBUG"));
+            StringBuilder log = logEnabled ? new StringBuilder() : null;
+            void Log(string message) { if (log != null) { log.AppendLine(message); } }
+            int loggedSurfaces = 0;
+            Log("=== Create.SolarModel (TBD -> SAM read-back) ===");
+            Log("year=" + year + "   shadeDays: count=" + shadeDays.Count
+                + (shadeDaysFallback ? " (FALLBACK 1..365 — GetShadeDays returned nothing)" : "")
+                + (shadeDays.Count <= 40 ? " [" + string.Join(",", shadeDays) + "]" : " (first=" + shadeDays[0] + " last=" + shadeDays[shadeDays.Count - 1] + ")"));
 
             int i = 0;
             while (building.GetZone(i) is TBD.zone tbdZone)
@@ -100,6 +114,19 @@ namespace SAM.Analytical.Tas
                                 }
                                 hour++;
                             }
+                        }
+
+                        if (logEnabled && coverage.Count != 0)
+                        {
+                            double sum = 0.0, min = double.MaxValue, max = double.MinValue;
+                            foreach (Tuple<DateTime, double> entry in coverage)
+                            {
+                                sum += entry.Item2;
+                                if (entry.Item2 < min) min = entry.Item2;
+                                if (entry.Item2 > max) max = entry.Item2;
+                            }
+                            loggedSurfaces++;
+                            Log(string.Format("  zone={0} surface={1} hours={2} mean={3:0.000} min={4:0.000} max={5:0.000}", tbdZone.number, tbdZoneSurface.number, coverage.Count, sum / coverage.Count, min, max));
                         }
 
                         if (coverage.Count != 0)
@@ -146,6 +173,12 @@ namespace SAM.Analytical.Tas
                 }
 
                 i++;
+            }
+
+            if (logEnabled)
+            {
+                Log("--- Summary --- surfaces with coverage: " + loggedSurfaces + "   total LinkedFace3Ds: " + (result.GetLinkedFace3Ds()?.Count ?? 0));
+                try { System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_FromTBD.log"), log.ToString()); } catch { }
             }
 
             return result;

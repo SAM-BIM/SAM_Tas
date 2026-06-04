@@ -165,6 +165,13 @@ namespace SAM.Analytical.Grasshopper.Tas
             // Rhino process. Setting it to null clears it, so unchecking _debug_ turns logging off.
             Environment.SetEnvironmentVariable("SAM_DEBUG", debug ? "1" : null);
 
+            // Clear the read-side log so a stale one from a previous run can't surface when this run
+            // doesn't import shades (Create.SolarModel only writes it when _importSurfaceShades_ is on).
+            if (debug)
+            {
+                try { System.IO.File.Delete(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_FromTBD.log")); } catch { }
+            }
+
             AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused, importSurfaceShades);
 
             index = Params.IndexOfOutputParam("analyticalModel");
@@ -193,10 +200,26 @@ namespace SAM.Analytical.Grasshopper.Tas
                 {
                     try
                     {
-                        string logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_CopyResults.log");
-                        if (System.IO.File.Exists(logPath))
+                        // Read-side detail (Create.SolarModel: what coverage was pulled per surface) first,
+                        // then the geometric matching (CopyResults: how it routed to panels/apertures).
+                        string fromTBDLog = null;
+                        string fromTBDLogPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_FromTBD.log");
+                        if (System.IO.File.Exists(fromTBDLogPath))
                         {
-                            debugLog = System.IO.File.ReadAllText(logPath);
+                            fromTBDLog = System.IO.File.ReadAllText(fromTBDLogPath);
+                        }
+
+                        string copyResultsLog = null;
+                        string copyResultsLogPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_CopyResults.log");
+                        if (System.IO.File.Exists(copyResultsLogPath))
+                        {
+                            copyResultsLog = System.IO.File.ReadAllText(copyResultsLogPath);
+                        }
+
+                        debugLog = string.Concat(fromTBDLog, (fromTBDLog != null && copyResultsLog != null) ? Environment.NewLine : null, copyResultsLog);
+                        if (string.IsNullOrEmpty(debugLog))
+                        {
+                            debugLog = null;
                         }
                     }
                     catch
