@@ -24,7 +24,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.3";
+        public override string LatestComponentVersion => "1.0.4";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -68,7 +68,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
-                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_debug_", NickName = "_debug_", Description = "If true, writes a per aperture-face diagnostic of the export shade calculation (whether each pane/frame face received any sun-exposure proportions) to %TEMP%\\SAM_ToTBD.log and returns its text on the 'debugLog' output. Off by default.", Optional = true, Access = GH_ParamAccess.item };
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "debug_", NickName = "debug_", Description = "If true, writes a per aperture-face diagnostic of the export shade calculation (whether each pane/frame face received any sun-exposure proportions) to %TEMP%\\SAM_ToTBD.log and returns its text on the 'debugLog' output. Off by default.", Optional = true, Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Voluntary));
 
@@ -85,6 +85,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
                 result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM Analytical Model", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "pathTasTBD", NickName = "pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "debugLog", NickName = "debugLog", Description = "Diagnostic log for the export shade calculation. Populated only when _debug_ is true (otherwise empty).", Access = GH_ParamAccess.item }, ParamVisibility.Voluntary));
                 return result.ToArray();
@@ -190,7 +191,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             }
 
             bool debug = false;
-            index = Params.IndexOfInputParam("_debug_");
+            index = Params.IndexOfInputParam("debug_");
             if (index == -1 || !dataAccess.GetData(index, ref debug))
             {
                 debug = false;
@@ -258,7 +259,15 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             index = Params.IndexOfOutputParam("analyticalModel");
             if (index != -1)
+            {
                 dataAccess.SetData(index, analyticalModel);
+            }
+
+            index = Params.IndexOfOutputParam("pathTasTBD");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, path);
+            }
 
             if (index_successful != -1)
             {
