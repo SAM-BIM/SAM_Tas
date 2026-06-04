@@ -6,12 +6,13 @@ using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Core.Grasshopper;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
 namespace SAM.Analytical.Grasshopper.Tas
 {
-    public class SAMAnalyticalFromTBD : GH_SAMComponent
+    public class SAMAnalyticalFromTBD : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -21,7 +22,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.4";
+        public override string LatestComponentVersion => "1.0.6";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -43,30 +44,49 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            //int aIndex = -1;
-            //Param_Boolean booleanParameter = null;
+            get
+            {
+                List<GH_SAMParam> result = [];
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTBD", NickName = "_pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
-            // Input order is preserved from the previous public release — new optional inputs
-            // are appended AFTER _run so existing Grasshopper definitions wired against the
-            // 3-input (_pathTasTBD / _importUnused_ / _run) signature keep their wires
-            // correctly mapped instead of having _run silently shift right.
-            inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
-            inputParamManager.AddBooleanParameter("_importUnused_", "_importUnused_", "Import Unused IC", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_importSurfaceShades_", "_importSurfaceShades_", "If true, reads TAS-computed shade proportions for every exposed zoneSurface and attaches a populated SolarModel to the AnalyticalModel (via AnalyticalModelParameter.SolarModel). Required input for SAMAnalytical.CompareSolarCoverage. Adds a few seconds to import time.", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_debug_", "_debug_", "If true, writes a per-run diagnostic of the SolarModel→AnalyticalModel result copy (which TAS surface each aperture pane/frame and panel matched, and why any was skipped) to %TEMP%\\SAM_CopyResults.log, and returns its text on the 'debugLog' output. Off by default.", GH_ParamAccess.item, false);
+                global::Grasshopper.Kernel.Parameters.Param_Boolean @boolean = null;
+
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_importUnused_", NickName = "_importUnused_", Description = "Import Unused IC", Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
+
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_importSurfaceShades_", NickName = "_importSurfaceShades_", Description = "If true, reads TAS-computed shade proportions for every exposed zoneSurface and attaches a populated SolarModel to the AnalyticalModel (via AnalyticalModelParameter.SolarModel). Required input for SAMAnalytical.CompareSolarCoverage. Adds a few seconds to import time.", Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
+
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
+
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_debug_", NickName = "_debug_", Description = "If true, writes a per-run diagnostic of the SolarModel→AnalyticalModel result copy (which TAS surface each aperture pane/frame and panel matched, and why any was skipped) to %TEMP%\\SAM_CopyResults.log, and returns its text on the 'debugLog' output. Off by default.", Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(@boolean, ParamVisibility.Voluntary));
+
+                return [.. result];
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddParameter(new GooAnalyticalModelParam(), "analyticalModel", "analyticalModel", "SAM AnalyticalModel", GH_ParamAccess.list);
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
-            outputParamManager.AddTextParameter("debugLog", "debugLog", "Diagnostic log for the pane/frame/panel result matching. Populated only when _debug_ is true (otherwise empty).", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = [];
+                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM Analytical Model", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "pathTasTBD", NickName = "pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "debugLog", NickName = "debugLog", Description = "Diagnostic log for the pane/frame/panel result matching. Populated only when _debug_ is true (otherwise empty).", Access = GH_ParamAccess.item }, ParamVisibility.Voluntary));
+                return [.. result];
+            }
         }
 
         /// <summary>
@@ -75,39 +95,53 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(1, false);
+            int index_successful = Params.IndexOfOutputParam("successful");
+            if (index_successful != -1)
+            {
+                dataAccess.SetData(index_successful, false);
+            }
+
+            int index;
 
             // Input indices: 0 = _pathTasTBD, 1 = _importUnused_, 2 = _run, 3 = _importSurfaceShades_
             bool run = false;
-            if (!dataAccess.GetData(2, ref run))
+            index = Params.IndexOfInputParam("_run");
+            if (!dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
+
             if (!run)
+            {
                 return;
+            }
 
             string path_TBD = null;
-            if (!dataAccess.GetData(0, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+            index = Params.IndexOfInputParam("_pathTasTBD");
+            if (!dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
             bool importUnused = false;
-            if (!dataAccess.GetData(1, ref importUnused))
+            index = Params.IndexOfInputParam("_importUnused_");
+            if (!dataAccess.GetData(index, ref importUnused))
             {
                 importUnused = false;
             }
 
             bool importSurfaceShades = false;
-            if (!dataAccess.GetData(3, ref importSurfaceShades))
+            index = Params.IndexOfInputParam("_importSurfaceShades_");
+            if (!dataAccess.GetData(index, ref importSurfaceShades))
             {
                 importSurfaceShades = false;
             }
 
             bool debug = false;
-            if (!dataAccess.GetData(4, ref debug))
+            index = Params.IndexOfInputParam("_debug_");
+            if (!dataAccess.GetData(index, ref debug))
             {
                 debug = false;
             }
@@ -118,26 +152,45 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             AnalyticalModel analyticalModel = Analytical.Tas.Convert.ToSAM(path_TBD, importUnused, importSurfaceShades);
 
-            dataAccess.SetData(0, analyticalModel);
-            dataAccess.SetData(1, analyticalModel != null);
-
-            string debugLog = null;
-            if (debug)
+            index = Params.IndexOfOutputParam("analyticalModel");
+            if(index != -1)
             {
-                try
+                dataAccess.SetData(index, analyticalModel);
+            }
+
+            index = Params.IndexOfOutputParam("pathTasTBD");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, path_TBD);
+            }
+
+            index = Params.IndexOfOutputParam("successful");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, analyticalModel != null);
+            }
+
+            index = Params.IndexOfOutputParam("debugLog");
+            if (index != -1)
+            {
+                string debugLog = null;
+                if (debug)
                 {
-                    string logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_CopyResults.log");
-                    if (System.IO.File.Exists(logPath))
+                    try
                     {
-                        debugLog = System.IO.File.ReadAllText(logPath);
+                        string logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_CopyResults.log");
+                        if (System.IO.File.Exists(logPath))
+                        {
+                            debugLog = System.IO.File.ReadAllText(logPath);
+                        }
+                    }
+                    catch
+                    {
+                        // Reading the diagnostic must never fail the component.
                     }
                 }
-                catch
-                {
-                    // Reading the diagnostic must never fail the component.
-                }
+                dataAccess.SetData(index, debugLog);
             }
-            dataAccess.SetData(2, debugLog);
         }
 
         public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
