@@ -157,6 +157,11 @@ namespace SAM.Analytical.Tas
                 sAMTBDDocument.Save();
             }
 
+            // Diagnostic only (SAM_DEBUG): reopen the saved TBD and compare the coverage read back
+            // (the FromTBD path) against the SAM source coverage, so the option-2 round-trip drift is
+            // captured on the ToTBD side. No-op unless _debug_ is on; never throws.
+            Modify.LogShadeRoundTrip(path, analyticalModel);
+
             return true;
         }
     }
