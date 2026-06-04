@@ -65,7 +65,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
-                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_debug_", NickName = "_debug_", Description = "If true, writes a per-run diagnostic of the SolarModel→AnalyticalModel result copy (which TAS surface each aperture pane/frame and panel matched, and why any was skipped) to %TEMP%\\SAM_CopyResults.log, and returns its text on the 'debugLog' output. Off by default.", Access = GH_ParamAccess.item };
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "debug_", NickName = "debug_", Description = "If true, writes a per-run diagnostic of the SolarModel→AnalyticalModel result copy (which TAS surface each aperture pane/frame and panel matched, and why any was skipped) to %TEMP%\\SAM_CopyResults.log, and returns its text on the 'debugLog' output. Off by default.", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Voluntary));
 
@@ -106,10 +106,13 @@ namespace SAM.Analytical.Grasshopper.Tas
             // Input indices: 0 = _pathTasTBD, 1 = _importUnused_, 2 = _run, 3 = _importSurfaceShades_
             bool run = false;
             index = Params.IndexOfInputParam("_run");
-            if (!dataAccess.GetData(index, ref run))
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
-                return;
+            if (index != -1)
+            { 
+                if (!dataAccess.GetData(index, ref run))
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
+                    return;
+                }
             }
 
             if (!run)
@@ -119,31 +122,43 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             string path_TBD = null;
             index = Params.IndexOfInputParam("_pathTasTBD");
-            if (!dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+            if (index != -1)
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
-                return;
+                if (!dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
+                    return;
+                }
             }
 
             bool importUnused = false;
             index = Params.IndexOfInputParam("_importUnused_");
-            if (!dataAccess.GetData(index, ref importUnused))
+            if (index != -1)
             {
-                importUnused = false;
+                if (!dataAccess.GetData(index, ref importUnused))
+                {
+                    importUnused = false;
+                }
             }
 
             bool importSurfaceShades = false;
             index = Params.IndexOfInputParam("_importSurfaceShades_");
-            if (!dataAccess.GetData(index, ref importSurfaceShades))
+            if (index != -1)
             {
-                importSurfaceShades = false;
+                if (!dataAccess.GetData(index, ref importSurfaceShades))
+                {
+                    importSurfaceShades = false;
+                }
             }
 
             bool debug = false;
-            index = Params.IndexOfInputParam("_debug_");
-            if (!dataAccess.GetData(index, ref debug))
+            index = Params.IndexOfInputParam("debug_");
+            if(index != -1)
             {
-                debug = false;
+                if (!dataAccess.GetData(index, ref debug))
+                {
+                    debug = false;
+                }
             }
 
             // Toggle the CopyResults diagnostic log (Modify.CopyResults reads SAM_DEBUG) for this

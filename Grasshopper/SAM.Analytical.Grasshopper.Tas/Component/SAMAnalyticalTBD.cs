@@ -68,7 +68,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
-                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_debug_", NickName = "_debug_", Description = "If true, writes a per aperture-face diagnostic of the export shade calculation (whether each pane/frame face received any sun-exposure proportions) to %TEMP%\\SAM_ToTBD.log and returns its text on the 'debugLog' output. Off by default.", Optional = true, Access = GH_ParamAccess.item };
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "debug_", NickName = "debug_", Description = "If true, writes a per aperture-face diagnostic of the export shade calculation (whether each pane/frame face received any sun-exposure proportions) to %TEMP%\\SAM_ToTBD.log and returns its text on the 'debugLog' output. Off by default.", Optional = true, Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Voluntary));
 
@@ -191,7 +191,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             }
 
             bool debug = false;
-            index = Params.IndexOfInputParam("_debug_");
+            index = Params.IndexOfInputParam("debug_");
             if (index == -1 || !dataAccess.GetData(index, ref debug))
             {
                 debug = false;
