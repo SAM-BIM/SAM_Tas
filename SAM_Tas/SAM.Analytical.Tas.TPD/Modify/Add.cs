@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using SAM.Core;
 using SAM.Core.Systems;
 using SAM.Geometry.Planar;
@@ -2335,10 +2338,18 @@ namespace SAM.Analytical.Tas.TPD
 
                 YearlySchedule yearlySchedule = (YearlySchedule)schedule;
                 double[] values = yearlySchedule.Values;
+
+                // Bulk-write via PlantSchedule.SetYearlyValues(Object) — single COM call vs
+                // 8760 per-index round-trips. Same pattern as the UpdateACCI fix on
+                // TBD.profileClass. The per-index setter signature is (Int32, Int32), so the
+                // SAFEARRAY element type the marshaller expects is Int32 → pass int[].
+                int[] intValues = new int[values.Length];
                 for (int i = 0; i < values.Length; i++)
                 {
-                    result.SetYearlyValue(i + 1, System.Convert.ToInt32(values[i]));
+                    intValues[i] = System.Convert.ToInt32(values[i]);
                 }
+
+                result.SetYearlyValues(intValues);
             }
 
             if (result == null)
@@ -2366,10 +2377,24 @@ namespace SAM.Analytical.Tas.TPD
                 result.Name = fluidType.Name;
             }
 
-            result.SpecificHeatCapacity = fluidType.SpecificHeatCapacity;
-            result.Density = fluidType.Density;
+            // Only overwrite TAS's built-in fluid defaults when SAM has real values. Legacy
+            // SystemEnergyCentre JSON templates (deployed before 2026-05) omit SpecificHeatCapacity
+            // and Density entirely, which deserialize to 0 and would otherwise clobber TAS's known-
+            // good defaults (Water = 4181.3 J/(kg·K), 1000 kg/m^3), causing TPD to flag the fluid
+            // as invalid and the downstream circuit analysis to misbehave.
+            if (!double.IsNaN(fluidType.SpecificHeatCapacity) && fluidType.SpecificHeatCapacity > 0)
+            {
+                result.SpecificHeatCapacity = fluidType.SpecificHeatCapacity;
+            }
+            if (!double.IsNaN(fluidType.Density) && fluidType.Density > 0)
+            {
+                result.Density = fluidType.Density;
+            }
+            if (!double.IsNaN(fluidType.FreezingPoint))
+            {
+                result.FreezingPoint = fluidType.FreezingPoint;
+            }
             result.Description = fluidType.Description;
-            result.FreezingPoint = fluidType.FreezingPoint;
 
             return result;
         }

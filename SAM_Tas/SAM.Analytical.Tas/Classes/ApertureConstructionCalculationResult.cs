@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -18,7 +20,7 @@ namespace SAM.Analytical.Tas
         private double calculatedPaneThermalTransmittance;
         private double calculatedFrameThermalTransmittance;
 
-        public ApertureConstructionCalculationResult(JObject jObject)
+        public ApertureConstructionCalculationResult(JsonObject jObject)
             :base(jObject)
         {
 
@@ -143,64 +145,64 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
-            if(!base.FromJObject(jObject))
+            if(!base.FromJsonObject(jObject))
             {
                 return false;
             }
 
             if (jObject.ContainsKey("ApertureType"))
             {
-                apertureType = Core.Query.Enum<ApertureType>(jObject.Value<string>("ApertureType"));
+                apertureType = Core.Query.Enum<ApertureType>(jObject["ApertureType"]?.GetValue<string>() ?? null);
             }
 
             if (jObject.ContainsKey("InitialApertureConstructionName"))
             {
-                initialApertureConstructionName = jObject.Value<string>("InitialApertureConstructionName");
+                initialApertureConstructionName = jObject["InitialApertureConstructionName"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("InitialPaneThermalTransmittance"))
             {
-                initialPaneThermalTransmittance = jObject.Value<double>("InitialPaneThermalTransmittance");
+                initialPaneThermalTransmittance = jObject["InitialPaneThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("InitialFrameThermalTransmittance"))
             {
-                initialFrameThermalTransmittance = jObject.Value<double>("InitialFrameThermalTransmittance");
+                initialFrameThermalTransmittance = jObject["InitialFrameThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("ApertureConstructionName"))
             {
-                apertureConstructionName = jObject.Value<string>("ApertureConstructionName");
+                apertureConstructionName = jObject["ApertureConstructionName"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("PaneThermalTransmittance"))
             {
-                paneThermalTransmittance = jObject.Value<double>("PaneThermalTransmittance");
+                paneThermalTransmittance = jObject["PaneThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("FrameThermalTransmittance"))
             {
-                frameThermalTransmittance = jObject.Value<double>("FrameThermalTransmittance");
+                frameThermalTransmittance = jObject["FrameThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("CalculatedPaneThermalTransmittance"))
             {
-                calculatedPaneThermalTransmittance = jObject.Value<double>("CalculatedPaneThermalTransmittance");
+                calculatedPaneThermalTransmittance = jObject["CalculatedPaneThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("CalculatedFrameThermalTransmittance"))
             {
-                calculatedFrameThermalTransmittance = jObject.Value<double>("CalculatedFrameThermalTransmittance");
+                calculatedFrameThermalTransmittance = jObject["CalculatedFrameThermalTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             return true;
         }
 
-        public override JObject ToJObject()
+        public override JsonObject ToJsonObject()
         {
-            JObject result = base.ToJObject();
+            JsonObject result = base.ToJsonObject();
             if(result == null )
             {
                 return result;

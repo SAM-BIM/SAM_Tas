@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
@@ -453,6 +456,69 @@ namespace SAM.Analytical.Tas
             return false;
         }
 
+        /// <summary>
+        /// Writes an imported TAS shade coverage (per zoneSurface, attached on import as a
+        /// SolarCoverageSimulationResult) back onto a TBD zoneSurface as DaysShade/SurfaceShade
+        /// rows. Unlike the generic UpdateSurfaceShades(ISolarSimulationResult) overload — which
+        /// does AddSurfaceShade(dateTime.Hour - 1) — this correctly undoes the import's
+        /// AddHours(1..24) storage: the 24th hour rolls to the next day at Hour 0, so a plain
+        /// "Hour - 1" yields AddSurfaceShade(-1) and corrupts that day's row (the whole grid then
+        /// reads zero in Tas). Here Hour 0 maps back to slot 23 of the ORIGINAL day.
+        /// </summary>
+        private static List<SurfaceShade> WriteImportedCoverageShades(Building building, List<DaysShade> daysShades, zoneSurface zoneSurface, Geometry.SolarCalculator.SolarCoverageSimulationResult coverageResult)
+        {
+            List<SurfaceShade> result = new List<SurfaceShade>();
+            if (building == null || daysShades == null || zoneSurface == null || coverageResult?.DateTimes == null)
+            {
+                return result;
+            }
+
+            Dictionary<int, DaysShade> daysShadeByDay = new Dictionary<int, DaysShade>();
+            foreach (DaysShade daysShade_Existing in daysShades)
+            {
+                if (daysShade_Existing != null)
+                {
+                    daysShadeByDay[daysShade_Existing.day] = daysShade_Existing;
+                }
+            }
+
+            foreach (DateTime dateTime in coverageResult.DateTimes)
+            {
+                int dayIndex = dateTime.DayOfYear;
+
+                // Write coverage for DateTime hour H at TAS shade-slot H (0..23). Through the
+                // SAMAnalytical.FromTBD read path the TBD is opened read-WRITE, and a manually-written
+                // SurfaceShade at slot s reads back at hour s — so slot = H round-trips to hour H.
+                // The previous slot = (H-1) read back one hour EARLY through that path: the via-TBD model
+                // (ModelB-SAMToTasFromTas) lagged the TAS benchmark by exactly 1 h, which was the entire
+                // ~0.106 CompareSolarCoverage gap. TAS-native shade is written by TAS itself and is
+                // unaffected. (A read-ONLY reopen instead maps slot s -> hour s+1, which is why the
+                // in-process round-trip check looked lossless — see SAM_SolarCalculator
+                // ViaTBD_hour_shift_probe / Modify.LogShadeRoundTrip.)
+                int hourIndex = dateTime.Hour;
+
+                if (dayIndex < 1)
+                {
+                    continue;
+                }
+
+                if (!daysShadeByDay.TryGetValue(dayIndex, out DaysShade daysShade) || daysShade == null)
+                {
+                    daysShade = building.AddDaysShade();
+                    daysShade.day = dayIndex;
+                    daysShades.Add(daysShade);
+                    daysShadeByDay[dayIndex] = daysShade;
+                }
+
+                SurfaceShade surfaceShade = daysShade.AddSurfaceShade(System.Convert.ToInt16(hourIndex));
+                surfaceShade.proportion = System.Convert.ToSingle(coverageResult.GetCoverage(dateTime));
+                surfaceShade.surface = zoneSurface;
+                result.Add(surfaceShade);
+            }
+
+            return result;
+        }
+
         public static void Update(this Building building, AdjacencyCluster adjacencyCluster, MaterialLibrary materialLibrary, bool updateGuids = false)
         {
             adjacencyCluster = adjacencyCluster.UpdateNormals(true, false, false);
@@ -470,6 +536,25 @@ namespace SAM.Analytical.Tas
 
             Dictionary<Guid, List<Tuple<zoneSurface, bool>>> dictionary_Panel = new Dictionary<Guid, List<Tuple<zoneSurface, bool>>>();
             Dictionary<Guid, List<Tuple<AperturePart, zoneSurface, bool>>> dictionary_Aperture = new Dictionary<Guid, List<Tuple<AperturePart, zoneSurface, bool>>>();
+
+            // Hoist these out of the per-space loop. They were being refetched via COM PER SPACE and then
+            // linear-scanned per panel (lines below) — O(spaces * panels * existingElements).
+            // The lists are appended to inside the inner panel loop, so we mirror that in the dictionaries.
+            List<buildingElement> buildingElements = building.BuildingElements() ?? new List<buildingElement>();
+            List<TBD.Construction> constructions = building.Constructions() ?? new List<TBD.Construction>();
+            Dictionary<string, buildingElement> buildingElementsByName = new Dictionary<string, buildingElement>(buildingElements.Count);
+            foreach (buildingElement be in buildingElements)
+            {
+                if (!string.IsNullOrEmpty(be?.name))
+                    buildingElementsByName[be.name] = be;
+            }
+            Dictionary<string, TBD.Construction> constructionsByName = new Dictionary<string, TBD.Construction>(constructions.Count);
+            foreach (TBD.Construction c in constructions)
+            {
+                if (!string.IsNullOrEmpty(c?.name))
+                    constructionsByName[c.name] = c;
+            }
+
             foreach (Space space in spaces)
             {
                 Shell shell = adjacencyCluster.Shell(space);
@@ -511,9 +596,6 @@ namespace SAM.Analytical.Tas
                 }
 
                 room room = zone.AddRoom();
-
-                List<buildingElement> buildingElements = building.BuildingElements();
-                List<TBD.Construction> constructions = building.Constructions();
 
                 int index_Space = adjacencyCluster.GetIndex(space);
 
@@ -618,7 +700,7 @@ namespace SAM.Analytical.Tas
 
                         PanelType panelType = panel.PanelType;
 
-                        buildingElement buildingElement_Panel = buildingElements.Find(x => x.name == name_Panel);
+                        buildingElementsByName.TryGetValue(name_Panel, out buildingElement buildingElement_Panel);
                         if (buildingElement_Panel == null)
                         {
                             TBD.Construction construction_TBD = null;
@@ -628,7 +710,7 @@ namespace SAM.Analytical.Tas
                                 Construction construction = panel.Construction;
                                 if (construction != null)
                                 {
-                                    construction_TBD = constructions.Find(x => x.name == construction.Name);
+                                    constructionsByName.TryGetValue(construction.Name ?? string.Empty, out construction_TBD);
                                     if (construction_TBD == null)
                                     {
                                         construction_TBD = building.AddConstruction(null);
@@ -662,6 +744,8 @@ namespace SAM.Analytical.Tas
                                         }
 
                                         constructions.Add(construction_TBD);
+                                        if (!string.IsNullOrEmpty(construction_TBD.name))
+                                            constructionsByName[construction_TBD.name] = construction_TBD;
                                     }
 
                                     if (panelType == PanelType.Undefined && construction != null)
@@ -682,6 +766,8 @@ namespace SAM.Analytical.Tas
                             buildingElement_Panel.AssignConstruction(construction_TBD);
                             buildingElement_Panel.ghost = panelType == PanelType.Air ? 1 : 0;
                             buildingElements.Add(buildingElement_Panel);
+                            if (!string.IsNullOrEmpty(buildingElement_Panel.name))
+                                buildingElementsByName[buildingElement_Panel.name] = buildingElement_Panel;
                         }
 
                         if (buildingElement_Panel != null)
@@ -770,45 +856,19 @@ namespace SAM.Analytical.Tas
 
                                 string name = Query.Name(aperture.UniqueName(), false, true, true, false);
 
+                                // Tas stores window/door building elements with a leading
+                                // "Windows: " / "Doors: " prefix (see native .tbd naming). Mirror
+                                // that here so exported -pane/-frame elements match the convention.
+                                string prefix = aperture.ApertureType == ApertureType.Door ? "Doors: " : "Windows: ";
+                                name = string.Concat(prefix, name);
+
                                 Dictionary<string, Tuple<AperturePart, List<zoneSurface>>> dictionary = new Dictionary<string, Tuple<AperturePart, List<zoneSurface>>>();
 
                                 double thickness = double.NaN;
 
-                                thickness = aperture.GetThickness(AperturePart.Pane);
-                                if (!double.IsNaN(thickness) && thickness > 0)
-                                {
-                                    List<Face3D> face3Ds_Pane = aperture.GetFace3Ds(AperturePart.Pane);
-                                    if (face3Ds_Pane != null)
-                                    {
-                                        string apertureName_Pane = string.Format("{0} {1}", name, AperturePart.Pane.Sufix());
-                                        dictionary[apertureName_Pane] = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Pane, new List<zoneSurface>());
-                                        foreach (Face3D face3D_Pane in face3Ds_Pane)
-                                        {
-                                            // here we added fix so Pane/Frame on secnd side will be correctyl shaded...
-                                            if (dictionary_Panel.ContainsKey(panel.Guid))
-                                            {
-                                                face3D_Pane.FlipNormal(false);
-                                            }
-                                            face3D_Pane.Normalize(Geometry.Orientation.Clockwise);
-
-                                            zoneSurface zoneSurface = func.Invoke(face3D_Pane);
-                                            if (zoneSurface != null)
-                                            {
-                                                dictionary[apertureName_Pane].Item2.Add(zoneSurface);
-
-                                                if (updateGuids)
-                                                {
-                                                    Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
-                                                    ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.PaneZoneSurfaceReference_1) ? ApertureParameter.PaneZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_1;
-                                                    aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
-                                                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
-                                                    panel_Temp.AddAperture(aperture_Temp);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
+                                // Frame is created BEFORE pane so the exported surfaces match native
+                                // Tas ordering (frame then pane within each window/door), which makes
+                                // the exported TBD's surface list line up with an imported one.
                                 thickness = aperture.GetThickness(AperturePart.Frame);
                                 if (!double.IsNaN(thickness) && thickness > 0)
                                 {
@@ -845,9 +905,44 @@ namespace SAM.Analytical.Tas
                                     }
                                 }
 
+                                thickness = aperture.GetThickness(AperturePart.Pane);
+                                if (!double.IsNaN(thickness) && thickness > 0)
+                                {
+                                    List<Face3D> face3Ds_Pane = aperture.GetFace3Ds(AperturePart.Pane);
+                                    if (face3Ds_Pane != null)
+                                    {
+                                        string apertureName_Pane = string.Format("{0} {1}", name, AperturePart.Pane.Sufix());
+                                        dictionary[apertureName_Pane] = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Pane, new List<zoneSurface>());
+                                        foreach (Face3D face3D_Pane in face3Ds_Pane)
+                                        {
+                                            // here we added fix so Pane/Frame on secnd side will be correctyl shaded...
+                                            if (dictionary_Panel.ContainsKey(panel.Guid))
+                                            {
+                                                face3D_Pane.FlipNormal(false);
+                                            }
+                                            face3D_Pane.Normalize(Geometry.Orientation.Clockwise);
+
+                                            zoneSurface zoneSurface = func.Invoke(face3D_Pane);
+                                            if (zoneSurface != null)
+                                            {
+                                                dictionary[apertureName_Pane].Item2.Add(zoneSurface);
+
+                                                if (updateGuids)
+                                                {
+                                                    Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
+                                                    ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.PaneZoneSurfaceReference_1) ? ApertureParameter.PaneZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_1;
+                                                    aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
+                                                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
+                                                    panel_Temp.AddAperture(aperture_Temp);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 foreach (KeyValuePair<string, Tuple<AperturePart, List<zoneSurface>>> keyValuePair in dictionary)
                                 {
-                                    buildingElement buildingElement_Aperture = buildingElements.Find(x => x.name == keyValuePair.Key);
+                                    buildingElementsByName.TryGetValue(keyValuePair.Key, out buildingElement buildingElement_Aperture);
                                     if (buildingElement_Aperture == null)
                                     {
 
@@ -860,7 +955,7 @@ namespace SAM.Analytical.Tas
                                         {
                                             string constructionName = string.Format("{0} {1}", Query.Name(aperture.UniqueName(), false, true, false, false), aperturePart.Sufix());
 
-                                            construction_TBD = constructions.Find(x => x.name == constructionName);
+                                            constructionsByName.TryGetValue(constructionName ?? string.Empty, out construction_TBD);
                                             if (construction_TBD == null)
                                             {
                                                 construction_TBD = building.AddConstruction(null);
@@ -894,6 +989,8 @@ namespace SAM.Analytical.Tas
                                                 }
 
                                                 constructions.Add(construction_TBD);
+                                                if (!string.IsNullOrEmpty(construction_TBD.name))
+                                                    constructionsByName[construction_TBD.name] = construction_TBD;
                                             }
                                         }
 
@@ -909,6 +1006,8 @@ namespace SAM.Analytical.Tas
                                             buildingElement_Aperture.BEType = Query.BEType(keyValuePair.Value.Item1);
                                             buildingElement_Aperture.AssignConstruction(construction_TBD);
                                             buildingElements.Add(buildingElement_Aperture);
+                                            if (!string.IsNullOrEmpty(buildingElement_Aperture.name))
+                                                buildingElementsByName[buildingElement_Aperture.name] = buildingElement_Aperture;
                                         }
 
 

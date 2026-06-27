@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 using System.Collections.Generic;
 
@@ -31,7 +33,7 @@ namespace SAM.Analytical.Tas
                     if (values == null)
                         continue;
 
-                    JArray jArray = new JArray();
+                    JsonArray jArray = new JsonArray();
                     values.ForEach(x => jArray.Add(x));
 
                     parameterSet.Add(spaceDataType.Text(), jArray);
@@ -60,6 +62,9 @@ namespace SAM.Analytical.Tas
             result.SetValue(Analytical.SpaceParameter.Area, area);
             result.SetValue(Analytical.SpaceParameter.Volume, zone.volume);
             result.SetValue(SpaceParameter.ZoneGuid, zone.GUID);
+
+            // Round-trip the TBD zone colour (export writes it back from SpaceParameter.Color).
+            result.SetValue(Analytical.SpaceParameter.Color, new SAMColor(zone.colour.ToColor()));
 
             List<TBD.InternalCondition> internalConditions_TBD = zone.InternalConditions();
             if(internalConditions_TBD != null)

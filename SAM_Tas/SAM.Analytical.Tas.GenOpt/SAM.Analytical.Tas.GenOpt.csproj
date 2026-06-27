@@ -7,8 +7,6 @@
     <AssemblyTitle>SAM.Analytical.Tas.GenOpt</AssemblyTitle>
     <Product>SAM.Analytical.Tas.GenOpt</Product>
     <Copyright>Copyright ©  2023</Copyright>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
 	  <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	  <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>

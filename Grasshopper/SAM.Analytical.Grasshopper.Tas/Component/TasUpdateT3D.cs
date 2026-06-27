@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Core.Grasshopper;
 using System;
@@ -15,7 +18,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.1";
+        public override string LatestComponentVersion => "1.0.2";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -44,6 +47,11 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             inputParamManager.AddTextParameter("_pathTasT3D", "_pathTasT3D", "The string path to a TasT3D file.", GH_ParamAccess.item);
             inputParamManager.AddParameter(new GooAnalyticalModelParam(), "_analyticalModel", "_analyticalModel", "A SAM analytical model", GH_ParamAccess.item);
+
+
+            int index = inputParamManager.AddBooleanParameter("T3DWindowsPlacement_", "T3DWindowsPlacement_", "T3D Windows Placement.\nDefault is false.\nUse false for non-rectangular windows to keep complex shapes such as S, B or D. In this mode the frame is not created, which is normal behaviour.\nSet to true to force window placement by host object such as Wall, Floor, Roof or Door.", GH_ParamAccess.item, false);
+            inputParamManager[index].Optional = true;
+
             inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
         }
 
@@ -65,13 +73,16 @@ namespace SAM.Analytical.Grasshopper.Tas
             dataAccess.SetData(1, false);
 
             bool run = false;
-            if (!dataAccess.GetData(2, ref run))
+            if (!dataAccess.GetData(3, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
+
             if (!run)
+            {
                 return;
+            }
 
             string path_T3D = null;
             if (!dataAccess.GetData(0, ref path_T3D) || string.IsNullOrWhiteSpace(path_T3D))
@@ -87,7 +98,10 @@ namespace SAM.Analytical.Grasshopper.Tas
                 return;
             }
 
-            AnalyticalModel analyticalModel_New = Analytical.Tas.Query.UpdateT3D(analyticalModel, path_T3D);
+            bool updateWindowPositionType = false;
+            dataAccess.GetData(2, ref updateWindowPositionType);
+
+            AnalyticalModel analyticalModel_New = Analytical.Tas.Query.UpdateT3D(analyticalModel, path_T3D, updateWindowPositionType);
 
 
             //SAM.Core.Tas.Import.ToT3D(path_T3D, path_gbXML, @override, fixNormals, zonesFromSpaces);

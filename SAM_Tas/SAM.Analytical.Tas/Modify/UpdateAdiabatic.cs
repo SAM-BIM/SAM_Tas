@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
@@ -91,7 +94,7 @@ namespace SAM.Analytical.Tas
             {
                 return true;
             }
-            
+
             foreach(zone zone in zones)
             {
                 List<IZoneSurface> zoneSurfaces = zone?.ZoneSurfaces();
@@ -110,27 +113,64 @@ namespace SAM.Analytical.Tas
 
                     foreach(IRoomSurface roomSurface in roomSurfaces)
                     {
-                        Face3D face3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter());
+                        TBD.Perimeter perimeter = roomSurface?.GetPerimeter();
+                        if (perimeter == null)
+                        {
+                            continue;
+                        }
+
+                        // Cheap AABB from the perimeter's outer polygon. Skip the full ToSAM (plane
+                        // + Face2D construction) when no adiabatic panel could possibly match. Tested
+                        // against each tuple individually rather than against a union envelope, because
+                        // adiabatic panels in residential models (party walls) are scattered through
+                        // the building and the union AABB ends up covering ~everything.
+                        BoundingBox3D boundingBox3D_RoomSurface = Geometry.Tas.Query.BoundingBox3D(perimeter);
+                        if (boundingBox3D_RoomSurface == null)
+                        {
+                            continue;
+                        }
+
+                        bool intersectsAdiabatic = false;
+                        foreach (Tuple<BoundingBox3D, Face3D> candidate in tuples)
+                        {
+                            if (candidate.Item1.InRange(boundingBox3D_RoomSurface, tolerance))
+                            {
+                                intersectsAdiabatic = true;
+                                break;
+                            }
+                        }
+                        if (!intersectsAdiabatic)
+                        {
+                            continue;
+                        }
+
+                        Face3D face3D = Geometry.Tas.Convert.ToSAM(perimeter);
                         if(face3D == null)
                         {
                             continue;
                         }
 
                         Point3D point3D_Temp = face3D.InternalPoint3D();
-                        if (point3D == null)
+                        if (point3D_Temp == null)
                         {
                             continue;
                         }
 
                         BoundingBox3D boundingBox3D_Temp = face3D.GetBoundingBox();
 
-                        List<Tuple<BoundingBox3D, Face3D>> tuples_Temp = tuples.FindAll(x => x.Item1.InRange(boundingBox3D_Temp, tolerance) && x.Item1.InRange(point3D_Temp, tolerance));
-                        if(tuples_Temp == null || tuples_Temp.Count == 0)
+                        // Single pass over `tuples` rather than FindAll() followed by Find() over the filtered list.
+                        Tuple<BoundingBox3D, Face3D> tuple = null;
+                        foreach (Tuple<BoundingBox3D, Face3D> candidate in tuples)
                         {
-                            continue;
+                            if (!candidate.Item1.InRange(boundingBox3D_Temp, tolerance))
+                                continue;
+                            if (!candidate.Item1.InRange(point3D_Temp, tolerance))
+                                continue;
+                            if (!candidate.Item2.InRange(point3D_Temp, tolerance))
+                                continue;
+                            tuple = candidate;
+                            break;
                         }
-
-                        Tuple<BoundingBox3D, Face3D> tuple = tuples_Temp.Find(x => x.Item2.InRange(point3D_Temp, tolerance));
                         if(tuple == null)
                         {
                             continue;

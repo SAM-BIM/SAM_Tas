@@ -1,4 +1,9 @@
-﻿using SAM.Core.Tas;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
+using SAM.Geometry.SolarCalculator;
+using SAM.Geometry.Spatial;
 using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
@@ -114,36 +119,84 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
+        /// <summary>
+        /// Backwards-compatible 2-arg overload — forwards to the 3-arg variant with
+        /// <paramref name="importSurfaceShades"/> defaulted to <c>false</c> so callers
+        /// compiled against the previous signature keep working.
+        /// </summary>
         public static AnalyticalModel ToSAM(string path_TBD, bool importUnused)
         {
+            return ToSAM(path_TBD, importUnused, false);
+        }
+
+        public static AnalyticalModel ToSAM(string path_TBD, bool importUnused, bool importSurfaceShades)
+        {
+            // Shared polygon3D cache across AdjacencyCluster build + Create.SolarModel.
+            // Saves redundant COM polygon conversions for the exposed surfaces that get
+            // processed by both phases (~50 polygons, ~400 ms on a real building).
+            Dictionary<string, Polygon3D> polygonCache = [];
+
             AnalyticalModel result = null;
-            using (SAMTBDDocument sAMTBDDocument = new SAMTBDDocument(path_TBD))
+            using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
             {
                 if (!importUnused)
                 {
                     Modify.RemoveUnusedInternalConditions(sAMTBDDocument?.TBDDocument?.Building);
                 }
 
-                result = ToSAM(sAMTBDDocument);
+                TBD.Building building = sAMTBDDocument?.TBDDocument?.Building;
+                result = ToSAM_AnalyticalModel(building, polygonCache, importUnused);
+
+                if(result is not null)
+                {
+                    Weather.WeatherData weatherData = Weather.Tas.Convert.ToSAM_WeatherData(building);
+                    if(weatherData is not null)
+                    {
+                        List<DesignDay> coolingDesignDays = null;
+                        List<DesignDay> heatingDesignDays = null;
+
+                        if(weatherData.CoolingDesignDay() is DesignDay coolingDesignDay)
+                        {
+                            coolingDesignDays = [coolingDesignDay];
+                        }
+
+                        if (weatherData.HeatingDesignDay() is DesignDay heatingDesignDay)
+                        {
+                            heatingDesignDays = [heatingDesignDay];
+                        }
+
+                        result.UpdateWeather(weatherData, coolingDesignDays, heatingDesignDays);
+                    }
+                    
+                    if (importSurfaceShades)
+                    {
+                        SolarModel solarModel = Create.SolarModel(building, polygonCache);
+                        if (solarModel != null)
+                        {
+                            result = result.CopyResults(solarModel);
+                            result.SetValue(Analytical.AnalyticalModelParameter.SolarModel, solarModel);
+                        }
+                    }
+                }
             }
 
             return result;
         }
 
-        public static AnalyticalModel ToSAM(this SAMTBDDocument sAMTBDDocument)
+        public static AnalyticalModel ToSAM_AnalyticalModel(this SAMTBDDocument sAMTBDDocument)
         {
-            if(sAMTBDDocument == null)
+            if (sAMTBDDocument == null)
             {
                 return null;
             }
 
-            return ToSAM(sAMTBDDocument.TBDDocument);
+            return ToSAM_AnalyticalModel(sAMTBDDocument.TBDDocument);
 
         }
 
-        public static AnalyticalModel ToSAM(this TBD.TBDDocument tBDDocument)
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.TBDDocument tBDDocument)
         {
-            if(tBDDocument == null)
+            if (tBDDocument == null)
             {
                 return null;
             }
@@ -152,6 +205,36 @@ namespace SAM.Analytical.Tas
         }
 
         public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building)
+        {
+            return ToSAM_AnalyticalModel(building, null);
+        }
+
+        /// <summary>
+        /// AnalyticalModel build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> so that subsequent calls (e.g. <c>Create.SolarModel</c>)
+        /// can reuse the already-converted Polygon3D objects instead of re-marshaling them
+        /// over the TBD COM boundary.
+        /// </summary>
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
+            return ToSAM_AnalyticalModel(building, polygonCache, false);
+        }
+
+        /// <summary>
+        /// AnalyticalModel build with optional shared polygon3D cache. Pass a non-null
+        /// <paramref name="polygonCache"/> so that subsequent calls (e.g. <c>Create.SolarModel</c>)
+        /// can reuse the already-converted Polygon3D objects instead of re-marshaling them
+        /// over the TBD COM boundary.
+        /// <para/>
+        /// With <paramref name="importUnused"/> = true the building's full construction library is
+        /// imported — including constructions not attached to any surface (e.g. the transparent
+        /// <c>Air_Glass</c> sizing placeholder or the Null building element's construction) — as
+        /// standalone templates, so the library round-trips back out on export. The geometry-driven
+        /// import alone only captures constructions referenced by a zone surface. Internal conditions
+        /// not assigned to any zone are likewise added as templates (model-side only — see
+        /// <see cref="AddUnusedInternalConditions(AdjacencyCluster, TBD.Building)"/> for the export caveat).
+        /// </summary>
+        public static AnalyticalModel ToSAM_AnalyticalModel(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache, bool importUnused)
         {
             if (building == null)
             {
@@ -164,9 +247,48 @@ namespace SAM.Analytical.Tas
             Core.Location location = new Core.Location(building.name, building.longitude, building.latitude, 0);
             location.SetValue(Core.LocationParameter.TimeZone, Core.Query.Description(Core.Query.UTC(building.timeZone)));
 
-            Core.Address address = new Core.Address(null, null, null, Core.CountryCode.Undefined);
+            Core.Address address = new (null, null, null, Core.CountryCode.Undefined);
 
-            return new AnalyticalModel(building.name, null, location, address, ToSAM(building), materialLibrary, profileLibrary);
+            AdjacencyCluster adjacencyCluster = ToSAM(building, polygonCache);
+
+            if (importUnused)
+            {
+                adjacencyCluster.AddUnusedConstructions(building);
+                adjacencyCluster.AddUnusedInternalConditions(building);
+            }
+
+            return new AnalyticalModel(building.name, null, location, address, adjacencyCluster, materialLibrary, profileLibrary);
+        }
+
+        public static SolarModel ToSAM_SolarModel(this SAMTBDDocument sAMTBDDocument)
+        {
+            if(sAMTBDDocument == null)
+            {
+                return null;
+            }
+
+            return ToSAM_SolarModel(sAMTBDDocument.TBDDocument);
+
+        }
+
+        public static SolarModel ToSAM_SolarModel(this TBD.TBDDocument tBDDocument)
+        {
+            if(tBDDocument == null)
+            {
+                return null;
+            }
+
+            return ToSAM_SolarModel(tBDDocument.Building);
+        }
+        
+        public static SolarModel ToSAM_SolarModel(this TBD.Building building)
+        {
+            if (building == null)
+            {
+                return null;
+            }
+
+            return Create.SolarModel(building);
         }
     }
 }

@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -15,10 +17,10 @@ namespace SAM.Analytical.Tas
         private double pilkingtonLongWavelengthCoefficient;
         private ThermalTransmittances thermalTransmittances;
 
-        public ThermalTransmittanceCalculationResult(JObject jObject)
+        public ThermalTransmittanceCalculationResult(JsonObject jObject)
             : base(jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
         
         public ThermalTransmittanceCalculationResult(ThermalTransmittanceCalculationResult thermalTransmittanceCalculationResult)
@@ -158,14 +160,14 @@ namespace SAM.Analytical.Tas
             return thermalTransmittances.GetTransparentValue();
         }
 
-        public override bool FromJObject(JObject jObject)
+        public override bool FromJsonObject(JsonObject jObject)
         {
             if (jObject == null)
             {
                 return false;
             }
 
-            bool result = base.FromJObject(jObject);
+            bool result = base.FromJsonObject(jObject);
             if(!result)
             {
                 return result;
@@ -173,55 +175,55 @@ namespace SAM.Analytical.Tas
 
             if (jObject.ContainsKey("LightTransmittance"))
             {
-                lightTransmittance = jObject.Value<double>("LightTransmittance");
+                lightTransmittance = jObject["LightTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("LightReflectance"))
             {
-                lightReflectance = jObject.Value<double>("LightReflectance");
+                lightReflectance = jObject["LightReflectance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("DirectSolarEnergyTransmittance"))
             {
-                directSolarEnergyTransmittance = jObject.Value<double>("DirectSolarEnergyTransmittance");
+                directSolarEnergyTransmittance = jObject["DirectSolarEnergyTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("DirectSolarEnergyReflectance"))
             {
-                directSolarEnergyReflectance = jObject.Value<double>("DirectSolarEnergyReflectance");
+                directSolarEnergyReflectance = jObject["DirectSolarEnergyReflectance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("DirectSolarEnergyAbosrtptance"))
             {
-                directSolarEnergyAbosrtptance = jObject.Value<double>("DirectSolarEnergyAbosrtptance");
+                directSolarEnergyAbosrtptance = jObject["DirectSolarEnergyAbosrtptance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("TotalSolarEnergyTransmittance"))
             {
-                totalSolarEnergyTransmittance = jObject.Value<double>("TotalSolarEnergyTransmittance");
+                totalSolarEnergyTransmittance = jObject["TotalSolarEnergyTransmittance"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("PilkingtonShortWavelengthCoefficient"))
             {
-                pilkingtonShortWavelengthCoefficient = jObject.Value<double>("PilkingtonShortWavelengthCoefficient");
+                pilkingtonShortWavelengthCoefficient = jObject["PilkingtonShortWavelengthCoefficient"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("PilkingtonLongWavelengthCoefficient"))
             {
-                pilkingtonLongWavelengthCoefficient = jObject.Value<double>("PilkingtonLongWavelengthCoefficient");
+                pilkingtonLongWavelengthCoefficient = jObject["PilkingtonLongWavelengthCoefficient"]?.GetValue<double>() ?? default(double);
             }
 
             if (jObject.ContainsKey("ThermalTransmittances"))
             {
-                thermalTransmittances = new ThermalTransmittances(jObject.Value<JObject>("ThermalTransmittances"));
+                thermalTransmittances = new ThermalTransmittances(jObject["ThermalTransmittances"] as JsonObject);
             }
 
             return result;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = base.ToJObject();
+            JsonObject jObject = base.ToJsonObject();
             if(jObject == null)
             {
                 return null;
@@ -269,7 +271,7 @@ namespace SAM.Analytical.Tas
 
             if (thermalTransmittances != null)
             {
-                jObject.Add("ThermalTransmittances", thermalTransmittances.ToJObject());
+                jObject.Add("ThermalTransmittances", thermalTransmittances.ToJsonObject());
             }
 
             return jObject;

@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System.Collections.Generic;
 using System.Linq;
 using TBD;
@@ -53,16 +56,34 @@ namespace SAM.Analytical.Tas
             if (constructions == null || constructions.Count == 0)
                 return false;
 
+            // Index constructions once so the per-element loop avoids three O(N) scans + a worst-case O(N*W) word match.
+            Dictionary<string, TBD.Construction> constructionByName = new Dictionary<string, TBD.Construction>(constructions.Count);
+            List<KeyValuePair<TBD.Construction, HashSet<string>>> constructionWordSets = new List<KeyValuePair<TBD.Construction, HashSet<string>>>(constructions.Count);
+            foreach (TBD.Construction c in constructions)
+            {
+                if (string.IsNullOrWhiteSpace(c?.name))
+                    continue;
+                constructionByName[c.name] = c;
+                HashSet<string> wordSet = new HashSet<string>();
+                foreach (string w in c.name.Split(' '))
+                {
+                    if (!string.IsNullOrWhiteSpace(w))
+                        wordSet.Add(w);
+                }
+                if (wordSet.Count > 0)
+                    constructionWordSets.Add(new KeyValuePair<TBD.Construction, HashSet<string>>(c, wordSet));
+            }
+
             foreach (buildingElement buildingElement in buildingElements)
             {
                 string name = Query.Name(buildingElement);
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
 
-                TBD.Construction construction = constructions.Find(x => name.Equals(x.name));
-                if(construction == null)
+                TBD.Construction construction;
+                if (!constructionByName.TryGetValue(name, out construction))
                 {
-                    List<TBD.Construction> constructions_Temp = constructions.FindAll(x => name.EndsWith(x.name));
+                    List<TBD.Construction> constructions_Temp = constructions.FindAll(x => !string.IsNullOrWhiteSpace(x?.name) && name.EndsWith(x.name));
                     if(constructions_Temp == null || constructions_Temp.Count == 0)
                     {
                         constructions_Temp = constructions.FindAll(x => !string.IsNullOrWhiteSpace(x?.name) && x.name.EndsWith(name));
@@ -77,31 +98,22 @@ namespace SAM.Analytical.Tas
 
                 if(construction == null)
                 {
-                    List<string> values = name.Split(' ')?.ToList();
-                    values?.RemoveAll(x => string.IsNullOrWhiteSpace(x));
-                    if (values != null && values.Count != 0)
+                    HashSet<string> elementWords = new HashSet<string>();
+                    foreach (string w in name.Split(' '))
                     {
-                        foreach (TBD.Construction construction_Temp in constructions)
+                        if (!string.IsNullOrWhiteSpace(w))
+                            elementWords.Add(w);
+                    }
+
+                    if (elementWords.Count != 0)
+                    {
+                        foreach (KeyValuePair<TBD.Construction, HashSet<string>> entry in constructionWordSets)
                         {
-                            List<string> values_Temp = construction_Temp?.name?.Split(' ')?.ToList();
-                            values_Temp?.RemoveAll(x => string.IsNullOrWhiteSpace(x));
-                            if (values_Temp == null || values_Temp.Count == 0)
+                            // Original behaviour: construction matches when every word of the construction's name
+                            // appears in the element's name (i.e. constructionWords is a subset of elementWords).
+                            if (entry.Value.IsSubsetOf(elementWords))
                             {
-                                continue;
-                            }
-
-                            int count = 0;
-                            foreach (string value in values)
-                            {
-                                if (values_Temp.Contains(value))
-                                {
-                                    count++;
-                                }
-                            }
-
-                            if (count == values_Temp.Count)
-                            {
-                                construction = construction_Temp;
+                                construction = entry.Key;
                                 break;
                             }
                         }

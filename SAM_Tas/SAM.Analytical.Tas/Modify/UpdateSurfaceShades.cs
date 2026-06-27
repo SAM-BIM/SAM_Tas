@@ -1,4 +1,8 @@
-﻿using SAM.Geometry.Spatial;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Geometry.SolarCalculator;
+using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -110,16 +114,24 @@ namespace SAM.Analytical.Tas
                 dictionary_Temp[tuple.Item2] = tuple.Item3;
             }
 
+            // Index existing DaysShades by day so the lookup is O(1) instead of a linear .Find per dictionary key.
+            Dictionary<int, TBD.DaysShade> daysShadesByDay = new Dictionary<int, TBD.DaysShade>(daysShades.Count);
+            foreach (TBD.DaysShade ds in daysShades)
+            {
+                if (ds != null)
+                    daysShadesByDay[ds.day] = ds;
+            }
+
             foreach (KeyValuePair<int, Dictionary<short, float>> keyValuePair in dictionary)
             {
-                TBD.DaysShade daysShade = daysShades.Find(x => x.day == keyValuePair.Key);
-                if (daysShade == null)
+                if (!daysShadesByDay.TryGetValue(keyValuePair.Key, out TBD.DaysShade daysShade) || daysShade == null)
                 {
                     daysShade = building.AddDaysShade();
 
                     daysShade.day = keyValuePair.Key;
-                    
+
                     daysShades.Add(daysShade);
+                    daysShadesByDay[keyValuePair.Key] = daysShade;
                 }
 
                 foreach (KeyValuePair<short, float> keyValuePair_Temp in keyValuePair.Value)
@@ -136,14 +148,14 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
-        public static List<TBD.SurfaceShade> UpdateSurfaceShades(this TBD.Building building, List<TBD.DaysShade> daysShades, TBD.zoneSurface zoneSurface, Geometry.SolarCalculator.SolarFaceSimulationResult solarFaceSimulationResult, double tolerance = 0.01)
+        public static List<TBD.SurfaceShade> UpdateSurfaceShades(this TBD.Building building, List<TBD.DaysShade> daysShades, TBD.zoneSurface zoneSurface, SAM.Core.SolarCalculator.ISolarSimulationResult solarSimulationResult, double tolerance = 0.01)
         {
-            if (daysShades == null || solarFaceSimulationResult == null || zoneSurface == null)
+            if (daysShades == null || solarSimulationResult == null || zoneSurface == null)
             {
                 return null;
             }
 
-            List<DateTime> dateTimes = solarFaceSimulationResult.DateTimes;
+            List<DateTime> dateTimes = solarSimulationResult.DateTimes;
             if (dateTimes == null || dateTimes.Count == 0)
             {
                 return null;
@@ -155,7 +167,7 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            List<Face3D> face3Ds = new List<Face3D>();
+            List<Face3D> face3Ds = [];
             double area = 0;
             foreach (TBD.IRoomSurface roomSurface in roomSurfaces)
             {
@@ -180,14 +192,63 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            List<TBD.SurfaceShade> result = new List<TBD.SurfaceShade>();
+            List<TBD.SurfaceShade> result = [];
 
             foreach (DateTime dateTime in dateTimes)
             {
-                List<Face3D> sunExposureFace3Ds = solarFaceSimulationResult.GetSunExposureFace3Ds(dateTime);
-                if (sunExposureFace3Ds == null || sunExposureFace3Ds.Count == 0)
+                float proportion = 0;
+
+                if (solarSimulationResult is SolarFaceSimulationResult solarFaceSimulationResult)
+                {
+                    List<Face3D> sunExposureFace3Ds = solarFaceSimulationResult.GetSunExposureFace3Ds(dateTime);
+                    if (sunExposureFace3Ds == null || sunExposureFace3Ds.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    Plane plane = sunExposureFace3Ds[0].GetPlane();
+                    List<Geometry.Planar.Face2D> sunExposureFace2Ds = sunExposureFace3Ds.ConvertAll(x => plane.Convert(x));
+                    List<Geometry.Planar.Face2D> face2Ds = face3Ds.ConvertAll(x => plane.Convert(x));
+
+                    double sunExposureArea = 0;
+                    foreach (Geometry.Planar.Face2D sunExposureface2D in sunExposureFace2Ds)
+                    {
+                        if (sunExposureface2D == null)
+                        {
+                            continue;
+                        }
+
+                        foreach (Geometry.Planar.Face2D face2D in face2Ds)
+                        {
+                            if (face2D == null)
+                            {
+                                continue;
+                            }
+
+                            List<Geometry.Planar.Face2D> face2Ds_Intersection = Geometry.Planar.Query.Intersection(sunExposureface2D, face2D);
+                            if (face2Ds_Intersection == null || face2Ds_Intersection.Count == 0)
+                            {
+                                continue;
+                            }
+
+                            sunExposureArea += face2Ds_Intersection.ConvertAll(x => x.GetArea()).Sum();
+                        }
+                    }
+
+                    proportion = System.Convert.ToSingle(Core.Query.Round(sunExposureArea / area, tolerance));
+                }
+                else if(solarSimulationResult is SolarCoverageSimulationResult solarCoverageSimulationResult)
+                {
+                    proportion = System.Convert.ToSingle(solarCoverageSimulationResult.GetCoverage(dateTime));
+                }
+                else
                 {
                     continue;
+                }
+
+                if (proportion <= tolerance)
+                {
+                    proportion = 0;
                 }
 
                 int dayIndex = dateTime.DayOfYear;
@@ -198,41 +259,6 @@ namespace SAM.Analytical.Tas
                     daysShade = building.AddDaysShade();
                     daysShade.day = dayIndex;
                     daysShades.Add(daysShade);
-                }
-
-                Plane plane = sunExposureFace3Ds[0].GetPlane();
-                List<Geometry.Planar.Face2D> sunExposureFace2Ds = sunExposureFace3Ds.ConvertAll(x => plane.Convert(x));
-                List<Geometry.Planar.Face2D> face2Ds = face3Ds.ConvertAll(x => plane.Convert(x));
-
-                double sunExposureArea = 0;
-                foreach (Geometry.Planar.Face2D sunExposureface2D in sunExposureFace2Ds)
-                {
-                    if(sunExposureface2D == null)
-                    {
-                        continue;
-                    }
-
-                    foreach(Geometry.Planar.Face2D face2D in face2Ds)
-                    {
-                        if(face2D == null)
-                        {
-                            continue;
-                        }
-
-                        List<Geometry.Planar.Face2D> face2Ds_Intersection = Geometry.Planar.Query.Intersection(sunExposureface2D, face2D);
-                        if(face2Ds_Intersection == null || face2Ds_Intersection.Count == 0)
-                        {
-                            continue;
-                        }
-
-                        sunExposureArea += face2Ds_Intersection.ConvertAll(x => x.GetArea()).Sum();
-                    }
-                }
-
-                float proportion = System.Convert.ToSingle(Core.Query.Round(sunExposureArea / area, tolerance));
-                if (proportion <= tolerance)
-                {
-                    proportion = 0;
                 }
 
                 TBD.SurfaceShade surfaceShade = daysShade.AddSurfaceShade(System.Convert.ToInt16(dateTime.Hour - 1));

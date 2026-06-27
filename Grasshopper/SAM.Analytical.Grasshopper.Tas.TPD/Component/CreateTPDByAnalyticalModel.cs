@@ -1,13 +1,19 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Systems;
 using SAM.Analytical.Grasshopper.Tas.TPD.Properties;
+using SAM.Analytical.Systems;
 using SAM.Analytical.Tas.TPD;
+using SAM.Core;
 using SAM.Core.Grasshopper;
 using SAM.Core.Systems;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
 
 namespace SAM.Analytical.Grasshopper.Tas.TPD
@@ -17,7 +23,7 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
         /// </summary>
-        public override Guid ComponentGuid => new Guid("ee49ab96-8b5c-433a-ab89-d959e082968b");
+        public override Guid ComponentGuid => new ("ee49ab96-8b5c-433a-ab89-d959e082968b");
 
         /// <summary>
         /// The latest version of this component
@@ -35,8 +41,8 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
         /// Initializes a new instance of the SAM_point3D class.
         /// </summary>
         public CreateTPDByAnalyticalModel()
-          : base("SAMAnalytical.TPDByAnalyticalModel ", "SAMAnalytical.TPDByAnalyticalModel ",
-              "Creates TPD from AnalyticalModel",
+          : base("SAMAnalytical.TPDByAnalyticalModel", "SAMAnalytical.TPDByAnalyticalModel",
+              "Creates a TPD plant-room file from a SAM AnalyticalModel, ready for simulation by Tas.",
               "SAM", "Tas")
         {
         }
@@ -188,21 +194,40 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
             if(systemEnergyCentre == null)
             {
                 systemEnergyCentre = analyticalModel.GetValue<SystemEnergyCentre>(Analytical.Systems.AnalyticalModelParameter.SystemEnergyCentre);
-            }
-            
-            if(systemEnergyCentre == null)
-            {
-                systemEnergyCentre = Analytical.Systems.Create.SystemEnergyCentre(analyticalModel, out HashSet<string> unavailableSystemTypeNames);
-                if (unavailableSystemTypeNames != null && unavailableSystemTypeNames.Count != 0)
+
+                if (systemEnergyCentre == null)
                 {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, string.Format("Following system types not defined: {0}", string.Join(", ", unavailableSystemTypeNames)));
+                    systemEnergyCentre = Analytical.Systems.Create.SystemEnergyCentre(analyticalModel, out HashSet<string> unavailableSystemTypeNames);
+                    if (unavailableSystemTypeNames != null && unavailableSystemTypeNames.Count != 0)
+                    {
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, string.Format("Following system types not defined: {0}", string.Join(", ", unavailableSystemTypeNames)));
+                    }
                 }
+
+                if (systemEnergyCentre != null)
+                {
+                    string test = Core.Convert.ToString(systemEnergyCentre);
+
+                    //Core.Convert.ToFile(systemEnergyCentre, @"C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-05-19-MigrationTest\test-copy-debug.JSON");
+                    systemEnergyCentre.UpdateDesignDays(analyticalModel);
+                }
+            }
+            else
+            {
+                //SAM.Core.Convert.ToFile(systemEnergyCentre, @"C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-05-19-MigrationTest\test-debug.JSON");
             }
 
             if (systemEnergyCentre == null)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not find and create SystemEnergyCentre");
                 return;
+            }
+
+            Log log = Analytical.Systems.Create.Log(systemEnergyCentre);
+            if (log is not null)
+            {
+                log.ToList().FindAll(x => x.LogRecordType == LogRecordType.Warning).ForEach(x => AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, x.ToString()));
+                log.ToList().FindAll(x => x.LogRecordType == LogRecordType.Error).ForEach(x => AddRuntimeMessage(GH_RuntimeMessageLevel.Error, x.ToString()));
             }
 
             bool successful = Analytical.Tas.TPD.Convert.ToTPD(systemEnergyCentre, path_TPD, path_TSD, systemEnergyCentreConversionSettings);

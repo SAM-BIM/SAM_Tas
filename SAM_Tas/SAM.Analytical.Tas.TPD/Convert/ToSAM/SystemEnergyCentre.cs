@@ -19,7 +19,7 @@ namespace SAM.Analytical.Tas.TPD
             }
 
             SystemEnergyCentre result = null;
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD, true))
             {
 
                 result = ToSAM(sAMTPDDocument, systemEnergyCentreConversionSettings);
@@ -119,27 +119,18 @@ namespace SAM.Analytical.Tas.TPD
             }
 
             result.SetValue(SystemEnergyCentreParameter.AnalyticalSystemsProperties, analyticalSystemsProperties);
+
+            if (systemEnergyCentreConversionSettings.Simulate)
+            {
+                tPDDoc.Simulate(
+                    systemEnergyCentreConversionSettings.StartHour + 1,
+                    systemEnergyCentreConversionSettings.EndHour + 1,
+                    0);
+                tPDDoc.Save();
+            }
+
             foreach (PlantRoom plantRoom in plantRooms)
             {
-                if (systemEnergyCentreConversionSettings.Simulate)
-                {
-                    //designConditionLoads.Add(energyCentre.GetNullDesignCondition());
-
-                    //plantRoom.SimulateExx(
-                    //    systemEnergyCentreConversionSettings.StartHour + 1,
-                    //    systemEnergyCentreConversionSettings.EndHour + 1,
-                    //    0,
-                    //    1,
-                    //    0,
-                    //    0,
-                    //    designConditionLoads.ToArray(),
-                    //    (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents,
-                    //    1,
-                    //    0);
-
-                    plantRoom.SimulateEx(systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1, 15, energyCentre.ExternalPollutant.Value, 10.0, (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
-                }
-
                 SystemPlantRoom systemPlantRoom = plantRoom.ToSAM();
 
                 List<global::TPD.System> systems = plantRoom?.Systems();

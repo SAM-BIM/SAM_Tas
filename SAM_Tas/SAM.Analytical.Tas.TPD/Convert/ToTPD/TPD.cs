@@ -36,40 +36,53 @@ namespace SAM.Analytical.Tas.TPD
                 System.IO.File.Delete(path_TPD);
             }
 
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            TPDProfiler profiler = new TPDProfiler();
+            try
             {
-                TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
-                if (tPDDoc == null)
+                profiler.Step("Opening TPD file");
+                using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
                 {
-                    return false;
-                }
-
-                EnergyCentre energyCentre = tPDDoc.EnergyCentre;
-                energyCentre.AddTSDData(path_TSD, 1);
-
-                TSDData tSDData = energyCentre.GetTSDData(1);
-
-                ToTPD(systemEnergyCentre, tPDDoc);
-
-                if (systemEnergyCentreConversionSettings == null)
-                {
-                    systemEnergyCentreConversionSettings = new SystemEnergyCentreConversionSettings();
-                }
-
-                if (systemEnergyCentreConversionSettings.Simulate)
-                {
-                    foreach(PlantRoom plantRoom in energyCentre.PlantRooms())
+                    TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
+                    if (tPDDoc == null)
                     {
-                        plantRoom.SimulateEx(systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1, 15, energyCentre.ExternalPollutant.Value, 10.0, (int)tpdSimulationData.tpdSimulationDataLoad + (int)tpdSimulationData.tpdSimulationDataPipe + (int)tpdSimulationData.tpdSimulationDataDuct + (int)tpdSimulationData.tpdSimulationDataSimEvents + (int)tpdSimulationData.tpdSimulationDataCont, 1, 0);
+                        return false;
                     }
 
-                    if (systemEnergyCentreConversionSettings.IncludeComponentResults)
-                    {
-                        Modify.CopyResults(energyCentre, systemEnergyCentre, systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1);
-                    }
-                }
+                    profiler.Step("Loading TSD data");
+                    EnergyCentre energyCentre = tPDDoc.EnergyCentre;
+                    energyCentre.AddTSDData(path_TSD, 1);
 
-                tPDDoc.Save();
+                    TSDData tSDData = energyCentre.GetTSDData(1);
+
+                    ToTPD(systemEnergyCentre, tPDDoc, profiler);
+
+                    if (systemEnergyCentreConversionSettings == null)
+                    {
+                        systemEnergyCentreConversionSettings = new SystemEnergyCentreConversionSettings();
+                    }
+
+                    if (systemEnergyCentreConversionSettings.Simulate)
+                    {
+                        profiler.Step("Simulating");
+                        tPDDoc.Simulate(
+                            systemEnergyCentreConversionSettings.StartHour + 1,
+                            systemEnergyCentreConversionSettings.EndHour + 1,
+                            0);
+
+                        if (systemEnergyCentreConversionSettings.IncludeComponentResults)
+                        {
+                            profiler.Step("Copying component results");
+                            Modify.CopyResults(energyCentre, systemEnergyCentre, systemEnergyCentreConversionSettings.StartHour + 1, systemEnergyCentreConversionSettings.EndHour + 1);
+                        }
+                    }
+
+                    profiler.Step("Saving TPD");
+                    tPDDoc.Save();
+                }
+            }
+            finally
+            {
+                profiler.WriteCsv(path_TPD);
             }
 
             return true;
@@ -77,8 +90,17 @@ namespace SAM.Analytical.Tas.TPD
 
         public static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc)
         {
+            return ToTPD(systemEnergyCentre, tPDDoc, null);
+        }
+
+        // The profiler param threads per-section timing through the build. Null = no-op; otherwise
+        // each Step("name") accumulates against that bucket so plantroom-loop work shows up as a
+        // single summed row in the CSV.
+        internal static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc, TPDProfiler profiler)
+        {
             EnergyCentre energyCentre = tPDDoc.EnergyCentre;
 
+            profiler?.Step("Adding properties (schedules/fluids/design conditions)");
             AnalyticalSystemsProperties analyticalSystemsProperties = systemEnergyCentre.GetValue<AnalyticalSystemsProperties>(SystemEnergyCentreParameter.AnalyticalSystemsProperties);
             if (analyticalSystemsProperties != null)
             {
@@ -110,6 +132,7 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            profiler?.Step("Adding energy sources");
             List<SystemEnergySource> systemEnergySources = systemEnergyCentre.GetSystemEnergySources();
             if (systemEnergySources != null && systemEnergySources.Count != 0)
             {
@@ -124,6 +147,7 @@ namespace SAM.Analytical.Tas.TPD
             {
                 foreach (SystemPlantRoom systemPlantRoom in systemPlantRooms)
                 {
+                    profiler?.Step("Plantroom: setup");
                     PlantRoom plantRoom = energyCentre.PlantRoom(systemPlantRoom.Name);
                     if (plantRoom == null)
                     {
@@ -133,6 +157,7 @@ namespace SAM.Analytical.Tas.TPD
 
                     List<Core.Systems.SystemLabel> systemLabels = systemPlantRoom.GetSystemObjects<Core.Systems.SystemLabel>();
 
+                    profiler?.Step("Plantroom: liquid systems");
                     List<LiquidSystem> liquidSystems = systemPlantRoom.GetSystems<LiquidSystem>();
                     if (liquidSystems != null && liquidSystems.Count != 0)
                     {
@@ -172,7 +197,12 @@ namespace SAM.Analytical.Tas.TPD
 
                                     if (systemComponents != null)
                                     {
-                                        systemComponents.RemoveAll(x => x is ISystemCollection && ((dynamic)x).Guid == ((dynamic)x).Guid);
+                                        // Correctness fix: previously compared `((dynamic)x).Guid` to itself,
+                                        // which was always true and wiped EVERY ISystemCollection from
+                                        // systemComponents on the first outer iteration. Compare against the
+                                        // current systemCollection being processed instead.
+                                        string systemCollectionGuid = (systemCollection as dynamic)?.Guid as string;
+                                        systemComponents.RemoveAll(x => x is ISystemCollection && ((x as dynamic)?.Guid as string) == systemCollectionGuid);
                                     }
                                 }
                             }
@@ -375,6 +405,7 @@ namespace SAM.Analytical.Tas.TPD
                         }
                     }
 
+                    profiler?.Step("Plantroom: standalone components (wind / PV)");
                     List<Core.Systems.ISystemComponent> systemComponents_All = systemPlantRoom.GetSystemComponents<Core.Systems.ISystemComponent>();
                     if (systemComponents_All != null)
                     {
@@ -407,6 +438,7 @@ namespace SAM.Analytical.Tas.TPD
                         }
                     }
 
+                    profiler?.Step("Plantroom: air systems");
                     List<AirSystem> airSystems = systemPlantRoom.GetSystems<AirSystem>();
                     if (airSystems != null && airSystems.Count != 0)
                     {
@@ -599,16 +631,20 @@ namespace SAM.Analytical.Tas.TPD
                                             systemComponents_SAM.RemoveAt(i);
                                         }
 
+                                        // Hoist Keys.Max() out of the loop: this fallback loop only ever
+                                        // appends to the highest existing group, and the max key cannot
+                                        // change inside the loop (TryGetValue below succeeds after the
+                                        // first iteration adds the bucket). SortedDictionary.Keys.Max()
+                                        // is O(n) LINQ; per-iteration calls were O(n²) overall.
+                                        int fallbackGroupIndex = sortedDictionary_SystemComponent.Count == 0 ? 0 : sortedDictionary_SystemComponent.Keys.Max();
                                         for (int i = systemComponents_SAM.Count - 1; i >= 0; i--)
                                         {
                                             Core.Systems.ISystemComponent systemComponent_SAM_Temp = systemComponents_SAM[i];
 
-                                            int groupIndex = sortedDictionary_SystemComponent.Count == 0 ? 0 : sortedDictionary_SystemComponent.Keys.Max();
-
-                                            if (!sortedDictionary_SystemComponent.TryGetValue(groupIndex, out List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples))
+                                            if (!sortedDictionary_SystemComponent.TryGetValue(fallbackGroupIndex, out List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples))
                                             {
                                                 tuples = new List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>>();
-                                                sortedDictionary_SystemComponent[groupIndex] = tuples;
+                                                sortedDictionary_SystemComponent[fallbackGroupIndex] = tuples;
                                             }
 
                                             if (!dictionary_SystemComponent.TryGetValue((systemComponent_SAM_Temp as dynamic).Guid, out global::TPD.ISystemComponent systemComponent_TPD_Temp))
@@ -679,16 +715,16 @@ namespace SAM.Analytical.Tas.TPD
                                                 systemControllers_SAM.RemoveAt(i);
                                             }
 
+                                            // Same Keys.Max() hoist as the SystemComponent fallback loop above.
+                                            int fallbackControllerGroupIndex = sortedDictionary_Controller.Count == 0 ? 0 : sortedDictionary_Controller.Keys.Max();
                                             for (int i = systemControllers_SAM.Count - 1; i >= 0; i--)
                                             {
                                                 SystemController systemController_SAM_Temp = systemControllers_SAM[i];
 
-                                                int groupIndex = sortedDictionary_Controller.Count == 0 ? 0 : sortedDictionary_Controller.Keys.Max();
-
-                                                if (!sortedDictionary_Controller.TryGetValue(groupIndex, out List<Tuple<SystemController, Controller>> tuples))
+                                                if (!sortedDictionary_Controller.TryGetValue(fallbackControllerGroupIndex, out List<Tuple<SystemController, Controller>> tuples))
                                                 {
                                                     tuples = new List<Tuple<SystemController, Controller>>();
-                                                    sortedDictionary_Controller[groupIndex] = tuples;
+                                                    sortedDictionary_Controller[fallbackControllerGroupIndex] = tuples;
                                                 }
 
                                                 if (!dictionary_Controller.TryGetValue(systemController_SAM_Temp.Guid, out Controller controller_TPD_Temp))
@@ -745,7 +781,10 @@ namespace SAM.Analytical.Tas.TPD
 
                                             if (sortedDictionary_SystemComponent.TryGetValue(index, out List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples) && tuples != null && tuples.Count != 0)
                                             {
-                                                int index_Temp = tuples.FindIndex(x => (x.Item2 as dynamic)?.GUID == ((dynamic)systemComponent_TPD_New).GUID);
+                                                // Cache the outer GUID once per outer iteration so the FindIndex
+                                                // lambda doesn't re-dispatch the dynamic .GUID per tuple.
+                                                string systemComponent_TPD_New_GUID = ((dynamic)systemComponent_TPD_New)?.GUID as string;
+                                                int index_Temp = tuples.FindIndex(x => ((x.Item2 as dynamic)?.GUID as string) == systemComponent_TPD_New_GUID);
                                                 if (index_Temp != -1)
                                                 {
                                                     Core.Systems.ISystemComponent systemComponent_SAM = tuples[index_Temp].Item1;

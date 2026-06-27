@@ -1,4 +1,7 @@
-﻿using TPD;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using TPD;
 using System.Collections.Generic;
 using SAM.Core.Tas;
 using SAM.Analytical.Systems;
@@ -7,39 +10,47 @@ namespace SAM.Analytical.Tas.TPD
 {
     public static partial class Convert
     {
-        public static List<SystemSpaceResult> ToSAM_SpaceSystemResults(string path_TPD)
+        public static List<SystemSpaceResult> ToSAM_SpaceSystemResults(string path_TPD, out string path_TSD)
         {
-            if(string.IsNullOrWhiteSpace(path_TPD))
+            path_TSD = null;
+
+            if (string.IsNullOrWhiteSpace(path_TPD))
             {
                 return null;
             }
 
             List<SystemSpaceResult> result = null;
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD, true))
             {
 
-                result = ToSAM_SpaceSystemCalculationResults(sAMTPDDocument);
+                result = ToSAM_SpaceSystemCalculationResults(sAMTPDDocument, out path_TSD);
             }
 
             return result;
         }
 
-        public static List<SystemSpaceResult> ToSAM_SpaceSystemCalculationResults(this SAMTPDDocument sAMTPDDocument)
+        public static List<SystemSpaceResult> ToSAM_SpaceSystemCalculationResults(this SAMTPDDocument sAMTPDDocument, out string path_TSD)
         {
+            path_TSD = null;
+
             if (sAMTPDDocument == null)
             {
                 return null;
             }
 
-            return ToSAM_SpaceSystemResults(sAMTPDDocument.TPDDocument);
+            return ToSAM_SpaceSystemResults(sAMTPDDocument.TPDDocument, out path_TSD);
         }
 
-        public static List<SystemSpaceResult> ToSAM_SpaceSystemResults(this TPDDoc tPDDoc)
+        public static List<SystemSpaceResult> ToSAM_SpaceSystemResults(this TPDDoc tPDDoc, out string path_TSD)
         {
+            path_TSD = null;
+
             if (tPDDoc == null)
             {
                 return null;
             }
+
+            path_TSD = tPDDoc.EnergyCentre?.GetTSDData(1)?.TSDPath;
 
             List<SystemSpaceResult> result = new List<SystemSpaceResult>();
 

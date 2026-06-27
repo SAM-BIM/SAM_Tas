@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using System.Collections.Generic;
 
 namespace SAM.Weather.Tas
 {
@@ -125,13 +128,13 @@ namespace SAM.Weather.Tas
                 weatherDays.Add(new WeatherDay());
             }
 
-            float[] values_GlobalSolarRadiation = weatherYear_TBD.GetAnnualParameter(2);
-            float[] values_DiffuseSolarRadiation = weatherYear_TBD.GetAnnualParameter(3);
-            float[] values_CloudCover = weatherYear_TBD.GetAnnualParameter(4);
-            float[] values_DryBulbTemperature = weatherYear_TBD.GetAnnualParameter(0);
-            float[] values_RelativeHumidity = weatherYear_TBD.GetAnnualParameter(1);
-            float[] values_WindSpeed = weatherYear_TBD.GetAnnualParameter(5);
-            float[] values_WindDirection = weatherYear_TBD.GetAnnualParameter(6);
+            dynamic values_GlobalSolarRadiation = weatherYear_TBD.GetAnnualParameter(2);
+            dynamic values_DiffuseSolarRadiation = weatherYear_TBD.GetAnnualParameter(3);
+            dynamic values_CloudCover = weatherYear_TBD.GetAnnualParameter(4);
+            dynamic values_DryBulbTemperature = weatherYear_TBD.GetAnnualParameter(0);
+            dynamic values_RelativeHumidity = weatherYear_TBD.GetAnnualParameter(1);
+            dynamic values_WindSpeed = weatherYear_TBD.GetAnnualParameter(5);
+            dynamic values_WindDirection = weatherYear_TBD.GetAnnualParameter(6);
 
             //Parallel.For(0, 365, (int i) =>
             for (int i = 0; i < 365; i++)
@@ -141,17 +144,17 @@ namespace SAM.Weather.Tas
                 int hourIndex_Start = i * 24;
                 int hourIndex_End = hourIndex_Start + 24;
 
-                for (int hourIndex = hourIndex_Start; i < hourIndex_End; i++)
+                for (int hourIndex = hourIndex_Start; hourIndex < hourIndex_End; hourIndex++)
                 {
                     int index = hourIndex - hourIndex_Start;
 
-                    weatherDay[WeatherDataType.GlobalSolarRadiation, index] = values_GlobalSolarRadiation[hourIndex];
-                    weatherDay[WeatherDataType.DiffuseSolarRadiation, index] = values_DiffuseSolarRadiation[hourIndex];
-                    weatherDay[WeatherDataType.CloudCover, index] = values_CloudCover[hourIndex];
-                    weatherDay[WeatherDataType.DryBulbTemperature, index] = values_DryBulbTemperature[hourIndex];
-                    weatherDay[WeatherDataType.RelativeHumidity, index] = values_RelativeHumidity[hourIndex];
-                    weatherDay[WeatherDataType.WindSpeed, index] = values_WindSpeed[hourIndex];
-                    weatherDay[WeatherDataType.WindDirection, index] = values_WindDirection[hourIndex];
+                    weatherDay[WeatherDataType.GlobalSolarRadiation, index] = values_GlobalSolarRadiation[hourIndex + 1];
+                    weatherDay[WeatherDataType.DiffuseSolarRadiation, index] = values_DiffuseSolarRadiation[hourIndex + 1];
+                    weatherDay[WeatherDataType.CloudCover, index] = values_CloudCover[hourIndex + 1];
+                    weatherDay[WeatherDataType.DryBulbTemperature, index] = values_DryBulbTemperature[hourIndex + 1];
+                    weatherDay[WeatherDataType.RelativeHumidity, index] = values_RelativeHumidity[hourIndex + 1];
+                    weatherDay[WeatherDataType.WindSpeed, index] = values_WindSpeed[hourIndex + 1];
+                    weatherDay[WeatherDataType.WindDirection, index] = values_WindDirection[hourIndex + 1];
                 }
 
             };//);

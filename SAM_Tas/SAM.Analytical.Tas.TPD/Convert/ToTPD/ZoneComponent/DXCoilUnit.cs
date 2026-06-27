@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using TPD;
 
 namespace SAM.Analytical.Tas.TPD
@@ -43,7 +46,7 @@ namespace SAM.Analytical.Tas.TPD
                 RefrigerantGroup refrigerantGroup = plantRoom?.RefrigerantGroups()?.Find(x => ((dynamic)x).Name == collectionLink.Name);
                 if (refrigerantGroup != null)
                 {
-                    ((dynamic)dXCoilUnit).SetRefrigeranGroup(refrigerantGroup);
+                    ((dynamic)dXCoilUnit).SetRefrigerantGroup(refrigerantGroup);
                 }
             }
 

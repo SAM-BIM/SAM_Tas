@@ -10,7 +10,6 @@
 	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
-	<Deterministic>false</Deterministic>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
 	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -124,6 +123,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.SAP\SAM.Analytical.Tas.SAP.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.TM59\SAM.Analytical.Tas.TM59.csproj" />
+    <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.TPD\SAM.Analytical.Tas.TPD.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas\SAM.Analytical.Tas.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Core.Tas.UKBR\SAM.Core.Tas.UKBR.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Core.Tas\SAM.Core.Tas.csproj" />
@@ -136,9 +136,7 @@
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>13.0.3</Version>
-    </PackageReference>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="ToTAS\GH_Curve.cs" />

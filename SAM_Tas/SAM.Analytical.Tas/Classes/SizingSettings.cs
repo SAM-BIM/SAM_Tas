@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Text.Json.Nodes;
 using SAM.Core;
 
 namespace SAM.Analytical.Tas
@@ -20,9 +22,9 @@ namespace SAM.Analytical.Tas
 
         }
 
-        public SizingSettings(JObject jObject)
+        public SizingSettings(JsonObject jObject)
         {
-            FromJObject(jObject);
+            FromJsonObject(jObject);
         }
 
         public SizingSettings(bool excludeOutdoorAir, bool excludePositiveInternalGains, bool generateUncappedFile, bool generateHDDCDDFile, bool systemSizingMethod)
@@ -46,7 +48,7 @@ namespace SAM.Analytical.Tas
             }
         }
 
-        public bool FromJObject(JObject jObject)
+        public bool FromJsonObject(JsonObject jObject)
         {
             if(jObject == null)
             {
@@ -55,35 +57,35 @@ namespace SAM.Analytical.Tas
 
             if(jObject.ContainsKey("ExcludeOutdoorAir"))
             {
-                ExcludeOutdoorAir = jObject.Value<bool>("ExcludeOutdoorAir");
+                ExcludeOutdoorAir = jObject["ExcludeOutdoorAir"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("ExcludePositiveInternalGains"))
             {
-                ExcludePositiveInternalGains = jObject.Value<bool>("ExcludePositiveInternalGains");
+                ExcludePositiveInternalGains = jObject["ExcludePositiveInternalGains"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("GenerateUncappedFile"))
             {
-                GenerateUncappedFile = jObject.Value<bool>("GenerateUncappedFile");
+                GenerateUncappedFile = jObject["GenerateUncappedFile"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("GenerateHDDCDDFile"))
             {
-                GenerateHDDCDDFile = jObject.Value<bool>("GenerateHDDCDDFile");
+                GenerateHDDCDDFile = jObject["GenerateHDDCDDFile"]?.GetValue<bool>() ?? default(bool);
             }
 
             if (jObject.ContainsKey("SystemSizingMethod"))
             {
-                SystemSizingMethod = jObject.Value<bool>("SystemSizingMethod");
+                SystemSizingMethod = jObject["SystemSizingMethod"]?.GetValue<bool>() ?? default(bool);
             }
 
             return true;
         }
 
-        public JObject ToJObject()
+        public JsonObject ToJsonObject()
         {
-            JObject jObject = new JObject();
+            JsonObject jObject = new JsonObject();
             jObject.Add("_type", Core.Query.FullTypeName(this));
             
             jObject.Add("ExcludeOutdoorAir", ExcludeOutdoorAir);

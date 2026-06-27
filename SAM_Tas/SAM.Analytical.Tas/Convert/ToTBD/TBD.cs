@@ -1,8 +1,12 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
 using System.IO;
 using TAS3D;
+using TBD;
 
 namespace SAM.Analytical.Tas
 {
@@ -119,11 +123,17 @@ namespace SAM.Analytical.Tas
                 }
 
                 ToTBD(analyticalModel, tBDDocument, updateGuids);
+
+                // ToTBD only writes constructions referenced by a panel/aperture; add the unused
+                // library templates (e.g. Air_Glass, the Null element's construction) so they
+                // round-trip on this export path too. (UpdateZones below handles the IC templates.)
+                Modify.AddUnusedConstructions(tBDDocument.Building, analyticalModel.AdjacencyCluster, analyticalModel.MaterialLibrary);
+
                 Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
 
                 if(coolingDesignDays == null)
                 {
-                    if(analyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.CoolingDesignDays, out SAMCollection<DesignDay> designDays, true))
+                    if(analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.CoolingDesignDays, out SAMCollection<DesignDay> designDays, true))
                     {
                         coolingDesignDays = designDays;
                     }
@@ -131,7 +141,7 @@ namespace SAM.Analytical.Tas
 
                 if (heatingDesignDays == null)
                 {
-                    if (analyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.HeatingDesignDays, out SAMCollection<DesignDay> designDays, true))
+                    if (analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.HeatingDesignDays, out SAMCollection<DesignDay> designDays, true))
                     {
                         heatingDesignDays = designDays;
                     }
@@ -142,8 +152,15 @@ namespace SAM.Analytical.Tas
                     Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
                 }
 
+                Modify.UpdateShading(tBDDocument.Building, analyticalModel);
+
                 sAMTBDDocument.Save();
             }
+
+            // Diagnostic only (SAM_DEBUG): reopen the saved TBD and compare the coverage read back
+            // (the FromTBD path) against the SAM source coverage, so the option-2 round-trip drift is
+            // captured on the ToTBD side. No-op unless _debug_ is on; never throws.
+            Modify.LogShadeRoundTrip(path, analyticalModel);
 
             return true;
         }

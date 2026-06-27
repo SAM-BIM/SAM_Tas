@@ -1,8 +1,10 @@
-﻿using Grasshopper;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
 using SAM.Core;
@@ -39,7 +41,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// </summary>
         public TasTSDQueryResultsByPercentage()
           : base("Tas.TSDQueryResultsByPercentage", "Tas.TSDQueryResultsByPercentage",
-              "Query Results by Percentage.\n*Each space is treated indepedently. Results will be presented for all spaces. \n To avoid zeros use min value 0.1",
+              "Reads space-level results from a TasTSD file at a given percentile of the simulated period.\nEach space is treated independently; results are returned for every space.\nUse a minimum value of 0.1 to avoid zeros.",
               "SAM", "Tas")
         {
         }
@@ -264,7 +266,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
                         space = space_AdjacencyCluster;
                     }
 
-                    if(!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JArray jArray) || jArray == null)
+                    if(!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JsonArray jArray) || jArray == null)
                     {
                         continue;
                     }

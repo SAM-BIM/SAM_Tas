@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Core;
@@ -21,7 +24,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.2";
+        public override string LatestComponentVersion => "1.0.4";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -65,6 +68,10 @@ namespace SAM.Analytical.Grasshopper.Tas
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "debug_", NickName = "debug_", Description = "If true, writes a per aperture-face diagnostic of the export shade calculation (whether each pane/frame face received any sun-exposure proportions) to %TEMP%\\SAM_ToTBD.log and returns its text on the 'debugLog' output. Off by default.", Optional = true, Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(@boolean, ParamVisibility.Voluntary));
+
                 return result.ToArray();
             }
         }
@@ -78,7 +85,9 @@ namespace SAM.Analytical.Grasshopper.Tas
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
                 result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM Analytical Model", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "pathTasTBD", NickName = "pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "debugLog", NickName = "debugLog", Description = "Diagnostic log for the export shade calculation. Populated only when _debug_ is true (otherwise empty).", Access = GH_ParamAccess.item }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -181,6 +190,23 @@ namespace SAM.Analytical.Grasshopper.Tas
                 coolingDesignDays = coolingDesignDays.ConvertAll(x => x?.Clone());
             }
 
+            bool debug = false;
+            index = Params.IndexOfInputParam("debug_");
+            if (index == -1 || !dataAccess.GetData(index, ref debug))
+            {
+                debug = false;
+            }
+
+            // Toggle the export shade diagnostic (Modify.Update reads SAM_DEBUG) for this Rhino
+            // process, and clear any previous log so 'debugLog' reflects only this run.
+            Environment.SetEnvironmentVariable("SAM_DEBUG", debug ? "1" : null);
+            string toTBDLogPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_ToTBD.log");
+            if (debug)
+            {
+                try { if (System.IO.File.Exists(toTBDLogPath)) { System.IO.File.Delete(toTBDLogPath); } }
+                catch { }
+            }
+
             Analytical.Tas.Convert.ToTBD(analyticalModel, path, weatherData, coolingDesignDays, heatingDesignDays);
 
             bool saveWeather = false;
@@ -233,11 +259,40 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             index = Params.IndexOfOutputParam("analyticalModel");
             if (index != -1)
+            {
                 dataAccess.SetData(index, analyticalModel);
+            }
+
+            index = Params.IndexOfOutputParam("pathTasTBD");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, path);
+            }
 
             if (index_successful != -1)
             {
                 dataAccess.SetData(index_successful, true);
+            }
+
+            int index_debugLog = Params.IndexOfOutputParam("debugLog");
+            if (index_debugLog != -1)
+            {
+                string debugLog = null;
+                if (debug)
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(toTBDLogPath))
+                        {
+                            debugLog = System.IO.File.ReadAllText(toTBDLogPath);
+                        }
+                    }
+                    catch
+                    {
+                        // Reading the diagnostic must never fail the component.
+                    }
+                }
+                dataAccess.SetData(index_debugLog, debugLog);
             }
         }
 

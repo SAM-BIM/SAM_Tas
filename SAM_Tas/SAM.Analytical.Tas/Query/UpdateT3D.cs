@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using SAM.Core.Tas;
 using System.Collections.Generic;
 using TAS3D;
@@ -7,7 +10,7 @@ namespace SAM.Analytical.Tas
 {
     public static partial class Query
     {
-        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, string path_T3D)
+        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, string path_T3D, bool updateWindowPositionType = false)
         {
             if (analyticalModel == null || string.IsNullOrWhiteSpace(path_T3D))
                 return null;
@@ -16,7 +19,7 @@ namespace SAM.Analytical.Tas
 
             using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(path_T3D))
             {
-                result = UpdateT3D(analyticalModel, sAMT3DDocument.T3DDocument);
+                result = UpdateT3D(analyticalModel, sAMT3DDocument.T3DDocument, updateWindowPositionType);
                 if (result != null)
                     sAMT3DDocument.Save();
             }
@@ -25,7 +28,7 @@ namespace SAM.Analytical.Tas
 
         }
 
-        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, T3DDocument t3DDocument)
+        public static AnalyticalModel UpdateT3D(this AnalyticalModel analyticalModel, T3DDocument t3DDocument, bool updateWindowPositionType = false)
         {
             if (analyticalModel == null)
                 return null;
@@ -38,7 +41,7 @@ namespace SAM.Analytical.Tas
             Modify.RemoveUnused(building);
             
             double northAngle = double.NaN;
-            if (analyticalModel.TryGetValue(SAM.Analytical.AnalyticalModelParameter.NorthAngle, out northAngle))
+            if (analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.NorthAngle, out northAngle))
             {
                 building.northAngle = global::System.Math.Round(Units.Convert.ToDegrees(northAngle), 1);
                 if(building.northAngle < 0.5)
@@ -105,9 +108,17 @@ namespace SAM.Analytical.Tas
                     List<Element> elements = building.Elements();
                     if(elements != null)
                     {
+                        // Build the construction lookup ONCE for the entire elements loop.
+                        // Previously element.Match(constructions) materialised the list and
+                        // ran a null/blank-name RemoveAll on every call — N × O(M) allocation
+                        // plus N × M × 3 .Trim() calls. With the pre-built state, pass 1 and
+                        // pass 3 are O(1) dictionary lookups and pass 2 is a single O(M) scan
+                        // over an already-trimmed list.
+                        BuildConstructionLookup(constructions, out Dictionary<string, Construction> constructionsByName, out List<KeyValuePair<Construction, string>> constructions_Trimmed);
+
                         foreach (Element element in elements)
                         {
-                            Construction construction = element.Match(constructions);
+                            Construction construction = element.Match(constructionsByName, constructions_Trimmed);
                             if (construction == null)
                             {
                                 element.ghost = true;
@@ -173,6 +184,9 @@ namespace SAM.Analytical.Tas
                                     string_BEType = null;
                             }
 
+                            // Hoist GetPanels(construction) once — was being called up to three times for the same construction.
+                            List<Panel> panels_Construction = adjacencyCluster.GetPanels(construction);
+
                             if(!string.IsNullOrEmpty(string_BEType))
                             {
                                 int bEType = BEType(string_BEType);
@@ -186,18 +200,16 @@ namespace SAM.Analytical.Tas
                             {
                                 panelType = Analytical.PanelType.Undefined;
 
-                                List<Panel> panels_Construction =  adjacencyCluster.GetPanels(construction);
                                 if(panels_Construction != null && panels_Construction.Count > 0)
                                 {
                                     Panel panel = panels_Construction.Find(x => x.PanelType != Analytical.PanelType.Undefined);
                                     if (panel != null)
                                         panelType = panel.PanelType;
-                                }    
+                                }
                             }
 
                             if (panelType == Analytical.PanelType.Undefined)
                             {
-                                List<Panel> panels_Construction = adjacencyCluster.GetPanels(construction);
                                 if (panels_Construction != null && panels_Construction.Count != 0)
                                     element.zoneFloorArea = panels_Construction.Find(x => x.PanelType.PanelGroup() == PanelGroup.Floor) != null;
                             }
@@ -215,13 +227,12 @@ namespace SAM.Analytical.Tas
                             if(construction.TryGetValue(Analytical.ConstructionParameter.IsAir, out air))
                                 element.ghost = air;
 
-                            List<Panel> panels = adjacencyCluster.GetPanels(construction);
-                            if(panels != null && panels.Count > 0)
+                            if(panels_Construction != null && panels_Construction.Count > 0)
                             {
                                 ParameterSet parameterSet = Create.ParameterSet(ActiveSetting.Setting, element);
                                 construction.Add(parameterSet);
 
-                                foreach(Panel panel in panels)
+                                foreach(Panel panel in panels_Construction)
                                 {
                                     Panel panel_New = Analytical.Create.Panel(panel, construction);
                                     adjacencyCluster.AddObject(panel_New);
@@ -238,12 +249,15 @@ namespace SAM.Analytical.Tas
                     List<window> windows = building.Windows();
                     if (windows != null)
                     {
+                        // Same one-shot lookup-build pattern as the constructions loop above.
+                        BuildApertureConstructionLookup(apertureConstructions, out Dictionary<string, ApertureConstruction> apertureConstructionsByName, out List<KeyValuePair<ApertureConstruction, string>> apertureConstructions_Trimmed);
+
                         foreach(window window in windows)
                         {
                             if (window == null)
                                 continue;
 
-                            ApertureConstruction apertureConstruction = window.Match(apertureConstructions);
+                            ApertureConstruction apertureConstruction = window.Match(apertureConstructionsByName, apertureConstructions_Trimmed);
                             if (apertureConstruction == null)
                                 continue;
 
@@ -261,7 +275,7 @@ namespace SAM.Analytical.Tas
                             else
                             {
                                 System.Drawing.Color color = global::System.Drawing.Color.Empty;
-                                if (!apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.Color, out color))
+                                if (!apertureConstruction.TryGetValue(ApertureConstructionParameter.Color, out color))
                                     color = Analytical.Query.Color(apertureConstruction.ApertureType);
 
                                 if (color != global::System.Drawing.Color.Empty)
@@ -279,7 +293,7 @@ namespace SAM.Analytical.Tas
                             if (materialType == MaterialType.Undefined)
                             {
                                 materialType = MaterialType.Opaque;
-                                if (apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.Transparent, out transparent))
+                                if (apertureConstruction.TryGetValue(ApertureConstructionParameter.Transparent, out transparent))
                                     window.transparent = transparent;
                             }
                             else
@@ -293,7 +307,7 @@ namespace SAM.Analytical.Tas
                                 //InternalShadows
                                 window.internalShadows = false; //Requested by Michal 2021.03.01
                                 bool internalShadows = false;
-                                if (apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.IsInternalShadow, out internalShadows))
+                                if (apertureConstruction.TryGetValue(ApertureConstructionParameter.IsInternalShadow, out internalShadows))
                                 {
                                     window.internalShadows = internalShadows;
                                 }
@@ -311,7 +325,7 @@ namespace SAM.Analytical.Tas
                             //FrameWidth
                             double frameWidth = double.NaN;
                             
-                            if(apertureConstruction.TryGetValue(Analytical.ApertureConstructionParameter.DefaultFrameWidth, out frameWidth))
+                            if(apertureConstruction.TryGetValue(ApertureConstructionParameter.DefaultFrameWidth, out frameWidth))
                             {
                                 window.frameWidth = frameWidth;
                             }
@@ -329,12 +343,58 @@ namespace SAM.Analytical.Tas
                                 window.framePerc = frameFactor * 100;
                             }
 
+                            if(aperture is not null)
+                            {
+                                bool update = true;
+                                if(!updateWindowPositionType)
+                                {
+                                    if(!Geometry.Planar.Query.Rectangular(aperture.Face3D.ExternalEdge2D, 0.05))
+                                    {
+                                        update = false;
+                                    }
+                                }
+
+                                if(update)
+                                {
+                                    Panel panel = adjacencyCluster.GetPanel(aperture);
+                                    if (panel is not null)
+                                    {
+                                        switch (panel.PanelGroup)
+                                        {
+                                            case PanelGroup.Wall:
+
+                                                //Full Wall Height (positionType = 3) missing to be implemented 2026.04.27
+
+                                                switch (aperture.ApertureType)
+                                                {
+                                                    case Analytical.ApertureType.Window:
+                                                        window.positionType = 0;
+                                                        break;
+
+                                                    case Analytical.ApertureType.Door:
+                                                        window.positionType = 2;
+                                                        break;
+                                                }
+                                                break;
+
+                                            case PanelGroup.Roof:
+                                                window.positionType = 1;
+                                                break;
+
+
+                                            case PanelGroup.Floor:
+                                                window.positionType = 4;
+                                                break;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            AnalyticalModel result = new AnalyticalModel(analyticalModel, adjacencyCluster);
+            AnalyticalModel result = new (analyticalModel, adjacencyCluster);
 
             return result;
         }

@@ -1,4 +1,8 @@
-﻿using SAM.Geometry.Spatial;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Geometry.Spatial;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TBD;
@@ -45,6 +49,19 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            Dictionary<string, buildingElement> buildingElementsByGuid = new Dictionary<string, buildingElement>(buildingElements.Count);
+            foreach (buildingElement be in buildingElements)
+            {
+                if (!string.IsNullOrWhiteSpace(be?.GUID))
+                {
+                    buildingElementsByGuid[be.GUID] = be;
+                }
+            }
+
+            // Build once; replaces a per-aperture AdjacencyCluster.Apertures(point, ...) call that
+            // re-walked every panel each time (O(apertures * panels) on a 625-zone TM59 model).
+            List<Tuple<BoundingBox3D, Aperture>> aperturesIndex = adjacencyCluster.AperturesWithBoundingBoxes();
+
             List<TBD.ApertureType> result = new List<TBD.ApertureType>();
 
             foreach(Panel panel_Temp in panels_Temp)
@@ -65,7 +82,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    Aperture aperture = adjacencyCluster.Apertures(point3D, 1, Core.Tolerance.MacroDistance)?.FirstOrDefault();
+                    Aperture aperture = aperturesIndex.Apertures(point3D, 1, Core.Tolerance.MacroDistance)?.FirstOrDefault();
                     if(aperture == null)
                     {
                         continue;
@@ -76,8 +93,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    buildingElement buildingElement = buildingElements.Find(x => x.GUID == GUID);
-                    if(buildingElement == null)
+                    if(!buildingElementsByGuid.TryGetValue(GUID, out buildingElement buildingElement) || buildingElement == null)
                     {
                         continue;
                     }

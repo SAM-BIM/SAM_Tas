@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Systems;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Systems;
 using SAM.Analytical.Tas.TPD;
 using System;
 using System.Collections.Generic;
@@ -16,14 +19,14 @@ namespace SAM.Core.Tas.TPD
                 return null;
             }
 
-            if (resultPeriod == ResultPeriod.Undefined || systemEnergyCentreDataTypes == null || systemEnergyCentreDataTypes.Count() == 0)
+            if (resultPeriod == ResultPeriod.Undefined || systemEnergyCentreDataTypes == null || !systemEnergyCentreDataTypes.Any())
             {
                 return null;
             }
 
             List<SystemEnergyCentreResult> result = null;
 
-            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path))
+            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path, true))
             {
                 TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
                 if (tPDDoc == null)
@@ -39,7 +42,7 @@ namespace SAM.Core.Tas.TPD
 
         public static List<SystemEnergyCentreResult> SystemEnergyCentreResults(this EnergyCentre energyCentre, ResultPeriod resultPeriod, IEnumerable<SystemEnergyCentreDataType> systemEnergyCentreDataTypes, IEnumerable<int> plantRoomIndexes = null, bool detailedCategory = false, bool regulatedEnergyOnly = false, bool perUnitArea = false)
         {
-            if (energyCentre == null || resultPeriod == ResultPeriod.Undefined || systemEnergyCentreDataTypes == null || systemEnergyCentreDataTypes.Count() == 0)
+            if (energyCentre == null || resultPeriod == ResultPeriod.Undefined || systemEnergyCentreDataTypes == null || !systemEnergyCentreDataTypes.Any())
             {
                 return null;
             }

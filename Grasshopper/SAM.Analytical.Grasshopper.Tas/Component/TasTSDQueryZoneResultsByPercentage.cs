@@ -1,8 +1,10 @@
-﻿using Grasshopper;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
 using SAM.Core;
@@ -39,7 +41,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// </summary>
         public TasTSDQueryZoneResultsByPercentage()
           : base("Tas.TSDQueryZoneResultsByPercentage", "Tas.TSDQueryZoneResultsByPercentage",
-              "Query Zone Results by Percentage.\n*Each space is treated indepedently. Results will be presented for all spaces. \n To avoid zeros use min value 0.1",
+              "Reads zone-level results from a TasTSD file at a given percentile of the simulated period.\nEach zone is treated independently; results are returned for every zone.\nUse a minimum value of 0.1 to avoid zeros.",
               "SAM", "Tas")
         {
         }
@@ -291,7 +293,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
                             continue;
                         }
 
-                        if (!space.TryGetValue(spaceDataType.Text(), out JArray jArray) || jArray == null)
+                        if (!space.TryGetValue(spaceDataType.Text(), out JsonArray jArray) || jArray == null)
                         {
                             continue;
                         }

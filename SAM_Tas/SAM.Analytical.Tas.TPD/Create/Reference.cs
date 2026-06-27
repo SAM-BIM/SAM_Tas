@@ -1,7 +1,10 @@
-﻿using TPD;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
 using SAM.Core;
 using System;
 using System.Collections.Generic;
+using TPD;
 
 namespace SAM.Analytical.Tas.TPD
 {
@@ -9,7 +12,7 @@ namespace SAM.Analytical.Tas.TPD
     {
         public static IReference Reference(this Controller controller)
         {
-            if(controller == null)
+            if (controller == null)
             {
                 return null;
             }
@@ -17,21 +20,21 @@ namespace SAM.Analytical.Tas.TPD
             int index = -1;
 
             global::TPD.System system = controller.GetSystem();
-            if(system == null)
+            if (system == null)
             {
                 return null;
             }
 
             PlantRoom plantRoom = system.GetPlantRoom();
-            if(plantRoom == null)
+            if (plantRoom == null)
             {
                 return null;
             }
 
-            List<ObjectReference> objectReferences = new List<ObjectReference>() 
-            { 
-                new ObjectReference(typeof(PlantRoom), Guid.Parse(plantRoom.GUID())), 
-                new ObjectReference(typeof(global::TPD.System), Guid.Parse(system.GUID)) 
+            List<ObjectReference> objectReferences = new List<ObjectReference>()
+            {
+                new ObjectReference(typeof(PlantRoom), Guid.Parse(plantRoom.GUID())),
+                new ObjectReference(typeof(global::TPD.System), Guid.Parse(system.GUID))
             };
 
             List<Controller> controllers = null;
@@ -39,7 +42,7 @@ namespace SAM.Analytical.Tas.TPD
             Type type = null;
 
             ComponentGroup componentGroup = controller.GetGroup();
-            if(componentGroup != null)
+            if (componentGroup != null)
             {
                 controllers = componentGroup.Controllers();
 
@@ -59,7 +62,7 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
-            if(index == -1)
+            if (index == -1)
             {
                 return null;
             }

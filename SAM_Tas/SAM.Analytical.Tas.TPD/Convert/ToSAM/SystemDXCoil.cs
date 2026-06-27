@@ -1,4 +1,7 @@
-﻿using TPD;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using TPD;
 using SAM.Analytical.Systems;
 using SAM.Geometry.Planar;
 
@@ -46,7 +49,7 @@ namespace SAM.Analytical.Tas.TPD
             RefrigerantGroup refrigerantGroup = @dynamic.GetRefrigerantGroup();
             if (refrigerantGroup != null)
             {
-                result.SetValue(SystemDXColiParameter.RefrigerantCollection, new CollectionLink(CollectionType.Refrigerant, ((dynamic)refrigerantGroup).Name));
+                result.SetValue(SystemDXCoilParameter.RefrigerantCollection, new CollectionLink(CollectionType.Refrigerant, ((dynamic)refrigerantGroup).Name));
             }
 
             return result;

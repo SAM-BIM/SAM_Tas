@@ -1,4 +1,7 @@
-﻿using SAM.Core.Tas;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Tas;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -46,6 +49,22 @@ namespace SAM.Analytical.Tas
             //Removes Internal Conditions with given names. Names are taken from Space Name (assumption Space Name equals InternalCondtion Name)
             RemoveInternalConditions(building, dictionary_Spaces.Keys);
 
+            // Hoist Query.ZoneGroups once and index it by name so the per-space ventilation lookup is O(1)
+            // instead of rebuilding the list and scanning it linearly for every space.
+            List<TBD.ZoneGroup> zoneGroups = Query.ZoneGroups(building) ?? new List<TBD.ZoneGroup>();
+            Dictionary<string, TBD.ZoneGroup> zoneGroupsByName = new Dictionary<string, TBD.ZoneGroup>(zoneGroups.Count);
+            foreach (TBD.ZoneGroup zg in zoneGroups)
+            {
+                if (!string.IsNullOrWhiteSpace(zg?.name))
+                    zoneGroupsByName[zg.name] = zg;
+            }
+
+            // Hoist the non-HDD dayType list once. AddInternalCondition would otherwise walk
+            // building.DayTypes() (GetDayTypeCount + per-index dayTypes(i) + .name COM access) per space.
+            List<TBD.dayType> dayTypes_NonHDD = Query.DayTypes(building);
+            if (dayTypes_NonHDD != null)
+                dayTypes_NonHDD.RemoveAll(x => x.name.Equals("HDD"));
+
             List<TBD.zone> result = new List<TBD.zone>();
             foreach (Space space in spaces)
             {
@@ -58,7 +77,7 @@ namespace SAM.Analytical.Tas
                 if (!dictionary_Zones.TryGetValue(name, out zone) || zone == null)
                     continue;
 
-                zone = building.UpdateZone(zone, space, profileLibrary, adjacencyCluster);
+                zone = building.UpdateZone(zone, space, profileLibrary, dayTypes_NonHDD, adjacencyCluster);
 
                 VentilationSystem ventilationSystem = adjacencyCluster.GetRelatedObjects<VentilationSystem>(space)?.FirstOrDefault();
                 if(ventilationSystem != null)
@@ -66,12 +85,12 @@ namespace SAM.Analytical.Tas
                     string ventilationSystemTypeName = (ventilationSystem.Type as VentilationSystemType)?.Name;
                     if(!string.IsNullOrWhiteSpace(ventilationSystemTypeName))
                     {
-                        TBD.ZoneGroup zoneGroup = Query.ZoneGroups(building)?.Find(x => ventilationSystemTypeName.Equals(x.name));
-                        if (zoneGroup == null)
+                        if (!zoneGroupsByName.TryGetValue(ventilationSystemTypeName, out TBD.ZoneGroup zoneGroup) || zoneGroup == null)
                         {
                             zoneGroup = building.AddZoneGroup();
                             zoneGroup.name = ventilationSystemTypeName;
                             zoneGroup.type = (int)TBD.ZoneGroupType.tbdHVACZG;
+                            zoneGroupsByName[ventilationSystemTypeName] = zoneGroup;
                         }
 
                         if (zoneGroup != null)
@@ -88,6 +107,10 @@ namespace SAM.Analytical.Tas
                 if (includeHDD)
                     building.UpdateZone_HDD(zone, space, profileLibrary);
             }
+
+            //Write unused/library internal conditions (templates not assigned to any space) so an
+            //importUnused round-trip keeps them. Their gains come from stored parameters, not a space.
+            building.AddUnusedInternalConditions(adjacencyCluster, profileLibrary, dayTypes_NonHDD);
 
             //Updating Builidng Information
             building.description = string.Format("Delivered by SAM https://github.com/HoareLea/SAM [{0}]", System.DateTime.Now.ToString("yyyy/MM/dd"));

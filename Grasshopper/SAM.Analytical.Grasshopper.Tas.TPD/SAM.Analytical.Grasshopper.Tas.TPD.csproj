@@ -12,7 +12,6 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
-	<Deterministic>false</Deterministic>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
 	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -33,9 +32,21 @@
     <Reference Include="Interop.TasConv">
       <HintPath>..\..\references_buildonly\Interop.TasConv.dll</HintPath>
     </Reference>
+    <Reference Include="Interop.TBD">
+      <HintPath>..\..\references_buildonly\Interop.TBD.dll</HintPath>
+    </Reference>
+    <Reference Include="Interop.TCD">
+      <HintPath>..\..\references_buildonly\Interop.TCD.dll</HintPath>
+    </Reference>
+    <Reference Include="Interop.TIC">
+      <HintPath>..\..\references_buildonly\Interop.TIC.dll</HintPath>
+    </Reference>
     <Reference Include="Interop.TPD">
       <HintPath>..\..\references_buildonly\Interop.TPD.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="Interop.TSD">
+      <HintPath>..\..\references_buildonly\Interop.TSD.dll</HintPath>
     </Reference>
     <Reference Include="SAM.Analytical, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -77,12 +88,11 @@
     </PackageReference>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>13.0.3</Version>
-    </PackageReference>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas.TPD\SAM.Analytical.Tas.TPD.csproj" />
+    <ProjectReference Include="..\..\SAM_Tas\SAM.Analytical.Tas\SAM.Analytical.Tas.csproj" />
     <ProjectReference Include="..\..\SAM_Tas\SAM.Core.Tas\SAM.Core.Tas.csproj" />
   </ItemGroup>
   <PropertyGroup />

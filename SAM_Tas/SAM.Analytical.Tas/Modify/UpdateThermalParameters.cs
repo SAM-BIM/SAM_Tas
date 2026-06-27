@@ -1,4 +1,7 @@
-﻿using SAM.Core;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +28,15 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            // Index TBD constructions by name once; the per-panel and per-aperture loops below
+            // would otherwise scan this list 2-3 times per element.
+            Dictionary<string, TBD.Construction> constructions_TBD_ByName = new Dictionary<string, TBD.Construction>(constructions_TBD.Count);
+            foreach (TBD.Construction c in constructions_TBD)
+            {
+                if (!string.IsNullOrEmpty(c?.name))
+                    constructions_TBD_ByName[c.name] = c;
+            }
+
             List<Panel> panels = adjacencyCluster.GetPanels();
             if (panels == null)
             {
@@ -42,11 +54,11 @@ namespace SAM.Analytical.Tas
 
                 string name = construction.Name;
 
-                TBD.Construction construction_TBD = constructions_TBD.Find(x => x.name == name);
-                if (construction_TBD == null)
+                TBD.Construction construction_TBD;
+                if (!constructions_TBD_ByName.TryGetValue(name ?? string.Empty, out construction_TBD))
                 {
                     name = Analytical.Query.UniqueName(panel.PanelType, name);
-                    construction_TBD = constructions_TBD.Find(x => x.name == name);
+                    constructions_TBD_ByName.TryGetValue(name ?? string.Empty, out construction_TBD);
                 }
 
                 if (construction_TBD == null)
@@ -133,17 +145,18 @@ namespace SAM.Analytical.Tas
                             continue;
                         }
 
-                        TBD.Construction construction_TBD_Aperture = constructions_TBD.Find(x => x.name == name_Aperture);
-                        if (construction_TBD_Aperture == null)
+                        TBD.Construction construction_TBD_Aperture;
+                        if (!constructions_TBD_ByName.TryGetValue(name_Aperture, out construction_TBD_Aperture))
                         {
                             name_Aperture = string.Format("{0} -pane", name_Aperture);
-                            construction_TBD_Aperture = constructions_TBD.Find(x => x.name == name_Aperture);
+                            constructions_TBD_ByName.TryGetValue(name_Aperture, out construction_TBD_Aperture);
                         }
 
                         if (construction_TBD_Aperture == null)
                         {
                             string prefix = Analytical.Query.UniqueNamePrefix(aperture.ApertureType);
-                            construction_TBD_Aperture = constructions_TBD.Find(x => x.name.EndsWith(name_Aperture) && x.name.StartsWith(prefix));
+                            string apertureName = name_Aperture;
+                            construction_TBD_Aperture = constructions_TBD.Find(x => x.name.EndsWith(apertureName) && x.name.StartsWith(prefix));
                         }
 
                         if (construction_TBD_Aperture == null)
@@ -242,7 +255,7 @@ namespace SAM.Analytical.Tas
 
         public static Dictionary<Panel, double> UpdateThermalParameters(this IEnumerable<Panel> panels, IEnumerable<TCD.Construction> constructions)
         {
-            if (panels == null || constructions == null || panels.Count() == 0)
+            if (panels == null || constructions == null || !panels.Any())
             {
                 return null;
             }
@@ -251,6 +264,14 @@ namespace SAM.Analytical.Tas
             if (constructions_TCD == null)
             {
                 return null;
+            }
+
+            // Index TCD constructions by name once (mirrors the TBD overload above).
+            Dictionary<string, TCD.Construction> constructions_TCD_ByName = new Dictionary<string, TCD.Construction>(constructions_TCD.Count);
+            foreach (TCD.Construction c in constructions_TCD)
+            {
+                if (!string.IsNullOrEmpty(c?.name))
+                    constructions_TCD_ByName[c.name] = c;
             }
 
             Dictionary<Panel, double> result = new Dictionary<Panel, double>();
@@ -264,11 +285,11 @@ namespace SAM.Analytical.Tas
 
                 string name = construction.Name;
 
-                TCD.Construction construction_TCD = constructions_TCD.Find(x => x.name == name);
-                if (construction_TCD == null)
+                TCD.Construction construction_TCD;
+                if (!constructions_TCD_ByName.TryGetValue(name ?? string.Empty, out construction_TCD))
                 {
                     name = Analytical.Query.UniqueName(panel.PanelType, name);
-                    construction_TCD = constructions_TCD.Find(x => x.name == name);
+                    constructions_TCD_ByName.TryGetValue(name ?? string.Empty, out construction_TCD);
                 }
 
                 if (construction_TCD == null)
@@ -355,17 +376,18 @@ namespace SAM.Analytical.Tas
                             continue;
                         }
 
-                        TCD.Construction construction_TCD_Aperture = constructions_TCD.Find(x => x.name == name_Aperture);
-                        if (construction_TCD_Aperture == null)
+                        TCD.Construction construction_TCD_Aperture;
+                        if (!constructions_TCD_ByName.TryGetValue(name_Aperture, out construction_TCD_Aperture))
                         {
                             name_Aperture = string.Format("{0} -pane", name_Aperture);
-                            construction_TCD_Aperture = constructions_TCD.Find(x => x.name == name_Aperture);
+                            constructions_TCD_ByName.TryGetValue(name_Aperture, out construction_TCD_Aperture);
                         }
 
                         if (construction_TCD_Aperture == null)
                         {
                             string prefix = Analytical.Query.UniqueNamePrefix(aperture.ApertureType);
-                            construction_TCD_Aperture = constructions_TCD.Find(x => x.name.EndsWith(name_Aperture) && x.name.StartsWith(prefix));
+                            string apertureName = name_Aperture;
+                            construction_TCD_Aperture = constructions_TCD.Find(x => x.name.EndsWith(apertureName) && x.name.StartsWith(prefix));
                         }
 
                         if (construction_TCD_Aperture == null)

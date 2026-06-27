@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
@@ -23,7 +26,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.10";
+        public override string LatestComponentVersion => "1.0.12";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -38,8 +41,8 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// </summary>
         public SAMAnalyticalWorkflowgbXML()
           : base("SAMAnalytical.WorkflowgbXML", "SAMAnalytical.WorkflowgbXML",
-              "To run the Tas workflow with gbXML, make sure to generate the gbXML file beforehand. \n* Use SAMAnalytical.Check to verify that your model is error-free. ",
-              "SAM WIP", "Tas")
+              "Runs the full Tas workflow from a gbXML file: imports geometry into T3D, builds a TBD, applies weather, design days, IZAMs, sizing and surface-output specs, then simulates and writes results back to the AnalyticalModel.\nGenerate the gbXML beforehand and use SAMAnalytical.Check to verify the model is error-free.",
+              "SAM", "Tas")
         {
         }
 
@@ -73,6 +76,10 @@ namespace SAM.Analytical.Grasshopper.Tas
                 result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
 
                 boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_simulate_", NickName = "_simulate_", Description = "Simulates the model from 1 to 365 day.", Access = GH_ParamAccess.item };
+                @boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
+
+                boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "T3DWindowsPlacement_", NickName = "T3DWindowsPlacement_", Description = "T3D Windows Placement.\nDefault is false.\nUse false for non-rectangular windows to keep complex shapes such as S, B or D. In this mode the frame is not created, which is normal behaviour.\nSet to true to force window placement by host object such as Wall, Floor, Roof or Door.", Access = GH_ParamAccess.item, Optional = true };
                 @boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
 
@@ -314,6 +321,16 @@ namespace SAM.Analytical.Grasshopper.Tas
                 }
             }
 
+            bool updateWindowPositionType = false;
+            index = Params.IndexOfInputParam("T3DWindowsPlacement_");
+            if (index != -1)
+            {
+                if (!dataAccess.GetData(index, ref updateWindowPositionType))
+                {
+                    updateWindowPositionType = false;
+                }
+            }
+
             WorkflowSettings workflowSettings = new WorkflowSettings()
             {
                 Path_TBD = path_TBD,
@@ -331,9 +348,28 @@ namespace SAM.Analytical.Grasshopper.Tas
                 SimulateFrom = 1,
                 SimulateTo = 365,
                 RemoveExistingTBD = removeExistingTBD,
+                UpdateWindowPositionType = updateWindowPositionType
             };
 
             analyticalModel = Modify.RunWorkflow(analyticalModel, workflowSettings);
+
+            try
+            {
+                string timingDirectory = System.IO.Path.GetDirectoryName(path_TBD);
+                string timingFileName = System.IO.Path.GetFileNameWithoutExtension(path_TBD);
+                if (!string.IsNullOrWhiteSpace(timingDirectory) && !string.IsNullOrWhiteSpace(timingFileName))
+                {
+                    string path_Timing = System.IO.Path.Combine(timingDirectory, timingFileName + ".timing.csv");
+                    if (System.IO.File.Exists(path_Timing))
+                    {
+                        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Per-step timings: " + path_Timing);
+                    }
+                }
+            }
+            catch
+            {
+                // Surfacing the timing path is best-effort and must never break the component.
+            }
 
             bool saveWeather = false;
             index = Params.IndexOfInputParam("saveWeather_");

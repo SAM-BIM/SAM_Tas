@@ -1,8 +1,10 @@
-﻿using Grasshopper;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
 using SAM.Core.Grasshopper;
@@ -38,7 +40,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// </summary>
         public TasTSDQueryResultsByHourOfYear()
           : base("Tas.TSDQueryResultsByHourOfYear", "Tas.TSDQueryResultsByHourOfYear",
-              "Query Results by HourOfYear.",
+              "Reads space-level simulation results from a TasTSD file for a specific hour of the year (1-8760).",
               "SAM", "Tas")
         {
         }
@@ -205,7 +207,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
                             continue;
                         }
 
-                        if (!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JArray jArray) || jArray == null)
+                        if (!space_AdjacencyCluster.TryGetValue(spaceDataType.Text(), out JsonArray jArray) || jArray == null)
                         {
                             continue;
                         }
