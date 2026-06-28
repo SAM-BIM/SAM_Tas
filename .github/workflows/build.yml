@@ -61,9 +61,9 @@ jobs:
 
           $deps = @(
             'SAM',
-            'SAM_Systems',
             'SAM_Psychrometrics',
             'SAM_Mollier',
+            'SAM_Systems',
             'SAM_Windows',
             'SAM_gbXML',
             'SAM_SolarCalculator'
@@ -124,9 +124,9 @@ jobs:
 
           $solutions = @(
             'SAM\SAM.sln'
-            'SAM_Systems\SAM_Systems.sln'
             'SAM_Psychrometrics\SAM_Psychrometrics.sln'
             'SAM_Mollier\SAM_Mollier.sln'
+            'SAM_Systems\SAM_Systems.sln'
             'SAM_Windows\SAM_Windows.sln'
             'SAM_gbXML\SAM_gbXML.sln'
             'SAM_SolarCalculator\SAM_SolarCalculator.sln'
