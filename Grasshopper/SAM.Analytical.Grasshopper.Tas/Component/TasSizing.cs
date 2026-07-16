@@ -3,10 +3,11 @@ using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
 using SAM.Core.Grasshopper;
 using System;
+using System.Collections.Generic;
 
 namespace SAM.Analytical.Grasshopper.Tas
 {
-    public class TasSizing : GH_SAMComponent
+    public class TasSizing : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -16,7 +17,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.3";
+        public override string LatestComponentVersion => "1.0.4";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -38,35 +39,57 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            //int aIndex = -1;
-            //Param_Boolean booleanParameter = null;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
 
-            int index = -1;
+                global::Grasshopper.Kernel.Parameters.Param_String param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTBD", NickName = "_pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item };
+                param_String.WireDisplay = GH_ParamWireDisplay.hidden;
+                result.Add(new GH_SAMParam(param_String, ParamVisibility.Binding));
 
-            index = inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
-            inputParamManager[index].WireDisplay = GH_ParamWireDisplay.hidden;
-            
-            index = inputParamManager.AddParameter(new GooAnalyticalModelParam(), "_analyticalModel_", "_analyticalModel_", "A SAM analytical model", GH_ParamAccess.item);
-            inputParamManager[index].Optional = true;
+                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel_", NickName = "_analyticalModel_", Description = "A SAM analytical model", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
 
-            inputParamManager.AddBooleanParameter("_excludeOutdoorAir_", "_excludeOutdoorAir_", "Should the outdoor air be excluded and TBD ventilation factor set to zero?", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_excludePositiveInternalGains_", "_excludePositiveInternalGains_", "Should the internal conduction gains not offset the heating load from adjacent rooms? This will re-run few times, sizing the simulation for each temperature.", GH_ParamAccess.item, true);
+                global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_excludeOutdoorAir_", NickName = "_excludeOutdoorAir_", Description = "Should the outdoor air be excluded and TBD ventilation factor set to zero?", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-            inputParamManager.AddBooleanParameter("_systemSizingMethod_", "_systemSizingMethod_", "System Sizing Method", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_generateUncappedFile_", "_generateUncappedFile_", "Generate Uncapped File", GH_ParamAccess.item, true);
-            inputParamManager.AddBooleanParameter("_generateHDDCDDFile_", "_generateHDDCDDFile_", "Generate HDD and CDD File", GH_ParamAccess.item, true);
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_excludePositiveInternalGains_", NickName = "_excludePositiveInternalGains_", Description = "Should the internal conduction gains not offset the heating load from adjacent rooms? This will re-run few times, sizing the simulation for each temperature.", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(true);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_systemSizingMethod_", NickName = "_systemSizingMethod_", Description = "System Sizing Method", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_generateUncappedFile_", NickName = "_generateUncappedFile_", Description = "Generate Uncapped File", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(true);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_generateHDDCDDFile_", NickName = "_generateHDDCDDFile_", Description = "Generate HDD and CDD File", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(true);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -75,10 +98,17 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(0, false);
+            int index = -1;
 
+            int index_Successful = Params.IndexOfOutputParam("successful");
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, false);
+            }
+
+            index = Params.IndexOfInputParam("_run");
             bool run = false;
-            if (!dataAccess.GetData(7, ref run))
+            if (index == -1 || !dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -89,49 +119,59 @@ namespace SAM.Analytical.Grasshopper.Tas
                 return;
             }
 
+            index = Params.IndexOfInputParam("_analyticalModel_");
             AnalyticalModel analyticalModel = null;
-            if (!dataAccess.GetData(1, ref analyticalModel))
+            if (index != -1)
             {
-                analyticalModel = null;
+                if (!dataAccess.GetData(index, ref analyticalModel))
+                {
+                    analyticalModel = null;
+                }
             }
 
+            index = Params.IndexOfInputParam("_pathTasTBD");
             string path_TBD = null;
-            if (!dataAccess.GetData(0, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+            if (index == -1 || !dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_excludeOutdoorAir_");
             bool excludeOutdoorAir = false;
-            if (!dataAccess.GetData(2, ref excludeOutdoorAir))
+            if (index == -1 || !dataAccess.GetData(index, ref excludeOutdoorAir))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_excludePositiveInternalGains_");
             bool excludePositiveInternalGains = true;
-            if (!dataAccess.GetData(3, ref excludePositiveInternalGains))
+            if (index == -1 || !dataAccess.GetData(index, ref excludePositiveInternalGains))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_systemSizingMethod_");
             bool systemSizingMethod = false;
-            if (!dataAccess.GetData(4, ref systemSizingMethod))
+            if (index == -1 || !dataAccess.GetData(index, ref systemSizingMethod))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_generateUncappedFile_");
             bool generateUncappedFile = true;
-            if (!dataAccess.GetData(5, ref generateUncappedFile))
+            if (index == -1 || !dataAccess.GetData(index, ref generateUncappedFile))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_generateHDDCDDFile_");
             bool generateHDDCDDFile = true;
-            if (!dataAccess.GetData(6, ref generateHDDCDDFile))
+            if (index == -1 || !dataAccess.GetData(index, ref generateHDDCDDFile))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -148,7 +188,10 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             bool result = Analytical.Tas.Query.Sizing(path_TBD, sizingSettings, analyticalModel);
 
-            dataAccess.SetData(0, result);
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, result);
+            }
         }
     }
 }

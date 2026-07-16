@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace SAM.Analytical.Grasshopper.Tas
 {
-    public class TasUpdateAdaptiveSetpointACCI : GH_SAMComponent
+    public class TasUpdateAdaptiveSetpointACCI : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -16,7 +16,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.2";
+        public override string LatestComponentVersion => "1.0.3";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -61,25 +61,33 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            //int aIndex = -1;
-            //Param_Boolean booleanParameter = null;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTBD", NickName = "pathTasTBD", Description = "The string path to TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSpaceParam() { Name = "spaces_", NickName = "spaces_", Description = "SAM Analytical Spaces", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
 
-            inputParamManager.AddTextParameter("_pathTasTBD", "pathTasTBD", "The string path to TasTBD file.", GH_ParamAccess.item);
+                global::Grasshopper.Kernel.Parameters.Param_Boolean boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(boolean, ParamVisibility.Binding));
 
-            GooSpaceParam spaceParam = new GooSpaceParam() { Name = "spaces_", NickName = "spaces_", Description = "SAM Analytical Spaces", Access = GH_ParamAccess.list, Optional = true };
-            inputParamManager.AddParameter(spaceParam);
-            
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -88,10 +96,16 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(0, false);
+            int index = -1;
+            int index_Successful = Params.IndexOfOutputParam("successful");
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, false);
+            }
 
+            index = Params.IndexOfInputParam("_run");
             bool run = false;
-            if (!dataAccess.GetData(2, ref run))
+            if (index == -1 || !dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -99,22 +113,31 @@ namespace SAM.Analytical.Grasshopper.Tas
             if (!run)
                 return;
 
+            index = Params.IndexOfInputParam("_pathTasTBD");
             string path_TBD = null;
-            if (!dataAccess.GetData(0, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+            if (index == -1 || !dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("spaces_");
             List<Space> spaces = new List<Space>();
-            if (!dataAccess.GetDataList(1, spaces) || spaces.Count == 0)
+            if (index != -1)
+            {
+                dataAccess.GetDataList(index, spaces);
+            }
+            if (spaces.Count == 0)
             {
                 spaces = null;
             }
 
             bool result = Analytical.Tas.Modify.UpdateACCI(path_TBD, spaces?.ConvertAll(x => x?.Name));
 
-            dataAccess.SetData(0, result);
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, result);
+            }
         }
     }
 }

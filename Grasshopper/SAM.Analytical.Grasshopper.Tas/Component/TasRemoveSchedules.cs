@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace SAM.Analytical.Grasshopper.Tas
 {
-    public class TasRemoveSchedules : GH_SAMComponent
+    public class TasRemoveSchedules : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -16,7 +16,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.1";
+        public override string LatestComponentVersion => "1.0.2";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -38,25 +38,42 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            //int aIndex = -1;
-            //Param_Boolean booleanParameter = null;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTBD", NickName = "_pathTasTBD", Description = "The string path of a TasTBD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_suffix", NickName = "_suffix", Description = "The schedule name suffix.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
-            inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path of a TasTBD file.", GH_ParamAccess.item);
-            inputParamManager.AddTextParameter("_suffix", "_suffix", "The schedule name suffix.", GH_ParamAccess.item);
-            inputParamManager.AddBooleanParameter("_caseSensitive_", "_caseSensitive_", "Should the capitalsation be considered?", GH_ParamAccess.item, false);
-            inputParamManager.AddBooleanParameter("_trim_", "_trim_", "Do you want to trim the TasTBD file?", GH_ParamAccess.item, true);
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean Toggle to run.", GH_ParamAccess.item, false);
+                global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_caseSensitive_", NickName = "_caseSensitive_", Description = "Should the capitalsation be considered?", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_trim_", NickName = "_trim_", Description = "Do you want to trim the TasTBD file?", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(true);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean Toggle to run.", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddTextParameter("names", "names", "The names of the schedules that have been removed.", GH_ParamAccess.list);
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "names", NickName = "names", Description = "The names of the schedules that have been removed.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -65,10 +82,17 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(1, false);
+            int index = -1;
 
+            int index_Successful = Params.IndexOfOutputParam("successful");
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, false);
+            }
+
+            index = Params.IndexOfInputParam("_run");
             bool run = false;
-            if (!dataAccess.GetData(4, ref run))
+            if (index == -1 || !dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -76,29 +100,33 @@ namespace SAM.Analytical.Grasshopper.Tas
             if (!run)
                 return;
 
+            index = Params.IndexOfInputParam("_pathTasTBD");
             string path_TBD = null;
-            if (!dataAccess.GetData(0, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+            if (index == -1 || !dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_suffix");
             string sufix = null;
-            if (!dataAccess.GetData(1, ref sufix))
+            if (index == -1 || !dataAccess.GetData(index, ref sufix))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_caseSensitive_");
             bool caseSensitive = false;
-            if (!dataAccess.GetData(2, ref caseSensitive))
+            if (index == -1 || !dataAccess.GetData(index, ref caseSensitive))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
+            index = Params.IndexOfInputParam("_trim_");
             bool trim = false;
-            if (!dataAccess.GetData(3, ref trim))
+            if (index == -1 || !dataAccess.GetData(index, ref trim))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -106,8 +134,16 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             List<string> result = Analytical.Tas.Modify.RemoveSchedules(path_TBD, sufix, caseSensitive, trim);
 
-            dataAccess.SetData(0, result);
-            dataAccess.SetData(1, result != null);
+            index = Params.IndexOfOutputParam("names");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, result);
+            }
+
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, result != null);
+            }
         }
     }
 }

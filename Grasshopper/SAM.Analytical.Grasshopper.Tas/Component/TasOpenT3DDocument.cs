@@ -2,10 +2,11 @@
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Core.Grasshopper;
 using System;
+using System.Collections.Generic;
 
 namespace SAM.Analytical.Grasshopper.Tas
 {
-    public class TasOpenT3DDocument : GH_SAMComponent
+    public class TasOpenT3DDocument : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -15,7 +16,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.1";
+        public override string LatestComponentVersion => "1.0.2";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -37,22 +38,33 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            //int aIndex = -1;
-            //Param_Boolean booleanParameter = null;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathT3D", NickName = "_pathT3D", Description = "The string path to a Tas T3D file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
-            inputParamManager.AddTextParameter("_pathT3D", "_pathT3D", "The string path to a Tas T3D file.", GH_ParamAccess.item);
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
+                global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddParameter(new GooSAMT3DDocumentParam(), "T3DDocument", "T3DDocument", "A T3DDocument", GH_ParamAccess.item);
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new GooSAMT3DDocumentParam() { Name = "T3DDocument", NickName = "T3DDocument", Description = "A T3DDocument", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -61,10 +73,17 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(1, false);
+            int index = -1;
 
+            int index_Successful = Params.IndexOfOutputParam("successful");
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, false);
+            }
+
+            index = Params.IndexOfInputParam("_run");
             bool run = false;
-            if (!dataAccess.GetData(1, ref run))
+            if (index == -1 || !dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -72,8 +91,9 @@ namespace SAM.Analytical.Grasshopper.Tas
             if (!run)
                 return;
 
+            index = Params.IndexOfInputParam("_pathT3D");
             string path_T3D = null;
-            if (!dataAccess.GetData(0, ref path_T3D) || string.IsNullOrWhiteSpace(path_T3D))
+            if (index == -1 || !dataAccess.GetData(index, ref path_T3D) || string.IsNullOrWhiteSpace(path_T3D))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -90,8 +110,16 @@ namespace SAM.Analytical.Grasshopper.Tas
                 this.Phase = GH_SolutionPhase.Blank;
             };
 
-            dataAccess.SetData(0, new GooSAMT3DDocument(sAMT3DDocument));
-            dataAccess.SetData(1, true);
+            index = Params.IndexOfOutputParam("T3DDocument");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, new GooSAMT3DDocument(sAMT3DDocument));
+            }
+
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, true);
+            }
         }
     }
 }
