@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using Grasshopper.Kernel;
@@ -201,6 +201,13 @@ namespace SAM.Analytical.Grasshopper.Tas
             {
                 dataAccess.SetData(index_Successful, result);
             }
+        }
+
+        public override bool Read(GH_IO.Serialization.GH_IReader reader)
+        {
+            bool result = base.Read(reader);
+            Core.Grasshopper.Tas.Modify.ReadLegacyParameterData(this, reader, Inputs, Outputs);
+            return result;
         }
     }
 }

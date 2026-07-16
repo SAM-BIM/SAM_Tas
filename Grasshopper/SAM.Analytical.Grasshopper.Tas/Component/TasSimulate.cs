@@ -281,5 +281,12 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             Core.Query.StartProcess(path);
         }
+
+        public override bool Read(GH_IO.Serialization.GH_IReader reader)
+        {
+            bool result = base.Read(reader);
+            Core.Grasshopper.Tas.Modify.ReadLegacyParameterData(this, reader, Inputs, Outputs);
+            return result;
+        }
     }
 }
