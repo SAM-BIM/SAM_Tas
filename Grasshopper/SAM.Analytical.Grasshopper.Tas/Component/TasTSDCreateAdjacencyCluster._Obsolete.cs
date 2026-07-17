@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using SAM.Analytical.Grasshopper.Tas.Properties;
 using SAM.Analytical.Tas;
@@ -9,7 +12,7 @@ using System.Collections.Generic;
 namespace SAM.Analytical.Grasshopper.Tas.Obsolete
 {
     [Obsolete("Obsolete since 2021-01-27")]
-    public class TasTSDCreateAdjacencyCluster : GH_SAMComponent
+    public class TasTSDCreateAdjacencyCluster : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -19,7 +22,7 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.1";
+        public override string LatestComponentVersion => "1.0.2";
 
         public override GH_Exposure Exposure => GH_Exposure.hidden;
 
@@ -41,29 +44,38 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            int index = -1;
-            //Param_Boolean booleanParameter = null;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
 
-            inputParamManager.AddTextParameter("_pathTasTSD", "_pathTasTSD", "A string path to a TasTSD file.", GH_ParamAccess.item);
-            
-            index = inputParamManager.AddGenericParameter("panelDataType_", "panelDataType_", "Filters your chosen results for the type: panel.", GH_ParamAccess.list);
-            inputParamManager[index].Optional = true;
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTSD", NickName = "_pathTasTSD", Description = "A string path to a TasTSD file.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_GenericObject() { Name = "panelDataType_", NickName = "panelDataType_", Description = "Filters your chosen results for the type: panel.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_GenericObject() { Name = "spaceDataType_", NickName = "spaceDataType_", Description = "Filters your chosen results for the type: space.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
 
-            index = inputParamManager.AddGenericParameter("spaceDataType_", "spaceDataType_", "Filters your chosen results for the type: space.", GH_ParamAccess.list);
-            inputParamManager[index].Optional = true;
+                global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddParameter(new GooAdjacencyClusterParam(),  "adjacencyCluster", "adjacencyCluster", "A SAM analytical adjacency cluster", GH_ParamAccess.item);
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+
+                result.Add(new GH_SAMParam(new GooAdjacencyClusterParam() { Name = "adjacencyCluster", NickName = "adjacencyCluster", Description = "A SAM analytical adjacency cluster", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -72,10 +84,17 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(1, false);
+            int index_Successful = Params.IndexOfOutputParam("successful");
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, false);
+            }
+
+            int index = -1;
 
             bool run = false;
-            if (!dataAccess.GetData(3, ref run))
+            index = Params.IndexOfInputParam("_run");
+            if (index == -1 || !dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -84,7 +103,8 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
                 return;
 
             string path_TSD = null;
-            if (!dataAccess.GetData(0, ref path_TSD) || string.IsNullOrWhiteSpace(path_TSD))
+            index = Params.IndexOfInputParam("_pathTasTSD");
+            if (index == -1 || !dataAccess.GetData(index, ref path_TSD) || string.IsNullOrWhiteSpace(path_TSD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -95,7 +115,8 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
             List<PanelDataType> panelDataTypes = null;
 
             objectWrappers = new List<GH_ObjectWrapper>();
-            if(dataAccess.GetDataList(1, objectWrappers))
+            index = Params.IndexOfInputParam("panelDataType_");
+            if (index != -1 && dataAccess.GetDataList(index, objectWrappers))
             {
                 panelDataTypes = new List<PanelDataType>();
                 foreach(GH_ObjectWrapper objectWrapper in objectWrappers)
@@ -114,7 +135,8 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
             List<SpaceDataType> spaceDataTypes = null;
 
             objectWrappers = new List<GH_ObjectWrapper>();
-            if (dataAccess.GetDataList(2, objectWrappers))
+            index = Params.IndexOfInputParam("spaceDataType_");
+            if (index != -1 && dataAccess.GetDataList(index, objectWrappers))
             {
                 spaceDataTypes = new List<SpaceDataType>();
                 foreach (GH_ObjectWrapper objectWrapper in objectWrappers)
@@ -132,8 +154,22 @@ namespace SAM.Analytical.Grasshopper.Tas.Obsolete
 
             AdjacencyCluster adjacencyCluster = path_TSD.ToSAM_AdjacencyCluster(spaceDataTypes, panelDataTypes);
 
-            dataAccess.SetData(0, adjacencyCluster);
-            dataAccess.SetData(1, adjacencyCluster != null);
+            index = Params.IndexOfOutputParam("adjacencyCluster");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, adjacencyCluster);
+            }
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, adjacencyCluster != null);
+            }
+        }
+
+        public override bool Read(GH_IO.Serialization.GH_IReader reader)
+        {
+            bool result = base.Read(reader);
+            Core.Grasshopper.Tas.Modify.ReadLegacyParameterData(this, reader, Inputs, Outputs);
+            return result;
         }
     }
 }

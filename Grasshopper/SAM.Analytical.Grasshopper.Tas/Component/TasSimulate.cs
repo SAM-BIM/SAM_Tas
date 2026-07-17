@@ -13,7 +13,7 @@ using System.Windows.Forms;
 
 namespace SAM.Analytical.Grasshopper.Tas
 {
-    public class TasSimulate : GH_SAMComponent
+    public class TasSimulate : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -23,7 +23,7 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.6";
+        public override string LatestComponentVersion => "1.0.7";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -45,33 +45,56 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            int index = -1;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
 
-            index = inputParamManager.AddTextParameter("_pathTasTBD", "_pathTasTBD", "The string path to a TasTBD file.", GH_ParamAccess.item);
-            inputParamManager[index].WireDisplay = GH_ParamWireDisplay.hidden;
-            
-            index = inputParamManager.AddTextParameter("_pathTasTSD", "_pathTasTSD", "The string path to a TasTSD file.", GH_ParamAccess.item);
-            inputParamManager[index].WireDisplay = GH_ParamWireDisplay.hidden;
+                global::Grasshopper.Kernel.Parameters.Param_String param_String;
 
-            global::Grasshopper.Kernel.Parameters.Param_GenericObject genericObject = new global::Grasshopper.Kernel.Parameters.Param_GenericObject() { Name = "_surfaceOutputSpec", NickName = "_surfaceOutputSpec", Description = "Surface Output Spec.", Access = GH_ParamAccess.list, Optional = true };
-            inputParamManager.AddParameter(genericObject);
+                param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTBD", NickName = "_pathTasTBD", Description = "The string path to a TasTBD file.", Access = GH_ParamAccess.item };
+                param_String.WireDisplay = GH_ParamWireDisplay.hidden;
+                result.Add(new GH_SAMParam(param_String, ParamVisibility.Binding));
 
-            index = inputParamManager.AddTextParameter("_sizingType_", "_sizingType_", "Sizing Type", GH_ParamAccess.item);
-            inputParamManager[index].Optional = true;
+                param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_pathTasTSD", NickName = "_pathTasTSD", Description = "The string path to a TasTSD file.", Access = GH_ParamAccess.item };
+                param_String.WireDisplay = GH_ParamWireDisplay.hidden;
+                result.Add(new GH_SAMParam(param_String, ParamVisibility.Binding));
 
-            inputParamManager.AddIntegerParameter("_dayFirst_", "_dayFirst_", "The first day", GH_ParamAccess.item, 1);
-            inputParamManager.AddIntegerParameter("_dayLast_", "_dayLast_", "The last day", GH_ParamAccess.item, 365);
-            inputParamManager.AddBooleanParameter("_run", "_run", "Connect a boolean toggle to run.", GH_ParamAccess.item, false);
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_GenericObject() { Name = "_surfaceOutputSpec", NickName = "_surfaceOutputSpec", Description = "Surface Output Spec.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_sizingType_", NickName = "_sizingType_", Description = "Sizing Type", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
+
+                global::Grasshopper.Kernel.Parameters.Param_Integer param_Integer;
+
+                param_Integer = new global::Grasshopper.Kernel.Parameters.Param_Integer() { Name = "_dayFirst_", NickName = "_dayFirst_", Description = "The first day", Access = GH_ParamAccess.item };
+                param_Integer.SetPersistentData(1);
+                result.Add(new GH_SAMParam(param_Integer, ParamVisibility.Binding));
+
+                param_Integer = new global::Grasshopper.Kernel.Parameters.Param_Integer() { Name = "_dayLast_", NickName = "_dayLast_", Description = "The last day", Access = GH_ParamAccess.item };
+                param_Integer.SetPersistentData(365);
+                result.Add(new GH_SAMParam(param_Integer, ParamVisibility.Binding));
+
+                global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run", NickName = "_run", Description = "Connect a boolean toggle to run.", Access = GH_ParamAccess.item };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddBooleanParameter("successful", "successful", "Correctly imported?", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "successful", NickName = "successful", Description = "Correctly imported?", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -80,10 +103,17 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
-            dataAccess.SetData(0, false);
+            int index_Successful = Params.IndexOfOutputParam("successful");
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, false);
+            }
+
+            int index = -1;
 
             bool run = false;
-            if (!dataAccess.GetData(6, ref run))
+            index = Params.IndexOfInputParam("_run");
+            if (index == -1 || !dataAccess.GetData(index, ref run))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -92,28 +122,32 @@ namespace SAM.Analytical.Grasshopper.Tas
                 return;
 
             string path_TBD = null;
-            if (!dataAccess.GetData(0, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
+            index = Params.IndexOfInputParam("_pathTasTBD");
+            if (index == -1 || !dataAccess.GetData(index, ref path_TBD) || string.IsNullOrWhiteSpace(path_TBD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
             string path_TSD = null;
-            if (!dataAccess.GetData(1, ref path_TSD) || string.IsNullOrWhiteSpace(path_TSD))
+            index = Params.IndexOfInputParam("_pathTasTSD");
+            if (index == -1 || !dataAccess.GetData(index, ref path_TSD) || string.IsNullOrWhiteSpace(path_TSD))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
             int day_First = -1;
-            if (!dataAccess.GetData(4, ref day_First))
+            index = Params.IndexOfInputParam("_dayFirst_");
+            if (index == -1 || !dataAccess.GetData(index, ref day_First))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
             }
 
             int day_Last = -1;
-            if (!dataAccess.GetData(5, ref day_Last))
+            index = Params.IndexOfInputParam("_dayLast_");
+            if (index == -1 || !dataAccess.GetData(index, ref day_Last))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
@@ -122,7 +156,8 @@ namespace SAM.Analytical.Grasshopper.Tas
             Analytical.Tas.SizingType sizingType = Analytical.Tas.SizingType.Undefined;
 
             string sizingTypeString = null;
-            if (dataAccess.GetData(3, ref sizingTypeString))
+            index = Params.IndexOfInputParam("_sizingType_");
+            if (index != -1 && dataAccess.GetData(index, ref sizingTypeString))
             {
                 if(!Core.Query.TryGetEnum(sizingTypeString, out sizingType))
                 {
@@ -134,7 +169,8 @@ namespace SAM.Analytical.Grasshopper.Tas
             List<SurfaceOutputSpec> surfaceOutputSpecs = null;
 
             List<GH_ObjectWrapper> objectWrappers = new List<GH_ObjectWrapper>();
-            if(dataAccess.GetDataList(2, objectWrappers) && objectWrappers != null && objectWrappers.Count != 0)
+            index = Params.IndexOfInputParam("_surfaceOutputSpec");
+            if (index != -1 && dataAccess.GetDataList(index, objectWrappers) && objectWrappers != null && objectWrappers.Count != 0)
             {
                 surfaceOutputSpecs = new List<SurfaceOutputSpec>();
                 foreach (GH_ObjectWrapper objectWrapper in objectWrappers)
@@ -179,7 +215,10 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             bool result = Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, day_First, day_Last, sizingType, surfaceOutputSpecs);
 
-            dataAccess.SetData(0, result);
+            if (index_Successful != -1)
+            {
+                dataAccess.SetData(index_Successful, result);
+            }
         }
 
         public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
@@ -241,6 +280,13 @@ namespace SAM.Analytical.Grasshopper.Tas
             }
 
             Core.Query.StartProcess(path);
+        }
+
+        public override bool Read(GH_IO.Serialization.GH_IReader reader)
+        {
+            bool result = base.Read(reader);
+            Core.Grasshopper.Tas.Modify.ReadLegacyParameterData(this, reader, Inputs, Outputs);
+            return result;
         }
     }
 }

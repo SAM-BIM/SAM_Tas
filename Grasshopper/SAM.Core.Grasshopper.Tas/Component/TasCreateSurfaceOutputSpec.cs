@@ -1,10 +1,14 @@
-﻿using Grasshopper.Kernel;
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using SAM.Core.Grasshopper.Tas.Properties;
 using System;
+using System.Collections.Generic;
 
 namespace SAM.Core.Grasshopper.Tas
 {
-    public class TasCreateSurfaceOutputSpec : GH_SAMComponent
+    public class TasCreateSurfaceOutputSpec : GH_SAMVariableOutputParameterComponent
     {
         /// <summary>
         /// Gets the unique ID for this component. Do not change this ID after release.
@@ -14,7 +18,7 @@ namespace SAM.Core.Grasshopper.Tas
         /// <summary>
         /// The latest version of this component
         /// </summary>
-        public override string LatestComponentVersion => "1.0.1";
+        public override string LatestComponentVersion => "1.0.2";
 
         /// <summary>
         /// Provides an Icon for the component.
@@ -36,44 +40,66 @@ namespace SAM.Core.Grasshopper.Tas
         /// <summary>
         /// Registers all the input parameters for this component.
         /// </summary>
-        protected override void RegisterInputParams(GH_InputParamManager inputParamManager)
+        protected override GH_SAMParam[] Inputs
         {
-            int index = -1;
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
 
-            index = inputParamManager.AddTextParameter("_name_", "_name_", "Name", GH_ParamAccess.item, "SAM SurfaceOutputSpec");
-            inputParamManager[index].Optional = true;
-            
-            index = inputParamManager.AddTextParameter("_description_", "_description_", "Description", GH_ParamAccess.item);
-            inputParamManager[index].Optional = true;
+                global::Grasshopper.Kernel.Parameters.Param_String param_String;
 
-            index = inputParamManager.AddBooleanParameter("_apertureData_", "_apertureData_", "Aperture Data", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_name_", NickName = "_name_", Description = "Name", Access = GH_ParamAccess.item, Optional = true };
+                param_String.SetPersistentData("SAM SurfaceOutputSpec");
+                result.Add(new GH_SAMParam(param_String, ParamVisibility.Binding));
 
-            index = inputParamManager.AddBooleanParameter("_condensation_", "_condensation_", "Condensation \n* you need also  convection, temperature", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_description_", NickName = "_description_", Description = "Description", Access = GH_ParamAccess.item, Optional = true };
+                result.Add(new GH_SAMParam(param_String, ParamVisibility.Binding));
 
-            index = inputParamManager.AddBooleanParameter("_convection_", "_convection_", "Convection", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean;
 
-            index = inputParamManager.AddBooleanParameter("_solarGain_", "_solarGain_", "Solar Gain", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_apertureData_", NickName = "_apertureData_", Description = "Aperture Data", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-            index = inputParamManager.AddBooleanParameter("_conduction_", "_conduction_", "Conduction", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_condensation_", NickName = "_condensation_", Description = "Condensation \n* you need also  convection, temperature", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-            index = inputParamManager.AddBooleanParameter("_longWave_", "_longWave_", "LongWave \n* you need also solarGain, condensation, convection  ", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_convection_", NickName = "_convection_", Description = "Convection", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-            index = inputParamManager.AddBooleanParameter("_temperature_", "_temperature_", "Temperature", GH_ParamAccess.item, false);
-            inputParamManager[index].Optional = true;
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_solarGain_", NickName = "_solarGain_", Description = "Solar Gain", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_conduction_", NickName = "_conduction_", Description = "Conduction", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_longWave_", NickName = "_longWave_", Description = "LongWave \n* you need also solarGain, condensation, convection  ", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_temperature_", NickName = "_temperature_", Description = "Temperature", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean.SetPersistentData(false);
+                result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
+
+                return result.ToArray();
+            }
         }
 
         /// <summary>
         /// Registers all the output parameters for this component.
         /// </summary>
-        protected override void RegisterOutputParams(GH_OutputParamManager outputParamManager)
+        protected override GH_SAMParam[] Outputs
         {
-            outputParamManager.AddParameter(new GooSurfaceOutputSpecParam(), "surfaceOutputSpec", "surfaceOutputSpec", "SAM Core Tas SurfaceOutputSpec", GH_ParamAccess.item);
+            get
+            {
+                List<GH_SAMParam> result = new List<GH_SAMParam>();
+                result.Add(new GH_SAMParam(new GooSurfaceOutputSpecParam() { Name = "surfaceOutputSpec", NickName = "surfaceOutputSpec", Description = "SAM Core Tas SurfaceOutputSpec", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                return result.ToArray();
+            }
         }
 
         /// <summary>
@@ -82,44 +108,93 @@ namespace SAM.Core.Grasshopper.Tas
         /// <param name="dataAccess">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess dataAccess)
         {
+            int index = -1;
+
+            index = Params.IndexOfInputParam("_name_");
             string name = null;
-            dataAccess.GetData(0, ref name);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref name);
+            }
             Core.Tas.SurfaceOutputSpec surfaceOutputSpec = new Core.Tas.SurfaceOutputSpec(name);
 
+            index = Params.IndexOfInputParam("_description_");
             string description = null;
-            dataAccess.GetData(1, ref description);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref description);
+            }
             surfaceOutputSpec.Description = description;
 
+            index = Params.IndexOfInputParam("_apertureData_");
             bool apertureData = false;
-            dataAccess.GetData(2, ref apertureData);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref apertureData);
+            }
             surfaceOutputSpec.ApertureData = apertureData;
 
+            index = Params.IndexOfInputParam("_condensation_");
             bool condensation = false;
-            dataAccess.GetData(3, ref condensation);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref condensation);
+            }
             surfaceOutputSpec.Condensation = condensation;
 
+            index = Params.IndexOfInputParam("_convection_");
             bool convection = false;
-            dataAccess.GetData(4, ref convection);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref convection);
+            }
             surfaceOutputSpec.Convection = convection;
 
+            index = Params.IndexOfInputParam("_solarGain_");
             bool solarGain = false;
-            dataAccess.GetData(5, ref solarGain);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref solarGain);
+            }
             surfaceOutputSpec.SolarGain = solarGain;
 
+            index = Params.IndexOfInputParam("_conduction_");
             bool conduction = false;
-            dataAccess.GetData(6, ref conduction);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref conduction);
+            }
             surfaceOutputSpec.Conduction = conduction;
 
+            index = Params.IndexOfInputParam("_longWave_");
             bool longWave = false;
-            dataAccess.GetData(7, ref longWave);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref longWave);
+            }
             surfaceOutputSpec.LongWave = longWave;
 
+            index = Params.IndexOfInputParam("_temperature_");
             bool temperature = false;
-            dataAccess.GetData(8, ref temperature);
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref temperature);
+            }
             surfaceOutputSpec.Temperature = temperature;
 
 
-            dataAccess.SetData(0, surfaceOutputSpec);
+            index = Params.IndexOfOutputParam("surfaceOutputSpec");
+            if (index != -1)
+            {
+                dataAccess.SetData(index, surfaceOutputSpec);
+            }
+        }
+
+        public override bool Read(GH_IO.Serialization.GH_IReader reader)
+        {
+            bool result = base.Read(reader);
+            Modify.ReadLegacyParameterData(this, reader, Inputs, Outputs);
+            return result;
         }
     }
 }
