@@ -96,8 +96,9 @@ namespace SAM.Analytical.Tas.Benchmark
                 SdkVersion = null,
                 WeatherIdentity = Path.GetFileNameWithoutExtension(weatherPath),
                 WeatherHash = BenchmarkHash.ComputeSha256(File.ReadAllBytes(weatherPath)),
-                // Sizing (design loads) relies on the design days embedded in the source model.
-                DesignDaySource = DesignDaySource.EmbeddedModel,
+                // Sizing (design loads) relies on the design days embedded in the source model —
+                // report EmbeddedModel only when the model actually carries them.
+                DesignDaySource = ResolveDesignDaySource(model),
                 RunTimestampUtc = DateTimeOffset.UtcNow,
             };
 
@@ -111,16 +112,29 @@ namespace SAM.Analytical.Tas.Benchmark
             // otherwise export it from the SAM model (the same gbXML both engines can consume).
             string gbxmlPath = EnsureGbXml(arguments.GetOption("gbxml"), tbdPath, model, context);
 
+            // The supplied --weather is authoritative: the provenance records its identity/hash, so
+            // TAS MUST simulate exactly it. If it cannot be read, stop with an input error rather
+            // than letting WorkflowCalculator silently fall back to the model's embedded weather
+            // (which would make the document claim weather A while TAS ran weather B).
+            Weather.WeatherData weatherData = LoadWeather(weatherPath);
+
+            string tsdPath = Path.Combine(Path.GetDirectoryName(tbdPath) ?? string.Empty, Path.GetFileNameWithoutExtension(tbdPath) + ".tsd");
+
+            // A repeatable benchmark must not reuse stale artefacts: remove any prior TBD/TSD so this
+            // run starts clean (RemoveExistingTBD handles the TBD; delete the TSD explicitly).
+            DeleteIfExists(tsdPath);
+
             WorkflowSettings settings = new WorkflowSettings
             {
                 Path_TBD = tbdPath,
                 Path_gbXML = gbxmlPath,
-                WeatherData = LoadWeather(weatherPath, context),
+                WeatherData = weatherData,
                 Simulate = true,
                 Sizing = true,
                 AddIZAMs = true,
                 UnmetHours = true,
                 UpdateZones = true,
+                RemoveExistingTBD = true,
                 SimulateFrom = 1,
                 SimulateTo = 365,
             };
@@ -135,11 +149,10 @@ namespace SAM.Analytical.Tas.Benchmark
             // A non-null returned model is NOT sufficient: Calculate can return a (cloned) model
             // without simulating (e.g. no weather year), and result extraction can yield nothing.
             // Only declare success when the run actually produced the required measurements — model
-            // annual energy AND at least one per-space load — so a malformed weather file or a
-            // missing TSD becomes a failed producer document (exit 5), never a silent "success".
+            // annual energy AND at least one per-space load — so a missing TSD or empty results
+            // becomes a failed producer document (exit 5), never a silent "success".
             bool ranClean = !timedOut && runError == null && calculated != null;
 
-            string tsdPath = Path.Combine(Path.GetDirectoryName(tbdPath) ?? string.Empty, Path.GetFileNameWithoutExtension(tbdPath) + ".tsd");
             bool tsdExists = ranClean && File.Exists(tsdPath);
             if (tsdExists)
             {
@@ -235,23 +248,60 @@ namespace SAM.Analytical.Tas.Benchmark
             return gbxmlPath;
         }
 
-        /// <summary>Reads an EPW weather file into a SAM <see cref="Weather.WeatherData"/>; records a note and returns null on failure (the run then produces a failure document).</summary>
-        private static Weather.WeatherData LoadWeather(string weatherPath, TasBenchmarkContext context)
+        /// <summary>
+        /// Reads the EPW weather file into a SAM <see cref="Weather.WeatherData"/>. The supplied
+        /// weather is authoritative (its identity/hash go into the provenance), so a file that
+        /// cannot be read is a hard input failure (<see cref="IOException"/> → exit 3) — never a
+        /// silent fall back to the model's embedded weather.
+        /// </summary>
+        private static Weather.WeatherData LoadWeather(string weatherPath)
+        {
+            Weather.WeatherData weatherData;
+            try
+            {
+                weatherData = Weather.Convert.ToSAM(weatherPath);
+            }
+            catch (Exception exception) when (!(exception is IOException) && !(exception is UnauthorizedAccessException))
+            {
+                throw new IOException("The weather file could not be read into SAM weather data: " + weatherPath, exception);
+            }
+
+            if (weatherData == null)
+            {
+                throw new IOException("The weather file did not read into SAM weather data: " + weatherPath);
+            }
+
+            return weatherData;
+        }
+
+        /// <summary>Reports <see cref="DesignDaySource.EmbeddedModel"/> only when the model actually carries heating or cooling design days; otherwise <see cref="DesignDaySource.None"/>.</summary>
+        private static DesignDaySource ResolveDesignDaySource(AnalyticalModel analyticalModel)
+        {
+            bool hasDesignDays = HasDesignDays(analyticalModel, Analytical.AnalyticalModelParameter.HeatingDesignDays)
+                || HasDesignDays(analyticalModel, Analytical.AnalyticalModelParameter.CoolingDesignDays);
+            return hasDesignDays ? DesignDaySource.EmbeddedModel : DesignDaySource.None;
+        }
+
+        private static bool HasDesignDays(AnalyticalModel analyticalModel, Analytical.AnalyticalModelParameter parameter)
+        {
+            return analyticalModel.TryGetValue(parameter, out Core.SAMCollection<DesignDay> designDays)
+                && designDays != null
+                && designDays.Count > 0;
+        }
+
+        private static void DeleteIfExists(string path)
         {
             try
             {
-                Weather.WeatherData weatherData = Weather.Convert.ToSAM(weatherPath);
-                if (weatherData == null)
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
                 {
-                    context.Notes.Add("The weather file did not read into SAM weather data: " + Path.GetFileName(weatherPath));
+                    File.Delete(path);
                 }
-
-                return weatherData;
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                context.Notes.Add("Reading the weather file failed: " + exception.Message);
-                return null;
+                // A stale artefact we cannot delete is not fatal here; RemoveExistingTBD and the run
+                // itself will surface a genuine problem.
             }
         }
 
