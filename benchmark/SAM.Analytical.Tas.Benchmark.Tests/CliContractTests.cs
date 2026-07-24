@@ -142,6 +142,28 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             }
         }
 
+        [Test]
+        public void InputOverwriteCollision_RejectsModelEqualToTbdSidecarsOrOut()
+        {
+            string dir = Path.GetTempPath();
+            string outJson = Path.Combine(dir, "benchmark-out.json");
+            string tbd = Path.Combine(dir, "house.tbd");
+
+            // --tbd is the model itself (RemoveExistingTBD would delete it) — the .sam case Codex flagged.
+            Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.sam"), Path.Combine(dir, "house.sam"), outJson), Is.Not.Null);
+            // A stem sidecar the run writes lands on the model.
+            Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.json"), tbd, outJson), Is.Not.Null, ".json sidecar");
+            Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.tsd"), tbd, outJson), Is.Not.Null, ".tsd sidecar");
+            // The auto gbXML is only written (and only a collision candidate) when no --gbxml is supplied.
+            string autoGbxml = Path.Combine(dir, "house.xml");
+            Assert.That(Producer.FindInputOverwriteCollision(autoGbxml, tbd, outJson, autoGbxml), Is.Not.Null, "auto gbXML written");
+            Assert.That(Producer.FindInputOverwriteCollision(autoGbxml, tbd, outJson, null), Is.Null, "supplied --gbxml: <stem>.xml is not written, so no collision");
+            // The benchmark output lands on the model.
+            Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.sam"), tbd, Path.Combine(dir, "house.sam")), Is.Not.Null, "--out == --model");
+            // A well-separated set of paths is fine.
+            Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.sam"), tbd, outJson), Is.Null, "no collision");
+        }
+
         private static int Body(BenchmarkArguments arguments, System.Threading.CancellationToken cancellationToken)
         {
             return 0;

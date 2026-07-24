@@ -119,6 +119,65 @@ namespace SAM.Analytical.Tas.Benchmark
             return results != null && results.Any(x => IsFinite(x, Analytical.SpaceSimulationResultParameter.Load));
         }
 
+        /// <summary>
+        /// Returns the first path this run would write that resolves to the same file as the input
+        /// model — or null when there is no collision. A TAS run writes the TBD and, from the same
+        /// stem, the <c>.tsd</c>/<c>.t3d</c>/<c>.json</c> sidecar/<c>.timing.csv</c>; the producer also
+        /// writes the benchmark output and, when it exports one, the shared gbXML. Because
+        /// <c>RemoveExistingTBD</c> deletes the TBD before opening it, a <c>--tbd</c> (or <c>--out</c>)
+        /// pointed at the source model would destroy it — the caller must be rejected up front.
+        /// <paramref name="gbxmlOutputPath"/> is the gbXML the producer will actually write (the
+        /// auto-derived <c>&lt;tbd&gt;.xml</c> when no <c>--gbxml</c> was supplied), or null when a
+        /// caller-supplied gbXML is reused and nothing is written there. All comparisons are
+        /// full-path, case-insensitive.
+        /// </summary>
+        public static string FindInputOverwriteCollision(string modelPath, string tbdPath, string outputPath, string gbxmlOutputPath = null)
+        {
+            if (string.IsNullOrWhiteSpace(modelPath))
+            {
+                return null;
+            }
+
+            string directory = Path.GetDirectoryName(tbdPath) ?? string.Empty;
+            string stem = Path.GetFileNameWithoutExtension(tbdPath);
+            string basePath = Path.Combine(directory, stem);
+
+            List<string> runOutputs = new List<string>
+            {
+                tbdPath,
+                basePath + ".tsd",
+                basePath + ".t3d",
+                basePath + ".json",
+                basePath + ".timing.csv",
+                outputPath,
+            };
+
+            if (!string.IsNullOrWhiteSpace(gbxmlOutputPath))
+            {
+                runOutputs.Add(gbxmlOutputPath);
+            }
+
+            return runOutputs.FirstOrDefault(candidate => PathsEqual(candidate, modelPath));
+        }
+
+        /// <summary>Case-insensitive full-path equality (Windows filesystem), tolerant of separators/relative segments.</summary>
+        public static bool PathsEqual(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private static void RemoveObjects<T>(AdjacencyCluster adjacencyCluster, List<T> objects) where T : SAM.Core.SAMObject
         {
             if (objects == null)
