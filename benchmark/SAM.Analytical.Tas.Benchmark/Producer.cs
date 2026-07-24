@@ -2,6 +2,7 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using SAM.Analytical.Benchmark;
@@ -60,6 +61,86 @@ namespace SAM.Analytical.Tas.Benchmark
             BenchmarkSerializer.Write(outputPath, document);
             standardOutput?.WriteLine("Wrote " + outputPath + " (state=" + (runSucceeded ? RunState.Success : RunState.Failure) + ", route=Native-TAS).");
             return runSucceeded ? (int)BenchmarkExitCode.Success : (int)BenchmarkExitCode.ProducerFailure;
+        }
+
+        /// <summary>
+        /// Returns a copy of the model with every pre-existing simulation result removed, so this run
+        /// starts from a clean model and only its OWN results can be emitted or satisfy the success
+        /// gate. This is stronger than the source filter: an <b>older TAS result</b> already embedded
+        /// in the input carries the same <c>SAM.Analytical.Tas</c> source, so filtering by source
+        /// cannot distinguish it — it must be removed. Model identity (GUID), libraries, spaces and
+        /// geometry are preserved; only <see cref="AnalyticalModelSimulationResult"/> and
+        /// <see cref="SpaceSimulationResult"/> objects (and their relations) are dropped.
+        /// </summary>
+        public static AnalyticalModel StripPreviousResults(AnalyticalModel analyticalModel)
+        {
+            if (analyticalModel == null)
+            {
+                return null;
+            }
+
+            AdjacencyCluster adjacencyCluster = analyticalModel.AdjacencyCluster;
+            if (adjacencyCluster == null)
+            {
+                return analyticalModel;
+            }
+
+            RemoveObjects(adjacencyCluster, adjacencyCluster.GetObjects<SpaceSimulationResult>());
+            RemoveObjects(adjacencyCluster, adjacencyCluster.GetObjects<AnalyticalModelSimulationResult>());
+
+            return new AnalyticalModel(analyticalModel, adjacencyCluster);
+        }
+
+        /// <summary>True when the model-level result carries a finite annual heating or cooling energy.</summary>
+        public static bool HasModelAnnualEnergy(AnalyticalModelSimulationResult modelResult)
+        {
+            if (modelResult == null)
+            {
+                return false;
+            }
+
+            return IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionHeating)
+                || IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionCooling);
+        }
+
+        /// <summary>
+        /// True when at least one per-space result FROM THE GIVEN RESULT SOURCE carries a finite load.
+        /// Combined with <see cref="StripPreviousResults"/> (which removes older same-source results
+        /// up front), this guarantees the gate is satisfied only by measurements THIS run produced.
+        /// </summary>
+        public static bool HasSpaceLoad(AnalyticalModel analyticalModel, string resultSource)
+        {
+            if (analyticalModel == null || string.IsNullOrWhiteSpace(resultSource))
+            {
+                return false;
+            }
+
+            List<SpaceSimulationResult> results = analyticalModel.GetResults<SpaceSimulationResult>(resultSource);
+            return results != null && results.Any(x => IsFinite(x, Analytical.SpaceSimulationResultParameter.Load));
+        }
+
+        private static void RemoveObjects<T>(AdjacencyCluster adjacencyCluster, List<T> objects) where T : SAM.Core.SAMObject
+        {
+            if (objects == null)
+            {
+                return;
+            }
+
+            foreach (T @object in objects)
+            {
+                if (@object != null)
+                {
+                    adjacencyCluster.RemoveObject<T>(@object.Guid);
+                }
+            }
+        }
+
+        private static bool IsFinite(SAM.Core.SAMObject sAMObject, Enum parameter)
+        {
+            return sAMObject != null
+                && sAMObject.TryGetValue(parameter, out double value)
+                && !double.IsNaN(value)
+                && !double.IsInfinity(value);
         }
     }
 }

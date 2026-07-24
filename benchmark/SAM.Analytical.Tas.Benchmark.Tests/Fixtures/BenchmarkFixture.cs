@@ -86,6 +86,21 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             return BuildModel(results);
         }
 
+        /// <summary>
+        /// A model whose ONLY per-space result is an OLD TAS-sourced heating result (same source as a
+        /// fresh run) and no new results — the case the source filter alone cannot catch. Used to
+        /// prove <c>StripPreviousResults</c> removes it so it cannot be emitted or satisfy the gate.
+        /// </summary>
+        public static AnalyticalModel SingleSpaceModelWithOnlyStaleTasResult()
+        {
+            SpaceSimulationResult stale = new SpaceSimulationResult(SpaceName, TasSource, "old-tas-zone-ref");
+            stale.SetValue(SpaceSimulationResultParameter.LoadType, LoadType.Heating.Text());
+            stale.SetValue(SpaceSimulationResultParameter.Load, 88888.0);
+            stale.SetValue(SpaceSimulationResultParameter.LoadIndex, 50);
+            stale.SetValue(SpaceSimulationResultParameter.DesignLoad, 88888.0);
+            return BuildModel(new List<SpaceSimulationResult> { stale });
+        }
+
         /// <summary>An OpenStudio-sourced heating result with a distinct (wrong) load, to be ignored by the TAS producer.</summary>
         public static SpaceSimulationResult ForeignHeatingResult()
         {

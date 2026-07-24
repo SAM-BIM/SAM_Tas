@@ -82,6 +82,11 @@ namespace SAM.Analytical.Tas.Benchmark
             string neutralJson = model.ToJsonObject().ToJsonString();
             string canonicalModelHash = BenchmarkCanonicalJson.ComputeSha256(neutralJson);
 
+            // Start from a clean model: drop any pre-existing simulation results — including older
+            // TAS-sourced ones the source filter cannot distinguish — so only THIS run's results can
+            // be emitted or satisfy the success gate. The hashes above reflect the original input.
+            model = Producer.StripPreviousResults(model);
+
             TasBenchmarkContext context = new TasBenchmarkContext
             {
                 SourceModelName = string.IsNullOrWhiteSpace(model.Name) ? "model" : model.Name,
@@ -161,8 +166,8 @@ namespace SAM.Analytical.Tas.Benchmark
                 context.ModelResult = SAM.Analytical.Tas.Convert.ToSAM_AnalyticalModelSimulationResult(tsdPath, resultModel);
             }
 
-            bool hasModelEnergy = HasAnnualEnergy(context.ModelResult);
-            bool hasSpaceLoad = HasAnySpaceLoad(resultModel, context.ModelResult?.Source);
+            bool hasModelEnergy = Producer.HasModelAnnualEnergy(context.ModelResult);
+            bool hasSpaceLoad = Producer.HasSpaceLoad(resultModel, context.ModelResult?.Source);
             bool success = ranClean && tsdExists && hasModelEnergy && hasSpaceLoad;
             context.State = success ? RunState.Success : RunState.Failure;
 
@@ -193,42 +198,6 @@ namespace SAM.Analytical.Tas.Benchmark
 
             BenchmarkDocument document = resultModel.ToBenchmark(context);
             return Producer.Emit(document, outputPath, success, standardOutput);
-        }
-
-        /// <summary>True when the model-level result carries a finite annual heating or cooling energy.</summary>
-        private static bool HasAnnualEnergy(AnalyticalModelSimulationResult modelResult)
-        {
-            if (modelResult == null)
-            {
-                return false;
-            }
-
-            return IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionHeating)
-                || IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionCooling);
-        }
-
-        /// <summary>
-        /// True when at least one per-space result FROM THE TAS RESULT SOURCE carries a finite load
-        /// (i.e. this run produced space measurements). Filtering to the source stops a pre-existing
-        /// non-TAS result already on the input model from satisfying the success gate.
-        /// </summary>
-        private static bool HasAnySpaceLoad(AnalyticalModel analyticalModel, string resultSource)
-        {
-            if (string.IsNullOrWhiteSpace(resultSource))
-            {
-                return false;
-            }
-
-            List<SpaceSimulationResult> results = analyticalModel.GetResults<SpaceSimulationResult>(resultSource);
-            return results != null && results.Any(x => IsFinite(x, Analytical.SpaceSimulationResultParameter.Load));
-        }
-
-        private static bool IsFinite(Core.SAMObject sAMObject, Enum parameter)
-        {
-            return sAMObject != null
-                && sAMObject.TryGetValue(parameter, out double value)
-                && !double.IsNaN(value)
-                && !double.IsInfinity(value);
         }
 
         /// <summary>

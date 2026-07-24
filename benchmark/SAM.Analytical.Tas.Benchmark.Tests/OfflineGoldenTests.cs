@@ -83,6 +83,26 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
         }
 
         [Test]
+        public void StalePreviousTasResult_IsStripped_GateFails_AndNotEmitted()
+        {
+            // The input carries an OLD TAS-sourced heating result (load 88888 W) and nothing fresh —
+            // the source filter cannot distinguish it because it shares the TAS source.
+            AnalyticalModel model = BenchmarkFixture.SingleSpaceModelWithOnlyStaleTasResult();
+            Assert.That(Producer.HasSpaceLoad(model, BenchmarkFixture.TasSource), Is.True, "precondition: the stale result is present before stripping");
+
+            // StripPreviousResults removes it, so a run that produced no new space result fails the gate.
+            AnalyticalModel stripped = Producer.StripPreviousResults(model);
+            Assert.That(Producer.HasSpaceLoad(stripped, BenchmarkFixture.TasSource), Is.False, "the stale result must not satisfy the success gate");
+
+            // ...and the stale load is never emitted (no fresh model result either → all unavailable).
+            TasBenchmarkContext context = BenchmarkFixture.GoldenContext();
+            context.ModelResult = null;
+            BenchmarkSpaceResult space = stripped.ToBenchmark(context).Spaces.Single();
+            Assert.That(space.Heating.PeakLoad.Available, Is.False, "the stale TAS load must not be emitted");
+            Assert.That(space.Heating.DesignLoad.Available, Is.False);
+        }
+
+        [Test]
         public void Golden_Provenance_IsNativeTasRoute()
         {
             BenchmarkProvenance provenance = Golden().Provenance;
