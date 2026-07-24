@@ -25,6 +25,11 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
 
         public static readonly Guid SpaceGuid = new Guid("cccccccc-0000-0000-0000-000000000001");
 
+        // TAS keys a SpaceSimulationResult's Reference by the TAS zone GUID, NOT the SAM space GUID.
+        // The fixture uses a distinct value so the tests prove the mapping reads per-space results via
+        // the adjacency-cluster relation, not by matching the reference to the SAM space GUID.
+        public const string TasZoneReference = "tas-zone-00000001";
+
         public const string SpaceName = "Space Single";
 
         public const double FloorArea = 20.0;
@@ -58,7 +63,12 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
 
         public const double UnmetCoolingHours = 0.0;
 
-        /// <summary>One conditioned office space with a fixed GUID, 20 m² floor area and 60 m³ volume (no geometry).</summary>
+        /// <summary>
+        /// One conditioned office space (fixed GUID, 20 m² / 60 m³) with the per-space heating and
+        /// cooling results RELATED to it in the adjacency cluster, exactly as the TAS route attaches
+        /// them. The results are constructed before the model so the model's deep copy preserves the
+        /// space→result relations the mapping reads.
+        /// </summary>
         public static AnalyticalModel SingleSpaceModel()
         {
             AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
@@ -67,6 +77,12 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             space.SetValue(SpaceParameter.Area, FloorArea);
             space.SetValue(SpaceParameter.Volume, SpaceVolume);
             adjacencyCluster.AddObject(space);
+
+            foreach (SpaceSimulationResult spaceSimulationResult in SpaceResults())
+            {
+                adjacencyCluster.AddObject(spaceSimulationResult);
+                adjacencyCluster.AddRelation(space, spaceSimulationResult);
+            }
 
             return new AnalyticalModel(
                 "Single Box Model",
@@ -93,10 +109,10 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             return result;
         }
 
-        /// <summary>The per-space heating and cooling results (W), keyed on the space GUID as TAS attaches them.</summary>
+        /// <summary>The per-space heating and cooling results (W), referenced by the TAS zone GUID (as TAS attaches them).</summary>
         public static List<SpaceSimulationResult> SpaceResults()
         {
-            string reference = SpaceGuid.ToString("N");
+            string reference = TasZoneReference;
 
             SpaceSimulationResult heating = new SpaceSimulationResult(SpaceName, TasSource, reference);
             heating.SetValue(SpaceSimulationResultParameter.LoadType, LoadType.Heating.Text());
@@ -125,7 +141,6 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
         public static BenchmarkDocument GoldenDocument()
         {
             AnalyticalModel model = SingleSpaceModel();
-            List<SpaceSimulationResult> spaceResults = SpaceResults();
 
             TasBenchmarkContext context = new TasBenchmarkContext
             {
@@ -146,8 +161,6 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
                 DurationSeconds = 42.0,
                 State = RunState.Success,
                 ModelResult = ModelResult(),
-                SpaceResults = spaceResults,
-                SpaceDesignLoadResults = spaceResults,
             };
 
             return model.ToBenchmark(context);

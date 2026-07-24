@@ -12,10 +12,12 @@ namespace SAM.Analytical.Tas.Benchmark
     {
         /// <summary>
         /// Maps a simulated SAM <see cref="AnalyticalModel"/> and its TAS run context to a B1a
-        /// benchmark document (schema v1, route <c>Native-TAS</c>). Measurements are read from the
-        /// engine-neutral SAM results the TAS route produced — the model-level
-        /// <see cref="AnalyticalModelSimulationResult"/> and the per-space
-        /// <see cref="SpaceSimulationResult"/> list — so this producer never re-reads a TSD or
+        /// benchmark document (schema v1, route <c>Native-TAS</c>). Per-space measurements are read
+        /// from the <see cref="SpaceSimulationResult"/> objects the TAS route related to each space
+        /// (via the adjacency-cluster relation, exactly as the engine attached them — not by matching
+        /// GUIDs, since a TAS result's <c>Reference</c> is the TAS zone GUID, not the SAM space GUID);
+        /// the model-level annual energy/peaks come from the context's
+        /// <see cref="AnalyticalModelSimulationResult"/>. This producer never re-reads a TSD or
         /// re-converts anything.
         /// </summary>
         /// <remarks>
@@ -29,8 +31,8 @@ namespace SAM.Analytical.Tas.Benchmark
         /// with a null value. A measured zero stays a value of 0. Peak load and its hour are coupled:
         /// a peak with no valid hour-of-year is emitted as unavailable rather than a misleading zero.
         /// </remarks>
-        /// <param name="analyticalModel">The neutral source model (provides GUIDs, names, areas and volumes).</param>
-        /// <param name="tasBenchmarkContext">Run context: SAM results, hashes and provenance.</param>
+        /// <param name="analyticalModel">The neutral source model, carrying the TAS-attached per-space results.</param>
+        /// <param name="tasBenchmarkContext">Run context: model-level result, hashes and provenance.</param>
         /// <returns>The benchmark document, or null when either argument is null.</returns>
         public static BenchmarkDocument ToBenchmark(this AnalyticalModel analyticalModel, TasBenchmarkContext tasBenchmarkContext)
         {
@@ -40,18 +42,18 @@ namespace SAM.Analytical.Tas.Benchmark
             }
 
             AnalyticalModelSimulationResult modelResult = tasBenchmarkContext.ModelResult;
-            List<SpaceSimulationResult> spaceResults = tasBenchmarkContext.SpaceResults ?? new List<SpaceSimulationResult>();
+            List<BenchmarkSpaceResult> spaces = Spaces(analyticalModel, out HashSet<string> spaceSources);
 
             return new BenchmarkDocument
             {
                 SchemaVersion = BenchmarkSchema.CurrentVersion,
-                Provenance = Provenance(tasBenchmarkContext, modelResult, spaceResults),
+                Provenance = Provenance(tasBenchmarkContext, modelResult, spaceSources),
                 Model = Model(modelResult),
-                Spaces = Spaces(analyticalModel, spaceResults, tasBenchmarkContext.SpaceDesignLoadResults),
+                Spaces = spaces,
             };
         }
 
-        private static BenchmarkProvenance Provenance(TasBenchmarkContext context, AnalyticalModelSimulationResult modelResult, IEnumerable<SpaceSimulationResult> spaceResults)
+        private static BenchmarkProvenance Provenance(TasBenchmarkContext context, AnalyticalModelSimulationResult modelResult, HashSet<string> spaceSources)
         {
             return new BenchmarkProvenance
             {
@@ -75,30 +77,19 @@ namespace SAM.Analytical.Tas.Benchmark
                 RunTimestampUtc = context.RunTimestampUtc,
                 DurationSeconds = context.DurationSeconds,
                 State = context.State,
-                ResultSources = ResultSources(modelResult, spaceResults),
+                ResultSources = ResultSources(modelResult, spaceSources),
                 Warnings = new List<string>(context.Warnings ?? new List<string>()),
                 Notes = new List<string>(context.Notes ?? new List<string>()),
             };
         }
 
         /// <summary>Distinct, non-empty SAM <c>Query.Source()</c> values retained from the attached results.</summary>
-        private static List<string> ResultSources(AnalyticalModelSimulationResult modelResult, IEnumerable<SpaceSimulationResult> spaceResults)
+        private static List<string> ResultSources(AnalyticalModelSimulationResult modelResult, HashSet<string> spaceSources)
         {
-            HashSet<string> sources = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<string> sources = new HashSet<string>(spaceSources ?? new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
             if (!string.IsNullOrWhiteSpace(modelResult?.Source))
             {
                 sources.Add(modelResult.Source);
-            }
-
-            if (spaceResults != null)
-            {
-                foreach (SpaceSimulationResult spaceResult in spaceResults)
-                {
-                    if (!string.IsNullOrWhiteSpace(spaceResult?.Source))
-                    {
-                        sources.Add(spaceResult.Source);
-                    }
-                }
             }
 
             return sources.ToList();
@@ -133,17 +124,17 @@ namespace SAM.Analytical.Tas.Benchmark
             };
         }
 
-        private static List<BenchmarkSpaceResult> Spaces(AnalyticalModel analyticalModel, List<SpaceSimulationResult> spaceResults, IEnumerable<SpaceSimulationResult> designLoadResults)
+        private static List<BenchmarkSpaceResult> Spaces(AnalyticalModel analyticalModel, out HashSet<string> spaceSources)
         {
+            spaceSources = new HashSet<string>(StringComparer.Ordinal);
             List<BenchmarkSpaceResult> result = new List<BenchmarkSpaceResult>();
 
-            List<Space> spaces = analyticalModel.AdjacencyCluster?.GetSpaces();
+            AdjacencyCluster adjacencyCluster = analyticalModel.AdjacencyCluster;
+            List<Space> spaces = adjacencyCluster?.GetSpaces();
             if (spaces == null)
             {
                 return result;
             }
-
-            List<SpaceSimulationResult> designLoads = designLoadResults?.ToList() ?? new List<SpaceSimulationResult>();
 
             foreach (Space space in spaces)
             {
@@ -152,45 +143,52 @@ namespace SAM.Analytical.Tas.Benchmark
                     continue;
                 }
 
-                string reference = space.Guid.ToString("N");
+                // Read the results the TAS route related to THIS space (via the adjacency-cluster
+                // relation), regardless of how the result's own Reference (a TAS zone GUID) is keyed.
+                List<SpaceSimulationResult> spaceResults = adjacencyCluster.GetResults<SpaceSimulationResult>(space) ?? new List<SpaceSimulationResult>();
+                foreach (SpaceSimulationResult spaceResult in spaceResults)
+                {
+                    if (!string.IsNullOrWhiteSpace(spaceResult?.Source))
+                    {
+                        spaceSources.Add(spaceResult.Source);
+                    }
+                }
 
                 result.Add(new BenchmarkSpaceResult
                 {
-                    Guid = reference,
+                    Guid = space.Guid.ToString("N"),
                     Name = space.Name,
                     Area = NonNegative(Double(space, SpaceParameter.Area), MetricUnit.SquareMetre),
                     Volume = NonNegative(Double(space, SpaceParameter.Volume), MetricUnit.CubicMetre),
-                    Heating = Condition(reference, LoadType.Heating, spaceResults, designLoads),
-                    Cooling = Condition(reference, LoadType.Cooling, spaceResults, designLoads),
+                    Heating = Condition(spaceResults, LoadType.Heating),
+                    Cooling = Condition(spaceResults, LoadType.Cooling),
                 });
             }
 
             return result;
         }
 
-        private static BenchmarkConditionResult Condition(string reference, LoadType loadType, List<SpaceSimulationResult> spaceResults, List<SpaceSimulationResult> designLoads)
+        private static BenchmarkConditionResult Condition(List<SpaceSimulationResult> spaceResults, LoadType loadType)
         {
-            SpaceSimulationResult annual = spaceResults.FirstOrDefault(x => Matches(x, reference, loadType) && Double(x, Analytical.SpaceSimulationResultParameter.Load).HasValue);
-            SpaceSimulationResult design = designLoads.FirstOrDefault(x => Matches(x, reference, loadType) && Double(x, Analytical.SpaceSimulationResultParameter.DesignLoad).HasValue);
+            SpaceSimulationResult match = spaceResults.FirstOrDefault(x => IsLoadType(x, loadType));
 
             (MetricValue peakLoad, MetricValue peakHour) = Peak(
-                Double(annual, Analytical.SpaceSimulationResultParameter.Load),
-                Integer(annual, Analytical.SpaceSimulationResultParameter.LoadIndex),
+                Double(match, Analytical.SpaceSimulationResultParameter.Load),
+                Integer(match, Analytical.SpaceSimulationResultParameter.LoadIndex),
                 MetricUnit.Watt);
 
             return new BenchmarkConditionResult
             {
-                DesignLoad = NonNegative(Double(design, Analytical.SpaceSimulationResultParameter.DesignLoad), MetricUnit.Watt),
+                DesignLoad = NonNegative(Double(match, Analytical.SpaceSimulationResultParameter.DesignLoad), MetricUnit.Watt),
                 PeakLoad = peakLoad,
                 PeakHour = peakHour,
-                UnmetHours = NonNegative(Double(annual, Analytical.SpaceSimulationResultParameter.UnmetHours), MetricUnit.Hour),
+                UnmetHours = NonNegative(Double(match, Analytical.SpaceSimulationResultParameter.UnmetHours), MetricUnit.Hour),
             };
         }
 
-        private static bool Matches(SpaceSimulationResult spaceSimulationResult, string reference, LoadType loadType)
+        private static bool IsLoadType(SpaceSimulationResult spaceSimulationResult, LoadType loadType)
         {
             return spaceSimulationResult != null
-                && string.Equals(spaceSimulationResult.Reference, reference, StringComparison.OrdinalIgnoreCase)
                 && spaceSimulationResult.TryGetValue(Analytical.SpaceSimulationResultParameter.LoadType, out string value)
                 && string.Equals(value, loadType.ToString(), StringComparison.Ordinal);
         }

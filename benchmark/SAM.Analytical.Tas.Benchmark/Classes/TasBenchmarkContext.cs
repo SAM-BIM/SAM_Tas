@@ -86,21 +86,10 @@ namespace SAM.Analytical.Tas.Benchmark
         /// <summary>
         /// The model-level result supplying annual consumption and coincident peaks (Wh/W as TAS
         /// stores them). Null for a failure document, in which case those metrics are unavailable.
+        /// Per-space results are NOT carried here: the mapping reads them from the source model's
+        /// adjacency cluster (the TAS route relates each <see cref="SpaceSimulationResult"/> to its
+        /// space), which is robust to the TAS zone-GUID keying of a result's own <c>Reference</c>.
         /// </summary>
         public AnalyticalModelSimulationResult ModelResult { get; set; }
-
-        /// <summary>
-        /// The per-space annual results (peak load [W] + coincident hour-of-year, unmet hours [h]),
-        /// matched to spaces by <c>Reference</c> (the SAM space GUID in "N" form) and load type.
-        /// Null/empty when no per-space results were read.
-        /// </summary>
-        public List<SpaceSimulationResult> SpaceResults { get; set; }
-
-        /// <summary>
-        /// Optional per-space design-day (sizing) results supplying <c>designLoad</c> [W]. Null/empty
-        /// when no sizing periods ran, in which case <c>designLoad</c> is emitted as unavailable.
-        /// Matched to spaces by <c>Reference</c> and load type.
-        /// </summary>
-        public List<SpaceSimulationResult> SpaceDesignLoadResults { get; set; }
     }
 }

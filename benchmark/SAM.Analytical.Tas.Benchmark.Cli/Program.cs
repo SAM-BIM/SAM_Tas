@@ -130,40 +130,83 @@ namespace SAM.Analytical.Tas.Benchmark
             stopwatch.Stop();
 
             AnalyticalModel resultModel = calculated ?? model;
-            bool success = !timedOut && runError == null && calculated != null;
-            context.State = success ? RunState.Success : RunState.Failure;
             context.DurationSeconds = stopwatch.Elapsed.TotalSeconds;
 
-            if (success)
-            {
-                string tsdPath = Path.Combine(Path.GetDirectoryName(tbdPath) ?? string.Empty, Path.GetFileNameWithoutExtension(tbdPath) + ".tsd");
+            // A non-null returned model is NOT sufficient: Calculate can return a (cloned) model
+            // without simulating (e.g. no weather year), and result extraction can yield nothing.
+            // Only declare success when the run actually produced the required measurements — model
+            // annual energy AND at least one per-space load — so a malformed weather file or a
+            // missing TSD becomes a failed producer document (exit 5), never a silent "success".
+            bool ranClean = !timedOut && runError == null && calculated != null;
 
+            string tsdPath = Path.Combine(Path.GetDirectoryName(tbdPath) ?? string.Empty, Path.GetFileNameWithoutExtension(tbdPath) + ".tsd");
+            bool tsdExists = ranClean && File.Exists(tsdPath);
+            if (tsdExists)
+            {
                 // The workflow attaches per-space results but NOT the model-level annual energy —
                 // read that explicitly (Wh/W; ToBenchmark converts to kWh/kW).
                 context.ModelResult = SAM.Analytical.Tas.Convert.ToSAM_AnalyticalModelSimulationResult(tsdPath, resultModel);
-                List<SpaceSimulationResult> spaceResults = resultModel.GetResults<SpaceSimulationResult>();
-                context.SpaceResults = spaceResults;
-                // Design loads (from sizing) live on the same per-space results.
-                context.SpaceDesignLoadResults = spaceResults;
             }
-            else
+
+            bool hasModelEnergy = HasAnnualEnergy(context.ModelResult);
+            bool hasSpaceLoad = HasAnySpaceLoad(resultModel);
+            bool success = ranClean && tsdExists && hasModelEnergy && hasSpaceLoad;
+            context.State = success ? RunState.Success : RunState.Failure;
+
+            if (!success)
             {
                 if (timedOut)
                 {
                     context.Notes.Add("The TAS run exceeded the " + timeout.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + "s timeout; measurements are unavailable.");
                 }
-                else
+                else if (runError != null)
                 {
                     context.Notes.Add("The TAS run did not complete successfully; measurements are unavailable.");
-                    if (runError != null)
-                    {
-                        context.Warnings.Add(runError.Message);
-                    }
+                    context.Warnings.Add(runError.Message);
+                }
+                else if (!tsdExists)
+                {
+                    context.Notes.Add("No TSD was produced (the simulation did not run — e.g. the weather file has no usable year); measurements are unavailable.");
+                }
+                else if (!hasModelEnergy)
+                {
+                    context.Notes.Add("The run produced no model annual-energy result; the TAS result is treated as a failure.");
+                }
+                else if (!hasSpaceLoad)
+                {
+                    context.Notes.Add("The run produced no per-space load results; the TAS result is treated as a failure.");
                 }
             }
 
             BenchmarkDocument document = resultModel.ToBenchmark(context);
             return Producer.Emit(document, outputPath, success, standardOutput);
+        }
+
+        /// <summary>True when the model-level result carries a finite annual heating or cooling energy.</summary>
+        private static bool HasAnnualEnergy(AnalyticalModelSimulationResult modelResult)
+        {
+            if (modelResult == null)
+            {
+                return false;
+            }
+
+            return IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionHeating)
+                || IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionCooling);
+        }
+
+        /// <summary>True when at least one per-space result carries a finite load (i.e. the simulation produced space measurements).</summary>
+        private static bool HasAnySpaceLoad(AnalyticalModel analyticalModel)
+        {
+            List<SpaceSimulationResult> results = analyticalModel.GetResults<SpaceSimulationResult>();
+            return results != null && results.Any(x => IsFinite(x, Analytical.SpaceSimulationResultParameter.Load));
+        }
+
+        private static bool IsFinite(Core.SAMObject sAMObject, Enum parameter)
+        {
+            return sAMObject != null
+                && sAMObject.TryGetValue(parameter, out double value)
+                && !double.IsNaN(value)
+                && !double.IsInfinity(value);
         }
 
         /// <summary>
