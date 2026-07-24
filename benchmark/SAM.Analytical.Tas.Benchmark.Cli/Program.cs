@@ -74,10 +74,12 @@ namespace SAM.Analytical.Tas.Benchmark
             TimeSpan timeout = arguments.GetTimeout() ?? DefaultTimeout;
 
             // The TAS run writes the TBD (deleted first by RemoveExistingTBD), its stem sidecars
-            // (.tsd/.t3d/.json/.timing.csv/auto .xml) and the benchmark output. Reject up front any
-            // --tbd/--out that would make one of those clobber the input --model: the CLI only writes
-            // its own artefacts, never the caller's source model.
-            string overwriteCollision = Producer.FindInputOverwriteCollision(modelPath, tbdPath, outputPath);
+            // (.tsd/.t3d/.json/.timing.csv) and the benchmark output; when no --gbxml is supplied it
+            // also writes the auto-derived <tbd>.xml. Reject up front any --tbd/--out that would make
+            // one of those clobber the input --model: the CLI only writes its own artefacts, never
+            // the caller's source model. A caller-supplied gbXML is reused, never written over.
+            string autoGbxmlPath = string.IsNullOrWhiteSpace(arguments.GetOption("gbxml")) ? Path.ChangeExtension(tbdPath, ".xml") : null;
+            string overwriteCollision = Producer.FindInputOverwriteCollision(modelPath, tbdPath, outputPath, autoGbxmlPath);
             if (overwriteCollision != null)
             {
                 throw new IOException("The TAS run/output path '" + Path.GetFullPath(overwriteCollision) + "' would overwrite the input model. Choose a different --tbd or --out path.");

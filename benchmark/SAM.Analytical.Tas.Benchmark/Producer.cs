@@ -122,13 +122,16 @@ namespace SAM.Analytical.Tas.Benchmark
         /// <summary>
         /// Returns the first path this run would write that resolves to the same file as the input
         /// model — or null when there is no collision. A TAS run writes the TBD and, from the same
-        /// stem, the <c>.tsd</c>/<c>.t3d</c>/<c>.json</c> sidecar/<c>.timing.csv</c> and (when no
-        /// <c>--gbxml</c> is supplied) the auto-derived <c>.xml</c>; the producer also writes the
-        /// benchmark output. Because <c>RemoveExistingTBD</c> deletes the TBD before opening it, a
-        /// <c>--tbd</c> (or <c>--out</c>) pointed at the source model would destroy it — the caller
-        /// must be rejected up front. All comparisons are full-path, case-insensitive.
+        /// stem, the <c>.tsd</c>/<c>.t3d</c>/<c>.json</c> sidecar/<c>.timing.csv</c>; the producer also
+        /// writes the benchmark output and, when it exports one, the shared gbXML. Because
+        /// <c>RemoveExistingTBD</c> deletes the TBD before opening it, a <c>--tbd</c> (or <c>--out</c>)
+        /// pointed at the source model would destroy it — the caller must be rejected up front.
+        /// <paramref name="gbxmlOutputPath"/> is the gbXML the producer will actually write (the
+        /// auto-derived <c>&lt;tbd&gt;.xml</c> when no <c>--gbxml</c> was supplied), or null when a
+        /// caller-supplied gbXML is reused and nothing is written there. All comparisons are
+        /// full-path, case-insensitive.
         /// </summary>
-        public static string FindInputOverwriteCollision(string modelPath, string tbdPath, string outputPath)
+        public static string FindInputOverwriteCollision(string modelPath, string tbdPath, string outputPath, string gbxmlOutputPath = null)
         {
             if (string.IsNullOrWhiteSpace(modelPath))
             {
@@ -146,9 +149,13 @@ namespace SAM.Analytical.Tas.Benchmark
                 basePath + ".t3d",
                 basePath + ".json",
                 basePath + ".timing.csv",
-                basePath + ".xml",
                 outputPath,
             };
+
+            if (!string.IsNullOrWhiteSpace(gbxmlOutputPath))
+            {
+                runOutputs.Add(gbxmlOutputPath);
+            }
 
             return runOutputs.FirstOrDefault(candidate => PathsEqual(candidate, modelPath));
         }

@@ -154,7 +154,10 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             // A stem sidecar the run writes lands on the model.
             Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.json"), tbd, outJson), Is.Not.Null, ".json sidecar");
             Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.tsd"), tbd, outJson), Is.Not.Null, ".tsd sidecar");
-            Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.xml"), tbd, outJson), Is.Not.Null, "auto gbXML");
+            // The auto gbXML is only written (and only a collision candidate) when no --gbxml is supplied.
+            string autoGbxml = Path.Combine(dir, "house.xml");
+            Assert.That(Producer.FindInputOverwriteCollision(autoGbxml, tbd, outJson, autoGbxml), Is.Not.Null, "auto gbXML written");
+            Assert.That(Producer.FindInputOverwriteCollision(autoGbxml, tbd, outJson, null), Is.Null, "supplied --gbxml: <stem>.xml is not written, so no collision");
             // The benchmark output lands on the model.
             Assert.That(Producer.FindInputOverwriteCollision(Path.Combine(dir, "house.sam"), tbd, Path.Combine(dir, "house.sam")), Is.Not.Null, "--out == --model");
             // A well-separated set of paths is fine.
