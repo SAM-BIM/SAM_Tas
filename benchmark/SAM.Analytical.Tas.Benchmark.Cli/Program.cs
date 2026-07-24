@@ -73,6 +73,15 @@ namespace SAM.Analytical.Tas.Benchmark
             string outputPath = BenchmarkCliPaths.ValidateOutputFile(arguments.RequireOption("out"));
             TimeSpan timeout = arguments.GetTimeout() ?? DefaultTimeout;
 
+            // WorkflowCalculator writes a sidecar SAM model to <tbd-stem>.json after the run. Reject a
+            // --tbd that would make that clobber the input --model: the CLI only writes the TBD/TSD,
+            // the shared gbXML and the benchmark output, never the caller's source model.
+            string sidecarModelPath = Path.Combine(Path.GetDirectoryName(tbdPath) ?? string.Empty, Path.GetFileNameWithoutExtension(tbdPath) + ".json");
+            if (PathsEqual(sidecarModelPath, modelPath))
+            {
+                throw new IOException("The --tbd path would make the TAS run overwrite the input model at '" + sidecarModelPath + "'. Choose a different --tbd name or directory.");
+            }
+
             // Provenance hashes (B1a helpers, exactly per SCHEMA.md "Canonical model hashing").
             string sourceFileHash = BenchmarkHash.ComputeSha256(File.ReadAllBytes(modelPath));
 
@@ -286,6 +295,24 @@ namespace SAM.Analytical.Tas.Benchmark
         /// masquerade as this run's — so a failed delete is a hard input/IO error (exit 3), not
         /// something to swallow.
         /// </summary>
+        /// <summary>Case-insensitive full-path equality (Windows filesystem), tolerant of separators/relative segments.</summary>
+        private static bool PathsEqual(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private static void DeleteIfExists(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
