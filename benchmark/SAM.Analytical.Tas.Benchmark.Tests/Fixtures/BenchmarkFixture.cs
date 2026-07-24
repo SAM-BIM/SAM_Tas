@@ -1,0 +1,156 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using System;
+using System.Collections.Generic;
+using SAM.Analytical;
+using SAM.Analytical.Benchmark;
+using SAM.Core;
+using SAM.Geometry.Spatial;
+
+namespace SAM.Analytical.Tas.Benchmark.Tests
+{
+    /// <summary>
+    /// Deterministic fixtures for the TAS producer tests, built entirely from SAM core objects with
+    /// no TAS COM: a one-space <see cref="AnalyticalModel"/> (fixed GUID, area and volume), a
+    /// model-level <see cref="AnalyticalModelSimulationResult"/> carrying annual energies/peaks in the
+    /// TAS storage units (<b>Wh</b>/<b>W</b>), and per-space <see cref="SpaceSimulationResult"/>
+    /// objects carrying peak loads, hours, unmet hours and design loads (<b>W</b>). The mapping
+    /// converts the model-level Wh/W to the schema's kWh/kW, so the golden magnitudes match the
+    /// OpenStudio producer (B1b) exactly — the whole point of the benchmark.
+    /// </summary>
+    public static class BenchmarkFixture
+    {
+        public const string TasSource = "SAM.Analytical.Tas";
+
+        public static readonly Guid SpaceGuid = new Guid("cccccccc-0000-0000-0000-000000000001");
+
+        public const string SpaceName = "Space Single";
+
+        public const double FloorArea = 20.0;
+
+        public const double SpaceVolume = 60.0;
+
+        // TAS storage units: consumption in Wh, model peaks in W. After the mapping's ÷1000 these
+        // become 1234.5 kWh / 678.25 kWh and 3.6 kW / 2.4 kW — the same magnitudes as B1b.
+        public const double AnnualHeatingWh = 1_234_500.0;
+
+        public const double AnnualCoolingWh = 678_250.0;
+
+        public const double ModelPeakHeatingW = 3600.0;
+
+        public const double ModelPeakCoolingW = 2400.0;
+
+        public const int PeakHeatingHour = 205;
+
+        public const int PeakCoolingHour = 4602;
+
+        // Per-space loads are already W; the mapping emits them unscaled.
+        public const double SpacePeakHeatingW = 3600.0;
+
+        public const double SpacePeakCoolingW = 2400.0;
+
+        public const double SpaceDesignHeatingW = 4200.0;
+
+        public const double SpaceDesignCoolingW = 2800.0;
+
+        public const double UnmetHeatingHours = 3.0;
+
+        public const double UnmetCoolingHours = 0.0;
+
+        /// <summary>One conditioned office space with a fixed GUID, 20 m² floor area and 60 m³ volume (no geometry).</summary>
+        public static AnalyticalModel SingleSpaceModel()
+        {
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+
+            Space space = new Space(SpaceGuid, SpaceName, new Point3D(2.5, 2, 1.5));
+            space.SetValue(SpaceParameter.Area, FloorArea);
+            space.SetValue(SpaceParameter.Volume, SpaceVolume);
+            adjacencyCluster.AddObject(space);
+
+            return new AnalyticalModel(
+                "Single Box Model",
+                "Benchmark producer offline fixture",
+                null,
+                null,
+                adjacencyCluster,
+                new MaterialLibrary("Benchmark Material Library"),
+                new ProfileLibrary("Benchmark Profile Library"));
+        }
+
+        /// <summary>The TAS model-level result (Wh/W), as <c>ToSAM_AnalyticalModelSimulationResult</c> would produce it.</summary>
+        public static AnalyticalModelSimulationResult ModelResult()
+        {
+            AnalyticalModelSimulationResult result = new AnalyticalModelSimulationResult(SpaceName, TasSource, "fixture.tsd");
+            result.SetValue(AnalyticalModelSimulationResultParameter.ConsumptionHeating, AnnualHeatingWh);
+            result.SetValue(AnalyticalModelSimulationResultParameter.ConsumptionCooling, AnnualCoolingWh);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakHeatingLoad, ModelPeakHeatingW);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakHeatingHour, PeakHeatingHour);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakCoolingLoad, ModelPeakCoolingW);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakCoolingHour, PeakCoolingHour);
+            result.SetValue(AnalyticalModelSimulationResultParameter.FloorArea, FloorArea);
+            result.SetValue(AnalyticalModelSimulationResultParameter.Volume, SpaceVolume);
+            return result;
+        }
+
+        /// <summary>The per-space heating and cooling results (W), keyed on the space GUID as TAS attaches them.</summary>
+        public static List<SpaceSimulationResult> SpaceResults()
+        {
+            string reference = SpaceGuid.ToString("N");
+
+            SpaceSimulationResult heating = new SpaceSimulationResult(SpaceName, TasSource, reference);
+            heating.SetValue(SpaceSimulationResultParameter.LoadType, LoadType.Heating.Text());
+            heating.SetValue(SpaceSimulationResultParameter.Load, SpacePeakHeatingW);
+            heating.SetValue(SpaceSimulationResultParameter.LoadIndex, PeakHeatingHour);
+            heating.SetValue(SpaceSimulationResultParameter.DesignLoad, SpaceDesignHeatingW);
+            heating.SetValue(SpaceSimulationResultParameter.UnmetHours, UnmetHeatingHours);
+
+            SpaceSimulationResult cooling = new SpaceSimulationResult(SpaceName, TasSource, reference);
+            cooling.SetValue(SpaceSimulationResultParameter.LoadType, LoadType.Cooling.Text());
+            cooling.SetValue(SpaceSimulationResultParameter.Load, SpacePeakCoolingW);
+            cooling.SetValue(SpaceSimulationResultParameter.LoadIndex, PeakCoolingHour);
+            cooling.SetValue(SpaceSimulationResultParameter.DesignLoad, SpaceDesignCoolingW);
+            cooling.SetValue(SpaceSimulationResultParameter.UnmetHours, UnmetCoolingHours);
+
+            return new List<SpaceSimulationResult> { heating, cooling };
+        }
+
+        /// <summary>
+        /// The full offline golden document: the one-space model mapped through the TAS-shaped
+        /// results and a fixed-provenance context (pinned <see cref="TasBenchmarkContext.RunTimestampUtc"/>
+        /// and fixed model-identity literals), so its serialization is byte-stable and can be asserted
+        /// against a committed fixture. Model + libraries take fresh random GUIDs each construction,
+        /// so the two model-identity provenance fields are pinned rather than derived.
+        /// </summary>
+        public static BenchmarkDocument GoldenDocument()
+        {
+            AnalyticalModel model = SingleSpaceModel();
+            List<SpaceSimulationResult> spaceResults = SpaceResults();
+
+            TasBenchmarkContext context = new TasBenchmarkContext
+            {
+                SourceModelName = model.Name,
+                SourceModelGuid = "cccccccc000000000000000000000009",
+                SourceFileHash = BenchmarkHash.ComputeSha256(new byte[] { 1, 2, 3, 4 }),
+                CanonicalModelHash = BenchmarkCanonicalJson.ComputeSha256("{\"model\":\"benchmark-golden-fixture\"}"),
+                CanonicalizationVersion = BenchmarkCanonicalization.CurrentVersion,
+                SamCommit = "0123456789abcdef",
+                RunnerCommit = "fedcba9876543210",
+                EngineName = "Tas",
+                EngineVersion = "9.5.3",
+                SdkVersion = null,
+                WeatherIdentity = "USA_TEST_Weather",
+                WeatherHash = BenchmarkHash.ComputeSha256(new byte[] { 5, 6, 7, 8 }),
+                DesignDaySource = DesignDaySource.EmbeddedModel,
+                RunTimestampUtc = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero),
+                DurationSeconds = 42.0,
+                State = RunState.Success,
+                ModelResult = ModelResult(),
+                SpaceResults = spaceResults,
+                SpaceDesignLoadResults = spaceResults,
+            };
+
+            return model.ToBenchmark(context);
+        }
+    }
+}
