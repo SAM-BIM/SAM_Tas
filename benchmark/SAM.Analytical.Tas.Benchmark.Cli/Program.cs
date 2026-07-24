@@ -73,13 +73,14 @@ namespace SAM.Analytical.Tas.Benchmark
             string outputPath = BenchmarkCliPaths.ValidateOutputFile(arguments.RequireOption("out"));
             TimeSpan timeout = arguments.GetTimeout() ?? DefaultTimeout;
 
-            // WorkflowCalculator writes a sidecar SAM model to <tbd-stem>.json after the run. Reject a
-            // --tbd that would make that clobber the input --model: the CLI only writes the TBD/TSD,
-            // the shared gbXML and the benchmark output, never the caller's source model.
-            string sidecarModelPath = Path.Combine(Path.GetDirectoryName(tbdPath) ?? string.Empty, Path.GetFileNameWithoutExtension(tbdPath) + ".json");
-            if (PathsEqual(sidecarModelPath, modelPath))
+            // The TAS run writes the TBD (deleted first by RemoveExistingTBD), its stem sidecars
+            // (.tsd/.t3d/.json/.timing.csv/auto .xml) and the benchmark output. Reject up front any
+            // --tbd/--out that would make one of those clobber the input --model: the CLI only writes
+            // its own artefacts, never the caller's source model.
+            string overwriteCollision = Producer.FindInputOverwriteCollision(modelPath, tbdPath, outputPath);
+            if (overwriteCollision != null)
             {
-                throw new IOException("The --tbd path would make the TAS run overwrite the input model at '" + sidecarModelPath + "'. Choose a different --tbd name or directory.");
+                throw new IOException("The TAS run/output path '" + Path.GetFullPath(overwriteCollision) + "' would overwrite the input model. Choose a different --tbd or --out path.");
             }
 
             // Provenance hashes (B1a helpers, exactly per SCHEMA.md "Canonical model hashing").
@@ -295,24 +296,6 @@ namespace SAM.Analytical.Tas.Benchmark
         /// masquerade as this run's — so a failed delete is a hard input/IO error (exit 3), not
         /// something to swallow.
         /// </summary>
-        /// <summary>Case-insensitive full-path equality (Windows filesystem), tolerant of separators/relative segments.</summary>
-        private static bool PathsEqual(string a, string b)
-        {
-            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
-            {
-                return false;
-            }
-
-            try
-            {
-                return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
         private static void DeleteIfExists(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
