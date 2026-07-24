@@ -201,19 +201,30 @@ namespace SAM.Analytical.Tas.Benchmark
         }
 
         /// <summary>
-        /// Resolves the gbXML the TAS route imports. Uses the caller's <c>--gbxml</c> when the file
-        /// exists; otherwise exports one from the SAM model (via <c>SAM.Analytical.gbXML</c>) to the
-        /// given path — defaulting to the TBD path with a <c>.xml</c> extension when none was given.
+        /// Resolves the gbXML the TAS route imports. A caller-supplied <c>--gbxml</c> that exists is
+        /// an intended shared input and is reused as-is. Otherwise a gbXML is exported from the
+        /// current SAM model: to the supplied path if it does not yet exist, or — when no
+        /// <c>--gbxml</c> was given — to the auto-derived <c>&lt;tbd&gt;.xml</c>, overwriting any stale
+        /// file from a previous run so a rerun that reuses the output directory can never simulate a
+        /// previous model's geometry while the provenance/hashes describe the current model.
         /// </summary>
         private static string EnsureGbXml(string gbxmlOption, string tbdPath, AnalyticalModel model, TasBenchmarkContext context)
         {
-            string gbxmlPath = string.IsNullOrWhiteSpace(gbxmlOption)
-                ? Path.ChangeExtension(tbdPath, ".xml")
-                : Path.GetFullPath(gbxmlOption);
+            bool callerSupplied = !string.IsNullOrWhiteSpace(gbxmlOption);
+            string gbxmlPath = callerSupplied
+                ? Path.GetFullPath(gbxmlOption)
+                : Path.ChangeExtension(tbdPath, ".xml");
 
-            if (File.Exists(gbxmlPath))
+            if (callerSupplied && File.Exists(gbxmlPath))
             {
                 return gbxmlPath;
+            }
+
+            // Auto-derived default: drop any stale gbXML first (the clean-run guarantee, alongside
+            // the stale .tbd/.tsd removal). A caller-supplied-but-missing path is simply created.
+            if (!callerSupplied)
+            {
+                DeleteIfExists(gbxmlPath);
             }
 
             gbXMLSerializer.gbXML gbxml = SAM.Analytical.gbXML.Convert.TogbXML(model);
@@ -222,7 +233,9 @@ namespace SAM.Analytical.Tas.Benchmark
                 throw new InvalidOperationException("Failed to export a shared gbXML from the model to: " + gbxmlPath);
             }
 
-            context.Notes.Add("Shared gbXML was exported from the source model (no --gbxml supplied).");
+            context.Notes.Add(callerSupplied
+                ? "Shared gbXML was exported from the source model to the supplied --gbxml path (it did not exist)."
+                : "Shared gbXML was exported from the source model (no --gbxml supplied).");
             return gbxmlPath;
         }
 
