@@ -42,7 +42,11 @@ namespace SAM.Analytical.Tas.Benchmark
             }
 
             AnalyticalModelSimulationResult modelResult = tasBenchmarkContext.ModelResult;
-            List<BenchmarkSpaceResult> spaces = Spaces(analyticalModel, out HashSet<string> spaceSources);
+
+            // The model result's Source is the authoritative TAS result source ("SAM.Analytical.Tas").
+            // Per-space results are read filtered to it, so pre-existing OpenStudio or older attached
+            // results in the input model can never be selected or leak into provenance.
+            List<BenchmarkSpaceResult> spaces = Spaces(analyticalModel, modelResult?.Source, out HashSet<string> spaceSources);
 
             return new BenchmarkDocument
             {
@@ -124,7 +128,7 @@ namespace SAM.Analytical.Tas.Benchmark
             };
         }
 
-        private static List<BenchmarkSpaceResult> Spaces(AnalyticalModel analyticalModel, out HashSet<string> spaceSources)
+        private static List<BenchmarkSpaceResult> Spaces(AnalyticalModel analyticalModel, string resultSource, out HashSet<string> spaceSources)
         {
             spaceSources = new HashSet<string>(StringComparer.Ordinal);
             List<BenchmarkSpaceResult> result = new List<BenchmarkSpaceResult>();
@@ -144,8 +148,12 @@ namespace SAM.Analytical.Tas.Benchmark
                 }
 
                 // Read the results the TAS route related to THIS space (via the adjacency-cluster
-                // relation), regardless of how the result's own Reference (a TAS zone GUID) is keyed.
-                List<SpaceSimulationResult> spaceResults = adjacencyCluster.GetResults<SpaceSimulationResult>(space) ?? new List<SpaceSimulationResult>();
+                // relation), regardless of how the result's own Reference (a TAS zone GUID) is keyed,
+                // and filtered to the TAS result source so pre-existing non-TAS results are ignored.
+                // With no known source (a failure document) there are no measurements to emit.
+                List<SpaceSimulationResult> spaceResults = string.IsNullOrWhiteSpace(resultSource)
+                    ? new List<SpaceSimulationResult>()
+                    : (adjacencyCluster.GetResults<SpaceSimulationResult>(space, resultSource) ?? new List<SpaceSimulationResult>());
                 foreach (SpaceSimulationResult spaceResult in spaceResults)
                 {
                     if (!string.IsNullOrWhiteSpace(spaceResult?.Source))

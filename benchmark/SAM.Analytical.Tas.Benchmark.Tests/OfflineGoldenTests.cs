@@ -66,6 +66,23 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
         }
 
         [Test]
+        public void ForeignNonTasResults_AreIgnored_OnlyTasValuesEmitted()
+        {
+            // The model carries an OpenStudio-sourced heating result (wrong load 99999 W) related to
+            // the space BEFORE the TAS results. The producer must select the TAS result by source and
+            // must not leak the foreign source into provenance.
+            BenchmarkDocument document = BenchmarkFixture.DocumentWithForeignResult();
+
+            BenchmarkSpaceResult space = document.Spaces.Single();
+            AssertAvailable(space.Heating.PeakLoad, BenchmarkFixture.SpacePeakHeatingW, MetricUnit.Watt);
+            AssertAvailable(space.Heating.DesignLoad, BenchmarkFixture.SpaceDesignHeatingW, MetricUnit.Watt);
+            AssertAvailable(space.Heating.UnmetHours, BenchmarkFixture.UnmetHeatingHours, MetricUnit.Hour);
+
+            Assert.That(document.Provenance.ResultSources, Is.EqualTo(new[] { BenchmarkFixture.TasSource }),
+                "only the TAS result source may appear in provenance");
+        }
+
+        [Test]
         public void Golden_Provenance_IsNativeTasRoute()
         {
             BenchmarkProvenance provenance = Golden().Provenance;

@@ -162,7 +162,7 @@ namespace SAM.Analytical.Tas.Benchmark
             }
 
             bool hasModelEnergy = HasAnnualEnergy(context.ModelResult);
-            bool hasSpaceLoad = HasAnySpaceLoad(resultModel);
+            bool hasSpaceLoad = HasAnySpaceLoad(resultModel, context.ModelResult?.Source);
             bool success = ranClean && tsdExists && hasModelEnergy && hasSpaceLoad;
             context.State = success ? RunState.Success : RunState.Failure;
 
@@ -207,10 +207,19 @@ namespace SAM.Analytical.Tas.Benchmark
                 || IsFinite(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionCooling);
         }
 
-        /// <summary>True when at least one per-space result carries a finite load (i.e. the simulation produced space measurements).</summary>
-        private static bool HasAnySpaceLoad(AnalyticalModel analyticalModel)
+        /// <summary>
+        /// True when at least one per-space result FROM THE TAS RESULT SOURCE carries a finite load
+        /// (i.e. this run produced space measurements). Filtering to the source stops a pre-existing
+        /// non-TAS result already on the input model from satisfying the success gate.
+        /// </summary>
+        private static bool HasAnySpaceLoad(AnalyticalModel analyticalModel, string resultSource)
         {
-            List<SpaceSimulationResult> results = analyticalModel.GetResults<SpaceSimulationResult>();
+            if (string.IsNullOrWhiteSpace(resultSource))
+            {
+                return false;
+            }
+
+            List<SpaceSimulationResult> results = analyticalModel.GetResults<SpaceSimulationResult>(resultSource);
             return results != null && results.Any(x => IsFinite(x, Analytical.SpaceSimulationResultParameter.Load));
         }
 
@@ -289,19 +298,24 @@ namespace SAM.Analytical.Tas.Benchmark
                 && designDays.Count > 0;
         }
 
+        /// <summary>
+        /// Deletes a stale artefact and confirms it is gone. A stale TSD that cannot be removed would
+        /// still satisfy the later "TSD exists" / result-reader checks and let a previous run's result
+        /// masquerade as this run's — so a failed delete is a hard input/IO error (exit 3), not
+        /// something to swallow.
+        /// </summary>
         private static void DeleteIfExists(string path)
         {
-            try
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                {
-                    File.Delete(path);
-                }
+                return;
             }
-            catch (Exception)
+
+            File.Delete(path);
+
+            if (File.Exists(path))
             {
-                // A stale artefact we cannot delete is not fatal here; RemoveExistingTBD and the run
-                // itself will surface a genuine problem.
+                throw new IOException("The stale TAS result file could not be removed: " + path);
             }
         }
 

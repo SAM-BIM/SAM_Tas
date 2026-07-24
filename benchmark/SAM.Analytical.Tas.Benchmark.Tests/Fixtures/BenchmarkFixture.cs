@@ -71,6 +71,35 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
         /// </summary>
         public static AnalyticalModel SingleSpaceModel()
         {
+            return BuildModel(SpaceResults());
+        }
+
+        /// <summary>
+        /// The same one-space model but with a FOREIGN (OpenStudio-sourced) heating result related to
+        /// the space BEFORE the TAS results — used to prove the producer selects the TAS result by
+        /// source, never a pre-existing non-TAS result attached to the input model.
+        /// </summary>
+        public static AnalyticalModel SingleSpaceModelWithForeignResultFirst()
+        {
+            List<SpaceSimulationResult> results = new List<SpaceSimulationResult> { ForeignHeatingResult() };
+            results.AddRange(SpaceResults());
+            return BuildModel(results);
+        }
+
+        /// <summary>An OpenStudio-sourced heating result with a distinct (wrong) load, to be ignored by the TAS producer.</summary>
+        public static SpaceSimulationResult ForeignHeatingResult()
+        {
+            SpaceSimulationResult foreign = new SpaceSimulationResult(SpaceName, "SAM.Analytical.OpenStudio", "os-zone-ref");
+            foreign.SetValue(SpaceSimulationResultParameter.LoadType, LoadType.Heating.Text());
+            foreign.SetValue(SpaceSimulationResultParameter.Load, 99999.0);
+            foreign.SetValue(SpaceSimulationResultParameter.LoadIndex, 100);
+            foreign.SetValue(SpaceSimulationResultParameter.DesignLoad, 99999.0);
+            foreign.SetValue(SpaceSimulationResultParameter.UnmetHours, 999.0);
+            return foreign;
+        }
+
+        private static AnalyticalModel BuildModel(IEnumerable<SpaceSimulationResult> resultsToAttach)
+        {
             AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
 
             Space space = new Space(SpaceGuid, SpaceName, new Point3D(2.5, 2, 1.5));
@@ -78,7 +107,7 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             space.SetValue(SpaceParameter.Volume, SpaceVolume);
             adjacencyCluster.AddObject(space);
 
-            foreach (SpaceSimulationResult spaceSimulationResult in SpaceResults())
+            foreach (SpaceSimulationResult spaceSimulationResult in resultsToAttach)
             {
                 adjacencyCluster.AddObject(spaceSimulationResult);
                 adjacencyCluster.AddRelation(space, spaceSimulationResult);
@@ -140,11 +169,21 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
         /// </summary>
         public static BenchmarkDocument GoldenDocument()
         {
-            AnalyticalModel model = SingleSpaceModel();
+            return SingleSpaceModel().ToBenchmark(GoldenContext());
+        }
 
-            TasBenchmarkContext context = new TasBenchmarkContext
+        /// <summary>The golden document produced from a model that also carries a foreign (non-TAS) result.</summary>
+        public static BenchmarkDocument DocumentWithForeignResult()
+        {
+            return SingleSpaceModelWithForeignResultFirst().ToBenchmark(GoldenContext());
+        }
+
+        /// <summary>The fixed-provenance context shared by the golden and the foreign-result document.</summary>
+        public static TasBenchmarkContext GoldenContext()
+        {
+            return new TasBenchmarkContext
             {
-                SourceModelName = model.Name,
+                SourceModelName = "Single Box Model",
                 SourceModelGuid = "cccccccc000000000000000000000009",
                 SourceFileHash = BenchmarkHash.ComputeSha256(new byte[] { 1, 2, 3, 4 }),
                 CanonicalModelHash = BenchmarkCanonicalJson.ComputeSha256("{\"model\":\"benchmark-golden-fixture\"}"),
@@ -162,8 +201,6 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
                 State = RunState.Success,
                 ModelResult = ModelResult(),
             };
-
-            return model.ToBenchmark(context);
         }
     }
 }
