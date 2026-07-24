@@ -18,6 +18,9 @@ The core/tests are split from the CLI so the mapping logic stays buildable and t
 so anything referencing `SAM.Analytical.Tas` must be built through the repository solution with the
 .NET Framework MSBuild (as CI does).
 
+The mandatory licensed-machine run (populated annual energy, non-zero space loads, schema-valid
+output) is recorded in [`D10-CHECKPOINT.md`](D10-CHECKPOINT.md).
+
 ## Prerequisites (run only on a licensed EDSL Tas laptop)
 
 - A licensed **EDSL Tas** installation with its COM servers registered. The install directory is
