@@ -217,10 +217,11 @@ namespace SAM.Analytical.Grasshopper.Tas
             // the run is alive. The call cannot be cancelled, and the thread is always joined, so nothing is
             // orphaned. TAS COM is STA-affine, hence the dedicated STA thread rather than a thread-pool one.
             bool result = false;
-            Core.Windows.Modify.RunOnStaThread("Tas.Simulate - simulating (cannot be cancelled)", () =>
+            Core.Windows.Modify.RunOnStaThread("Tas.Simulate - simulating", () =>
             {
                 result = Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, day_First, day_Last, sizingType, surfaceOutputSpecs);
-            });
+            },
+            "This simulation cannot be cancelled - it must run to completion, which may take several minutes.");
 
             if (index_Successful != -1)
             {
