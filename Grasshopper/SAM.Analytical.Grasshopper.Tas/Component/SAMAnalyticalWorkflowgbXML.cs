@@ -351,7 +351,13 @@ namespace SAM.Analytical.Grasshopper.Tas
                 UpdateWindowPositionType = updateWindowPositionType
             };
 
-            analyticalModel = Modify.RunWorkflow(analyticalModel, workflowSettings);
+            analyticalModel = Modify.RunWorkflow(analyticalModel, workflowSettings, out bool cancelled);
+
+            if (cancelled)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Workflow cancelled by user. Partially written .t3d/.tbd/.tsd files may remain - set _removeTBD_ to True for a clean rerun.");
+                return;
+            }
 
             try
             {

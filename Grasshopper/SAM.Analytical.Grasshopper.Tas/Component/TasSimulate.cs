@@ -213,7 +213,15 @@ namespace SAM.Analytical.Grasshopper.Tas
                 }
             }
 
-            bool result = Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, day_First, day_Last, sizingType, surfaceOutputSpecs);
+            // One uninterruptible TAS COM call: run it on a joined STA thread so an animated marquee shows
+            // the run is alive. The call cannot be cancelled, and the thread is always joined, so nothing is
+            // orphaned. TAS COM is STA-affine, hence the dedicated STA thread rather than a thread-pool one.
+            bool result = false;
+            Core.Windows.Modify.RunOnStaThread("Tas.Simulate - simulating", () =>
+            {
+                result = Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, day_First, day_Last, sizingType, surfaceOutputSpecs);
+            },
+            "This simulation cannot be cancelled - it must run to completion, which may take several minutes.");
 
             if (index_Successful != -1)
             {

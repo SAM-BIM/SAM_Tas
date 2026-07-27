@@ -12,6 +12,7 @@ using SAM.Weather;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace SAM.Analytical.Grasshopper.Tas
@@ -310,63 +311,95 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             bool shadingUpdated = false;
 
-            using (Core.Windows.Forms.ProgressForm progressForm = new ("SAM Workflow - TBD Update", count))
+            // One cancellation source spans the inline COM pre-step and RunWorkflow, so a single Cancel click
+            // aborts either. The dialog runs on its own UI thread (ProgressFormHost), so the Cancel click is
+            // recorded the instant it is made even though this thread is blocked in a COM call for minutes at
+            // a time; cancellation is still checked only BETWEEN COM calls — an in-flight TAS COM call is
+            // never interrupted.
+            using CancellationTokenSource cancellationTokenSource = new();
+
+            using (Core.Windows.Forms.ProgressFormHost progressForm = new ("SAM Workflow - TBD Update", count, true, "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress."))
             {
-                progressForm.Update("Opening TBD document");
-                using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
+                progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
+
+                try
                 {
-                    TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
-
-                    if (weatherData != null)
+                    progressForm.Update("Opening TBD document");
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
                     {
-                        progressForm.Update("Updating Weather Data");
-                        Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, analyticalModel.AdjacencyCluster.BuildingHeight());
+                        TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
 
-                        double latitude_TBD = Core.Query.Round(analyticalModel.Location.Latitude, 0.01);
-                        double longitude_TBD = Core.Query.Round(analyticalModel.Location.Longitude, 0.01);
-
-                        double latitude_WeatherData = Core.Query.Round(weatherData.Latitude, 0.01);
-                        double longitude_WeatherDate = Core.Query.Round(weatherData.Longitude, 0.01);
-
-                        if (Math.Abs(latitude_TBD - latitude_WeatherData) > 0.01 || Math.Abs(longitude_TBD - longitude_WeatherDate) > 0.01)
+                        if (weatherData != null)
                         {
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "WeatherData Longitude or Latitude mismatch");
+                            progressForm.Update("Updating Weather Data");
+                            cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                            Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, analyticalModel.AdjacencyCluster.BuildingHeight());
+
+                            double latitude_TBD = Core.Query.Round(analyticalModel.Location.Latitude, 0.01);
+                            double longitude_TBD = Core.Query.Round(analyticalModel.Location.Longitude, 0.01);
+
+                            double latitude_WeatherData = Core.Query.Round(weatherData.Latitude, 0.01);
+                            double longitude_WeatherDate = Core.Query.Round(weatherData.Longitude, 0.01);
+
+                            if (Math.Abs(latitude_TBD - latitude_WeatherData) > 0.01 || Math.Abs(longitude_TBD - longitude_WeatherDate) > 0.01)
+                            {
+                                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "WeatherData Longitude or Latitude mismatch");
+                            }
                         }
+
+                        progressForm.Update("Adding HDD and CDD Day Types");
+                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
+
+                        TBD.Calendar calendar = tBDDocument.Building.GetCalendar();
+
+                        List<TBD.dayType> dayTypes = Query.DayTypes(calendar);
+                        if (dayTypes.Find(x => x.name == "HDD") == null)
+                        {
+                            TBD.dayType dayType = calendar.AddDayType();
+                            dayType.name = "HDD";
+                        }
+
+                        if (dayTypes.Find(x => x.name == "CDD") == null)
+                        {
+                            TBD.dayType dayType = calendar.AddDayType();
+                            dayType.name = "CDD";
+                        }
+
+                        progressForm.Note = "Cannot cancel during 'Converting to TBD' - this stage may run for several minutes.";
+                        progressForm.Update("Converting to TBD");
+                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                        Analytical.Tas.Convert.ToTBD(analyticalModel, tBDDocument);
+                        progressForm.Note = "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress.";
+
+                        progressForm.Update("Updating Zones");
+                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                        Analytical.Tas.Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
+
+                        if (coolingDesignDays != null || heatingDesignDays != null)
+                        {
+                            progressForm.Update("Adding Design Days");
+                            cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                            Analytical.Tas.Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
+                        }
+
+                        //progressForm.Update("Updating Shades");
+                        //shadingUpdated = Analytical.Tas.Modify.UpdateShading(tBDDocument, analyticalModel);
+
+                        sAMTBDDocument.Save();
                     }
 
-                    progressForm.Update("Adding HDD and CDD Day Types");
-
-                    TBD.Calendar calendar = tBDDocument.Building.GetCalendar();
-
-                    List<TBD.dayType> dayTypes = Query.DayTypes(calendar);
-                    if (dayTypes.Find(x => x.name == "HDD") == null)
-                    {
-                        TBD.dayType dayType = calendar.AddDayType();
-                        dayType.name = "HDD";
-                    }
-
-                    if (dayTypes.Find(x => x.name == "CDD") == null)
-                    {
-                        TBD.dayType dayType = calendar.AddDayType();
-                        dayType.name = "CDD";
-                    }
-
-                    progressForm.Update("Converting to TBD");
-                    Analytical.Tas.Convert.ToTBD(analyticalModel, tBDDocument);
-
-                    progressForm.Update("Updating Zones");
-                    Analytical.Tas.Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
-
-                    if (coolingDesignDays != null || heatingDesignDays != null)
-                    {
-                        progressForm.Update("Adding Design Days");
-                        Analytical.Tas.Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
-                    }
-
-                    //progressForm.Update("Updating Shades");
-                    //shadingUpdated = Analytical.Tas.Modify.UpdateShading(tBDDocument, analyticalModel);
-
-                    sAMTBDDocument.Save();
+                    // Final pump before this form is disposed. A Cancel click queued during the last
+                    // operations (AddDesignDays / Save) is not delivered by any later Update, so without this
+                    // it would be discarded with the form and the workflow below would run regardless.
+                    // increment:false so the counted step total is not overshot.
+                    progressForm.Update("Finalising TBD", false);
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                }
+                catch (OperationCanceledException)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Workflow cancelled by user. Partially written .t3d/.tbd/.tsd files may remain - set _removeTBD_ to True for a clean rerun.");
+                    return;
                 }
             }
 
@@ -432,11 +465,17 @@ namespace SAM.Analytical.Grasshopper.Tas
             analyticalModel.TryGetValue(AnalyticalModelParameter.WeatherData, out WeatherData weatherData_Temp);
             analyticalModel.RemoveValue(AnalyticalModelParameter.WeatherData);
 
-            Modify.RunWorkflow(analyticalModel, workflowSettings);
+            Modify.RunWorkflow(analyticalModel, workflowSettings, cancellationTokenSource.Token, out bool cancelledWorkflow);
 
             if(weatherData_Temp != null)
             {
                 analyticalModel.SetValue(AnalyticalModelParameter.WeatherData, weatherData_Temp);
+            }
+
+            if (cancelledWorkflow)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Workflow cancelled by user. Partially written .t3d/.tbd/.tsd files may remain - set _removeTBD_ to True for a clean rerun.");
+                return;
             }
 
             bool saveWeather = false;

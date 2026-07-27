@@ -41,12 +41,47 @@ namespace SAM.Analytical.Tas
 
         public WorkflowSettings WorkflowSettings { get; set; }
 
+        /// <summary>
+        /// Optional cooperative cancellation. Defaults to <see cref="System.Threading.CancellationToken.None"/>
+        /// so existing callers (e.g. the benchmark CLI) are unaffected. It is observed once per stage in
+        /// <see cref="Step"/>, so a cancel aborts before the next step begins; it does NOT interrupt the
+        /// in-flight, uninterruptible TAS COM simulate/sizing call within a step.
+        /// </summary>
+        public System.Threading.CancellationToken CancellationToken { get; set; } = System.Threading.CancellationToken.None;
+
         private void Step(string description)
         {
+            // Finalize first so the stage that just completed keeps its timing.
             FinalizeCurrentStep();
+
+            // Already cancelled: stop without announcing a stage that will not run.
+            CancellationToken.ThrowIfCancellationRequested();
+
+            // Raise Updating BEFORE deciding to proceed. A WinForms listener pumps the message queue here
+            // (ProgressForm.Update -> Application.DoEvents), so this is where a queued Cancel click is actually
+            // delivered. Checking the token only before this call would observe a stale state and let this
+            // stage - potentially an expensive or file-writing one - start anyway.
+            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs(description));
+
+            // Observe a cancel delivered by that pump, before this stage does any work. Cancelling can still
+            // leave partially written .t3d/.tbd/.tsd files behind - a later clean rerun should set
+            // _removeTBD_ true.
+            CancellationToken.ThrowIfCancellationRequested();
+
             currentStepName = description;
             stepStopwatch.Restart();
-            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs(description));
+        }
+
+        /// <summary>
+        /// The second cancellation choke point, observed before every normal return from
+        /// <see cref="Calculate"/>. <see cref="Step"/> only covers cancels seen before a stage starts, so a
+        /// Cancel clicked during a terminal stage - "Saving Model", or the last stage on the no-weather and
+        /// no-simulation paths - would otherwise be recorded by the progress dialog and never seen here,
+        /// letting Calculate return normally and the caller report success.
+        /// </summary>
+        private void ThrowIfCancelledBeforeReturning()
+        {
+            CancellationToken.ThrowIfCancellationRequested();
         }
 
         private void FinalizeCurrentStep()
@@ -93,6 +128,11 @@ namespace SAM.Analytical.Tas
             {
                 return null;
             }
+
+            // Before anything else: the setup below unconditionally deletes an existing .t3d, and the .tbd
+            // too when RemoveExistingTBD is set, all of it ahead of the first Step. A caller handing in an
+            // already-cancelled token (the WorkflowTBD pre-step shares one) must not lose those files.
+            CancellationToken.ThrowIfCancellationRequested();
 
             AnalyticalModel result = new AnalyticalModel(analyticalModel);
 
@@ -358,6 +398,7 @@ namespace SAM.Analytical.Tas
             if (!hasWeatherData)
             {
                 WriteTimingsCsv(directory, fileName);
+                ThrowIfCancelledBeforeReturning();
                 return result;
             }
 
@@ -392,6 +433,7 @@ namespace SAM.Analytical.Tas
             if (!WorkflowSettings.Simulate)
             {
                 WriteTimingsCsv(directory, fileName);
+                ThrowIfCancelledBeforeReturning();
                 return result;
             }
 
@@ -439,6 +481,8 @@ namespace SAM.Analytical.Tas
             }
 
             WriteTimingsCsv(directory, fileName);
+
+            ThrowIfCancelledBeforeReturning();
 
             Ended?.Invoke(this, new System.EventArgs());
 
