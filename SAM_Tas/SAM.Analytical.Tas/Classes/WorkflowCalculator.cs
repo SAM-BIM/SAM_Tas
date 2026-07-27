@@ -51,14 +51,25 @@ namespace SAM.Analytical.Tas
 
         private void Step(string description)
         {
-            // Finalize first so the stage that just completed keeps its timing, then stop before the next one
-            // begins. Cancelling can leave partially written .t3d/.tbd/.tsd files behind — a later clean rerun
-            // should set _removeTBD_ true.
+            // Finalize first so the stage that just completed keeps its timing.
             FinalizeCurrentStep();
+
+            // Already cancelled: stop without announcing a stage that will not run.
             CancellationToken.ThrowIfCancellationRequested();
+
+            // Raise Updating BEFORE deciding to proceed. A WinForms listener pumps the message queue here
+            // (ProgressForm.Update -> Application.DoEvents), so this is where a queued Cancel click is actually
+            // delivered. Checking the token only before this call would observe a stale state and let this
+            // stage - potentially an expensive or file-writing one - start anyway.
+            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs(description));
+
+            // Observe a cancel delivered by that pump, before this stage does any work. Cancelling can still
+            // leave partially written .t3d/.tbd/.tsd files behind - a later clean rerun should set
+            // _removeTBD_ true.
+            CancellationToken.ThrowIfCancellationRequested();
+
             currentStepName = description;
             stepStopwatch.Restart();
-            Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs(description));
         }
 
         private void FinalizeCurrentStep()

@@ -386,6 +386,13 @@ namespace SAM.Analytical.Grasshopper.Tas
 
                         sAMTBDDocument.Save();
                     }
+
+                    // Final pump before this form is disposed. A Cancel click queued during the last
+                    // operations (AddDesignDays / Save) is not delivered by any later Update, so without this
+                    // it would be discarded with the form and the workflow below would run regardless.
+                    // increment:false so the counted step total is not overshot.
+                    progressForm.Update("Finalising TBD", false);
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
                 }
                 catch (OperationCanceledException)
                 {
