@@ -72,6 +72,18 @@ namespace SAM.Analytical.Tas
             stepStopwatch.Restart();
         }
 
+        /// <summary>
+        /// The second cancellation choke point, observed before every normal return from
+        /// <see cref="Calculate"/>. <see cref="Step"/> only covers cancels seen before a stage starts, so a
+        /// Cancel clicked during a terminal stage - "Saving Model", or the last stage on the no-weather and
+        /// no-simulation paths - would otherwise be recorded by the progress dialog and never seen here,
+        /// letting Calculate return normally and the caller report success.
+        /// </summary>
+        private void ThrowIfCancelledBeforeReturning()
+        {
+            CancellationToken.ThrowIfCancellationRequested();
+        }
+
         private void FinalizeCurrentStep()
         {
             if (currentStepName == null)
@@ -116,6 +128,11 @@ namespace SAM.Analytical.Tas
             {
                 return null;
             }
+
+            // Before anything else: the setup below unconditionally deletes an existing .t3d, and the .tbd
+            // too when RemoveExistingTBD is set, all of it ahead of the first Step. A caller handing in an
+            // already-cancelled token (the WorkflowTBD pre-step shares one) must not lose those files.
+            CancellationToken.ThrowIfCancellationRequested();
 
             AnalyticalModel result = new AnalyticalModel(analyticalModel);
 
@@ -381,6 +398,7 @@ namespace SAM.Analytical.Tas
             if (!hasWeatherData)
             {
                 WriteTimingsCsv(directory, fileName);
+                ThrowIfCancelledBeforeReturning();
                 return result;
             }
 
@@ -415,6 +433,7 @@ namespace SAM.Analytical.Tas
             if (!WorkflowSettings.Simulate)
             {
                 WriteTimingsCsv(directory, fileName);
+                ThrowIfCancelledBeforeReturning();
                 return result;
             }
 
@@ -462,6 +481,8 @@ namespace SAM.Analytical.Tas
             }
 
             WriteTimingsCsv(directory, fileName);
+
+            ThrowIfCancelledBeforeReturning();
 
             Ended?.Invoke(this, new System.EventArgs());
 
