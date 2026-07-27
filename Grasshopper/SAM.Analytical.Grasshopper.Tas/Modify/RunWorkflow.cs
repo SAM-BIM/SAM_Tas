@@ -20,13 +20,21 @@ namespace SAM.Analytical.Grasshopper.Tas
         }
 
         /// <summary>
-        /// Runs the TAS workflow with a message-pumped progress form that carries a Cancel button. Cancellation
-        /// is cooperative and between-step (see <see cref="WorkflowCalculator.CancellationToken"/>): it aborts
-        /// before the next step but cannot interrupt the in-flight TAS COM simulate/sizing call. The optional
-        /// <paramref name="externalCancellationToken"/> lets a caller (e.g. WorkflowTBD's own COM pre-step) share
-        /// one cancel across its stage and this one. On cancellation the method returns null and sets
-        /// <paramref name="cancelled"/> true; on any other failure it returns null with <paramref name="cancelled"/>
-        /// false (indistinguishable from the previous behaviour for non-cancelled callers).
+        /// Runs the TAS workflow with a progress dialog that carries a Cancel button. Cancellation is
+        /// cooperative and between-step (see <see cref="WorkflowCalculator.CancellationToken"/>): it aborts
+        /// before the next step but cannot interrupt the in-flight TAS COM simulate/sizing call.
+        /// <para>
+        /// The dialog runs on its own UI thread (<see cref="ProgressFormHost"/>) rather than on this one. The
+        /// workflow blocks this thread for minutes at a time, and Windows ghosts a window whose thread has
+        /// stopped pumping and then discards clicks on the ghost — so a Cancel button on this thread's own
+        /// form silently loses the click and the run carries on to completion. The job itself stays here; only
+        /// the dialog moves, so no TAS COM object changes apartment.
+        /// </para>
+        /// The optional <paramref name="externalCancellationToken"/> lets a caller (e.g. WorkflowTBD's own COM
+        /// pre-step) share one cancel across its stage and this one. On cancellation the method returns null
+        /// and sets <paramref name="cancelled"/> true; on any other failure it returns null with
+        /// <paramref name="cancelled"/> false (indistinguishable from the previous behaviour for non-cancelled
+        /// callers).
         /// </summary>
         public static AnalyticalModel RunWorkflow(this AnalyticalModel analyticalModel, WorkflowSettings workflowSettings, CancellationToken externalCancellationToken, out bool cancelled)
         {
@@ -44,11 +52,9 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             AnalyticalModel result = analyticalModel;
             using (CancellationTokenSource cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
-            using (ProgressForm progressForm = new("Workflow"))
+            using (ProgressFormHost progressFormHost = new("Workflow", 1, true, CancelNote(null)))
             {
-                progressForm.Cancellable = true;
-                progressForm.Note = CancelNote(null);
-                progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
+                progressFormHost.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
                 WorkflowCalculator workflowCalculator = new(workflowSettings)
                 {
@@ -57,13 +63,13 @@ namespace SAM.Analytical.Grasshopper.Tas
 
                 workflowCalculator.StepsCounted += (s, e) =>
                 {
-                    progressForm.Max = e.Count;
+                    progressFormHost.Max = e.Count;
                 };
 
                 workflowCalculator.Updating += (s, e) =>
                 {
-                    progressForm.Note = CancelNote(e.Description);
-                    progressForm.Update(e.Description);
+                    progressFormHost.Note = CancelNote(e.Description);
+                    progressFormHost.Update(e.Description);
                 };
 
                 try

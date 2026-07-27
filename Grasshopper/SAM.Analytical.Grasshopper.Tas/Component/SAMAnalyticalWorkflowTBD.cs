@@ -312,15 +312,14 @@ namespace SAM.Analytical.Grasshopper.Tas
             bool shadingUpdated = false;
 
             // One cancellation source spans the inline COM pre-step and RunWorkflow, so a single Cancel click
-            // aborts either. The Update calls pump the message queue (Application.DoEvents), so the Cancel
-            // button is processed between steps; cancellation is checked only BETWEEN COM calls — an in-flight
-            // TAS COM call is never interrupted.
+            // aborts either. The dialog runs on its own UI thread (ProgressFormHost), so the Cancel click is
+            // recorded the instant it is made even though this thread is blocked in a COM call for minutes at
+            // a time; cancellation is still checked only BETWEEN COM calls — an in-flight TAS COM call is
+            // never interrupted.
             using CancellationTokenSource cancellationTokenSource = new();
 
-            using (Core.Windows.Forms.ProgressForm progressForm = new ("SAM Workflow - TBD Update", count))
+            using (Core.Windows.Forms.ProgressFormHost progressForm = new ("SAM Workflow - TBD Update", count, true, "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress."))
             {
-                progressForm.Cancellable = true;
-                progressForm.Note = "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress.";
                 progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
                 try
