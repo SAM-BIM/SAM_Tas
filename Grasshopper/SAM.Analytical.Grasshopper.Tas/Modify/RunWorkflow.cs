@@ -52,31 +52,51 @@ namespace SAM.Analytical.Grasshopper.Tas
 
             AnalyticalModel result = analyticalModel;
             using (CancellationTokenSource cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
-            using (ProgressFormHost progressFormHost = new("Workflow", 1, true, Analytical.Tas.Query.CancelNote(null)))
             {
-                progressFormHost.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
-
-                WorkflowCalculator workflowCalculator = new(workflowSettings)
-                {
-                    CancellationToken = cancellationTokenSource.Token
-                };
-
-                workflowCalculator.StepsCounted += (s, e) =>
-                {
-                    progressFormHost.Max = e.Count;
-                };
-
-                workflowCalculator.Updating += (s, e) =>
-                {
-                    progressFormHost.Note = Analytical.Tas.Query.CancelNote(e.Description);
-                    progressFormHost.Update(e.Description);
-                };
+                // Not a using: the dialog has to be torn down BEFORE the final cancellation check below, and a
+                // using would dispose it after. The Cancel button lives on the dialog's own UI thread, so it can
+                // be clicked at any instant - including after a check placed here. Checking then disposing only
+                // moves that race; disposing then checking closes it, because Dispose closes the form and joins
+                // its thread, so afterwards no further CancelRequested can arrive and any in-flight one has
+                // already run.
+                ProgressFormHost progressFormHost = new("Workflow", 1, true, Analytical.Tas.Query.CancelNote(null));
 
                 try
                 {
+                    progressFormHost.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
+
+                    WorkflowCalculator workflowCalculator = new(workflowSettings)
+                    {
+                        CancellationToken = cancellationTokenSource.Token
+                    };
+
+                    workflowCalculator.StepsCounted += (s, e) =>
+                    {
+                        progressFormHost.Max = e.Count;
+                    };
+
+                    workflowCalculator.Updating += (s, e) =>
+                    {
+                        progressFormHost.Note = Analytical.Tas.Query.CancelNote(e.Description);
+                        progressFormHost.Update(e.Description);
+                    };
+
                     result = workflowCalculator.Calculate(analyticalModel);
                 }
                 catch (System.OperationCanceledException)
+                {
+                    cancelled = true;
+                    result = null;
+                }
+                finally
+                {
+                    progressFormHost.Dispose();
+                }
+
+                // Past this point no cancel can be raised, so this observation is final. It catches a click that
+                // landed after WorkflowCalculator's own last check - without it the component would report
+                // success and emit a model the user had asked it to stop producing.
+                if (!cancelled && cancellationTokenSource.IsCancellationRequested)
                 {
                     cancelled = true;
                     result = null;
