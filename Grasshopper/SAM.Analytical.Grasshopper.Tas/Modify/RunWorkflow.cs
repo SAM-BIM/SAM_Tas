@@ -75,6 +75,13 @@ namespace SAM.Analytical.Grasshopper.Tas
                 try
                 {
                     result = workflowCalculator.Calculate(analyticalModel);
+
+                    // WorkflowCalculator observes the token before each stage and again before it returns, so a
+                    // cancel during the last stage is caught there. This closes the remaining sliver: a click
+                    // landing between that final check and Calculate handing back would otherwise leave
+                    // cancelled false, and the component would report success and emit a model the user had
+                    // asked it to stop producing.
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
                 }
                 catch (System.OperationCanceledException)
                 {
