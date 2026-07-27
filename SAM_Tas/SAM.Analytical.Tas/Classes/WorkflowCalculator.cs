@@ -41,9 +41,21 @@ namespace SAM.Analytical.Tas
 
         public WorkflowSettings WorkflowSettings { get; set; }
 
+        /// <summary>
+        /// Optional cooperative cancellation. Defaults to <see cref="System.Threading.CancellationToken.None"/>
+        /// so existing callers (e.g. the benchmark CLI) are unaffected. It is observed once per stage in
+        /// <see cref="Step"/>, so a cancel aborts before the next step begins; it does NOT interrupt the
+        /// in-flight, uninterruptible TAS COM simulate/sizing call within a step.
+        /// </summary>
+        public System.Threading.CancellationToken CancellationToken { get; set; } = System.Threading.CancellationToken.None;
+
         private void Step(string description)
         {
+            // Finalize first so the stage that just completed keeps its timing, then stop before the next one
+            // begins. Cancelling can leave partially written .t3d/.tbd/.tsd files behind — a later clean rerun
+            // should set _removeTBD_ true.
             FinalizeCurrentStep();
+            CancellationToken.ThrowIfCancellationRequested();
             currentStepName = description;
             stepStopwatch.Restart();
             Updating?.Invoke(this, new WorkflowCalculatorUpdatingEventArgs(description));
