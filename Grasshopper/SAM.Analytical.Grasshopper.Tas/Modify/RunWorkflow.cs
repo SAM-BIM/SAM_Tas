@@ -47,6 +47,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             using (ProgressForm progressForm = new("Workflow"))
             {
                 progressForm.Cancellable = true;
+                progressForm.Note = CancelNote(null);
                 progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
                 WorkflowCalculator workflowCalculator = new(workflowSettings)
@@ -61,6 +62,7 @@ namespace SAM.Analytical.Grasshopper.Tas
 
                 workflowCalculator.Updating += (s, e) =>
                 {
+                    progressForm.Note = CancelNote(e.Description);
                     progressForm.Update(e.Description);
                 };
 
@@ -76,6 +78,43 @@ namespace SAM.Analytical.Grasshopper.Tas
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Stage names whose TAS COM call runs for minutes and cannot be interrupted once entered. Matched as
+        /// case-insensitive substrings of the <c>Updating</c> description raised by
+        /// <see cref="WorkflowCalculator"/>.
+        /// </summary>
+        private static readonly string[] UninterruptibleSteps =
+        {
+            "Shading",
+            "Sizing",
+            "Simulating",
+            "Importing gbXML",
+            "Adding Results",
+            "Unmet Hours",
+            "Design Loads",
+        };
+
+        /// <summary>
+        /// The note shown under the progress text. Cancellation is only ever observed between stages, so this
+        /// says so plainly, and calls out the long stages (shading, sizing, simulation) where the wait after
+        /// clicking Cancel can be minutes rather than seconds.
+        /// </summary>
+        private static string CancelNote(string description)
+        {
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                foreach (string uninterruptibleStep in UninterruptibleSteps)
+                {
+                    if (description.IndexOf(uninterruptibleStep, System.StringComparison.OrdinalIgnoreCase) != -1)
+                    {
+                        return "Cannot cancel during '" + description + "' - this stage may run for several minutes.";
+                    }
+                }
+            }
+
+            return "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress.";
         }
     }
 }

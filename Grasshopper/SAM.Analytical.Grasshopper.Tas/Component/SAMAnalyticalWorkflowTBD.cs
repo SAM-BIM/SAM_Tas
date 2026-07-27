@@ -320,6 +320,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             using (Core.Windows.Forms.ProgressForm progressForm = new ("SAM Workflow - TBD Update", count))
             {
                 progressForm.Cancellable = true;
+                progressForm.Note = "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress.";
                 progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
                 try
@@ -366,9 +367,11 @@ namespace SAM.Analytical.Grasshopper.Tas
                             dayType.name = "CDD";
                         }
 
+                        progressForm.Note = "Cannot cancel during 'Converting to TBD' - this stage may run for several minutes.";
                         progressForm.Update("Converting to TBD");
                         cancellationTokenSource.Token.ThrowIfCancellationRequested();
                         Analytical.Tas.Convert.ToTBD(analyticalModel, tBDDocument);
+                        progressForm.Note = "Cancel takes effect once the current stage finishes - it cannot interrupt one in progress.";
 
                         progressForm.Update("Updating Zones");
                         cancellationTokenSource.Token.ThrowIfCancellationRequested();
