@@ -134,7 +134,14 @@ namespace SAM.Analytical.Grasshopper.Tas.TPD
                 return;
             }
 
-            bool succedded = Analytical.Tas.TPD.Modify.Simulate(path, startHour, endHour);
+            // One uninterruptible TAS COM call: run it on a joined STA thread so an animated marquee shows
+            // the run is alive. The call cannot be cancelled, and the thread is always joined, so nothing is
+            // orphaned. TAS COM is STA-affine, hence the dedicated STA thread rather than a thread-pool one.
+            bool succedded = false;
+            Core.Windows.Modify.RunOnStaThread("TasTPD.Simulate - simulating (cannot be cancelled)", () =>
+            {
+                succedded = Analytical.Tas.TPD.Modify.Simulate(path, startHour, endHour);
+            });
 
             index = Params.IndexOfOutputParam("path_TPD");
             if (index != -1)
