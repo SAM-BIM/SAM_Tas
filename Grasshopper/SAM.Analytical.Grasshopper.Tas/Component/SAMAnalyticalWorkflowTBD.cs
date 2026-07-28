@@ -318,89 +318,118 @@ namespace SAM.Analytical.Grasshopper.Tas
             // never interrupted.
             using CancellationTokenSource cancellationTokenSource = new();
 
-            using (Core.Windows.Forms.ProgressFormHost progressForm = new ("SAM Workflow - TBD Update", count, true, Analytical.Tas.Query.CancelNote(null)))
+            // Not a using: the dialog has to be torn down BEFORE the final cancellation check below, and a
+            // using would scope progressForm to its block, leaving nothing left to observe afterwards. The
+            // Cancel button lives on the dialog's own UI thread, so it can be clicked at any instant -
+            // including after a check placed inside the block. Checking then disposing only moves that race;
+            // disposing then checking closes it, because Dispose closes the form and joins its thread, so
+            // afterwards no further CancelRequested can arrive and any in-flight one has already run.
+            Core.Windows.Forms.ProgressFormHost progressForm = new ("SAM Workflow - TBD Update", count, true, Analytical.Tas.Query.CancelNote(null));
+
+            bool cancelled_Preparation = false;
+
+            try
             {
                 progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
-                try
+                progressForm.Update("Opening TBD document");
+                cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
                 {
-                    progressForm.Update("Opening TBD document");
-                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
-                    using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
+                    TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
+
+                    if (weatherData != null)
                     {
-                        TBD.TBDDocument tBDDocument = sAMTBDDocument.TBDDocument;
-
-                        if (weatherData != null)
-                        {
-                            progressForm.Update("Updating Weather Data");
-                            cancellationTokenSource.Token.ThrowIfCancellationRequested();
-                            Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, analyticalModel.AdjacencyCluster.BuildingHeight());
-
-                            double latitude_TBD = Core.Query.Round(analyticalModel.Location.Latitude, 0.01);
-                            double longitude_TBD = Core.Query.Round(analyticalModel.Location.Longitude, 0.01);
-
-                            double latitude_WeatherData = Core.Query.Round(weatherData.Latitude, 0.01);
-                            double longitude_WeatherDate = Core.Query.Round(weatherData.Longitude, 0.01);
-
-                            if (Math.Abs(latitude_TBD - latitude_WeatherData) > 0.01 || Math.Abs(longitude_TBD - longitude_WeatherDate) > 0.01)
-                            {
-                                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "WeatherData Longitude or Latitude mismatch");
-                            }
-                        }
-
-                        progressForm.Update("Adding HDD and CDD Day Types");
+                        progressForm.Update("Updating Weather Data");
                         cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                        Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, analyticalModel.AdjacencyCluster.BuildingHeight());
 
-                        TBD.Calendar calendar = tBDDocument.Building.GetCalendar();
+                        double latitude_TBD = Core.Query.Round(analyticalModel.Location.Latitude, 0.01);
+                        double longitude_TBD = Core.Query.Round(analyticalModel.Location.Longitude, 0.01);
 
-                        List<TBD.dayType> dayTypes = Query.DayTypes(calendar);
-                        if (dayTypes.Find(x => x.name == "HDD") == null)
+                        double latitude_WeatherData = Core.Query.Round(weatherData.Latitude, 0.01);
+                        double longitude_WeatherDate = Core.Query.Round(weatherData.Longitude, 0.01);
+
+                        if (Math.Abs(latitude_TBD - latitude_WeatherData) > 0.01 || Math.Abs(longitude_TBD - longitude_WeatherDate) > 0.01)
                         {
-                            TBD.dayType dayType = calendar.AddDayType();
-                            dayType.name = "HDD";
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "WeatherData Longitude or Latitude mismatch");
                         }
-
-                        if (dayTypes.Find(x => x.name == "CDD") == null)
-                        {
-                            TBD.dayType dayType = calendar.AddDayType();
-                            dayType.name = "CDD";
-                        }
-
-                        progressForm.Note = Analytical.Tas.Query.CancelNote("Converting to TBD");
-                        progressForm.Update("Converting to TBD");
-                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
-                        Analytical.Tas.Convert.ToTBD(analyticalModel, tBDDocument);
-                        progressForm.Note = Analytical.Tas.Query.CancelNote(null);
-
-                        progressForm.Update("Updating Zones");
-                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
-                        Analytical.Tas.Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
-
-                        if (coolingDesignDays != null || heatingDesignDays != null)
-                        {
-                            progressForm.Update("Adding Design Days");
-                            cancellationTokenSource.Token.ThrowIfCancellationRequested();
-                            Analytical.Tas.Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
-                        }
-
-                        //progressForm.Update("Updating Shades");
-                        //shadingUpdated = Analytical.Tas.Modify.UpdateShading(tBDDocument, analyticalModel);
-
-                        sAMTBDDocument.Save();
                     }
 
-                    // Final pump before this form is disposed. A Cancel click queued during the last
-                    // operations (AddDesignDays / Save) is not delivered by any later Update, so without this
-                    // it would be discarded with the form and the workflow below would run regardless.
-                    // increment:false so the counted step total is not overshot.
-                    progressForm.Update("Finalising TBD", false);
+                    progressForm.Update("Adding HDD and CDD Day Types");
                     cancellationTokenSource.Token.ThrowIfCancellationRequested();
+
+                    TBD.Calendar calendar = tBDDocument.Building.GetCalendar();
+
+                    List<TBD.dayType> dayTypes = Query.DayTypes(calendar);
+                    if (dayTypes.Find(x => x.name == "HDD") == null)
+                    {
+                        TBD.dayType dayType = calendar.AddDayType();
+                        dayType.name = "HDD";
+                    }
+
+                    if (dayTypes.Find(x => x.name == "CDD") == null)
+                    {
+                        TBD.dayType dayType = calendar.AddDayType();
+                        dayType.name = "CDD";
+                    }
+
+                    progressForm.Note = Analytical.Tas.Query.CancelNote("Converting to TBD");
+                    progressForm.Update("Converting to TBD");
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    Analytical.Tas.Convert.ToTBD(analyticalModel, tBDDocument);
+                    progressForm.Note = Analytical.Tas.Query.CancelNote(null);
+
+                    progressForm.Update("Updating Zones");
+                    cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    Analytical.Tas.Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
+
+                    if (coolingDesignDays != null || heatingDesignDays != null)
+                    {
+                        progressForm.Update("Adding Design Days");
+                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                        Analytical.Tas.Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
+                    }
+
+                    //progressForm.Update("Updating Shades");
+                    //shadingUpdated = Analytical.Tas.Modify.UpdateShading(tBDDocument, analyticalModel);
+
+                    sAMTBDDocument.Save();
                 }
-                catch (OperationCanceledException)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Workflow cancelled by user. Partially written .t3d/.tbd/.tsd files may remain - set _removeTBD_ to True for a clean rerun.");
-                    return;
-                }
+
+                // Final pump before this form is disposed. A Cancel click queued during the last
+                // operations (AddDesignDays / Save) is not delivered by any later Update, so without this
+                // it would be discarded with the form and the workflow below would run regardless.
+                // increment:false so the counted step total is not overshot.
+                progressForm.Update("Finalising TBD", false);
+                cancellationTokenSource.Token.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled_Preparation = true;
+            }
+            finally
+            {
+                progressForm.Dispose();
+            }
+
+            // Past this point no cancel can be raised, so this observation is final. It catches a click that
+            // landed after the last ThrowIfCancellationRequested above - without it the component would carry
+            // straight on into the workflow the user had asked it to stop.
+            //
+            // "Final" holds only once the host confirms it shut down cleanly. If it could not - the dialog
+            // thread was not joined, or a handler did not quiesce - that thread is still live and a click it
+            // has queued may never have been observed, so success cannot be claimed and the safe direction is
+            // to report the run as cancelled.
+            if (!cancelled_Preparation && (cancellationTokenSource.IsCancellationRequested || !progressForm.ShutdownCompleted))
+            {
+                cancelled_Preparation = true;
+            }
+
+            if (cancelled_Preparation)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Workflow cancelled by user. Partially written .t3d/.tbd/.tsd files may remain - set _removeTBD_ to True for a clean rerun.");
+                return;
             }
 
             int simulate_From = -1;
