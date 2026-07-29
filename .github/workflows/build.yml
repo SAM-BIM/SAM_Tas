@@ -167,6 +167,12 @@ jobs:
           # SAM_Revit_UI's workflow uses.
           $uiRef      = Join-Path (Get-Location) 'SAM_UI\build'
 
+          # MSBuild treats semicolons in /p values as item separators, so a raw "a;b" is
+          # rejected as MSB1006. Escape it so ReferencePath stays one property value - same
+          # trick SAM_Rhino_UI's workflow already uses.
+          $referencePathEscaped = "$windowsRef%3B$uiRef"
+          Write-Host "ReferencePath=$windowsRef;$uiRef"
+
           # IMPORTANT: keep these as an ARRAY of args (do NOT join into one string)
           $common = @(
             '/m:1'
@@ -175,7 +181,7 @@ jobs:
             '/p:Configuration=Release'
             '/p:UseSharedCompilation=false'
             '/p:RunPostBuildEvent=OnOutputUpdated'
-            "/p:ReferencePath=$windowsRef;$uiRef"
+            "/p:ReferencePath=$referencePathEscaped"
             '/p:SAMVersion=${{ steps.ver.outputs.samversion }}'
           )
 
