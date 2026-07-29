@@ -2,7 +2,7 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Tas;
-using SAM.Core.Windows.Forms;
+using SAM.Core.UI.WPF;
 using System.Threading;
 
 namespace SAM.Analytical.Grasshopper.Tas
@@ -24,11 +24,11 @@ namespace SAM.Analytical.Grasshopper.Tas
         /// cooperative and between-step (see <see cref="WorkflowCalculator.CancellationToken"/>): it aborts
         /// before the next step but cannot interrupt the in-flight TAS COM simulate/sizing call.
         /// <para>
-        /// The dialog runs on its own UI thread (<see cref="ProgressFormHost"/>) rather than on this one. The
+        /// The dialog runs on its own UI thread (<see cref="ProgressWindowHost"/>) rather than on this one. The
         /// workflow blocks this thread for minutes at a time, and Windows ghosts a window whose thread has
         /// stopped pumping and then discards clicks on the ghost — so a Cancel button on this thread's own
-        /// form silently loses the click and the run carries on to completion. The job itself stays here; only
-        /// the dialog moves, so no TAS COM object changes apartment.
+        /// window silently loses the click and the run carries on to completion. The job itself stays here;
+        /// only the dialog moves, so no TAS COM object changes apartment.
         /// </para>
         /// The optional <paramref name="externalCancellationToken"/> lets a caller (e.g. WorkflowTBD's own COM
         /// pre-step) share one cancel across its stage and this one. On cancellation the method returns null
@@ -56,14 +56,19 @@ namespace SAM.Analytical.Grasshopper.Tas
                 // Not a using: the dialog has to be torn down BEFORE the final cancellation check below, and a
                 // using would dispose it after. The Cancel button lives on the dialog's own UI thread, so it can
                 // be clicked at any instant - including after a check placed here. Checking then disposing only
-                // moves that race; disposing then checking closes it, because Dispose closes the form and joins
-                // its thread, so afterwards no further CancelRequested can arrive and any in-flight one has
-                // already run.
-                ProgressFormHost progressFormHost = new("Workflow", 1, true, Analytical.Tas.Query.CancelNote(null));
+                // moves that race; disposing then checking closes it, because Dispose closes the window and
+                // joins its thread, so afterwards no further CancelRequested can arrive and any in-flight one
+                // has already run.
+                //
+                // No owner is set: a WPF owner must live on the same thread as the window it owns, and this
+                // one deliberately does not - that is the whole point of the host. ProgressWindowHost sets
+                // Topmost instead, which is what keeps it in front of Grasshopper/Rhino while this thread is
+                // blocked.
+                ProgressWindowHost progressWindowHost = new("Workflow", 1, true, Analytical.Tas.Query.CancelNote(null));
 
                 try
                 {
-                    progressFormHost.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
+                    progressWindowHost.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
                     WorkflowCalculator workflowCalculator = new(workflowSettings)
                     {
@@ -72,13 +77,13 @@ namespace SAM.Analytical.Grasshopper.Tas
 
                     workflowCalculator.StepsCounted += (s, e) =>
                     {
-                        progressFormHost.Max = e.Count;
+                        progressWindowHost.Max = e.Count;
                     };
 
                     workflowCalculator.Updating += (s, e) =>
                     {
-                        progressFormHost.Note = Analytical.Tas.Query.CancelNote(e.Description);
-                        progressFormHost.Update(e.Description);
+                        progressWindowHost.Note = Analytical.Tas.Query.CancelNote(e.Description);
+                        progressWindowHost.Update(e.Description);
                     };
 
                     result = workflowCalculator.Calculate(analyticalModel);
@@ -90,7 +95,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 }
                 finally
                 {
-                    progressFormHost.Dispose();
+                    progressWindowHost.Dispose();
                 }
 
                 // Past this point no cancel can be raised, so this observation is final. It catches a click that
@@ -102,7 +107,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                 // has queued may never have been observed, so success cannot be claimed and the safe direction
                 // is to report the run as cancelled. The expensive artifacts (.tbd/.tsd) are on disk either way;
                 // what is given up is only the in-memory handoff, which a rerun reproduces.
-                if (!cancelled && (cancellationTokenSource.IsCancellationRequested || !progressFormHost.ShutdownCompleted))
+                if (!cancelled && (cancellationTokenSource.IsCancellationRequested || !progressWindowHost.ShutdownCompleted))
                 {
                     cancelled = true;
                     result = null;

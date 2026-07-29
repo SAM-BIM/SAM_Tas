@@ -312,27 +312,31 @@ namespace SAM.Analytical.Grasshopper.Tas
             bool shadingUpdated = false;
 
             // One cancellation source spans the inline COM pre-step and RunWorkflow, so a single Cancel click
-            // aborts either. The dialog runs on its own UI thread (ProgressFormHost), so the Cancel click is
+            // aborts either. The dialog runs on its own UI thread (ProgressWindowHost), so the Cancel click is
             // recorded the instant it is made even though this thread is blocked in a COM call for minutes at
             // a time; cancellation is still checked only BETWEEN COM calls — an in-flight TAS COM call is
             // never interrupted.
             using CancellationTokenSource cancellationTokenSource = new();
 
             // Not a using: the dialog has to be torn down BEFORE the final cancellation check below, and a
-            // using would scope progressForm to its block, leaving nothing left to observe afterwards. The
-            // Cancel button lives on the dialog's own UI thread, so it can be clicked at any instant -
+            // using would scope progressWindowHost to its block, leaving nothing left to observe afterwards.
+            // The Cancel button lives on the dialog's own UI thread, so it can be clicked at any instant -
             // including after a check placed inside the block. Checking then disposing only moves that race;
-            // disposing then checking closes it, because Dispose closes the form and joins its thread, so
+            // disposing then checking closes it, because Dispose closes the window and joins its thread, so
             // afterwards no further CancelRequested can arrive and any in-flight one has already run.
-            Core.Windows.Forms.ProgressFormHost progressForm = new ("SAM Workflow - TBD Update", count, true, Analytical.Tas.Query.CancelNote(null));
+            //
+            // No owner is set: a WPF owner must live on the same thread as the window it owns, and this one
+            // deliberately does not - that is the whole point of the host. ProgressWindowHost sets Topmost
+            // instead, which is what keeps it in front of Grasshopper/Rhino while this thread is blocked.
+            SAM.Core.UI.WPF.ProgressWindowHost progressWindowHost = new ("SAM Workflow - TBD Update", count, true, Analytical.Tas.Query.CancelNote(null));
 
             bool cancelled_Preparation = false;
 
             try
             {
-                progressForm.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
+                progressWindowHost.CancelRequested += (s, e) => cancellationTokenSource.Cancel();
 
-                progressForm.Update("Opening TBD document");
+                progressWindowHost.Update("Opening TBD document");
                 cancellationTokenSource.Token.ThrowIfCancellationRequested();
                 using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
                 {
@@ -340,7 +344,7 @@ namespace SAM.Analytical.Grasshopper.Tas
 
                     if (weatherData != null)
                     {
-                        progressForm.Update("Updating Weather Data");
+                        progressWindowHost.Update("Updating Weather Data");
                         cancellationTokenSource.Token.ThrowIfCancellationRequested();
                         Weather.Tas.Modify.UpdateWeatherData(tBDDocument, weatherData, analyticalModel.AdjacencyCluster.BuildingHeight());
 
@@ -356,7 +360,7 @@ namespace SAM.Analytical.Grasshopper.Tas
                         }
                     }
 
-                    progressForm.Update("Adding HDD and CDD Day Types");
+                    progressWindowHost.Update("Adding HDD and CDD Day Types");
                     cancellationTokenSource.Token.ThrowIfCancellationRequested();
 
                     TBD.Calendar calendar = tBDDocument.Building.GetCalendar();
@@ -374,34 +378,34 @@ namespace SAM.Analytical.Grasshopper.Tas
                         dayType.name = "CDD";
                     }
 
-                    progressForm.Note = Analytical.Tas.Query.CancelNote("Converting to TBD");
-                    progressForm.Update("Converting to TBD");
+                    progressWindowHost.Note = Analytical.Tas.Query.CancelNote("Converting to TBD");
+                    progressWindowHost.Update("Converting to TBD");
                     cancellationTokenSource.Token.ThrowIfCancellationRequested();
                     Analytical.Tas.Convert.ToTBD(analyticalModel, tBDDocument);
-                    progressForm.Note = Analytical.Tas.Query.CancelNote(null);
+                    progressWindowHost.Note = Analytical.Tas.Query.CancelNote(null);
 
-                    progressForm.Update("Updating Zones");
+                    progressWindowHost.Update("Updating Zones");
                     cancellationTokenSource.Token.ThrowIfCancellationRequested();
                     Analytical.Tas.Modify.UpdateZones(tBDDocument.Building, analyticalModel, true);
 
                     if (coolingDesignDays != null || heatingDesignDays != null)
                     {
-                        progressForm.Update("Adding Design Days");
+                        progressWindowHost.Update("Adding Design Days");
                         cancellationTokenSource.Token.ThrowIfCancellationRequested();
                         Analytical.Tas.Modify.AddDesignDays(tBDDocument, coolingDesignDays, heatingDesignDays, 30);
                     }
 
-                    //progressForm.Update("Updating Shades");
+                    //progressWindowHost.Update("Updating Shades");
                     //shadingUpdated = Analytical.Tas.Modify.UpdateShading(tBDDocument, analyticalModel);
 
                     sAMTBDDocument.Save();
                 }
 
-                // Final pump before this form is disposed. A Cancel click queued during the last
+                // Final pump before this window is disposed. A Cancel click queued during the last
                 // operations (AddDesignDays / Save) is not delivered by any later Update, so without this
-                // it would be discarded with the form and the workflow below would run regardless.
+                // it would be discarded with the window and the workflow below would run regardless.
                 // increment:false so the counted step total is not overshot.
-                progressForm.Update("Finalising TBD", false);
+                progressWindowHost.Update("Finalising TBD", false);
                 cancellationTokenSource.Token.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException)
@@ -410,7 +414,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             }
             finally
             {
-                progressForm.Dispose();
+                progressWindowHost.Dispose();
             }
 
             // Past this point no cancel can be raised, so this observation is final. It catches a click that
@@ -421,7 +425,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             // thread was not joined, or a handler did not quiesce - that thread is still live and a click it
             // has queued may never have been observed, so success cannot be claimed and the safe direction is
             // to report the run as cancelled.
-            if (!cancelled_Preparation && (cancellationTokenSource.IsCancellationRequested || !progressForm.ShutdownCompleted))
+            if (!cancelled_Preparation && (cancellationTokenSource.IsCancellationRequested || !progressWindowHost.ShutdownCompleted))
             {
                 cancelled_Preparation = true;
             }

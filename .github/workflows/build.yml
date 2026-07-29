@@ -66,7 +66,14 @@ jobs:
             'SAM_Systems',
             'SAM_Windows',
             'SAM_gbXML',
-            'SAM_SolarCalculator'
+            'SAM_SolarCalculator',
+            # SAM.Analytical.Grasshopper.Tas references SAM_UI\build\SAM.Core.UI.WPF.dll for the
+            # progress dialog (ProgressWindowHost). SAM_UI as a whole depends on SAM_Tas, so the
+            # full SAM_UI.sln CANNOT be built here - see the pre-build step below, which builds
+            # only the two leaf projects that carry no SAM_Tas dependency. SAM_Excel is cloned for
+            # the same reason: SAM.Core.UI.WPF references SAM_Excel\build\SAM.Core.Excel.dll.
+            'SAM_Excel',
+            'SAM_UI'
           )
 
           foreach ($r in $deps) {
@@ -99,6 +106,7 @@ jobs:
 
           # Ensure the reference path folder exists even before SAM_Windows builds
           New-Item -ItemType Directory -Force -Path "SAM_Windows\build" | Out-Null
+          New-Item -ItemType Directory -Force -Path "SAM_UI\build"      | Out-Null
 
       - name: Build benchmark schema (SAM_Validation)
         shell: pwsh
@@ -154,6 +162,16 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           $windowsRef = Join-Path (Get-Location) 'SAM_Windows\build'
+          # SAM_UI\build carries SAM.Core.UI(.WPF).dll, pre-built below. The csproj HintPaths
+          # already resolve to it as a sibling clone; this is the same belt-and-braces fallback
+          # SAM_Revit_UI's workflow uses.
+          $uiRef      = Join-Path (Get-Location) 'SAM_UI\build'
+
+          # MSBuild treats semicolons in /p values as item separators, so a raw "a;b" is
+          # rejected as MSB1006. Escape it so ReferencePath stays one property value - same
+          # trick SAM_Rhino_UI's workflow already uses.
+          $referencePathEscaped = "$windowsRef%3B$uiRef"
+          Write-Host "ReferencePath=$windowsRef;$uiRef"
 
           # IMPORTANT: keep these as an ARRAY of args (do NOT join into one string)
           $common = @(
@@ -163,7 +181,7 @@ jobs:
             '/p:Configuration=Release'
             '/p:UseSharedCompilation=false'
             '/p:RunPostBuildEvent=OnOutputUpdated'
-            "/p:ReferencePath=$windowsRef"
+            "/p:ReferencePath=$referencePathEscaped"
             '/p:SAMVersion=${{ steps.ver.outputs.samversion }}'
           )
 
@@ -178,7 +196,24 @@ jobs:
             'SAM_Windows\SAM_Windows.sln'
             'SAM_gbXML\SAM_gbXML.sln'
             'SAM_SolarCalculator\SAM_SolarCalculator.sln'
-            'SAM_Tas\SAM_Tas.sln'
+          )
+
+          # Individual PROJECTS, not solutions, and deliberately so. SAM.Analytical.Grasshopper.Tas
+          # references SAM_UI\build\SAM.Core.UI.WPF.dll, but SAM_UI.sln as a whole references
+          # SAM_Tas\build\*.dll (SAM.Analytical.UI and SAM.Analytical.UI.WPF both do) - building the
+          # whole solution here would be a circular dependency and cannot work.
+          #
+          # These two projects are the break in that cycle: neither has any SAM_Tas dependency.
+          # SAM.Core.UI.WPF's only sibling needs are SAM\build\SAM.Core.dll and
+          # SAM_Excel\build\SAM.Core.Excel.dll, and it pulls in SAM.Core.UI through a
+          # ProjectReference, so building it alone produces both DLLs SAM_Tas needs.
+          #
+          # Keep this list minimal. Adding a project here that (even transitively) touches SAM_Tas
+          # reintroduces the cycle, and it will fail as a confusing CS0234 rather than as anything
+          # that names the real problem.
+          $preProjects = @(
+            'SAM_Excel\SAM_Excel\SAM.Core.Excel\SAM.Core.Excel.csproj'
+            'SAM_UI\WPF\SAM.Core.UI.WPF\SAM.Core.UI.WPF.csproj'
           )
 
           foreach ($sln in $solutions) {
@@ -191,6 +226,24 @@ jobs:
             Write-Host "==> Rebuild: $sln"
             & msbuild $sln /t:Rebuild @common
           }
+
+          foreach ($proj in $preProjects) {
+            if (-not (Test-Path $proj)) { throw "Missing project: $proj" }
+            Write-Host "==> Restore + Build (pre-Tas leaf): $proj"
+            & msbuild $proj /t:Restore @common
+            if ($LASTEXITCODE -ne 0) { throw "Restore failed: $proj" }
+            & msbuild $proj /t:Build @common
+            if ($LASTEXITCODE -ne 0) { throw "Build failed: $proj" }
+          }
+
+          $uiWpfDll = 'SAM_UI\build\SAM.Core.UI.WPF.dll'
+          if (-not (Test-Path $uiWpfDll)) { throw "Expected DLL missing after pre-build: $uiWpfDll" }
+          Write-Host "Pre-Tas UI DLL present: $uiWpfDll"
+
+          Write-Host "==> Restore: SAM_Tas\SAM_Tas.sln"
+          & msbuild 'SAM_Tas\SAM_Tas.sln' /t:Restore @common
+          Write-Host "==> Rebuild: SAM_Tas\SAM_Tas.sln"
+          & msbuild 'SAM_Tas\SAM_Tas.sln' /t:Rebuild @common
 
 
       - name: Run benchmark producer tests (offline)
