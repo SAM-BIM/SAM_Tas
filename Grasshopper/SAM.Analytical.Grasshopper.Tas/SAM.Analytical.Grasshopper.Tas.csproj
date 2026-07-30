@@ -96,9 +96,6 @@
     <Reference Include="SAM.Core.Windows">
       <HintPath>..\..\..\SAM_Windows\build\SAM.Core.Windows.dll</HintPath>
     </Reference>
-    <Reference Include="SAM.Core.UI.WPF">
-      <HintPath>..\..\..\SAM_UI\build\SAM.Core.UI.WPF.dll</HintPath>
-    </Reference>
     <Reference Include="SAM.Geometry">
       <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
     </Reference>

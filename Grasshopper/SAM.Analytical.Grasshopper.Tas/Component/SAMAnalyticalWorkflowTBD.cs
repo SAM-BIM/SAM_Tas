@@ -328,7 +328,7 @@ namespace SAM.Analytical.Grasshopper.Tas
             // No owner is set: a WPF owner must live on the same thread as the window it owns, and this one
             // deliberately does not - that is the whole point of the host. ProgressWindowHost sets Topmost
             // instead, which is what keeps it in front of Grasshopper/Rhino while this thread is blocked.
-            SAM.Core.UI.WPF.ProgressWindowHost progressWindowHost = new ("SAM Workflow - TBD Update", count, true, Analytical.Tas.Query.CancelNote(null));
+            SAM.Core.Windows.WPF.ProgressWindowHost progressWindowHost = new ("SAM Workflow - TBD Update", count, true, Analytical.Tas.Query.CancelNote(null));
 
             bool cancelled_Preparation = false;
 
