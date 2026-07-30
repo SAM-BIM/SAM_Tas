@@ -2,7 +2,7 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Tas;
-using SAM.Core.UI.WPF;
+using SAM.Core.Windows.WPF;
 using System.Threading;
 
 namespace SAM.Analytical.Grasshopper.Tas
