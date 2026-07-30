@@ -75,9 +75,10 @@
     SAM.Analytical.Tas.GenOpt\Create\Files.cs). Historically this was only ever deployed as a side
     effect of the six Grasshopper Tas projects' post-build xcopy, so an engine-only build (a Revit
     consumer, a benchmark run, this project on its own) never deployed it. This target makes
-    SAM.Core.Tas - the one engine project every other engine project depends on directly or
-    transitively - the single canonical, idempotent producer of that deployment, independent of
-    whether any Grasshopper project is ever built. It is deliberately NOT a guarantee that this runs
+    SAM.Core.Tas - the foundational engine project on which the resource-consuming TAS engine
+    projects depend directly or transitively - the single canonical, idempotent producer of that
+    deployment, independent of whether any Grasshopper project is ever built. It is deliberately
+    NOT a guarantee that this runs
     exactly once per session: SkipUnchangedFiles makes repeat evaluations (e.g. a second project in
     the same build depending on this one) a cheap no-op, not a duplicate/racing copy.
   -->
