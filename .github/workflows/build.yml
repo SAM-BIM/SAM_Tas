@@ -217,6 +217,23 @@ jobs:
             --logger 'console;verbosity=normal'
           if ($LASTEXITCODE -ne 0) { throw "Benchmark producer tests failed" }
 
+      - name: Run TM59 room-use regression tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # SAM.Analytical.Tas.TM59.Tests references the already-built TM59/SAM assemblies via
+          # HintPath rather than ProjectReference, to avoid the COM-referencing SAM.Analytical.Tas /
+          # SAM.Core.Tas chain that `dotnet test` (.NET Core MSBuild) cannot build - see TESTING.md.
+          # The SAM_Tas.sln Rebuild above already produced SAM_Tas/build/SAM.Analytical.Tas.TM59.dll
+          # and SAM/build/SAM.Core.dll / SAM.Analytical.dll, so this runs standalone here.
+          $testProject = 'SAM_Tas/SAM_Tas/SAM.Analytical.Tas.TM59.Tests/SAM.Analytical.Tas.TM59.Tests.csproj'
+          Write-Host "==> Testing: $testProject"
+          & dotnet test $testProject `
+            -c Release `
+            --logger 'console;verbosity=normal'
+          if ($LASTEXITCODE -ne 0) { throw "TM59 room-use regression tests failed" }
+
       - name: Upload build folders (optional)
         uses: actions/upload-artifact@v4
         with:

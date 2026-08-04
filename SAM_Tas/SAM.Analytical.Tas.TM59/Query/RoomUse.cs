@@ -20,7 +20,7 @@ namespace SAM.Analytical.Tas.TM59
         // always meant. Any other InternalCondition name (including "Studio", "Single/Double
         // Bedroom", and anything not matching this exact "<n> Bed Apt. <function>" shape) is
         // untouched and continues through the existing fuzzy/fallback path below.
-        private static readonly Regex apartmentBedCountPrefix = new Regex(@"^\s*\d+\s*Bed\s+Apt\.\s*(?<function>.+)$", RegexOptions.IgnoreCase);
+        private static readonly Regex apartmentBedCountPrefix = new Regex(@"^\s*\d+\s*Bed\s+Apt\.\s*(?<function>.+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         public static RoomUse RoomUse(this TM59Manager tM59Manager, Space space)
         {
