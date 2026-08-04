@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- No ProjectReference to SAM.Analytical.Tas.TM59.csproj: it (transitively) pulls in
+         SAM.Analytical.Tas / SAM.Core.Tas, which use <COMReference> and require the
+         .NET Framework MSBuild (ResolveComReference isn't supported on .NET Core MSBuild).
+         Reference the already-built TM59 assembly instead, same pattern as
+         SAM.Analytical.Tas.Benchmark.Tests uses for SAM.Analytical.Benchmark.
+
+         This means the solution/library MUST be built before `dotnet test` here - see
+         TESTING.md for the exact build order and what happens if it's skipped. -->
+    <Reference Include="SAM.Analytical.Tas.TM59">
+      <HintPath>..\..\build\SAM.Analytical.Tas.TM59.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Core">
+      <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical">
+      <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Same TM59 TextMap resource the production code loads (SAM.Analytical.Query.
+         DefaultInternalConditionTextMap_TM59), copied locally so the test doesn't depend
+         on ActiveSetting or a %APPDATA%\SAM install being present on the build machine. -->
+    <None Include="..\..\..\SAM\files\resources\Analytical\SAM_InternalConditionTextMap_TM59.JSON">
+      <Link>Resources\SAM_InternalConditionTextMap_TM59.JSON</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
