@@ -20,7 +20,10 @@
          SAM.Analytical.Tas / SAM.Core.Tas, which use <COMReference> and require the
          .NET Framework MSBuild (ResolveComReference isn't supported on .NET Core MSBuild).
          Reference the already-built TM59 assembly instead, same pattern as
-         SAM.Analytical.Tas.Benchmark.Tests uses for SAM.Analytical.Benchmark. -->
+         SAM.Analytical.Tas.Benchmark.Tests uses for SAM.Analytical.Benchmark.
+
+         This means the solution/library MUST be built before `dotnet test` here - see
+         TESTING.md for the exact build order and what happens if it's skipped. -->
     <Reference Include="SAM.Analytical.Tas.TM59">
       <HintPath>..\..\build\SAM.Analytical.Tas.TM59.dll</HintPath>
     </Reference>
