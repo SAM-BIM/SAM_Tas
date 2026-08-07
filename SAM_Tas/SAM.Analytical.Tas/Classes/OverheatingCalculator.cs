@@ -11,7 +11,7 @@ namespace SAM.Analytical.Tas
     /// <para>
     /// <b>A compatibility wrapper.</b> The calculation itself moved to
     /// <see cref="TMOverheatingCalculator"/> in <c>SAM.Analytical</c>, because it never called TAS - it read
-    /// two named hourly channels off each space and produced <c>TM5x</c> results - and living here meant its
+    /// two named hourly series off each space and produced <c>TM5x</c> results - and living here meant its
     /// tests needed a licensed TAS install for no architectural reason. This class stays so that every
     /// existing Grasshopper and user-interface caller keeps compiling and behaving identically; it adds the
     /// two things that really are TAS's:
