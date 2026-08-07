@@ -33,6 +33,19 @@
     <Reference Include="SAM.Analytical">
       <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
     </Reference>
+    <Reference Include="SAM.Weather">
+      <HintPath>..\..\..\SAM\build\SAM.Weather.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
+    <!-- For OverheatingCalculatorEquivalenceTests: the compatibility wrapper. Referenced as a built DLL
+         for the same reason as SAM.Analytical.Tas.TM59 above - a ProjectReference would drag in the
+         <COMReference> projects and force .NET Framework MSBuild. The wrapper itself touches no COM type,
+         so the CLR never needs to load the TAS interop to run these tests. -->
+    <Reference Include="SAM.Analytical.Tas">
+      <HintPath>..\..\build\SAM.Analytical.Tas.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
