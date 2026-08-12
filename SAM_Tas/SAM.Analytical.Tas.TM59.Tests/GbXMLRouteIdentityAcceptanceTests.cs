@@ -9,6 +9,8 @@ using SAM.Core;
 using SAM.Weather;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Xml.Linq;
 using System.Text.Json.Nodes;
 
 namespace SAM.Analytical.Tas.TM59.Tests
@@ -113,6 +115,13 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Assert.That(space.InternalCondition, Is.Null, "A room with no resolvable identity was given design intent anyway.");
             }
 
+            //And the production component's whole-model call cannot put the refused bedrooms back into the
+            //assessment after RestoreDesignInternalConditions left them alone.
+            List<Space> spaces_Assessment = tM59AssessmentCalculator.Spaces(null, null);
+            Assert.That(spaces_Assessment.Count, Is.EqualTo(1));
+            Assert.That(spaces_Assessment[0].Name, Is.EqualTo("Corridor"));
+            Assert.That(tM59AssessmentCalculator.AssociationRefusals.Count, Is.EqualTo(3));
+
             //And the uniquely named corridor is unaffected by its neighbours' ambiguity.
             Assert.That(spaces.Find(x => x.Name == "Corridor").InternalCondition, Is.Not.Null);
         }
@@ -131,18 +140,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
             SimulationSpaceMap simulationSpaceMap = analyticalModel_Design.SimulationSpaceMap(analyticalModel_TSD);
 
             //Flat 1 MVRE, Flat 2 NV, Flat 3 MVRE, corridor UV - the design data says the opposite in each case.
-            List<OverheatingScenario> overheatingScenarios = [];
-
-            foreach (KeyValuePair<string, string> keyValuePair in new Dictionary<string, string> { { "Flat 1", "MVRE" }, { "Flat 2", "NV" }, { "Flat 3", "MVRE" }, { "Corridor", "UV" } })
-            {
-                Analytical.Zone zone = analyticalModel_Design.GetZones().Find(x => x.Name == keyValuePair.Key);
-
-                overheatingScenarios.Add(new OverheatingScenario(
-                    keyValuePair.Key == "Corridor" ? PartOAssessmentScope.CommonSpace : PartOAssessmentScope.Dwelling,
-                    zone.Guid,
-                    PartOIteration.Undefined,
-                    new SystemTemplate(keyValuePair.Value, null, null, null, null, null)));
-            }
+            List<OverheatingScenario> overheatingScenarios = Scenarios(analyticalModel_Design);
 
             OverheatingScenarioMap overheatingScenarioMap = new OverheatingScenarioMap(overheatingScenarios, analyticalModel_Design, simulationSpaceMap);
 
@@ -174,6 +172,65 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(tM59AssessmentResult.CorridorResults.Count, Is.EqualTo(1), "The corridor states UV.");
         }
 
+        /// <summary>
+        /// <b>Acceptance regression for the official TAS print workflow</b>:
+        /// <code>
+        /// SAMAnalytical.CreateTBDByTM59 -> TM59 XML/TBD/TSD -> TAS TM59 tabs -> print
+        /// </code>
+        /// The XML is prepared from the design model, so its SimulationSpaceMap is identity. All three flats may
+        /// call their room "Bedroom 2" without one flat's scenario deciding another flat's Nat/Mech Vent value.
+        /// </summary>
+        [Test]
+        public void TheOfficialTasPrintRoute_WritesEachBedroom2WithItsOwnScenario()
+        {
+            AnalyticalModel analyticalModel_Design = Model_Design();
+            List<OverheatingScenario> overheatingScenarios = Scenarios(analyticalModel_Design);
+
+            SimulationSpaceMap simulationSpaceMap = SimulationSpaceMap.Identity(analyticalModel_Design.GetSpaces());
+            OverheatingScenarioMap overheatingScenarioMap = new(overheatingScenarios, analyticalModel_Design, simulationSpaceMap);
+
+            Assert.That(overheatingScenarioMap.IsComplete, Is.True);
+
+            string path = Path.Combine(Path.GetTempPath(), "SAM-PartO-Step8-" + Guid.NewGuid().ToString("N") + ".xml");
+
+            try
+            {
+                bool converted = Analytical.Tas.TM59.Convert.ToXml(
+                    analyticalModel_Design,
+                    path,
+                    new TM59Manager(),
+                    overheatingScenarioMap.VentilationStrategyMap,
+                    out List<string> refusals);
+
+                Assert.That(converted, Is.True);
+                Assert.That(refusals, Is.Empty);
+
+                XDocument document = XDocument.Load(path);
+                List<XElement> zoneElements = [.. document.Descendants("DomOverheatZoneItem")];
+
+                Assert.That(zoneElements.Count, Is.EqualTo(4));
+
+                foreach (OverheatingScenario overheatingScenario in overheatingScenarios)
+                {
+                    Analytical.Zone zone_Design = analyticalModel_Design.GetZones().Find(x => x.Guid == overheatingScenario.ZoneGuid);
+                    Space space_Design = analyticalModel_Design.AdjacencyCluster.GetRelatedObjects<Space>(zone_Design)[0];
+                    XElement zoneElement = zoneElements.Find(x => Guid.Parse(x.Element("GUID").Value.Trim('{', '}')) == space_Design.Guid);
+
+                    Assert.That(zoneElement, Is.Not.Null);
+
+                    string expected = overheatingScenario.VentilationStrategy == "MVRE" ? "Mech Vent" : "Nat Vent";
+                    Assert.That(zoneElement.Element("SystemType").Value, Is.EqualTo(expected), zone_Design.Name + " received another zone's scenario.");
+                }
+            }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
         // ---------------------------------------------------------------------------------------------
         // Fixture
         // ---------------------------------------------------------------------------------------------
@@ -197,6 +254,24 @@ namespace SAM.Analytical.Tas.TM59.Tests
             int index = System.Array.IndexOf(flats, name);
 
             return index == -1 ? (name == "Corridor" ? "tas-zone-corridor" : null) : "tas-zone-" + index;
+        }
+
+        private static List<OverheatingScenario> Scenarios(AnalyticalModel analyticalModel_Design)
+        {
+            List<OverheatingScenario> result = [];
+
+            foreach (KeyValuePair<string, string> keyValuePair in new Dictionary<string, string> { { "Flat 1", "MVRE" }, { "Flat 2", "NV" }, { "Flat 3", "MVRE" }, { "Corridor", "UV" } })
+            {
+                Analytical.Zone zone = analyticalModel_Design.GetZones().Find(x => x.Name == keyValuePair.Key);
+
+                result.Add(new OverheatingScenario(
+                    keyValuePair.Key == "Corridor" ? PartOAssessmentScope.CommonSpace : PartOAssessmentScope.Dwelling,
+                    zone.Guid,
+                    PartOIteration.Undefined,
+                    new SystemTemplate(keyValuePair.Value, null, null, null, null, null)));
+            }
+
+            return result;
         }
 
         /// <summary>
