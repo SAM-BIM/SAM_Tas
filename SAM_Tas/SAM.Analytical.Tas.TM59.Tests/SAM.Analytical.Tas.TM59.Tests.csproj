@@ -46,6 +46,20 @@
     <Reference Include="SAM.Analytical.Tas">
       <HintPath>..\..\build\SAM.Analytical.Tas.dll</HintPath>
     </Reference>
+    <!-- For the step 9 boundary tests: the TPD-full preparation (ResultantTemperaturePreparation) and the
+         legacy approximate TPD preparation (ApproximateResultantTemperatureMap). Both types are deliberately
+         free of TAS COM types, so exercising them never forces the CLR to load Interop.TBD / Interop.TPD -
+         which is what makes the preparation boundary testable without an installed TAS. Referenced as a built
+         DLL for the same reason as the assemblies above. -->
+    <Reference Include="SAM.Analytical.Tas.TPD">
+      <HintPath>..\..\build\SAM.Analytical.Tas.TPD.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical.Systems">
+      <HintPath>..\..\build\SAM.Analytical.Systems.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Core.Systems">
+      <HintPath>..\..\build\SAM.Core.Systems.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
