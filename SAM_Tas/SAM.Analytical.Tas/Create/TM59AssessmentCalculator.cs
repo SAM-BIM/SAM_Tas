@@ -27,9 +27,17 @@ namespace SAM.Analytical.Tas
         /// The model read back from a TAS simulation - fresh spaces carrying hourly series, not the design
         /// model.
         /// </param>
-        public static Analytical.TM59AssessmentCalculator TM59AssessmentCalculator(this AnalyticalModel analyticalModel)
+        /// <param name="analyticalModel_Design">
+        /// The design model, which holds the internal conditions and the zone-to-space relations.
+        /// </param>
+        /// <param name="simulationSpaceMap">
+        /// How a simulated space is known to be a given design space. Null builds one with
+        /// <see cref="SimulationSpaceMap(AnalyticalModel, AnalyticalModel)"/>, which matches on the zone guid TAS
+        /// stamps across the round trip - the right default for a TAS caller, and the reason this factory exists.
+        /// </param>
+        public static Analytical.TM59AssessmentCalculator TM59AssessmentCalculator(this AnalyticalModel analyticalModel, AnalyticalModel analyticalModel_Design, Analytical.SimulationSpaceMap simulationSpaceMap = null)
         {
-            return new Analytical.TM59AssessmentCalculator(analyticalModel)
+            return new Analytical.TM59AssessmentCalculator(analyticalModel, analyticalModel_Design, simulationSpaceMap ?? SimulationSpaceMap(analyticalModel_Design, analyticalModel))
             {
                 //The keys TAS wrote, which are not what the analytical vocabulary would have called them.
                 ResultantTemperatureSeriesKey = SpaceDataType.ResultantTemperature.Text(),

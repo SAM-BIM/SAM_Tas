@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using NUnit.Framework;
@@ -36,7 +36,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
         [Test]
         public void TheFactory_SuppliesTheSeriesKeysTasActuallyWrites()
         {
-            TM59AssessmentCalculator tM59AssessmentCalculator = Model().TM59AssessmentCalculator();
+            TM59AssessmentCalculator tM59AssessmentCalculator = Model().TM59AssessmentCalculator(Model());
 
             Assert.That(tM59AssessmentCalculator.OccupancySensibleGainSeriesKey, Is.EqualTo(SpaceDataType.OccupantSensibleGain.Text()));
             Assert.That(tM59AssessmentCalculator.ResultantTemperatureSeriesKey, Is.EqualTo(SpaceDataType.ResultantTemperature.Text()));
@@ -56,7 +56,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
         public void TheFactory_KeepsTheProvenanceTheTasWrapperAlwaysStamped()
         {
             //Tas.Query, qualified: SAM.Analytical.Tas.TM59 has its own Query that shadows it here.
-            Assert.That(Model().TM59AssessmentCalculator().SourceFallback, Is.EqualTo(Tas.Query.Source()));
+            Assert.That(Model().TM59AssessmentCalculator(Model()).SourceFallback, Is.EqualTo(Tas.Query.Source()));
 
             //And it is the wrapper's, not the analytical assembly's - the value that would have been lost.
             Assert.That(Tas.Query.Source(), Is.EqualTo("SAM.Analytical.Tas"));
@@ -71,18 +71,23 @@ namespace SAM.Analytical.Tas.TM59.Tests
         {
             AnalyticalModel analyticalModel = Model();
 
-            TM59AssessmentCalculator tM59AssessmentCalculator = analyticalModel.TM59AssessmentCalculator();
+            TM59AssessmentCalculator tM59AssessmentCalculator = analyticalModel.TM59AssessmentCalculator(analyticalModel);
 
             Assert.That(tM59AssessmentCalculator.AnalyticalModel, Is.SameAs(analyticalModel));
             Assert.That(tM59AssessmentCalculator.TM52BuildingCategory, Is.EqualTo(TM52BuildingCategory.CategoryII));
 
-            //The property the repoint's behaviour-preservation rests on. A non-null default here would make the
-            //Grasshopper component - which states no scenario - start refusing every space it used to assess.
+            //No VentilationStrategyMap: the factory does not invent a scenario, so a caller that states none
+            //keeps the old criterion derivation rather than having every space refused.
             Assert.That(tM59AssessmentCalculator.VentilationStrategyMap, Is.Null);
+
+            //But it DOES build a SimulationSpaceMap, because identity is not optional - step 8. It reads the zone
+            //guid TAS preserves across the round trip, so this route never matches a space by name.
+            Assert.That(tM59AssessmentCalculator.SimulationSpaceMap, Is.Not.Null);
+            Assert.That(tM59AssessmentCalculator.AnalyticalModel_Design, Is.SameAs(analyticalModel));
 
             //A null model is configured just the same rather than throwing - the component reaches here
             //before it can know whether the TSD read produced anything.
-            Assert.That(((AnalyticalModel)null).TM59AssessmentCalculator(), Is.Not.Null);
+            Assert.That(((AnalyticalModel)null).TM59AssessmentCalculator(null), Is.Not.Null);
         }
 
         private static AnalyticalModel Model()
