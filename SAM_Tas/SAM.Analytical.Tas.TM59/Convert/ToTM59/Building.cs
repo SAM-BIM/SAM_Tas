@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Collections.Generic;
@@ -86,10 +86,22 @@ namespace SAM.Analytical.Tas.TM59
         /// What the scenarios state. Null falls back to the model-derived overload above, unchanged, with no
         /// refusals - so a caller with no scenario is not silently given an empty export.
         /// </param>
+        /// <para>
+        /// <b>A space that cannot be exported at all counts as a refusal too.</b> <c>Space.ToTM59</c> returns
+        /// null for a space with no <c>InternalCondition</c>, and for a null <paramref name="tM59Manager"/>.
+        /// Dropping those silently would defeat the whole guarantee: the completeness gate would pass and a
+        /// short document would be reported as a successful export - the exact outcome refusing the document
+        /// exists to prevent. They are refused with their own reason.
+        /// </para>
         /// <param name="ventilationStrategyRefusals">
-        /// Why the export was refused, one sentence per space. Never null; empty on success.
+        /// Why the export was refused, one sentence per space. Never null, and <b>never empty when the return
+        /// is null</b> - including where there was nothing to export at all, so a caller reading this to find
+        /// out why always gets an answer.
         /// </param>
-        /// <returns>The building, or null where any space's ventilation strategy was not settled.</returns>
+        /// <returns>
+        /// The building, or null where any space's ventilation strategy was not settled or any space could not
+        /// be exported.
+        /// </returns>
         public static Building ToTM59(this AnalyticalModel analyticalModel, TM59Manager tM59Manager, VentilationStrategyMap ventilationStrategyMap, out List<string> ventilationStrategyRefusals)
         {
             ventilationStrategyRefusals = new List<string>();
@@ -104,6 +116,10 @@ namespace SAM.Analytical.Tas.TM59
             List<Space> spaces = adjacencyCluster?.GetSpaces();
             if (spaces == null)
             {
+                //Refused with a reason rather than a bare null, so the documented contract holds: a null return
+                //always has something in the out parameter explaining it.
+                ventilationStrategyRefusals.Add("There is no model, or it holds no spaces, so there is nothing to export.");
+
                 return null;
             }
 
@@ -121,16 +137,25 @@ namespace SAM.Analytical.Tas.TM59
                     continue;
                 }
 
-                //Not Undefined, so Space.ToTM59 uses this instead of reading the internal condition.
+                //Not Undefined, so Space.ToTM59 uses this instead of reading the internal condition. The map
+                //guarantees a recognised ventilation identity, so this mapping cannot be reached with a word it
+                //has no criterion for.
                 SystemType systemType = Analytical.Query.IsMechanicalVentilation(ventilationStrategySelection.VentilationStrategy)
                     ? SystemType.MechanicalVentilation
                     : SystemType.NaturalVentilation;
 
                 Zone zone = space.ToTM59(tM59Manager, systemType);
-                if (zone != null)
+                if (zone == null)
                 {
-                    zones.Add(zone);
+                    //A settled strategy that still cannot be exported - no internal condition on the space, or
+                    //no TM59Manager. Silently omitting it would pass the completeness gate below and ship a
+                    //short document as a success.
+                    ventilationStrategyRefusals.Add(string.Format("Space '{0}' states ventilation strategy '{1}' but cannot be exported as a TM59 zone, which needs both an internal condition on the space and a TM59Manager.", space.Name, ventilationStrategySelection.VentilationStrategy));
+
+                    continue;
                 }
+
+                zones.Add(zone);
             }
 
             return ventilationStrategyRefusals.Count == 0 ? new Building(BuildingCategory.Category_II, false, false, zones) : null;

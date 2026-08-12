@@ -76,6 +76,10 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(tM59AssessmentCalculator.AnalyticalModel, Is.SameAs(analyticalModel));
             Assert.That(tM59AssessmentCalculator.TM52BuildingCategory, Is.EqualTo(TM52BuildingCategory.CategoryII));
 
+            //The property the repoint's behaviour-preservation rests on. A non-null default here would make the
+            //Grasshopper component - which states no scenario - start refusing every space it used to assess.
+            Assert.That(tM59AssessmentCalculator.VentilationStrategyMap, Is.Null);
+
             //A null model is configured just the same rather than throwing - the component reaches here
             //before it can know whether the TSD read produced anything.
             Assert.That(((AnalyticalModel)null).TM59AssessmentCalculator(), Is.Not.Null);

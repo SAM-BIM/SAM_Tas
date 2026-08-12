@@ -106,6 +106,96 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         /// <summary>
+        /// <b>A space that cannot be exported is a refusal, not a silently missing room.</b>
+        /// <para>
+        /// <c>Space.ToTM59</c> returns null for a space with no <c>InternalCondition</c>. Dropping it would pass
+        /// the completeness gate and ship a two-zone document for a three-space building as a success - the
+        /// exact outcome refusing the whole document exists to prevent, and the one thing the external TAS TM59
+        /// tool could never notice.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void ASpaceThatCannotBeExported_RefusesRatherThanVanishing()
+        {
+            AnalyticalModel analyticalModel = Model_ThreeFlats(name_WithoutInternalCondition: "Flat 2 Bedroom 2");
+
+            Assert.That(analyticalModel.GetSpaces().Count, Is.EqualTo(3));
+
+            //Every space has a stated strategy, so nothing is refused for being unsettled.
+            Building building = analyticalModel.ToTM59(tM59Manager, Map(analyticalModel, "MVRE"), out List<string> refusals);
+
+            Assert.That(building, Is.Null);
+            Assert.That(refusals.Count, Is.EqualTo(1));
+            Assert.That(refusals[0], Does.Contain("Flat 2 Bedroom 2"));
+            Assert.That(refusals[0], Does.Contain("cannot be exported as a TM59 zone"));
+        }
+
+        /// <summary>
+        /// The degenerate form of the same hole: a null <c>TM59Manager</c> makes every zone unexportable, which
+        /// used to return a zero-zone <c>Building</c> and report success.
+        /// </summary>
+        [Test]
+        public void ANullManager_RefusesRatherThanExportingNothing()
+        {
+            AnalyticalModel analyticalModel = Model("NV");
+
+            Building building = analyticalModel.ToTM59(null, Map(analyticalModel, "MVRE"), out List<string> refusals);
+
+            Assert.That(building, Is.Null);
+            Assert.That(refusals, Is.Not.Empty);
+        }
+
+        /// <summary>
+        /// <b>A null return always carries a reason.</b> Where there is nothing to export at all, a caller
+        /// reading the out parameter to find out why must get an answer rather than an empty list.
+        /// </summary>
+        [Test]
+        public void ANullReturn_AlwaysCarriesAReason()
+        {
+            Assert.That(((AnalyticalModel)null).ToTM59(tM59Manager, new VentilationStrategyMap(), out List<string> refusals), Is.Null);
+            Assert.That(refusals, Is.Not.Empty);
+            Assert.That(refusals[0], Does.Contain("nothing to export"));
+        }
+
+        /// <summary>
+        /// <b>An unrecognised strategy refuses the export instead of being written as "Mech Vent".</b> The
+        /// mapping treats anything that is not <c>NV</c> or <c>UV</c> as mechanical, so without the map's closed
+        /// vocabulary a scenario stating "Natural" would have been exported as mechanically ventilated.
+        /// </summary>
+        [Test]
+        public void AnUnrecognisedStrategy_RefusesTheExport()
+        {
+            AnalyticalModel analyticalModel = Model("NV");
+
+            Building building = analyticalModel.ToTM59(tM59Manager, Map(analyticalModel, "Natural"), out List<string> refusals);
+
+            Assert.That(building, Is.Null);
+            Assert.That(refusals.Count, Is.EqualTo(1));
+            Assert.That(refusals[0], Does.Contain("not a ventilation identity"));
+        }
+
+        /// <summary>
+        /// Two scenarios disagreeing over one space refuse the export as well, so ambiguity does not reach the
+        /// XML through this path either.
+        /// </summary>
+        [Test]
+        public void ConflictingScenarios_RefuseTheExport()
+        {
+            AnalyticalModel analyticalModel = Model("NV");
+            List<Space> spaces = analyticalModel.GetSpaces();
+
+            VentilationStrategyMap ventilationStrategyMap = new VentilationStrategyMap();
+            ventilationStrategyMap.Add(Scenario("MVRE"), spaces);
+            ventilationStrategyMap.Add(Scenario("NV"), spaces);
+
+            Building building = analyticalModel.ToTM59(tM59Manager, ventilationStrategyMap, out List<string> refusals);
+
+            Assert.That(building, Is.Null);
+            Assert.That(refusals.Count, Is.EqualTo(1));
+            Assert.That(refusals[0], Does.Contain("different ventilation strategies"));
+        }
+
+        /// <summary>
         /// <b>No map means no change.</b> A caller with no scenario gets the old model-derived export, not an
         /// empty one - and no refusals, because nothing was asked of a map that was not supplied.
         /// </summary>
@@ -218,31 +308,44 @@ namespace SAM.Analytical.Tas.TM59.Tests
             return new AnalyticalModel("Three Flats", null, null, null, adjacencyCluster);
         }
 
-        /// <summary>Three flats each with a "Bedroom 2", all stating NV in their design data.</summary>
-        private static AnalyticalModel Model_ThreeFlats()
+        /// <summary>
+        /// Three flats each with a "Bedroom 2", all stating NV in their design data.
+        /// </summary>
+        /// <param name="name_WithoutInternalCondition">
+        /// A space to leave with no <c>InternalCondition</c>, which is what makes <c>Space.ToTM59</c> return null
+        /// for it. Null leaves all three complete.
+        /// </param>
+        private static AnalyticalModel Model_ThreeFlats(string name_WithoutInternalCondition = null)
         {
             AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
 
             foreach (string name in new[] { "Flat 1", "Flat 2", "Flat 3" })
             {
-                adjacencyCluster.AddObject(Space(name + " Bedroom 2", "NV"));
+                string name_Space = name + " Bedroom 2";
+
+                adjacencyCluster.AddObject(Space(name_Space, "NV", name_Space != name_WithoutInternalCondition));
             }
 
             return new AnalyticalModel("Three Flats", null, null, null, adjacencyCluster);
         }
 
-        private static Space Space(string name, string ventilationSystemTypeName)
+        private static Space Space(string name, string ventilationSystemTypeName, bool internalCondition = true)
         {
             Space result = new Space(name);
 
-            InternalCondition internalCondition = new InternalCondition(name);
+            if (!internalCondition)
+            {
+                return result;
+            }
+
+            InternalCondition internalCondition_Temp = new InternalCondition(name);
 
             if (!string.IsNullOrEmpty(ventilationSystemTypeName))
             {
-                internalCondition.SetValue(InternalConditionParameter.VentilationSystemTypeName, ventilationSystemTypeName);
+                internalCondition_Temp.SetValue(InternalConditionParameter.VentilationSystemTypeName, ventilationSystemTypeName);
             }
 
-            result.InternalCondition = internalCondition;
+            result.InternalCondition = internalCondition_Temp;
 
             return result;
         }
