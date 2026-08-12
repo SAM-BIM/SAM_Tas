@@ -70,6 +70,15 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
+            //Checked here as well as in TryBeginSecondPass, so a missing companion TBD refuses BEFORE the full COM
+            //conversion below rather than after it. TryBeginSecondPass keeps its own check because it is the
+            //guarantee that nothing is copied without one, and must hold for any caller.
+            if (!System.IO.File.Exists(resultantTemperaturePreparation.Path_TBD_Design))
+            {
+                refusals.Add(string.Format("The TPD-full route needs the companion TBD '{0}' beside the TPD, and it does not exist.", resultantTemperaturePreparation.Path_TBD_Design));
+                return false;
+            }
+
             SystemEnergyCentreConversionSettings systemEnergyCentreConversionSettings = new SystemEnergyCentreConversionSettings()
             {
                 //The TPD is read, never re-run: the first pass has already happened and its results are what

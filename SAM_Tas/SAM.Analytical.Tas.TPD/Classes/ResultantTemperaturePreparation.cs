@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Systems;
@@ -26,7 +26,7 @@ namespace SAM.Analytical.Tas.TPD
     /// <para>
     /// <b>This type is deliberately free of TAS COM types.</b> It is path algebra, transfer selection and
     /// refusal - the decisions - so they can be tested without an installed TAS. The COM work stays in
-    /// <see cref="Modify.CalculateResultantTemperature(ResultantTemperaturePreparation)"/>.
+    /// <see cref="Modify.CalculateResultantTemperature(string, ResultantTemperatureTransfer, out string, out string, out System.Collections.Generic.List{string})"/>.
     /// </para>
     /// </summary>
     public class ResultantTemperaturePreparation
@@ -46,9 +46,19 @@ namespace SAM.Analytical.Tas.TPD
         /// <summary>
         /// Works out the two-pass route's files and whether the requested transfer can be performed.
         /// <para>
-        /// <b>Pure.</b> No file is opened, copied or simulated here, and nothing is checked for existence -
-        /// that belongs to the caller that actually does the work. What is decided here is the part that must be
-        /// right before any file is touched: that the second pass writes to a path the design model does not own.
+        /// <b>Pure, and it does not throw.</b> No file is opened, copied or simulated here, and no file is
+        /// checked for existence - that belongs to the caller that actually does the work. What is decided here is
+        /// the part that must be right before any file is touched: that the second pass writes to a path the
+        /// design model does not own.
+        /// </para>
+        /// <para>
+        /// <b>A malformed path is a refusal, not an exception.</b> The path algebra itself can throw -
+        /// <c>Path.GetDirectoryName(@"C:\")</c> returns null so <c>Path.Combine</c> raises
+        /// <c>ArgumentNullException</c>, and under .NET Framework an illegal character or an over-long path raises
+        /// <c>ArgumentException</c> / <c>PathTooLongException</c>. The route this replaced returned false cleanly
+        /// for all of those because it checked the file first, and the Grasshopper component only checks the
+        /// string is non-blank, so letting them escape would surface a bare exception on a port that used to
+        /// report failure.
         /// </para>
         /// </summary>
         /// <param name="path_TPD">The already-simulated TPD. Its companion TBD is expected beside it.</param>
@@ -65,14 +75,28 @@ namespace SAM.Analytical.Tas.TPD
             {
                 Path_TPD = path_TPD;
 
-                string directory = System.IO.Path.GetDirectoryName(path_TPD);
-                string fileName = System.IO.Path.GetFileNameWithoutExtension(path_TPD);
+                try
+                {
+                    string directory = System.IO.Path.GetDirectoryName(path_TPD);
+                    string fileName = System.IO.Path.GetFileNameWithoutExtension(path_TPD);
 
-                //The design TBD is read only. The second pass never writes to it - see Path_TBD_Simulation.
-                Path_TBD_Design = System.IO.Path.Combine(directory, fileName + ".tbd");
+                    if (directory == null || string.IsNullOrWhiteSpace(fileName))
+                    {
+                        refusals.Add(string.Format("'{0}' does not name a file in a directory, so the TPD-full route cannot work out where to put the TBD copy.", path_TPD));
+                    }
+                    else
+                    {
+                        //The design TBD is read only. The second pass never writes to it - see Path_TBD_Simulation.
+                        Path_TBD_Design = System.IO.Path.Combine(directory, fileName + ".tbd");
 
-                Path_TBD_Simulation = System.IO.Path.Combine(directory, fileName + Suffix + ".tbd");
-                Path_TSD_Simulation = System.IO.Path.Combine(directory, fileName + Suffix + ".tsd");
+                        Path_TBD_Simulation = System.IO.Path.Combine(directory, fileName + Suffix + ".tbd");
+                        Path_TSD_Simulation = System.IO.Path.Combine(directory, fileName + Suffix + ".tsd");
+                    }
+                }
+                catch (System.Exception exception)
+                {
+                    refusals.Add(string.Format("'{0}' is not a usable file path, so the TPD-full route cannot work out where to put the TBD copy: {1}", path_TPD, exception.Message));
+                }
             }
 
             string refusal = TransferRefusal(resultantTemperatureTransfer);
@@ -221,12 +245,15 @@ namespace SAM.Analytical.Tas.TPD
         /// is to carry the first pass's supply air temperature and supply airflow into the TBD copy. The read
         /// half is available and already happening: <c>Convert.ToSAM_SpaceSystemResults</c> asks a simulated
         /// TPD's <c>SystemZone</c> for every <c>SpaceDataType</c>, which includes
-        /// <c>SupplyAirTemperature</c> and <c>FlowRate</c>. The write half has no home. Across the whole
-        /// <c>Interop.TBD</c> object model the only temperature-valued member is
-        /// <c>IWeatherYear.groundTemperature</c>; a TBD zone, its internal condition, its thermostat and its
-        /// internal gain expose no per-zone supply air temperature of any kind. That is by design - TBD
-        /// introduces ventilation air at outside or adjacent-zone conditions, and conditioned supply air is a
-        /// TPD concept, which is precisely why TAS keeps the two models apart.
+        /// <c>SupplyAirTemperature</c> and <c>FlowRate</c>. The write half has no home: <b>no type in the
+        /// <c>Interop.TBD</c> object model exposes a per-zone supply air temperature.</b> A TBD zone, its
+        /// internal condition, its thermostat and its internal gain were each enumerated and none has one. The
+        /// temperature-valued members that TBD does have are all something else - <c>IControls</c>'s
+        /// frost-protection, authority and night-setback temperatures, <c>IEmitter</c>'s outside-temperature
+        /// cut-offs, <c>ISurfaceOutputSpec.dryBulbTemp</c> and <c>IWeatherYear.groundTemperature</c> - and not
+        /// one of them is a zone supply condition. That is by design: TBD introduces ventilation air at outside
+        /// or adjacent-zone conditions, and conditioned supply air is a TPD concept, which is precisely why TAS
+        /// keeps the two models apart.
         /// </para>
         /// <para>
         /// <b>Injecting the airflow alone would be worse, not partial progress.</b> TBD's ventilation profile

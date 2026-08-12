@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Systems;
@@ -34,6 +34,26 @@ namespace SAM.Analytical.Tas.TPD
     /// matched the space, which in a block of flats silently pairs one dwelling's system results with another
     /// dwelling's room - every flat has a "Bedroom 2". Where an identity cannot be resolved unambiguously the
     /// space is refused and reported, never paired with a same-named one.
+    /// </para>
+    /// <para>
+    /// <b>UNVERIFIED, and it decides whether identity mode engages at all.</b> A space's identity is the TBD/TSD
+    /// zone guid (<c>SpaceParameter.ZoneGuid</c>, which <c>ActiveSetting</c> maps to <c>TSD.ZoneData.zoneGUID</c>).
+    /// A <c>SystemSpaceResult</c>'s <c>Reference</c> comes from <c>(systemZone as dynamic).GUID</c> in
+    /// <c>Convert.ToSAM_SpaceSystemResult</c> - and <c>ISystemZone</c> declares no <c>GUID</c>, so that binds to
+    /// <c>ISystemComponent.GUID</c>: <b>the TPD component's own guid</b>. Nothing in this codebase establishes
+    /// that the two are equal, and step 8's "verified on the real run" evidence covers only the TSD route. If
+    /// they differ, identity never engages, the whole model falls to name mode, and a block of flats whose rooms
+    /// are all called "Bedroom 2" is <b>entirely refused</b> - which is safe but useless. The refusal below says
+    /// so once, loudly, rather than as one baffling message per room.
+    /// </para>
+    /// <para>
+    /// <b>The likely correct bridge is <c>IZoneLoad.GUID</c>, not the component guid.</b>
+    /// <c>ITSDData</c> - the object carrying <c>TBDPath</c> and <c>TSDPath</c> - exposes
+    /// <c>GetZoneLoadForGuid(string)</c>, so a zone load is addressable by the guid the TBD/TSD side uses. Moving
+    /// <c>ToSAM_SpaceSystemResult</c> onto <c>zoneLoad.GUID</c> is therefore the probable fix, but it is <b>not a
+    /// drive-by</b>: <c>Reference</c> is how a <c>SystemSpaceResult</c> is correlated to its
+    /// <c>SystemSpace</c>/<c>SystemZone</c> elsewhere in the energy-centre model and is persisted in JSON, so it
+    /// needs checking against a real TPD first. <b>Verify on Michal's validation model before changing it.</b>
     /// </para>
     /// <para>
     /// <b>Free of TAS COM types</b>, so the preparation can be tested without an installed TAS. The engine
@@ -108,11 +128,38 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            if (!identity)
+            {
+                //Said ONCE, before the per-space refusals, because the per-space ones ("matches 3 TPD results by
+                //name") describe the symptom and this describes the cause. See the class remarks: the two guid
+                //namespaces have never been shown to agree, and if they do not this is the message that says so.
+                refusals.Add("No TPD result identity matched any space identity, so results are being attributed by NAME for the whole model. Rooms sharing a name cannot then be told apart and are refused. If this model has duplicate room names, expect no results: the TPD result reference and the TBD/TSD zone guid are not the same identity.");
+            }
+
+            //Two spaces claiming one identity is refused in BOTH directions, which is the rule SimulationSpaceMap
+            //already follows: backwards, "which result belongs to this room" has two answers. Refusing only the
+            //two-results-to-one-space direction would have left this the one identity consumer in the programme
+            //with a weaker policy than the rest.
+            HashSet<string> keys_Contested = new HashSet<string>();
+            if (identity)
+            {
+                HashSet<string> keys_Seen = new HashSet<string>();
+
+                foreach (Space space in spaces)
+                {
+                    string key = func_StableKey == null ? null : func_StableKey.Invoke(space);
+                    if (!string.IsNullOrWhiteSpace(key) && !keys_Seen.Add(key))
+                    {
+                        keys_Contested.Add(key);
+                    }
+                }
+            }
+
             AdjacencyCluster adjacencyCluster = analyticalModel_Simulation.AdjacencyCluster;
 
             foreach (Space space in spaces)
             {
-                SystemSpaceResult systemSpaceResult = Resolve(space, func_StableKey, dictionary_Reference, dictionary_Name, identity);
+                SystemSpaceResult systemSpaceResult = Resolve(space, func_StableKey, dictionary_Reference, dictionary_Name, identity, keys_Contested);
                 if (systemSpaceResult == null)
                 {
                     continue;
@@ -146,6 +193,19 @@ namespace SAM.Analytical.Tas.TPD
         public List<Space> Prepared => new List<Space>(spaces_Prepared);
 
         /// <summary>
+        /// Whether the preparation produced a model the assessment can run on. <b>False means refuse</b> - and it
+        /// is false on exactly the branches where <see cref="AnalyticalModel"/> is null, so a caller that checks
+        /// this cannot then dereference nothing. Mirrors
+        /// <see cref="ResultantTemperaturePreparation.IsSupported"/>, so the two preparations are checked the same
+        /// way.
+        /// <para>
+        /// Note this is <b>not</b> "nothing was refused": individual spaces are routinely refused while the model
+        /// as a whole is still assessable. It means the preparation itself succeeded.
+        /// </para>
+        /// </summary>
+        public bool IsSupported => AnalyticalModel != null;
+
+        /// <summary>
         /// Every space this preparation refused, and why. <b>Reported, not swallowed</b> - a room missing from the
         /// assessment because its identity could not be resolved is a gap the user has to be able to see.
         /// </summary>
@@ -155,13 +215,19 @@ namespace SAM.Analytical.Tas.TPD
         /// Finds the TPD result belonging to this space: the engine identity first, then a unique name, then
         /// refusal. Never the first same-named candidate.
         /// </summary>
-        private SystemSpaceResult Resolve(Space space, Func<Space, string> func_StableKey, Dictionary<string, List<SystemSpaceResult>> dictionary_Reference, Dictionary<string, List<SystemSpaceResult>> dictionary_Name, bool identity)
+        private SystemSpaceResult Resolve(Space space, Func<Space, string> func_StableKey, Dictionary<string, List<SystemSpaceResult>> dictionary_Reference, Dictionary<string, List<SystemSpaceResult>> dictionary_Name, bool identity, HashSet<string> keys_Contested)
         {
             List<SystemSpaceResult> systemSpaceResults;
 
             if (identity)
             {
                 string key = func_StableKey == null ? null : func_StableKey.Invoke(space);
+
+                if (!string.IsNullOrWhiteSpace(key) && keys_Contested.Contains(key))
+                {
+                    refusals.Add(string.Format("Space '{0}' shares the identity '{1}' with another space, so no TPD result can be attributed to either of them.", space.Name, key));
+                    return null;
+                }
 
                 if (string.IsNullOrWhiteSpace(key))
                 {
@@ -208,7 +274,11 @@ namespace SAM.Analytical.Tas.TPD
         /// </summary>
         private Space Synthesise(Space space, SystemSpaceResult systemSpaceResult, string seriesKey_MeanRadiantTemperature, string seriesKey_ResultantTemperature)
         {
-            ParameterSet parameterSet = space.GetParameterSets() == null ? null : space.GetParameterSets().Find(x => x.Contains(seriesKey_MeanRadiantTemperature));
+            //Asked for ONCE: GetParameterSets deep-clones every set on every call, and these sets carry
+            //8760-element series.
+            List<ParameterSet> parameterSets = space.GetParameterSets();
+
+            ParameterSet parameterSet = parameterSets == null ? null : parameterSets.Find(x => x.Contains(seriesKey_MeanRadiantTemperature));
             if (parameterSet == null)
             {
                 refusals.Add(string.Format("Space '{0}' carries no '{1}' series, so no approximate resultant temperature can be synthesised for it.", space.Name, seriesKey_MeanRadiantTemperature));
@@ -229,17 +299,35 @@ namespace SAM.Analytical.Tas.TPD
                 return null;
             }
 
-            //A bounded read always returns as many values as were asked for - it WRAPS the available indices to
-            //fill the range rather than running out. So the length of what comes back proves nothing, and the
-            //check has to be against how much the TPD result actually holds. A ten-hour result silently
-            //stretched over a year would otherwise assess a fabricated series.
+            //The two series are read hour-for-hour, so BOTH their length and their ALIGNMENT have to hold.
+            //
+            //Neither is provable from what GetValues returns. A bounded read always hands back exactly as many
+            //values as were asked for: it WRAPS the requested index into [GetMinIndex(), GetMaxIndex()] rather
+            //than running out. So a ten-hour TPD result silently stretches over the year, and - because
+            //Create.IndexedDoubles indexes from the TPD's own start hour minus one - a result for a sub-period
+            //such as 1 May to 30 September starts at a non-zero index, where asking for index 0 returns some hour
+            //in the middle of the period. That is a ROTATED series, and averaging it against the radiant series
+            //would fabricate a resultant temperature that looks entirely plausible.
             int? index_Min = indexedDoubles.GetMinIndex();
             int? index_Max = indexedDoubles.GetMaxIndex();
 
-            int count_Available = index_Min.HasValue && index_Max.HasValue ? index_Max.Value - index_Min.Value + 1 : 0;
-            if (count_Available < jsonArray_MeanRadiantTemperature.Count)
+            if (!index_Min.HasValue || !index_Max.HasValue)
             {
-                refusals.Add(string.Format("Space '{0}' has {1} radiant temperature values but its TPD result covers only {2} hours, so the two cannot be combined.", space.Name, jsonArray_MeanRadiantTemperature.Count, count_Available));
+                refusals.Add(string.Format("Space '{0}' produced no readable TPD zone temperature series.", space.Name));
+                return null;
+            }
+
+            if (index_Min.Value != 0)
+            {
+                refusals.Add(string.Format("Space '{0}' has a TPD zone temperature series starting at hour {1} rather than hour 0, so it cannot be aligned with the radiant temperature series. A TPD simulated over part of the year cannot be combined with a full-year result.", space.Name, index_Min.Value));
+                return null;
+            }
+
+            //Count, not span: a gapped series has a wide span but missing keys, and a bounded read fills those
+            //with default(double) - averaging 0 degrees into the answer.
+            if (indexedDoubles.Count < jsonArray_MeanRadiantTemperature.Count)
+            {
+                refusals.Add(string.Format("Space '{0}' has {1} radiant temperature values but its TPD result holds only {2}, so the two cannot be combined.", space.Name, jsonArray_MeanRadiantTemperature.Count, indexedDoubles.Count));
                 return null;
             }
 
@@ -253,14 +341,23 @@ namespace SAM.Analytical.Tas.TPD
             JsonArray jsonArray_ResultantTemperature = new JsonArray();
             for (int i = 0; i < jsonArray_MeanRadiantTemperature.Count; i++)
             {
-                jsonArray_ResultantTemperature.Add(((double)jsonArray_MeanRadiantTemperature[i] + values_ZoneTemperature[i]) / 2);
+                //A null or non-numeric element would throw inside the cast, which on this route means an
+                //exception out of a Grasshopper component rather than a refusal it can report.
+                double? value_MeanRadiantTemperature = jsonArray_MeanRadiantTemperature[i] == null ? (double?)null : jsonArray_MeanRadiantTemperature[i].GetValue<double>();
+                if (!value_MeanRadiantTemperature.HasValue)
+                {
+                    refusals.Add(string.Format("Space '{0}' has a missing '{1}' value at hour {2}, so no approximate resultant temperature can be synthesised for it.", space.Name, seriesKey_MeanRadiantTemperature, i));
+                    return null;
+                }
+
+                jsonArray_ResultantTemperature.Add((value_MeanRadiantTemperature.Value + values_ZoneTemperature[i]) / 2);
             }
 
             Space result = new Space(space);
 
-            ParameterSet parameterSet_Result = new ParameterSet(parameterSet);
-            parameterSet_Result.Add(seriesKey_ResultantTemperature, jsonArray_ResultantTemperature);
-            result.Add(parameterSet_Result);
+            //parameterSet is already a private clone - GetParameterSets cloned it - so it is written to directly.
+            parameterSet.Add(seriesKey_ResultantTemperature, jsonArray_ResultantTemperature);
+            result.Add(parameterSet);
 
             return result;
         }

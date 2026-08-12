@@ -10,6 +10,7 @@ using SAM.Weather;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 
 namespace SAM.Analytical.Tas.TM59.Tests
@@ -86,8 +87,12 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 List<string> refusals;
 
                 Assert.That(resultantTemperaturePreparation.TryBeginSecondPass(Results(), out transferred, out refusals), Is.False);
-                Assert.That(refusals, Is.Not.Empty);
                 Assert.That(transferred, Is.Empty);
+
+                //Refused for the RIGHT reason - the unsupported transfer - and not merely because the payload
+                //came back empty, which would also have stopped it one guard later.
+                Assert.That(refusals, Has.Count.EqualTo(1));
+                Assert.That(refusals[0], Does.Contain("supply air temperature"));
 
                 Assert.That(fixture.DesignTBDUnchanged, Is.True, "A refused route modified the design TBD.");
                 Assert.That(File.Exists(resultantTemperaturePreparation.Path_TBD_Simulation), Is.False, "A refused route left a copy behind.");
@@ -95,10 +100,15 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         /// <summary>
-        /// <b>Where the route does proceed, it proceeds on a copy - and the design TBD is still untouched.</b>
+        /// <b>Where the route does proceed, it makes the copy - at a path the design model does not own.</b>
+        /// <para>
+        /// Note what this does and does not say: <c>TryBeginSecondPass</c> never <i>modifies</i> a TBD, so
+        /// "unchanged" here is about the copy existing and the original being left alone up to that point. The
+        /// writing is the COM code beyond this seam and is not reachable without an installed TAS.
+        /// </para>
         /// </summary>
         [Test]
-        public void TheSupportedTransfer_CopiesTheDesignTBDAndModifiesOnlyTheCopy()
+        public void TheSupportedTransfer_CopiesTheDesignTBDToItsOwnPath()
         {
             using (Fixture fixture = new Fixture())
             {
@@ -257,12 +267,32 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
                 Assert.That(resultantTemperaturePreparation.TryBeginSecondPass(Results(), out transferred, out refusals), Is.False);
 
-                //No second TSD was produced, so the TPD-full route has handed the caller no series at all. The
-                //approximate route is not reachable from here - it needs a converted companion-TSD model.
+                //No second TSD was produced, so the TPD-full route has handed the caller no series at all.
                 Assert.That(File.Exists(resultantTemperaturePreparation.Path_TSD_Simulation), Is.False);
                 Assert.That(transferred, Is.Empty);
                 Assert.That(refusals, Is.Not.Empty);
             }
+
+            //And "never falls back" is asserted STRUCTURALLY, because no amount of exercising a refusal can prove
+            //the absence of a code path that would only appear if someone added one. The TPD-full route's own type
+            //must not so much as mention the approximate route.
+            //
+            //A reflection check, and deliberately so: this is a statement about what the assembly does NOT
+            //contain, which is not a behaviour any input can elicit.
+            Assert.That(
+                typeof(Modify).Assembly.GetType(typeof(Modify).FullName)
+                    .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                    .Any(x => x.Name == "CalculateResultantTemperature"
+                        && x.GetParameters().Any(y => y.ParameterType == typeof(ApproximateResultantTemperatureMap))),
+                Is.False,
+                "The two-pass route has acquired a dependency on the approximate route.");
+
+            //Nor may the authoritative route's own preparation type know how to build the approximate one.
+            Assert.That(
+                typeof(ResultantTemperaturePreparation).GetMethods()
+                    .Any(x => x.ReturnType == typeof(ApproximateResultantTemperatureMap)),
+                Is.False,
+                "The two-pass preparation can now hand back an approximation.");
         }
 
         // =============================================================================================
@@ -360,8 +390,11 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(Model_CompanionTSD(), systemSpaceResults);
 
-            //All three bedrooms refused; the uniquely named corridor is unaffected.
-            Assert.That(approximateResultantTemperatureMap.Refusals, Has.Count.EqualTo(3));
+            //All three bedrooms refused, plus the one model-wide message saying attribution fell back to names -
+            //which is the CAUSE, where the three per-room messages are the symptom.
+            Assert.That(approximateResultantTemperatureMap.Refusals, Has.Count.EqualTo(4));
+            Assert.That(approximateResultantTemperatureMap.Refusals.FindAll(x => x.Contains("NAME")), Has.Count.EqualTo(1));
+
             Assert.That(approximateResultantTemperatureMap.Prepared, Has.Count.EqualTo(1));
             Assert.That(approximateResultantTemperatureMap.Prepared[0].Name, Is.EqualTo("Corridor"));
 
@@ -409,8 +442,51 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(Count(tM59AssessmentResult), Is.EqualTo(4));
 
-            //Nothing on this route names a second TBD or TSD, and no system results were needed to get here.
-            Assert.That(analyticalModel_TSD.Name, Does.Not.Contain(ResultantTemperaturePreparation.Suffix));
+            //The load-bearing part: this model carries a ResultantTemperature and NO system results at all, so it
+            //consumed nothing the two-pass route produces. Feeding the same model to the approximate preparation
+            //proves the point from the other side - with no TPD results there is nothing to synthesise from, and
+            //it refuses every space, while the TSD-simple route above assessed all four.
+            ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(Model_TSD(), null);
+
+            Assert.That(approximateResultantTemperatureMap.Prepared, Is.Empty);
+            Assert.That(approximateResultantTemperatureMap.Refusals, Is.Not.Empty);
+        }
+
+        /// <summary>
+        /// <b>The two identities are NOT assumed to be the same string.</b>
+        /// <para>
+        /// A space's identity is the TBD/TSD zone guid; a TPD result's <c>Reference</c> is the TPD component's own
+        /// guid, and nothing establishes that they are equal - see the remarks on
+        /// <c>ApproximateResultantTemperatureMap</c>. The other tests here give both sides the same string, which
+        /// is convenient but encodes exactly the assumption under doubt. This one gives them <b>different</b>
+        /// strings, which is the real-model shape if the guids differ, and pins what then happens: the whole model
+        /// falls to name mode, and it says so ONCE rather than leaving the reader to infer it from four
+        /// per-room messages.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void WhereTheTwoIdentityNamespacesDisagree_ItSaysSoOnceAndFallsToNames()
+        {
+            //Uniquely named spaces, so name mode can still resolve them and the test is about the DIAGNOSIS.
+            AnalyticalModel analyticalModel = Model(Analytical.Tas.Query.Text(Analytical.Tas.SpaceDataType.MeanRadiantTemperature), [20.0, 24.0, 28.0, 30.0], unique: true);
+
+            List<SystemSpaceResult> systemSpaceResults = [];
+            foreach (string name in new[] { "Flat 1", "Flat 2", "Flat 3", "Corridor" })
+            {
+                //A TPD-component-shaped reference that matches no space identity.
+                systemSpaceResults.Add(Result("tpd-component-" + name, name, Analytical.Systems.SpaceDataType.ZoneTemperature, 24.0));
+            }
+
+            ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(analyticalModel, systemSpaceResults);
+
+            //Resolved by name, so results were still produced...
+            Assert.That(approximateResultantTemperatureMap.Prepared, Has.Count.EqualTo(4));
+
+            //...but the fall back to names is reported exactly once, naming the cause.
+            List<string> refusals = approximateResultantTemperatureMap.Refusals;
+
+            Assert.That(refusals, Has.Count.EqualTo(1));
+            Assert.That(refusals[0], Does.Contain("NAME"));
         }
 
         /// <summary>
@@ -437,9 +513,14 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(First(approximateResultantTemperatureMap, "tas-zone-0"), Is.EqualTo(22.0).Within(1e-9));
 
-            //One route names simulation files it owns; the other has none to name.
-            Assert.That(resultantTemperaturePreparation.Path_TSD_Simulation, Is.Not.Null);
-            Assert.That(approximateResultantTemperatureMap.AnalyticalModel, Is.Not.Null);
+            //So the same first-pass input produces demonstrably different series on the two routes - which is why
+            //one may never silently stand in for the other.
+            Assert.That(First(approximateResultantTemperatureMap, "tas-zone-0"), Is.Not.EqualTo(resultantTemperaturePreparation.Transferred(systemSpaceResults)["Bedroom 2"].GetValue(0)));
+
+            //And only the two-pass route owns simulation files: the approximate route names no second TBD or TSD
+            //anywhere, because it never runs one.
+            Assert.That(resultantTemperaturePreparation.Path_TSD_Simulation, Does.Contain(ResultantTemperaturePreparation.Suffix));
+            Assert.That(typeof(ApproximateResultantTemperatureMap).GetProperties().Any(x => x.Name.Contains("Path")), Is.False, "The approximate route has acquired simulation file paths, so it is no longer distinguishable from the two-pass route.");
         }
 
         /// <summary>
@@ -465,9 +546,15 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(Count(tM59AssessmentResult_Approximate), Is.EqualTo(4));
             Assert.That(Count(tM59AssessmentResult_Approximate), Is.EqualTo(Count(tM59AssessmentResult_TSD)));
 
-            Assert.That(tM59AssessmentResult_Approximate.MechanicalVentilationResults.Count, Is.EqualTo(tM59AssessmentResult_TSD.MechanicalVentilationResults.Count));
-            Assert.That(tM59AssessmentResult_Approximate.NaturalVentilationResults.Count, Is.EqualTo(tM59AssessmentResult_TSD.NaturalVentilationResults.Count));
-            Assert.That(tM59AssessmentResult_Approximate.CorridorResults.Count, Is.EqualTo(tM59AssessmentResult_TSD.CorridorResults.Count));
+            //Comparing the bucket COUNTS alone would prove nothing: which criterion a room is assessed against
+            //comes from the shared design model, so the counts match however wrong the temperatures are. The
+            //assessment's own verdict per room is what has to agree.
+            Assert.That(Verdicts(tM59AssessmentResult_Approximate), Is.EqualTo(Verdicts(tM59AssessmentResult_TSD)));
+
+            //And the comparison is only meaningful if the two models really did arrive by different routes: one
+            //synthesised its series, the other was handed one.
+            Assert.That(Series(Simulated(analyticalModel_Approximate, "tas-zone-0"), Analytical.Tas.Query.Text(Analytical.Tas.SpaceDataType.ResultantTemperature)),
+                Is.EqualTo(Series(Simulated(analyticalModel_TSD, "tas-zone-0"), Analytical.Tas.Query.Text(Analytical.Tas.SpaceDataType.ResultantTemperature))).Within(1e-9));
         }
 
         /// <summary>
@@ -562,6 +649,30 @@ namespace SAM.Analytical.Tas.TM59.Tests
         private static int Count(TM59AssessmentResult tM59AssessmentResult)
         {
             return tM59AssessmentResult == null ? 0 : tM59AssessmentResult.MechanicalVentilationResults.Count + tM59AssessmentResult.NaturalVentilationResults.Count + tM59AssessmentResult.CorridorResults.Count;
+        }
+
+        /// <summary>
+        /// The assessment's actual answer per room - criterion, pass/fail and the hours behind it - sorted so two
+        /// runs can be compared without depending on the order results came back in.
+        /// <para>
+        /// Comparing bucket counts is not comparing assessments: the criterion each room is assessed against comes
+        /// from the design model, so counts agree however wrong the temperatures were.
+        /// </para>
+        /// </summary>
+        private static List<string> Verdicts(TM59AssessmentResult tM59AssessmentResult)
+        {
+            List<string> result = [];
+
+            foreach (TMResult tMResult in Enumerable.Concat(
+                Enumerable.Concat(tM59AssessmentResult.MechanicalVentilationResults, tM59AssessmentResult.NaturalVentilationResults),
+                tM59AssessmentResult.CorridorResults))
+            {
+                result.Add(string.Format("{0}|{1}|{2}|{3}|{4}", tMResult.GetType().Name, tMResult.Name, tMResult.Pass, tMResult.OccupiedHours, tMResult.MaxExceedableHours));
+            }
+
+            result.Sort(System.StringComparer.Ordinal);
+
+            return result;
         }
 
         private static double First(ApproximateResultantTemperatureMap approximateResultantTemperatureMap, string key)
@@ -683,13 +794,14 @@ namespace SAM.Analytical.Tas.TM59.Tests
             return Model(Analytical.Tas.Query.Text(Analytical.Tas.SpaceDataType.ResultantTemperature), values ?? [21.0, 24.5, 27.5, 29.0]);
         }
 
-        private static AnalyticalModel Model(string name_Series, double[] values)
+        private static AnalyticalModel Model(string name_Series, double[] values, bool unique = false)
         {
             AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
 
             foreach (string name in new[] { "Flat 1", "Flat 2", "Flat 3", "Corridor" })
             {
-                Space space = new Space(name == "Corridor" ? "Corridor" : "Bedroom 2");
+                //unique: the duplicate-name hazard is deliberately absent, so a test can be about something else.
+                Space space = new Space(unique ? name : (name == "Corridor" ? "Corridor" : "Bedroom 2"));
 
                 space.SetValue(Analytical.Tas.SpaceParameter.ZoneGuid, StableKey(name));
 
