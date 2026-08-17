@@ -158,6 +158,64 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         /// <summary>
+        /// <b>A model whose space list is EMPTY refuses too, not just one whose list is null.</b> The condition
+        /// said "there is no model, or it holds no spaces" and only tested the first half.
+        /// <para>
+        /// <c>GetObjects&lt;T&gt;</c> returns an empty list for a cluster that holds objects but none of that
+        /// type - a model with plant and no spaces yet - so this is the ordinary shape of "no spaces". Falling
+        /// through gave the loop nothing to visit, so no refusal was recorded, the completeness gate saw a clean
+        /// run, and a zero-zone document was written and reported as a success. That is the most complete form
+        /// of the very thing refusing the document exists to prevent, and the external TAS TM59 tool would
+        /// assess it without a word.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void AModelWithNoSpaces_RefusesRatherThanExportingAnEmptyDocument()
+        {
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+
+            //**A space is added and then REMOVED, and that is the only way to reach the empty case.** An
+            //untouched cluster has no Space type registered at all, so GetSpaces() returns null - the half that
+            //already refused. RemoveObject deletes the guid but leaves the type's bucket behind, so the lookup
+            //now finds the type and returns an EMPTY list. A model whose spaces were all deleted is exactly
+            //the shape a user can produce, and it is the one that used to export a zero-zone document.
+            Space space = Space("Flat 1 Bedroom 2", "NV");
+
+            adjacencyCluster.AddObject(space);
+
+            Assert.That(adjacencyCluster.RemoveObject(space), Is.True);
+
+            AnalyticalModel analyticalModel = new AnalyticalModel("No Spaces", null, null, null, adjacencyCluster);
+
+            //The premise, pinned: empty and NOT null, or this test proves nothing about the new half.
+            Assert.That(analyticalModel.AdjacencyCluster.GetSpaces(), Is.Not.Null);
+            Assert.That(analyticalModel.AdjacencyCluster.GetSpaces(), Is.Empty);
+
+            Building building = analyticalModel.ToTM59(tM59Manager, new VentilationStrategyMap(), out List<string> refusals);
+
+            Assert.That(building, Is.Null);
+            Assert.That(refusals, Is.Not.Empty);
+            Assert.That(refusals[0], Does.Contain("nothing to export"));
+
+            //And the end the finding was actually about: no file is written, and success is not reported.
+            string path = Path.Combine(Path.GetTempPath(), "SAM_TM59_NoSpaces_" + Guid.NewGuid().ToString("N") + ".xml");
+
+            try
+            {
+                Assert.That(analyticalModel.ToXml(path, tM59Manager, new VentilationStrategyMap(), out List<string> refusals_Xml), Is.False);
+                Assert.That(refusals_Xml, Is.Not.Empty);
+                Assert.That(File.Exists(path), Is.False);
+            }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        /// <summary>
         /// <b>An unrecognised strategy refuses the export instead of being written as "Mech Vent".</b> The
         /// mapping treats anything that is not <c>NV</c> or <c>UV</c> as mechanical, so without the map's closed
         /// vocabulary a scenario stating "Natural" would have been exported as mechanically ventilated.

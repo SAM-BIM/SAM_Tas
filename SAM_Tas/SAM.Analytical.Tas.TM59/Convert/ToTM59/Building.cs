@@ -114,7 +114,15 @@ namespace SAM.Analytical.Tas.TM59
             AdjacencyCluster adjacencyCluster = analyticalModel?.AdjacencyCluster;
 
             List<Space> spaces = adjacencyCluster?.GetSpaces();
-            if (spaces == null)
+
+            //**Empty counts, not just null**, which is what this condition originally said and did not do.
+            //`GetObjects<T>` returns an EMPTY list for a cluster that holds objects but none of that type - a
+            //model with panels and no spaces yet - so an empty list is the ordinary shape of "no spaces", not
+            //an edge case. Falling through left the loop with nothing to visit, so no refusal was recorded,
+            //the completeness gate below saw a clean run, and ToXml wrote a zero-zone document and reported
+            //success: exactly the complete-looking answer for an incomplete building that this whole
+            //refuse-the-document design exists to prevent, in its most complete form.
+            if (spaces == null || spaces.Count == 0)
             {
                 //Refused with a reason rather than a bare null, so the documented contract holds: a null return
                 //always has something in the out parameter explaining it.

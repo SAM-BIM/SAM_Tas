@@ -407,6 +407,61 @@ namespace SAM.Analytical.Tas.TM59.Tests
             }
         }
 
+        /// <summary>
+        /// <b>A non-numeric radiant value is refused for its own space, and does not abort the whole
+        /// preparation.</b> The series comes from parameter-set data and is not strongly typed, so one
+        /// hand-edited value could reach it. <c>GetValue&lt;double&gt;</c> threw on anything that was not a
+        /// double - which on this route is an exception out of a Grasshopper component instead of a refusal it
+        /// can report, and it took the other three spaces down with it rather than excluding the one affected.
+        /// </summary>
+        [TestCase("\"warm\"", TestName = "NonNumericRadiantValue_RefusesOnlyItsOwnSpace(string)")]
+        [TestCase("true", TestName = "NonNumericRadiantValue_RefusesOnlyItsOwnSpace(bool)")]
+        [TestCase("null", TestName = "NonNumericRadiantValue_RefusesOnlyItsOwnSpace(null)")]
+        public void NonNumericRadiantValue_RefusesOnlyItsOwnSpace(string json_Value)
+        {
+            AnalyticalModel analyticalModel = Model_CompanionTSD();
+
+            //Flat 2's third hour is replaced in place, so the other three spaces are untouched.
+            Corrupt(analyticalModel, StableKey("Flat 2"), 2, json_Value);
+
+            ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(analyticalModel, Results());
+
+            //Refused, with a reason, rather than thrown out of the component.
+            Assert.That(approximateResultantTemperatureMap.Refusals, Has.Count.EqualTo(1));
+            Assert.That(approximateResultantTemperatureMap.Refusals[0], Does.Contain("non-numeric"));
+
+            //And ONLY that space - the other three still prepared, which is what "aborts the entire map" cost.
+            Assert.That(approximateResultantTemperatureMap.Prepared, Has.Count.EqualTo(3));
+            Assert.That(approximateResultantTemperatureMap.Prepared.Exists(x => Analytical.Tas.Query.SimulationSpaceKey(x) == StableKey("Flat 2")), Is.False);
+        }
+
+        /// <summary>
+        /// The other half of the same guard: <b>a whole-number radiant value is data, not a fault.</b> A
+        /// <c>JsonValue</c> built in-process from an <c>int</c> is <c>JsonValueKind.Number</c> and yet fails
+        /// both <c>TryGetValue&lt;double&gt;</c> and <c>GetValue&lt;double&gt;</c> - the framework converts
+        /// numeric types only for <c>JsonElement</c>-backed values. So refusing on
+        /// <c>TryGetValue&lt;double&gt;</c> alone would have turned a legitimate series into a refusal, and
+        /// the pre-existing cast would have thrown on it.
+        /// </summary>
+        [Test]
+        public void AWholeNumberRadiantValue_IsRead()
+        {
+            AnalyticalModel analyticalModel = Model_CompanionTSD();
+
+            //Written as an in-process int, which is the backing that used to throw. 30 rather than the fixture's
+            //own 20, so the assertion below cannot pass if the replacement never landed.
+            Corrupt(analyticalModel, StableKey("Flat 2"), 0, null, JsonValue.Create(30));
+
+            ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(analyticalModel, Results());
+
+            Assert.That(approximateResultantTemperatureMap.Refusals, Is.Empty);
+            Assert.That(approximateResultantTemperatureMap.Prepared, Has.Count.EqualTo(4));
+
+            //Zone temperature is a flat 24 and the replaced radiant hour is 30, so the synthesised value is 27 -
+            //and 22 would mean the int never reached the reader at all.
+            Assert.That(First(approximateResultantTemperatureMap, StableKey("Flat 2")), Is.EqualTo(27.0).Within(1e-9));
+        }
+
         /// <summary>A space with no TPD result is reported, not silently dropped.</summary>
         [Test]
         public void ASpaceWithNoTPDResult_IsRefusedAndReported()
@@ -835,6 +890,39 @@ namespace SAM.Analytical.Tas.TM59.Tests
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Replaces one hour of one space's mean radiant temperature series in place, so the other spaces keep
+        /// the series the fixture gave them and a refusal can be attributed to this space alone.
+        /// </summary>
+        /// <param name="json_Value">
+        /// The replacement as JSON text - <c>"warm"</c>, <c>true</c>, <c>null</c>. Parsed, so the node is
+        /// <c>JsonElement</c>-backed exactly as a stored parameter set's would be.
+        /// </param>
+        /// <param name="jsonNode">
+        /// An already-built node instead, for the in-process backings that parsing cannot produce.
+        /// </param>
+        private static void Corrupt(AnalyticalModel analyticalModel, string key, int index, string json_Value, JsonNode jsonNode = null)
+        {
+            string name_Series = Analytical.Tas.Query.Text(Analytical.Tas.SpaceDataType.MeanRadiantTemperature);
+
+            Space space = Simulated(analyticalModel, key);
+
+            ParameterSet parameterSet = space.GetParameterSets().Find(x => x.Contains(name_Series));
+            JsonArray jsonArray = parameterSet.ToObject(name_Series) as JsonArray;
+
+            //The premise: there really is an hour there to replace, so this cannot pass by corrupting nothing.
+            Assert.That(jsonArray, Is.Not.Null);
+            Assert.That(jsonArray.Count, Is.GreaterThan(index));
+
+            jsonArray[index] = jsonNode ?? (json_Value == "null" ? null : JsonNode.Parse(json_Value));
+
+            //Written back at every level, because each of these may hand out a clone rather than the live object -
+            //GetParameterSets certainly does, which the preparation itself relies on.
+            parameterSet.Add(name_Series, jsonArray);
+            space.Add(parameterSet);
+            analyticalModel.AdjacencyCluster.AddObject(space);
         }
 
         private static JsonArray Values(IEnumerable<double> values)

@@ -5,6 +5,8 @@ using SAM.Analytical.Systems;
 using SAM.Core;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace SAM.Analytical.Tas.TPD
@@ -341,16 +343,20 @@ namespace SAM.Analytical.Tas.TPD
             JsonArray jsonArray_ResultantTemperature = new JsonArray();
             for (int i = 0; i < jsonArray_MeanRadiantTemperature.Count; i++)
             {
-                //A null or non-numeric element would throw inside the cast, which on this route means an
-                //exception out of a Grasshopper component rather than a refusal it can report.
-                double? value_MeanRadiantTemperature = jsonArray_MeanRadiantTemperature[i] == null ? (double?)null : jsonArray_MeanRadiantTemperature[i].GetValue<double>();
-                if (!value_MeanRadiantTemperature.HasValue)
+                //A null or non-numeric element must be REFUSED, and this line used to only half do it. The
+                //comment claimed the cast was guarded; it guarded the null and left `GetValue<double>()` to
+                //throw on anything else - a string, a bool - which on this route is an exception out of a
+                //Grasshopper component instead of the per-space refusal the rest of this method is built on,
+                //and it aborts the whole preparation map rather than excluding the one affected space. The
+                //series comes from parameter-set data and is not strongly typed, so one hand-edited value
+                //could do it.
+                if (!TryGetDouble(jsonArray_MeanRadiantTemperature[i], out double value_MeanRadiantTemperature))
                 {
-                    refusals.Add(string.Format("Space '{0}' has a missing '{1}' value at hour {2}, so no approximate resultant temperature can be synthesised for it.", space.Name, seriesKey_MeanRadiantTemperature, i));
+                    refusals.Add(string.Format("Space '{0}' has a missing or non-numeric '{1}' value at hour {2}, so no approximate resultant temperature can be synthesised for it.", space.Name, seriesKey_MeanRadiantTemperature, i));
                     return null;
                 }
 
-                jsonArray_ResultantTemperature.Add((value_MeanRadiantTemperature.Value + values_ZoneTemperature[i]) / 2);
+                jsonArray_ResultantTemperature.Add((value_MeanRadiantTemperature + values_ZoneTemperature[i]) / 2);
             }
 
             Space result = new Space(space);
@@ -360,6 +366,43 @@ namespace SAM.Analytical.Tas.TPD
             result.Add(parameterSet);
 
             return result;
+        }
+
+        /// <summary>
+        /// One hour of a series as a number, or false where the node is absent, null, or not a JSON number.
+        /// <para>
+        /// <b>Numeric-kind first, then the value - because <c>TryGetValue&lt;double&gt;</c> alone would refuse
+        /// perfectly good data.</b> A <c>JsonValue</c> built in-process from an <c>int</c>, <c>float</c> or
+        /// <c>decimal</c> reports <c>JsonValueKind.Number</c> and still fails both <c>TryGetValue&lt;double&gt;</c>
+        /// and <c>GetValue&lt;double&gt;</c>: the framework converts between numeric types only for values
+        /// backed by a <c>JsonElement</c>, which is what parsing produces. So a parsed <c>5</c> reads as
+        /// <c>5.0</c> while an in-process <c>5</c> throws - and this series arrives either way, parsed from a
+        /// stored parameter set or written directly by SAM code.
+        /// </para>
+        /// <para>
+        /// The JSON text is the one representation every backing agrees on, so it is the fallback, parsed
+        /// invariantly - a decimal comma would otherwise read "20.5" as 205 on a machine with a European locale.
+        /// The result is that a whole-number radiant value now converts instead of throwing, and only a
+        /// genuinely non-numeric node is refused.
+        /// </para>
+        /// </summary>
+        private static bool TryGetDouble(JsonNode jsonNode, out double value)
+        {
+            value = default;
+
+            if (!(jsonNode is JsonValue jsonValue) || jsonNode.GetValueKind() != JsonValueKind.Number)
+            {
+                return false;
+            }
+
+            if (jsonValue.TryGetValue(out double value_Double))
+            {
+                value = value_Double;
+
+                return true;
+            }
+
+            return double.TryParse(jsonValue.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
 
         private static Dictionary<string, List<SystemSpaceResult>> Group(IEnumerable<SystemSpaceResult> systemSpaceResults, Func<SystemSpaceResult, string> func)
