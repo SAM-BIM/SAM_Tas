@@ -485,6 +485,90 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         // -----------------------------------------------------------------------------------------------
+        // 12. TAS's own TM59 report states the natural-ventilation day criterion against "Occupied Summer
+        //     Hours" / "Max. Exceedable Hours" - a smaller, different basis than the whole-year
+        //     occupiedHours/maxExceedableHours this log already carried. Found comparing this log against a
+        //     real TAS report: a natural-bedroom row showed occupiedHours=8760/maxExceedableHours=262
+        //     (the annual pair) while TAS's report showed 3672/110 for the same room - the correct pair was
+        //     on the result object all along (SummerOccupiedHours/MaxExceedableSummerHours) but this log
+        //     never read it. Mechanical and corridor rows carry no such basis and must stay null.
+        // -----------------------------------------------------------------------------------------------
+
+        [Test]
+        public void NaturalBedroomResult_LogsSummerOccupiedHoursAndMaxExceedableSummerHours()
+        {
+            AnalyticalModel analyticalModel_Design = Model_Design();
+            List<Space> spaces_Simulated = Spaces_Simulated();
+            List<OverheatingScenario> scenarios = Scenarios(analyticalModel_Design);
+
+            PartODiagnosticLogInput input = Input(analyticalModel_Design, spaces_Simulated, scenarios,
+                mechanical: new List<TMResult> { Result_Mechanical(Simulated(spaces_Simulated, "Flat 1")) },
+                natural: new List<TMResult> { Result_NaturalBedroom(Simulated(spaces_Simulated, "Flat 2")) },
+                corridor: new List<TMResult> { Result_Corridor(Simulated(spaces_Simulated, "Corridor")) });
+
+            PartODiagnosticLogBuildResult result = PartODiagnosticLog.Build(input, Guid.NewGuid(), DateTime.UtcNow, false);
+
+            List<JsonObject> spaceRows = RecordsOf(result, "space");
+
+            JsonObject row_NaturalBedroom = spaceRows.Find(x => x["simulatedSpaceGuid"]?.GetValue<string>() == Simulated(spaces_Simulated, "Flat 2").Guid.ToString());
+            Assert.That(row_NaturalBedroom["criterion"]?.GetValue<string>(), Is.EqualTo("naturalBedroom"));
+            Assert.That(row_NaturalBedroom["summerOccupiedHours"]?.GetValue<int>(), Is.EqualTo(100), "Result_NaturalBedroom's summerOccupiedHours, not the annual occupiedHours also on the row.");
+            Assert.That(row_NaturalBedroom["maxExceedableSummerHours"]?.GetValue<int>(), Is.EqualTo(3));
+
+            JsonObject row_Mechanical = spaceRows.Find(x => x["simulatedSpaceGuid"]?.GetValue<string>() == Simulated(spaces_Simulated, "Flat 1").Guid.ToString());
+            Assert.That(row_Mechanical["criterion"]?.GetValue<string>(), Is.EqualTo("mechanical"));
+            Assert.That(row_Mechanical["summerOccupiedHours"], Is.Null, "Mechanical has no summer-hours basis - must not silently show one.");
+            Assert.That(row_Mechanical["maxExceedableSummerHours"], Is.Null);
+
+            JsonObject row_Corridor = spaceRows.Find(x => x["simulatedSpaceGuid"]?.GetValue<string>() == Simulated(spaces_Simulated, "Corridor").Guid.ToString());
+            Assert.That(row_Corridor["criterion"]?.GetValue<string>(), Is.EqualTo("corridor"));
+            Assert.That(row_Corridor["summerOccupiedHours"], Is.Null, "Corridor has no summer-hours basis - must not silently show one.");
+            Assert.That(row_Corridor["maxExceedableSummerHours"], Is.Null);
+        }
+
+        [Test]
+        public void ExtendedNaturalResult_DerivesSummerOccupiedHoursFromTheHourlySeriesInsteadOfTheAnnualBasis()
+        {
+            // Deliberately built with occupiedHourIndices split across HourOfYear's summer window
+            // (2880-6551 inclusive) and outside it, so a bug that summed ALL occupied hours instead of
+            // filtering to summer would be caught rather than coincidentally matching.
+            HashSet<int> occupiedHourIndices = new HashSet<int> { 0, 1, 2, 3, 4, 3000, 3100, 3200, 3300 };
+
+            TM59NaturalVentilationBedroomExtendedResult tM59NaturalVentilationBedroomExtendedResult = new TM59NaturalVentilationBedroomExtendedResult(
+                "Studio", "Test", Guid.NewGuid().ToString(), TM52BuildingCategory.CategoryII,
+                occupiedHourIndices, null, null, null);
+
+            int summerOccupiedHours_Expected = tM59NaturalVentilationBedroomExtendedResult.GetSummerOccupiedHours();
+            int maxExceedableSummerHours_Expected = tM59NaturalVentilationBedroomExtendedResult.GetSummerMaxExceedableHours();
+
+            Assert.That(summerOccupiedHours_Expected, Is.EqualTo(4), "4 of the 9 occupied hours fall inside the summer window - a pre-condition of this test, not the thing under test.");
+
+            AnalyticalModel analyticalModel_Design = SingleSpaceModel("Studio", stampZoneGuid: true);
+            Space space_Simulated = new Space("Studio");
+            space_Simulated.SetValue(SAM.Analytical.Tas.SpaceParameter.ZoneGuid, "tas-zone-Studio");
+
+            SAM.Analytical.Zone zone = analyticalModel_Design.GetZones().Find(x => x.Name == "Studio");
+            List<OverheatingScenario> scenarios = new List<OverheatingScenario>
+            {
+                new OverheatingScenario(PartOAssessmentScope.Dwelling, zone.Guid, PartOIteration.BasePassive, new SystemTemplate("NV", null, null, null, null, null)),
+            };
+
+            tM59NaturalVentilationBedroomExtendedResult = new TM59NaturalVentilationBedroomExtendedResult(
+                "Studio", "Test", space_Simulated.Guid.ToString(), TM52BuildingCategory.CategoryII,
+                occupiedHourIndices, null, null, null);
+
+            PartODiagnosticLogInput input = Input(analyticalModel_Design, new List<Space> { space_Simulated }, scenarios,
+                natural: new List<TMResult> { tM59NaturalVentilationBedroomExtendedResult });
+
+            PartODiagnosticLogBuildResult result = PartODiagnosticLog.Build(input, Guid.NewGuid(), DateTime.UtcNow, false);
+
+            JsonObject row = RecordsOf(result, "space").Single();
+            Assert.That(row["criterion"]?.GetValue<string>(), Is.EqualTo("naturalBedroom"));
+            Assert.That(row["summerOccupiedHours"]?.GetValue<int>(), Is.EqualTo(summerOccupiedHours_Expected));
+            Assert.That(row["maxExceedableSummerHours"]?.GetValue<int>(), Is.EqualTo(maxExceedableSummerHours_Expected));
+        }
+
+        // -----------------------------------------------------------------------------------------------
         // Fixture
         // -----------------------------------------------------------------------------------------------
 

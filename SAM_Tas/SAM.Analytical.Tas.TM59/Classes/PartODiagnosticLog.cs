@@ -614,6 +614,15 @@ namespace SAM.Analytical.Tas.TM59
             SetNullableInt(record, "hoursExceeding28", (tMResult as TM59CorridorResult)?.HoursExceeding28);
             SetNullableInt(record, "hoursExceedingComfortRange", (tMResult as TM59NaturalVentilationResult)?.HoursExceedingComfortRange);
 
+            // TAS's own TM59 report states a natural-ventilation day criterion against "Occupied Summer Hours" /
+            // "Max. Exceedable Hours" - a different, smaller basis than the whole-year occupiedHours/
+            // maxExceedableHours logged above (which TM59NaturalVentilationResult also carries, for the
+            // criterion's underlying annual bookkeeping). Without these two, a reader comparing this log against
+            // a TAS report would see occupiedHours/maxExceedableHours and wrongly read them as the day
+            // criterion's threshold.
+            SetNullableInt(record, "summerOccupiedHours", (tMResult as TM59NaturalVentilationResult)?.SummerOccupiedHours);
+            SetNullableInt(record, "maxExceedableSummerHours", (tMResult as TM59NaturalVentilationResult)?.MaxExceedableSummerHours);
+
             TM59NaturalVentilationBedroomResult bedroom = tMResult as TM59NaturalVentilationBedroomResult;
             SetNullableInt(record, "annualNightOccupiedHours", bedroom?.AnnualNightOccupiedHours);
             SetNullableInt(record, "maxExceedableNightHours", bedroom?.MaxExceedableNightHours);
@@ -632,6 +641,8 @@ namespace SAM.Analytical.Tas.TM59
             else if (tMResult is TM59NaturalVentilationBedroomExtendedResult bedroomExtended)
             {
                 SetNullableInt(record, "hoursExceedingComfortRange", NonNegative(bedroomExtended.GetOccupiedHoursExceedingComfortRange()));
+                SetNullableInt(record, "summerOccupiedHours", NonNegative(bedroomExtended.GetSummerOccupiedHours()));
+                SetNullableInt(record, "maxExceedableSummerHours", NonNegative(bedroomExtended.GetSummerMaxExceedableHours()));
                 SetNullableInt(record, "annualNightOccupiedHours", NonNegative(bedroomExtended.GetAnnualNightOccupiedHours()));
                 SetNullableInt(record, "maxExceedableNightHours", NonNegative(bedroomExtended.GetAnnualMaxExceedableNightHours()));
                 SetNullableInt(record, "nightHoursNumberExceeding26", NonNegative(bedroomExtended.GetNightHoursNumberExceeding26()));
@@ -639,6 +650,8 @@ namespace SAM.Analytical.Tas.TM59
             else if (tMResult is TM59NaturalVentilationExtendedResult naturalExtended)
             {
                 SetNullableInt(record, "hoursExceedingComfortRange", NonNegative(naturalExtended.GetOccupiedHoursExceedingComfortRange()));
+                SetNullableInt(record, "summerOccupiedHours", NonNegative(naturalExtended.GetSummerOccupiedHours()));
+                SetNullableInt(record, "maxExceedableSummerHours", NonNegative(naturalExtended.GetSummerMaxExceedableHours()));
             }
         }
 
