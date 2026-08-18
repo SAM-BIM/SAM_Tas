@@ -367,6 +367,124 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         // -----------------------------------------------------------------------------------------------
+        // 10. Zone guid identity is logged separately for each side, never coalesced into one value. A
+        //     coalesced field cannot be told apart from a genuine match - the whole point of splitting it.
+        // -----------------------------------------------------------------------------------------------
+
+        [Test]
+        public void ZoneGuid_IsLoggedSeparatelyForDesignAndSimulatedSides()
+        {
+            AnalyticalModel analyticalModel_Design = Model_Design();
+            List<Space> spaces_Simulated = Spaces_Simulated();
+            List<OverheatingScenario> scenarios = Scenarios(analyticalModel_Design);
+
+            PartODiagnosticLogInput input = Input(analyticalModel_Design, spaces_Simulated, scenarios,
+                mechanical: new List<TMResult> { Result_Mechanical(Simulated(spaces_Simulated, "Flat 1")) });
+
+            PartODiagnosticLogBuildResult result = PartODiagnosticLog.Build(input, Guid.NewGuid(), DateTime.UtcNow, false);
+
+            JsonObject row = RecordsOf(result, "space").Find(x => x["simulatedSpaceGuid"]?.GetValue<string>() == Simulated(spaces_Simulated, "Flat 1").Guid.ToString());
+
+            Assert.That(row, Is.Not.Null);
+            Assert.That(row.ContainsKey("zoneGuid"), Is.False, "The old coalesced field must be gone, not merely unused.");
+            Assert.That(row["designZoneGuidRaw"]?.GetValue<string>(), Is.EqualTo(StableKey("Flat 1")));
+            Assert.That(row["simulatedZoneGuidRaw"]?.GetValue<string>(), Is.EqualTo(StableKey("Flat 1")));
+        }
+
+        [Test]
+        public void ZoneGuid_ReportsWhichSideWasBlankWhenTheMatchFallsBackToName()
+        {
+            // Reproduces the real shape seen on a live run: the design side carries a real key, the
+            // simulated side does not. SimulationSpaceMap's name-fallback branch is reached ONLY when the
+            // simulated side's key is blank - a STATED key that simply disagrees with every design space is
+            // refused as Unresolved instead, never silently matched by name (see SimulationSpaceMap.cs,
+            // "A STATED key that matches no design space is not the same thing as no key at all"). So a
+            // uniqueName identityMode with a real-looking guid on screen is possible ONLY because one side
+            // was blank - the old coalesced field could not distinguish that from a genuine two-sided match;
+            // these two fields can.
+            AnalyticalModel analyticalModel_Design = SingleSpaceModel("Kitchen", stampZoneGuid: true);
+            Space space_Simulated = new Space("Kitchen"); // No ZoneGuid stamped - blank key.
+
+            SAM.Analytical.Zone zone = analyticalModel_Design.GetZones().Find(x => x.Name == "Kitchen");
+            List<OverheatingScenario> scenarios = new List<OverheatingScenario>
+            {
+                new OverheatingScenario(PartOAssessmentScope.Dwelling, zone.Guid, PartOIteration.BasePassive, new SystemTemplate("MVRE", null, null, null, null, null)),
+            };
+
+            PartODiagnosticLogInput input = Input(analyticalModel_Design, new List<Space> { space_Simulated }, scenarios,
+                mechanical: new List<TMResult> { Result_Mechanical(space_Simulated) });
+
+            PartODiagnosticLogBuildResult result = PartODiagnosticLog.Build(input, Guid.NewGuid(), DateTime.UtcNow, false);
+
+            List<JsonObject> spaceRows = RecordsOf(result, "space");
+            Assert.That(spaceRows.Count, Is.EqualTo(1));
+
+            JsonObject row = spaceRows[0];
+            Assert.That(row["designZoneGuidRaw"]?.GetValue<string>(), Is.EqualTo("tas-zone-Kitchen"));
+            Assert.That(row["simulatedZoneGuidRaw"], Is.Null, "The simulated side genuinely has no key - this must read null, not silently borrow the design side's value.");
+            Assert.That(row["identityMode"]?.GetValue<string>(), Is.EqualTo("uniqueName"));
+        }
+
+        // -----------------------------------------------------------------------------------------------
+        // 11. Per-terminal-role headline fields mirror SAM_UI's Part F Conformance Assessment SUP/EX/KEX
+        //     tags. The legacy continuousDesignFlowRate_Lps field only ever carries PartFSpaceData's PRIMARY
+        //     terminal - a multi-terminal space (a studio with its own supply and local kitchen extract
+        //     terminals, Approved Document F Appendix A) must not have its secondary terminal hidden behind
+        //     that single figure the way it previously was.
+        // -----------------------------------------------------------------------------------------------
+
+        [Test]
+        public void MultiTerminalSpace_LogsSupplyAndLocalKitchenExtractSeparately()
+        {
+            // Built directly, matching Model_Design()'s proven set-then-add-once shape, rather than mutating a
+            // space fetched back out of an already-built cluster (GetSpaces() is not guaranteed to hand back a
+            // reference AddObject will overwrite in place).
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+
+            Space space_Design = new Space("Studio");
+            space_Design.SetValue(Tas.SpaceParameter.ZoneGuid, "tas-zone-Studio");
+
+            PartFSpaceData partFSpaceData = new PartFSpaceData(
+                "Studio PartF", PartFType.Habitable, PartFVentilationType.supply, false, null, false, true, false, false,
+                "Area", 30.0, false, SpaceUse.Undefined, null);
+
+            partFSpaceData.Terminals.Add(new PartFVentilationTerminalRequirement("Supply", space_Design.Guid, PartFTerminalRole.Supply) { ContinuousDesignFlowRate_Lps = 30.0 });
+            partFSpaceData.Terminals.Add(new PartFVentilationTerminalRequirement("KEX", space_Design.Guid, PartFTerminalRole.LocalKitchenExtract) { ContinuousDesignFlowRate_Lps = 22.0, IsLocalExtract = true });
+
+            space_Design.SetValue(SAM.Analytical.SpaceParameter.PartFSpaceData, partFSpaceData);
+
+            SAM.Analytical.Zone zone = new SAM.Analytical.Zone("Studio");
+
+            adjacencyCluster.AddObject(space_Design);
+            adjacencyCluster.AddObject(zone);
+            adjacencyCluster.AddRelation(zone, space_Design);
+
+            AnalyticalModel analyticalModel_Design = new AnalyticalModel("Studio Model", null, null, null, adjacencyCluster);
+
+            Space space_Simulated = new Space("Studio");
+            space_Simulated.SetValue(Tas.SpaceParameter.ZoneGuid, "tas-zone-Studio");
+
+            List<OverheatingScenario> scenarios = new List<OverheatingScenario>
+            {
+                new OverheatingScenario(PartOAssessmentScope.Dwelling, zone.Guid, PartOIteration.BasePassive, new SystemTemplate("MVRE", null, null, null, null, null)),
+            };
+
+            PartODiagnosticLogInput input = Input(analyticalModel_Design, new List<Space> { space_Simulated }, scenarios,
+                mechanical: new List<TMResult> { Result_Mechanical(space_Simulated) });
+
+            PartODiagnosticLogBuildResult result = PartODiagnosticLog.Build(input, Guid.NewGuid(), DateTime.UtcNow, false);
+
+            JsonObject row = RecordsOf(result, "space").Single();
+
+            // The legacy single-figure field only ever shows the PRIMARY terminal (the supply terminal of a
+            // habitable room) - this is exactly the gap SAM_UI's separate SUP/KEX tags exposed.
+            Assert.That(row["continuousDesignFlowRate_Lps"]?.GetValue<double>(), Is.EqualTo(30.0).Within(1e-9));
+            Assert.That(row["supplyFlowRate_Lps"]?.GetValue<double>(), Is.EqualTo(30.0).Within(1e-9));
+            Assert.That(row["extractFlowRate_Lps"]?.GetValue<double>(), Is.EqualTo(22.0).Within(1e-9));
+            Assert.That(row["localKitchenExtractFlowRate_Lps"]?.GetValue<double>(), Is.EqualTo(22.0).Within(1e-9));
+        }
+
+        // -----------------------------------------------------------------------------------------------
         // Fixture
         // -----------------------------------------------------------------------------------------------
 

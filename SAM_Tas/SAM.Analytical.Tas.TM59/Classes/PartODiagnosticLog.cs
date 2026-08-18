@@ -250,7 +250,13 @@ namespace SAM.Analytical.Tas.TM59
                 result_BySimulatedGuid.TryGetValue(space_Simulation.Guid, out TMResult tMResult);
 
                 string identityMode = IdentityMode(simulationSpaceMap, space_Simulation, space_Design);
-                string zoneGuid = SAM.Analytical.Tas.Query.SimulationSpaceKey(space_Simulation) ?? (space_Design == null ? null : SAM.Analytical.Tas.Query.SimulationSpaceKey(space_Design));
+
+                // Logged separately, never coalesced: a coalesced single value can read as a match even where
+                // the two sides disagree or one is blank, which is exactly the ambiguity an identity
+                // investigation (see ZoneGuidProvenanceNote) needs resolved rather than hidden.
+                string designZoneGuidRaw = space_Design == null ? null : SAM.Analytical.Tas.Query.SimulationSpaceKey(space_Design);
+                string simulatedZoneGuidRaw = SAM.Analytical.Tas.Query.SimulationSpaceKey(space_Simulation);
+                string zoneGuid_ForOrdering = designZoneGuidRaw ?? simulatedZoneGuidRaw ?? string.Empty;
 
                 // SAM.Analytical.Tas.TM59's enclosing namespace SAM.Analytical.Tas declares its own
                 // SpaceParameter (ZoneGuid only) - an unqualified SpaceParameter here would silently bind to
@@ -264,11 +270,26 @@ namespace SAM.Analytical.Tas.TM59
                 SetString(record, "designSpaceName", space_Design?.Name);
                 SetString(record, "simulatedSpaceGuid", space_Simulation.Guid.ToString());
                 SetString(record, "simulatedSpaceName", space_Simulation.Name);
-                SetString(record, "zoneGuid", zoneGuid);
+                SetString(record, "designZoneGuidRaw", designZoneGuidRaw);
+                SetString(record, "simulatedZoneGuidRaw", simulatedZoneGuidRaw);
                 SetString(record, "identityMode", identityMode);
 
                 SetNullableDouble(record, "continuousDesignFlowRate_Lps", partFSpaceData?.ContinuousDesignFlowRate_Lps);
                 SetNullableDouble(record, "setbackFlowRate_Lps", partFSpaceData?.SetbackFlowRate_Lps);
+
+                // continuousDesignFlowRate_Lps above is the LEGACY single-terminal figure - PartFSpaceData's own
+                // PrimaryTerminal only (the supply terminal of a habitable room, the extract terminal of a wet
+                // room) - kept for direct comparison with SAMAnalytical.AddVentilationPropertiesByPartF's own
+                // "l/s" output. A multi-terminal space (a studio or open-plan living kitchen, Approved Document F
+                // Appendix A) also has a SECONDARY terminal invisible through that scalar - the local kitchen
+                // extract SAM_UI's Part F Conformance Assessment window shows as its own "KEX" tag alongside
+                // "SUP". The three fields below read PartFSpaceData's own already-computed per-role totals -
+                // nothing here is a new calculation - so the two workflows show the same breakdown instead of
+                // this log silently dropping the secondary terminal the way the legacy scalar does.
+                SetNullableDouble(record, "supplyFlowRate_Lps", partFSpaceData?.ContinuousSupplyFlowRate_Lps);
+                SetNullableDouble(record, "extractFlowRate_Lps", partFSpaceData?.ContinuousExtractFlowRate_Lps);
+                SetNullableDouble(record, "localKitchenExtractFlowRate_Lps", partFSpaceData?.LocalKitchenExtractFlowRate_Lps);
+
                 SetNullableDouble(record, "suppliedAirFlow_m3s", SuppliedAirFlow_m3s(space_Design));
                 SetNullableDouble(record, "exhaustAirFlow_m3s", ExhaustAirFlow_m3s(space_Design));
 
@@ -288,14 +309,14 @@ namespace SAM.Analytical.Tas.TM59
                 record["tM59Result"] = tMResult?.ToJsonObject();
                 record["scenario"] = scenario_Governing?.ToJsonObject();
 
-                space_Rows.Add((scenario_Governing == null ? null : scenario_Governing.Key.ToString(), zoneGuid, space_Design?.Guid.ToString(), space_Simulation.Guid.ToString(), record));
+                space_Rows.Add((scenario_Governing == null ? null : scenario_Governing.Key.ToString(), zoneGuid_ForOrdering, space_Design?.Guid.ToString(), space_Simulation.Guid.ToString(), record));
 
                 if (includeHourly && tMResult != null)
                 {
                     string simulatedGuid_Hourly = space_Simulation.Guid.ToString();
-                    foreach (JsonObject hourlyRecord in BuildHourlyRecords(tMResult, space_Design, space_Simulation, zoneGuid, identityMode, runId, runTimestampUtc))
+                    foreach (JsonObject hourlyRecord in BuildHourlyRecords(tMResult, space_Design, space_Simulation, designZoneGuidRaw, simulatedZoneGuidRaw, identityMode, runId, runTimestampUtc))
                     {
-                        hourly_Rows.Add((zoneGuid, simulatedGuid_Hourly, hourlyRecord));
+                        hourly_Rows.Add((zoneGuid_ForOrdering, simulatedGuid_Hourly, hourlyRecord));
                     }
                 }
             }
@@ -426,7 +447,7 @@ namespace SAM.Analytical.Tas.TM59
             ("maxAcceptable", x => x.MaxAcceptableTemperatures),
         };
 
-        private static List<JsonObject> BuildHourlyRecords(TMResult tMResult, Space space_Design, Space space_Simulation, string zoneGuid, string identityMode, Guid runId, DateTime runTimestampUtc)
+        private static List<JsonObject> BuildHourlyRecords(TMResult tMResult, Space space_Design, Space space_Simulation, string designZoneGuidRaw, string simulatedZoneGuidRaw, string identityMode, Guid runId, DateTime runTimestampUtc)
         {
             List<JsonObject> result = new List<JsonObject>();
 
@@ -450,7 +471,8 @@ namespace SAM.Analytical.Tas.TM59
 
                 SetString(record, "designSpaceGuid", space_Design?.Guid.ToString());
                 SetString(record, "simulatedSpaceGuid", space_Simulation?.Guid.ToString());
-                SetString(record, "zoneGuid", zoneGuid);
+                SetString(record, "designZoneGuidRaw", designZoneGuidRaw);
+                SetString(record, "simulatedZoneGuidRaw", simulatedZoneGuidRaw);
                 SetString(record, "identityMode", identityMode);
                 SetString(record, "series", key);
 
