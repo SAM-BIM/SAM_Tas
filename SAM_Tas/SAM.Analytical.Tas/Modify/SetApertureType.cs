@@ -8,6 +8,33 @@ namespace SAM.Analytical.Tas
     {
         public static TBD.ApertureType SetApertureType(this Building building, buildingElement buildingElement, ISingleOpeningProperties singleOpeningProperties, string name = null, int index = -1)
         {
+            return SetApertureType(building, buildingElement, singleOpeningProperties, out string _, name, index);
+        }
+
+        /// <summary>
+        /// Writes the aperture control (factor, discharge coefficient, day types and - where the opening
+        /// properties carry one - an availability profile/schedule) for one TBD building element.
+        /// <para>
+        /// <b>A <c>Profile</c> and a <c>Function</c> are not mutually exclusive.</b> When both are present,
+        /// <c>profile.type</c> is set to <c>ticFunctionProfile</c> so the function governs the base opening
+        /// curve, but the schedule stays assigned as an availability multiplier on top of it - the same
+        /// combination <see cref="AssignApertureTypes(Building, buildingElement, System.Collections.Generic.IEnumerable{dayType}, ApertureConstruction)"/>
+        /// already writes for its own day/night split. A profile with no function present is written as
+        /// <c>ticValueProfile</c>, where the schedule's own values are the whole curve.
+        /// </para>
+        /// <para>
+        /// <b>Reuse, not overwrite.</b> The schedule is looked up by name and reused if it already exists
+        /// (so repeated preparation/export does not duplicate schedules), and if the matched TBD aperture
+        /// type already carries a schedule under a different name, this refuses rather than overwriting it
+        /// - that schedule was not written by this method's own naming, so it may be user-authored control
+        /// this method has no business erasing.
+        /// </para>
+        /// </summary>
+        /// <param name="refusal">Why nothing was written, or null on success.</param>
+        public static TBD.ApertureType SetApertureType(this Building building, buildingElement buildingElement, ISingleOpeningProperties singleOpeningProperties, out string refusal, string name = null, int index = -1)
+        {
+            refusal = null;
+
             if(building == null || buildingElement == null || singleOpeningProperties == null)
             {
                 return null;
@@ -28,6 +55,8 @@ namespace SAM.Analytical.Tas
             {
                 name_Temp = string.Format("{0} {1}", name_Temp, index);
             }
+
+            bool apertureType_Existed = building.ApertureType(name_Temp) != null;
 
             TBD.ApertureType result = building.ApertureType(name_Temp);
             if(result == null)
@@ -54,39 +83,63 @@ namespace SAM.Analytical.Tas
             profile.value = 1;
             profile.factor = System.Convert.ToSingle(singleOpeningProperties.GetFactor());
 
-            if(singleOpeningProperties is ProfileOpeningProperties)
+            Profile profile_SAM = null;
+            if (singleOpeningProperties is ProfileOpeningProperties profileOpeningProperties)
             {
-                ProfileOpeningProperties profileOpeningProperties = (ProfileOpeningProperties)singleOpeningProperties;
-                Profile profile_SAM = profileOpeningProperties.Profile;
-                if(profile_SAM != null)
+                profile_SAM = profileOpeningProperties.Profile;
+            }
+            else if (singleOpeningProperties is PartOOpeningProperties partOOpeningProperties)
+            {
+                profile_SAM = partOOpeningProperties.Profile;
+            }
+
+            if (apertureType_Existed && profile_SAM != null)
+            {
+                schedule schedule_Existing = profile.schedule;
+                if (schedule_Existing != null && schedule_Existing.name != profile_SAM.Name)
                 {
-                    //profile.type = ProfileTypes.ticHourlyFunctionProfile;  //TODO: 2023-04-19 To bo implemented once Tas allow ticHourlyFunctionProfile or ticYearlyFunctionProfile
-                    profile.type = ProfileTypes.ticValueProfile;
-                    schedule schedule = building.Schedules()?.Find(x => x.name == profile_SAM.Name);
-                    if(schedule == null)
-                    {
-                        schedule = building.AddSchedule();
-                        schedule.name = profile_SAM.Name;
-                    }
-
-                    double[] values = profile_SAM.GetDailyValues();
-                    if(values != null && values.Length == 24)
-                    {
-                        for(int i=0; i < 24; i++)
-                        {
-                            //schedule.values[i] = ;
-                            schedule.set_values(i, System.Convert.ToInt32(values[i]));
-                        }
-                    }
-
-                    profile.schedule = schedule;
+                    refusal = string.Format("Aperture type '{0}' already carries a schedule ('{1}') that was not generated by this Part O opening restriction, so it was left untouched rather than overwritten.", name_Temp, schedule_Existing.name);
+                    return null;
                 }
+            }
+
+            if (profile_SAM != null)
+            {
+                //profile.type = ProfileTypes.ticHourlyFunctionProfile;  //TODO: 2023-04-19 To bo implemented once Tas allow ticHourlyFunctionProfile or ticYearlyFunctionProfile
+                schedule schedule = building.Schedules()?.Find(x => x.name == profile_SAM.Name);
+                if(schedule == null)
+                {
+                    schedule = building.AddSchedule();
+                    schedule.name = profile_SAM.Name;
+                }
+
+                double[] values = profile_SAM.GetDailyValues();
+                if(values != null && values.Length == 24)
+                {
+                    for(int i=0; i < 24; i++)
+                    {
+                        schedule.set_values(i, System.Convert.ToInt32(values[i]));
+                    }
+                }
+
+                //The default when nothing below claims the profile's base curve. A Function assigned next
+                //overrides this to ticFunctionProfile without clearing the schedule - see the remarks above.
+                profile.type = ProfileTypes.ticValueProfile;
+                profile.schedule = schedule;
             }
 
             if (singleOpeningProperties.TryGetValue(OpeningPropertiesParameter.Function, out string function))
             {
                 profile.type = ProfileTypes.ticFunctionProfile;
                 profile.function = function;
+            }
+
+            if (singleOpeningProperties is PartOOpeningProperties partOOpeningProperties_Restriction && partOOpeningProperties_Restriction.OpeningRestriction == OpeningRestriction.AlwaysClosed)
+            {
+                //The opening takes no part in the overheating ventilation strategy. Zeroing the factor
+                //multiplies out any function- or schedule-driven curve regardless of what else this opening
+                //carries, without needing a second 24-hour zero schedule purely for symmetry.
+                profile.factor = 0;
             }
 
             List<dayType> dayTypes = building.DayTypes();
