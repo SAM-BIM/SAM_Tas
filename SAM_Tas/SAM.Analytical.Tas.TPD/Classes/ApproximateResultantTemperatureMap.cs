@@ -325,11 +325,22 @@ namespace SAM.Analytical.Tas.TPD
                 return null;
             }
 
-            //Count, not span: a gapped series has a wide span but missing keys, and a bounded read fills those
-            //with default(double) - averaging 0 degrees into the answer.
-            if (indexedDoubles.Count < jsonArray_MeanRadiantTemperature.Count)
+            //Count, not span, and it must EQUAL the radiant length, not merely reach it: a gapped series
+            //has a wide span but missing keys, and a bounded read fills those with default(double) -
+            //averaging 0 degrees into the answer - while a longer zone series describes a different period
+            //than the radiant one and cannot be aligned to it. Both are refusals.
+            if (indexedDoubles.Count != jsonArray_MeanRadiantTemperature.Count)
             {
-                refusals.Add(string.Format("Space '{0}' has {1} radiant temperature values but its TPD result holds only {2}, so the two cannot be combined.", space.Name, jsonArray_MeanRadiantTemperature.Count, indexedDoubles.Count));
+                refusals.Add(string.Format("Space '{0}' has {1} radiant temperature values but its TPD result holds {2}, so the two cannot be combined.", space.Name, jsonArray_MeanRadiantTemperature.Count, indexedDoubles.Count));
+                return null;
+            }
+
+            //With the count equal and the minimum fixed at 0, a maximum below Count - 1 is exactly a gap -
+            //a missing key the bounded read would zero-fill - and a maximum above it cannot happen with
+            //unique keys, but the equality check makes the span exact in both directions.
+            if (index_Max.Value != jsonArray_MeanRadiantTemperature.Count - 1)
+            {
+                refusals.Add(string.Format("Space '{0}' has {1} radiant temperature values but its TPD zone temperature series only reaches hour {2}, so the two cannot be aligned.", space.Name, jsonArray_MeanRadiantTemperature.Count, index_Max.Value));
                 return null;
             }
 

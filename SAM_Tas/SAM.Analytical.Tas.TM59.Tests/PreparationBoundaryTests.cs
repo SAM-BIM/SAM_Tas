@@ -539,6 +539,50 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(approximateResultantTemperatureMap.Refusals, Has.Count.EqualTo(3));
         }
 
+        /// <summary>
+        /// <b>A zone series longer than the radiant series is refused, not truncated.</b>
+        /// <para>
+        /// The two series describe one period hour-for-hour. A longer zone series previously passed the
+        /// one-sided count check and silently discarded its extra hours, producing a plausible-looking
+        /// assessment from inputs that do not represent the same year.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void AZoneSeriesLongerThanTheRadiantSeries_IsRefusedRatherThanTruncated()
+        {
+            //Five zone hours against the fixture's four radiant hours.
+            IndexedDoubles series = new IndexedDoubles([24.0, 24.0, 24.0, 24.0, 24.0]);
+
+            ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(Model_CompanionTSD(), [Result("tas-zone-0", "Bedroom 2", new Dictionary<Analytical.Systems.SpaceDataType, IndexedDoubles> { { Analytical.Systems.SpaceDataType.ZoneTemperature, series } })]);
+
+            Assert.That(approximateResultantTemperatureMap.Prepared, Is.Empty);
+            Assert.That(approximateResultantTemperatureMap.Refusals.Find(x => x.Contains("cannot be combined")), Is.Not.Null);
+        }
+
+        /// <summary>
+        /// <b>A gapped zone series is refused, not zero-filled.</b>
+        /// <para>
+        /// A series whose minimum is 0 and whose count matches the radiant length can still be missing keys -
+        /// {0,2,3,4} has a hole at hour 1. The bounded read would fill the hole with 0 degrees and average it
+        /// into a plausible-looking resultant temperature. The maximum-index check catches exactly that
+        /// shape: with the count equal and the minimum fixed at 0, a maximum below Count - 1 is a gap.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void AGappedZoneSeries_IsRefusedRatherThanZeroFilled()
+        {
+            IndexedDoubles series = new IndexedDoubles();
+            series.Add(0, 24.0);
+            series.Add(2, 24.0);
+            series.Add(3, 24.0);
+            series.Add(4, 24.0);
+
+            ApproximateResultantTemperatureMap approximateResultantTemperatureMap = Approximate(Model_CompanionTSD(), [Result("tas-zone-0", "Bedroom 2", new Dictionary<Analytical.Systems.SpaceDataType, IndexedDoubles> { { Analytical.Systems.SpaceDataType.ZoneTemperature, series } })]);
+
+            Assert.That(approximateResultantTemperatureMap.Prepared, Is.Empty);
+            Assert.That(approximateResultantTemperatureMap.Refusals.Find(x => x.Contains("cannot be aligned")), Is.Not.Null);
+        }
+
         // =============================================================================================
         // The boundary itself
         // =============================================================================================
