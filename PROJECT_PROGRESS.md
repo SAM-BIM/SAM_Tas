@@ -4,8 +4,9 @@
 `feature/partf-terminal-transfer-compliance` (PR: SAM_Tas#29 against `sow/2026-Q3`)
 
 ## Last updated
-2026-08-20 (second pass) - final review cleanup: two P2 Codex findings against `7ef2aff3` investigated
-against `296882e7`, both confirmed and fixed; 151/151 tests green Debug + Release.
+2026-08-20 (final pre-merge pass) - rounds 1-2 Codex backlog re-triaged against current source; two
+further correctness fixes applied; 153/153 tests green Debug + Release; SAM_Tas.sln 0 errors both
+configurations.
 
 ## Current status
 The Part O availability schedule export is **complete and accepted on licensed TAS**. The mapping fix
@@ -79,6 +80,31 @@ Earlier this branch (`296882e7` and before):
   `AnEmptyZoneTemperatureSeries_IsNotTakenAsAUsablePayload` and
   `ACopyTargetThatCannotBeWritten_IsRefusedRatherThanThrown`.
 
+## Final pre-merge pass (this session) - backlog triage and fixes
+
+The rounds 1-2 Codex backlog on PR #29 was re-triaged against the current head. Implemented:
+
+- `ApproximateResultantTemperatureMap.Synthesise`: the zone-temperature series must now cover EXACTLY
+  the radiant series - the count must equal the radiant length and the maximum index must be
+  `radiantCount - 1`. A longer series was previously truncated silently; a gapped series (min 0, correct
+  count, a missing key) was zero-filled by the bounded read - both fabricated plausible resultant
+  temperatures. (Codex 3803884880, 3796840741)
+- `PartODiagnosticLog.BuildHourlyRecords`: identity fields (`designSpaceGuid`, `simulatedSpaceGuid`,
+  `designZoneGuidRaw`, `simulatedZoneGuidRaw`, `identityMode`, `series`) are now set on EVERY hourly
+  record, including the non-extended refusals - previously those rows could not be attributed to a flat,
+  which is exactly what this logger exists to diagnose. (Codex 3804809062)
+
+**Confirmed already fixed by earlier commits:** 3795669836 (radiant value validation - `TryGetDouble`),
+3796840735 (cluster clone semantics), 3815817499 (conflict refusals surfaced to the workflow),
+3815817505 (conflict check precedes every profile-control write; the method's non-transactional
+`description` write is documented), 3795669830 (empty-space refusal in ToTM59).
+
+**Classified DEFERRED / legacy / next branch:** 3802556065 (legacy approximate route treats an empty
+model as supported - contract of the compatibility route; the TPD-full route refuses empty payloads),
+3804809050 (scenario overload for `ToTBD` - new API; the Part O production component routes scenarios
+through `ToXml` with the map directly), 3803359698 (last-wins duplicate results - documented, deliberate),
+3821601792 (D3 schedule-removal transition - parked).
+
 ## Workflow diagnostics
 `SAM_Tas_Grasshopper` `f023594ef3f53a9d8d2411b6fe5bc21a9b363ad0` ("chore: clean TAS workflow schedule
 diagnostics") removed the verbose per-aperture D1 success commentary. A successful run is quiet; problem
@@ -95,6 +121,13 @@ lines still reach the canvas.
   geometry check, and the D2 proposal introduced a tolerance inconsistency. No D2 code exists here.
 
 ## Files changed
+Final pre-merge pass (this session):
+- `SAM_Tas/SAM.Analytical.Tas.TPD/Classes/ApproximateResultantTemperatureMap.cs`
+- `SAM_Tas/SAM.Analytical.Tas.TM59/Classes/PartODiagnosticLog.cs`
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PreparationBoundaryTests.cs` (+2)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PartODiagnosticLogTests.cs` (extended hourly-refusal test)
+- `PROJECT_PROGRESS.md` (this file)
+
 Final review cleanup (committed 2026-08-20 as "fix: verify opening schedules per child and clear workflow
 notes per run" + "docs: record final Part O review cleanup"):
 - `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs`
@@ -112,8 +145,8 @@ Previous session:
 ## Validation
 - `SAM_Tas.sln` built with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
   pre-existing MSB3270 (MSIL vs AMD64 interop) and MSB3277 (System.Memory unification) warnings.
-- `SAM.Analytical.Tas.TM59.Tests` Debug: **151 passed, 0 failed**. Release: **151 passed, 0 failed**
-  (was 134; +17 new for the two cleanup findings).
+- `SAM.Analytical.Tas.TM59.Tests` Debug: **153 passed, 0 failed**. Release: **153 passed, 0 failed**
+  (was 151; +2 new for the final-pass fixes).
 - Note the documented build order: the test project references already-built assemblies by `HintPath`
   (the COM-referencing projects cannot be built by the .NET Core MSBuild), so the SAM libraries and
   `SAM_Tas.sln` must be built before `dotnet test`. See `SAM.Analytical.Tas.TM59.Tests/TESTING.md`.
@@ -121,11 +154,11 @@ Previous session:
 ## Issues / blockers
 - None blocking. The real TBD/COM write is not exercisable without an installed TAS; it is covered by the
   licensed acceptance run recorded above, which has now passed.
+- Fresh Codex review on the current head is unavailable: `@codex review` is refused by
+  `chatgpt-codex-connector[bot]` ("create a Codex account and connect to github"). The delta after the
+  latest Codex-reviewed SHA (`7ef2aff3`) was reviewed manually.
 
 ## Next step
-- Cleanup committed and pushed on 2026-08-20; PR #29 description updated (validation counts 134 -> 151,
-  licensed acceptance paragraph, superseded "schedules unwritten" statements).
-- D3 transition design pass, if it is still wanted.
-- The rounds 1-2 Codex backlog on PR #29 was not re-triaged in this pass; a fresh `@codex review` of the
-  current head was requested on 2026-08-20 but the connector declined (usage limit / account connection) -
-  re-request once the Codex account is usable.
+- Commit and push the final-pass fixes, then merge PR #29 after SAM #73 and SAM_Systems #14.
+- The rounds 1-2 Codex backlog on PR #29 is now fully triaged (see above); the deferred items go to the
+  next branch along with the D3 transition design pass.
