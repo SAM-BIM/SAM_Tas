@@ -348,6 +348,16 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(result.HourlyRecords.Count, Is.EqualTo(3));
             Assert.That(result.HourlyRecords.All(x => x["record"]?.GetValue<string>() == "refusal"), Is.True);
             Assert.That(result.HourlyRecords.All(x => x["origin"]?.GetValue<string>() == "hourly"), Is.True);
+
+            //A refusal must still be attributable to its space - duplicate room names are exactly what this
+            //log exists to diagnose, and an unattributed refusal row is the one that cannot be tied to a flat.
+            string guid_Simulated = Simulated(spaces_Simulated, "Flat 1").Guid.ToString();
+            Assert.That(result.HourlyRecords.All(x => x["simulatedSpaceGuid"]?.GetValue<string>() == guid_Simulated), Is.True, "Every hourly refusal row carries its simulated space identity.");
+            Assert.That(result.HourlyRecords.All(x => x["identityMode"]?.GetValue<string>() == "zoneGuid"), Is.True);
+            Assert.That(result.HourlyRecords.All(x => x["series"] != null), Is.True);
+            Assert.That(result.HourlyRecords.All(x => x["designSpaceGuid"] != null), Is.True);
+            Assert.That(result.HourlyRecords.All(x => x["designZoneGuidRaw"]?.GetValue<string>() == StableKey("Flat 1")), Is.True);
+            Assert.That(result.HourlyRecords.All(x => x["simulatedZoneGuidRaw"]?.GetValue<string>() == StableKey("Flat 1")), Is.True);
         }
 
         // -----------------------------------------------------------------------------------------------

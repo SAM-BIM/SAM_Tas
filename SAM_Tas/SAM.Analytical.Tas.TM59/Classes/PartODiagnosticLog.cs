@@ -457,6 +457,16 @@ namespace SAM.Analytical.Tas.TM59
             {
                 JsonObject record = NewRecord(tMExtendedResult == null ? "refusal" : "hourly", runId, runTimestampUtc);
 
+                //Identity fields are set on EVERY record, including the refusal below - this logger exists
+                //to diagnose duplicate room names, and a refusal without its space identity is exactly the
+                //row that cannot be attributed to a flat.
+                SetString(record, "designSpaceGuid", space_Design?.Guid.ToString());
+                SetString(record, "simulatedSpaceGuid", space_Simulation?.Guid.ToString());
+                SetString(record, "designZoneGuidRaw", designZoneGuidRaw);
+                SetString(record, "simulatedZoneGuidRaw", simulatedZoneGuidRaw);
+                SetString(record, "identityMode", identityMode);
+                SetString(record, "series", key);
+
                 if (tMExtendedResult == null)
                 {
                     SetString(record, "origin", "hourly");
@@ -468,13 +478,6 @@ namespace SAM.Analytical.Tas.TM59
                 }
 
                 IndexedDoubles indexedDoubles = selector(tMExtendedResult);
-
-                SetString(record, "designSpaceGuid", space_Design?.Guid.ToString());
-                SetString(record, "simulatedSpaceGuid", space_Simulation?.Guid.ToString());
-                SetString(record, "designZoneGuidRaw", designZoneGuidRaw);
-                SetString(record, "simulatedZoneGuidRaw", simulatedZoneGuidRaw);
-                SetString(record, "identityMode", identityMode);
-                SetString(record, "series", key);
 
                 int? minIndex = indexedDoubles?.GetMinIndex();
                 int? maxIndex = indexedDoubles?.GetMaxIndex();
