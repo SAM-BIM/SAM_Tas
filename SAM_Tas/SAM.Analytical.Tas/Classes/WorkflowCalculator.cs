@@ -36,8 +36,19 @@ namespace SAM.Analytical.Tas
         private readonly Stopwatch stepStopwatch = new Stopwatch();
         private string currentStepName;
         private readonly List<KeyValuePair<string, double>> timings = new List<KeyValuePair<string, double>>();
+        private readonly List<string> notes = new List<string>();
 
         public IReadOnlyList<KeyValuePair<string, double>> Timings => timings;
+
+        /// <summary>
+        /// What the workflow wants the caller to know, one sentence each - refusals, skips and
+        /// identifications the previous implementation dropped silently. The aperture-type step in
+        /// particular reports, per TBD aperture, which SAM aperture it matched (or which gate stopped it)
+        /// and any schedule refusal, which is what makes a Part O schedule that failed to reach the TBD
+        /// diagnosable instead of invisible. Callers surface this from Grasshopper (runtime warnings) or
+        /// their own progress UI.
+        /// </summary>
+        public IReadOnlyList<string> Notes => notes;
 
         public WorkflowSettings WorkflowSettings { get; set; }
 
@@ -128,6 +139,9 @@ namespace SAM.Analytical.Tas
             {
                 return null;
             }
+
+            //A calculator instance can be re-run; each run reports only its own notes.
+            notes.Clear();
 
             // Before anything else: the setup below unconditionally deletes an existing .t3d, and the .tbd
             // too when RemoveExistingTBD is set, all of it ahead of the first Step. A caller handing in an
@@ -326,7 +340,8 @@ namespace SAM.Analytical.Tas
                 Modify.UpdateAdiabatic(tBDDocument, result, Tolerance.MacroDistance);
 
                 Step("Updating Building Elements");
-                Modify.UpdateBuildingElements(tBDDocument, result);
+                Modify.UpdateBuildingElements(tBDDocument, result, out List<string> notes_BuildingElements);
+                notes.AddRange(notes_BuildingElements);
 
                 adjacencyCluster = result.AdjacencyCluster;
                 Step("Updating Ids");
@@ -354,7 +369,8 @@ namespace SAM.Analytical.Tas
                 if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
                 {
                     Step("Updating Aperture Types");
-                    Modify.SetApertureTypes(tBDDocument.Building, adjacencyCluster, Tolerance.MacroDistance);
+                    Modify.SetApertureTypes(tBDDocument.Building, adjacencyCluster, out List<string> notes_ApertureTypes, Tolerance.MacroDistance);
+                    notes.AddRange(notes_ApertureTypes);
                 }
 
                 if (WorkflowSettings.AddIZAMs)
