@@ -24,9 +24,14 @@ namespace SAM.Analytical.Tas
         /// What did change: the value write itself now goes through
         /// <see cref="Modify.SetScheduleValues(TBD.schedule, IEnumerable{int}, out string)"/>, so this
         /// assembly has exactly one schedule-writing implementation - and one read-back verification - rather
-        /// than two independent ones.
+        /// than two independent ones. A failed read-back therefore returns <c>null</c> here too, instead of
+        /// handing back a schedule whose values do not match what was asked for.
         /// </para>
         /// </summary>
+        /// <returns>
+        /// The created schedule, or null when the building/name are unusable or the written values did not
+        /// read back. Callers must null-check before assigning it to a profile - all four existing ones do.
+        /// </returns>
         public static TBD.schedule Schedule(this TBD.Building building, string name, IEnumerable<int> values = null)
         {
             if (building == null || string.IsNullOrEmpty(name))
@@ -45,7 +50,13 @@ namespace SAM.Analytical.Tas
             if (values_Temp.Count == 0)
                 return result;
 
-            result.SetScheduleValues(values_Temp, out string _);
+            //A schedule whose values did not survive the write is not a schedule this method may hand back
+            //as if it had. Every caller null-checks the result before assigning it to a profile, so
+            //returning null leaves the profile with no schedule rather than with one holding values that do
+            //not match the model. The schedule itself stays in the building - TBD.Building has no
+            //RemoveSchedule - but nothing references it.
+            if (!result.SetScheduleValues(values_Temp, out string _))
+                return null;
 
             return result;
         }

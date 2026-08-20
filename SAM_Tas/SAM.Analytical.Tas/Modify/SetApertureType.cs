@@ -49,10 +49,22 @@ namespace SAM.Analytical.Tas
         /// Value equality is the test; the name is not.
         /// </para>
         /// <para>
-        /// Every failure below returns null with <paramref name="refusal"/> set. Nothing is written on a
-        /// refusal, and no TBD schedule is created before the SAM-side source has been validated -
-        /// <c>TBD.Building</c> has no <c>RemoveSchedule</c>, so a schedule created in error could not be
-        /// withdrawn.
+        /// <b>What the refusals do and do not guarantee.</b> Every failure returns null with
+        /// <paramref name="refusal"/> set, and the guarantee is specifically this: <b>a failed or
+        /// incompatible schedule is never assigned, and an existing different-valued schedule is never
+        /// overwritten.</b> No TBD schedule is created before the SAM-side source has been validated either,
+        /// which matters because <c>TBD.Building</c> has no <c>RemoveSchedule</c> and a schedule created in
+        /// error could not be withdrawn.
+        /// </para>
+        /// <para>
+        /// <b>This method is NOT transactional, and must not be described as such.</b> By the time a refusal
+        /// can fire, it may already have created the aperture type and written its <c>description</c>; and a
+        /// refusal from the final assignment read-back comes after <c>dischargeCoefficient</c>, <c>value</c>,
+        /// <c>factor</c>, <c>setbackValue</c>, <c>type</c> and <c>function</c> have been written. Schedule
+        /// resolution is deliberately hoisted above all of those writes - it needs none of them - so an
+        /// unusable source, a naming collision or a failed schedule write leaves the profile's existing mode
+        /// untouched. Only the two assignment-verification refusals are unavoidably late, because they exist
+        /// to check an assignment that has to have happened first.
         /// </para>
         /// </summary>
         /// <param name="refusal">Why nothing was written, or null on success.</param>
@@ -142,6 +154,21 @@ namespace SAM.Analytical.Tas
                 }
             }
 
+            //Resolved BEFORE the profile is touched. Nothing below this point is needed to resolve it, so
+            //hoisting it here means an invalid source, a naming collision or a failed COM write leaves the
+            //profile's existing mode, factor and function exactly as they were, instead of half-rewritten.
+            if (scheduleRequested && schedule_Resolved == null)
+            {
+                //Validates, then reuses by value, then creates at most one schedule and verifies its write
+                //by reading all 24 values back.
+                schedule_Resolved = building.GetOrCreateSchedule(name_Schedule, values_Schedule, out string refusal_Schedule);
+                if (schedule_Resolved == null)
+                {
+                    refusal = string.Format("Aperture type '{0}': {1}", name_Temp, refusal_Schedule ?? "no TBD schedule could be resolved.");
+                    return null;
+                }
+            }
+
             @dynamic.dischargeCoefficient = System.Convert.ToSingle(singleOpeningProperties.GetDischargeCoefficient());
 
             profile.value = 1;
@@ -176,18 +203,6 @@ namespace SAM.Analytical.Tas
 
             if (scheduleRequested)
             {
-                if (schedule_Resolved == null)
-                {
-                    //Validates, then reuses by value, then creates at most one schedule and verifies its
-                    //write by reading all 24 values back.
-                    schedule_Resolved = building.GetOrCreateSchedule(name_Schedule, values_Schedule, out string refusal_Schedule);
-                    if (schedule_Resolved == null)
-                    {
-                        refusal = string.Format("Aperture type '{0}': {1}", name_Temp, refusal_Schedule ?? "no TBD schedule could be resolved.");
-                        return null;
-                    }
-                }
-
                 profile.schedule = schedule_Resolved;
 
                 //Read the assignment back. This separates "the schedule did not persist its values" from
