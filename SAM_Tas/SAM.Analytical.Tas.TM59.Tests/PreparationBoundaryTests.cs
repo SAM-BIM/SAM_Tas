@@ -158,6 +158,73 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         /// <summary>
+        /// <b>An empty zone-temperature series is not a payload.</b>
+        /// <para>
+        /// A <c>SystemSpaceResult</c> can carry a non-null but EMPTY series - a zone the first pass produced no
+        /// hourly values for. Counting it towards the payload lets the route proceed and copy the TBD, and the
+        /// COM write beyond this seam then reads <c>values.Count</c> off it: either an exception out of a route
+        /// whose contract is refusal, or a default series simulated and reported as a systems-aware answer.
+        /// Absent and empty mean the same thing here.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void AnEmptyZoneTemperatureSeries_IsNotTakenAsAUsablePayload()
+        {
+            using (Fixture fixture = new Fixture())
+            {
+                ResultantTemperaturePreparation resultantTemperaturePreparation = new ResultantTemperaturePreparation(fixture.Path_TPD);
+
+                Dictionary<string, IndexedDoubles> transferred;
+                List<string> refusals;
+
+                //The series this transfer needs is present, and holds nothing.
+                SystemSpaceResult systemSpaceResult = Result("tas-zone-0", "Bedroom 2", new Dictionary<Analytical.Systems.SpaceDataType, IndexedDoubles>
+                {
+                    { Analytical.Systems.SpaceDataType.ZoneTemperature, new IndexedDoubles() },
+                });
+
+                Assert.That(resultantTemperaturePreparation.TryBeginSecondPass([systemSpaceResult], out transferred, out refusals), Is.False);
+                Assert.That(refusals, Is.Not.Empty);
+                Assert.That(transferred, Is.Empty);
+
+                Assert.That(File.Exists(resultantTemperaturePreparation.Path_TBD_Simulation), Is.False, "An unusable payload still copied the design TBD.");
+                Assert.That(fixture.DesignTBDUnchanged, Is.True);
+            }
+        }
+
+        /// <summary>
+        /// <b>A copy that cannot be made is a refusal, not an exception.</b>
+        /// <para>
+        /// The routine case is a previous run's <c>_TPDThermostat.tbd</c> still held open by TAS.
+        /// <c>Modify.CalculateResultantTemperature</c> does not catch, so an escaping <c>IOException</c> would
+        /// surface as a bare exception on a port that reports every other failure as a refusal - and the design
+        /// TBD must still be untouched.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void ACopyTargetThatCannotBeWritten_IsRefusedRatherThanThrown()
+        {
+            using (Fixture fixture = new Fixture())
+            {
+                ResultantTemperaturePreparation resultantTemperaturePreparation = new ResultantTemperaturePreparation(fixture.Path_TPD);
+
+                //The target held open with no sharing - what a TAS session that still has the previous run's
+                //copy loaded does to it.
+                using (FileStream fileStream = new FileStream(resultantTemperaturePreparation.Path_TBD_Simulation, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    Dictionary<string, IndexedDoubles> transferred;
+                    List<string> refusals;
+
+                    Assert.That(resultantTemperaturePreparation.TryBeginSecondPass(Results(), out transferred, out refusals), Is.False);
+                    Assert.That(refusals, Is.Not.Empty);
+                    Assert.That(transferred, Is.Empty);
+
+                    Assert.That(fixture.DesignTBDUnchanged, Is.True);
+                }
+            }
+        }
+
+        /// <summary>
         /// <b>The route genuinely consumes the first simulation.</b> The payload is the systems model's own hourly
         /// output: change the first pass and the payload changes with it. A payload that were a setpoint, a
         /// schedule or anything restated from the design model would be identical across these two runs.

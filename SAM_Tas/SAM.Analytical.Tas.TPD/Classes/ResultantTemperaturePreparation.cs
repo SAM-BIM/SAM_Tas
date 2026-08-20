@@ -171,7 +171,14 @@ namespace SAM.Analytical.Tas.TPD
                 }
 
                 IndexedDoubles indexedDoubles = systemSpaceResult[SpaceDataType.ZoneTemperature.ToString()];
-                if (indexedDoubles == null)
+
+                //A non-null but EMPTY series is skipped exactly as a missing one is. It carries nothing to
+                //write into the copy's thermostats, but it would have counted towards the payload and so
+                //let the route proceed - and the COM write beyond this seam reads values.Count off it,
+                //which either throws out of the preparation or writes a default series while the workflow
+                //reports a systems-aware answer. Absent and empty mean the same thing here: nothing to
+                //transfer for that zone.
+                if (indexedDoubles == null || indexedDoubles.Count <= 0)
                 {
                     continue;
                 }
@@ -233,7 +240,21 @@ namespace SAM.Analytical.Tas.TPD
 
             //The design TBD is copied here and opened for writing only through the copy's path. The original is
             //never opened for writing anywhere on this route.
-            System.IO.File.Copy(Path_TBD_Design, Path_TBD_Simulation, true);
+            //
+            //A locked, read-only or unwritable target - a previous run's copy still open in TAS is the routine
+            //case - is a REFUSAL, not an exception. This method's contract is that it returns false having
+            //written nothing, and Modify.CalculateResultantTemperature does not catch, so an escaping
+            //IOException would surface as a bare exception on a port that reports failure everywhere else.
+            try
+            {
+                System.IO.File.Copy(Path_TBD_Design, Path_TBD_Simulation, true);
+            }
+            catch (System.Exception exception)
+            {
+                transferred = new Dictionary<string, IndexedDoubles>();
+                refusals.Add(string.Format("The design TBD '{0}' could not be copied to '{1}', so the second pass has nothing to simulate: {2}", Path_TBD_Design, Path_TBD_Simulation, exception.Message));
+                return false;
+            }
 
             return true;
         }
