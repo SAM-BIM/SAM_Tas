@@ -202,32 +202,38 @@ namespace SAM.Analytical.Tas
                     {
                         if(aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
                         {
-                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp);
+                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp, out List<int> childIndices);
                             notes.AddRange(notes_Temp ?? []);
 
                             //Only an aperture that states an availability schedule is tracked here, and only
-                            //one that did NOT end up carrying a schedule is narrated. A successful write
-                            //contributes to the counters and says nothing, so an ordinary run does not put
-                            //one remark on the canvas per window.
+                            //a child whose schedule did NOT end up on the aperture type its own write
+                            //returned is narrated. A successful write contributes to the counters and says
+                            //nothing, so an ordinary run does not put one remark on the canvas per window.
                             if (TryDescribeScheduleRequest(openingProperties, out string description_Request))
                             {
-                                count_ScheduleRequested++;
+                                List<bool> scheduleRequests = openingProperties.OpeningScheduleRequests();
+                                int count_Requested = scheduleRequests.FindAll(x => x).Count;
+                                count_ScheduleRequested += count_Requested;
 
-                                TBD.ApertureType apertureType = apertureTypes == null || apertureTypes.Count == 0 ? null : apertureTypes[0];
-                                if (ApertureTypeSchedule(apertureType) != null)
+                                ScheduleDeliveryByChild(apertureTypes, childIndices, scheduleRequests.Count, out bool[] delivered, out TBD.ApertureType[] apertureTypesByChild);
+
+                                List<int> undelivered = openingProperties.UndeliveredOpeningScheduleRequests(delivered);
+                                count_ScheduleWritten += count_Requested - undelivered.Count;
+
+                                foreach (int childIndex in undelivered)
                                 {
-                                    count_ScheduleWritten++;
-                                }
-                                else
-                                {
-                                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by GUID; {4}; requested {5}; but {6}",
+                                    TBD.ApertureType apertureType = apertureTypesByChild[childIndex];
+                                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by GUID; {4}; requested {5}; but the schedule for {6} did not arrive - {7}",
                                         buildingElement.name,
                                         buildingElement.GUID,
                                         aperture.Name,
                                         aperture.Guid,
                                         DescribeOpeningProperties(openingProperties),
                                         description_Request,
-                                        apertureType == null ? "NO aperture type came back from the write - the refusal reported alongside names the reason." : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType.name, DescribeApertureTypeProfile(apertureType) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
+                                        scheduleRequests.Count == 1 ? "the opening" : string.Format("opening {0} of {1}", childIndex + 1, scheduleRequests.Count),
+                                        apertureType == null
+                                            ? "its write was refused - the refusal reported alongside this line names the reason."
+                                            : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType.name, DescribeApertureTypeProfile(apertureType) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
                                 }
                             }
                         }
@@ -246,11 +252,11 @@ namespace SAM.Analytical.Tas
 
             //Summarised at the front, so a reader sees what this path achieved before the individual lines.
             List<string> notes_Summary = [];
-            notes_Summary.Add(string.Format("Building elements: {0} aperture(s) requested an availability schedule on the GUID-matched path, {1} of those read a schedule back off the TBD profile.", count_ScheduleRequested, count_ScheduleWritten));
+            notes_Summary.Add(string.Format("Building elements: {0} opening(s) requested an availability schedule on the GUID-matched path, {1} of those read a schedule back off the TBD profile.", count_ScheduleRequested, count_ScheduleWritten));
 
             if (count_ScheduleRequested != count_ScheduleWritten)
             {
-                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} of {1} apertures that requested an availability schedule did NOT read one back off the TBD on this path.", count_ScheduleRequested - count_ScheduleWritten, count_ScheduleRequested));
+                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} of {1} requested availability schedules did NOT read one back off the TBD on this path.", count_ScheduleRequested - count_ScheduleWritten, count_ScheduleRequested));
             }
 
             if (count_GlazingWithoutConstruction != 0)

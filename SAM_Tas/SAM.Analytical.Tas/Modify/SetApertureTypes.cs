@@ -168,9 +168,14 @@ namespace SAM.Analytical.Tas
                     //the counters. Hundreds of "window with no schedule updated" remarks would bury the few
                     //lines that matter.
                     bool scheduleRequested = TryDescribeScheduleRequest(openingProperties, out string description_Request);
+
+                    //Per CHILD: a multiple-opening aperture can state one schedule request per child, and
+                    //each is verified below against the aperture type THAT child's write returned.
+                    List<bool> scheduleRequests = openingProperties.OpeningScheduleRequests();
+                    int count_Requested = scheduleRequests.FindAll(x => x).Count;
                     if (scheduleRequested)
                     {
-                        count_ScheduleRequested++;
+                        count_ScheduleRequested += count_Requested;
                     }
 
                     if(!buildingElementsByGuid.TryGetValue(GUID, out buildingElement buildingElement) || buildingElement == null)
@@ -179,7 +184,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Write);
+                    List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Write, out List<int> childIndices);
                     if(apertureTypes == null || apertureTypes.Count == 0)
                     {
                         notes.AddRange(notes_Write ?? []);
@@ -202,15 +207,20 @@ namespace SAM.Analytical.Tas
 
                     //An aperture that DOES carry a Part O restriction or an explicit schedule has the
                     //schedule read back off the TBD rather than restated from the SAM side - a note that
-                    //merely echoed the request would claim success the TBD had not delivered. Success is
-                    //counted and says nothing; only a schedule that did not arrive is narrated.
-                    if (ApertureTypeSchedule(apertureTypes[0]) != null)
+                    //merely echoed the request would claim success the TBD had not delivered. Each
+                    //requesting child is checked against the aperture type ITS OWN write returned, using
+                    //the correspondence the write reported - never against the first aperture type, which
+                    //can belong to a different child of a multiple-opening aperture. Success is counted and
+                    //says nothing; only a schedule that did not arrive is narrated.
+                    ScheduleDeliveryByChild(apertureTypes, childIndices, scheduleRequests.Count, out bool[] delivered, out TBD.ApertureType[] apertureTypesByChild);
+
+                    List<int> undelivered = openingProperties.UndeliveredOpeningScheduleRequests(delivered);
+                    count_ScheduleWritten += count_Requested - undelivered.Count;
+
+                    foreach (int childIndex in undelivered)
                     {
-                        count_ScheduleWritten++;
-                    }
-                    else
-                    {
-                        notes.Add(NotePrefix_Issue + string.Format("{0} matched SAM aperture '{1}' ({2}); {3}; TBD building element '{4}' ({5}); requested {6}; but aperture type '{7}' carries no schedule afterwards - it read back as {8}",
+                        TBD.ApertureType apertureType_Child = apertureTypesByChild[childIndex];
+                        notes.Add(NotePrefix_Issue + string.Format("{0} matched SAM aperture '{1}' ({2}); {3}; TBD building element '{4}' ({5}); requested {6}; but the schedule for {7} did not arrive - {8}",
                             identity_Temp,
                             aperture.Name,
                             aperture.Guid,
@@ -218,8 +228,10 @@ namespace SAM.Analytical.Tas
                             buildingElement.name,
                             GUID,
                             description_Request,
-                            apertureTypes[0]?.name,
-                            DescribeApertureTypeProfile(apertureTypes[0]) ?? "NO PROFILE - the aperture type came back without a TBD profile to read."));
+                            scheduleRequests.Count == 1 ? "the opening" : string.Format("opening {0} of {1}", childIndex + 1, scheduleRequests.Count),
+                            apertureType_Child == null
+                                ? "its write was refused - the refusal reported alongside this line names the reason."
+                                : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType_Child.name, DescribeApertureTypeProfile(apertureType_Child) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
                     }
 
                     //This is the ONLY place the candidate set is examined, and it is examined for the record,
@@ -236,7 +248,7 @@ namespace SAM.Analytical.Tas
             //Inserted at the front so the summary is the first thing a reader sees, and so a run in which
             //nothing was requested says so rather than saying nothing.
             List<string> notes_Summary = [];
-            notes_Summary.Add(string.Format("Aperture types: {0} TBD apertures seen, {1} updated, {2} requested an availability schedule, {3} of those read a schedule back off the TBD profile.", count_Seen, count_Updated, count_ScheduleRequested, count_ScheduleWritten));
+            notes_Summary.Add(string.Format("Aperture types: {0} TBD apertures seen, {1} updated, {2} opening(s) requested an availability schedule, {3} of those read a schedule back off the TBD profile.", count_Seen, count_Updated, count_ScheduleRequested, count_ScheduleWritten));
 
             foreach (KeyValuePair<string, int> keyValuePair in counts_Gate)
             {
@@ -246,7 +258,7 @@ namespace SAM.Analytical.Tas
 
             if (count_ScheduleRequested != count_ScheduleWritten)
             {
-                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture types: {0} of {1} apertures that requested an availability schedule did NOT read one back off the TBD. The per-aperture lines above name which, and at which gate.", count_ScheduleRequested - count_ScheduleWritten, count_ScheduleRequested));
+                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture types: {0} of {1} requested availability schedules did NOT read one back off the TBD. The per-aperture lines above name which opening, and at which gate.", count_ScheduleRequested - count_ScheduleWritten, count_ScheduleRequested));
             }
 
             notes.InsertRange(0, notes_Summary);
@@ -267,7 +279,24 @@ namespace SAM.Analytical.Tas
         /// </summary>
         public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, out List<string> notes, string name = null)
         {
+            return SetApertureTypes(building, buildingElement, openingProperties, out notes, out List<int> _, name);
+        }
+
+        /// <summary>
+        /// The same write, additionally reporting the CORRESPONDENCE between the opening's child properties
+        /// and the aperture types that came back: <paramref name="childIndices"/> runs parallel to the
+        /// returned list and holds, for each returned aperture type, the index of the child opening property
+        /// whose write produced it (always 0 for a single opening). A refused child is simply absent - the
+        /// returned list is not padded - so the correspondence survives a <see cref="MultipleOpeningProperties"/>
+        /// in which only some children were written. Callers verifying "the schedule this child requested is
+        /// on the aperture type this child got" need exactly this; checking the FIRST returned aperture type
+        /// instead is what made a schedule delivered to a later child look missing, and one missing from a
+        /// later child look delivered.
+        /// </summary>
+        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, out List<string> notes, out List<int> childIndices, string name = null)
+        {
             notes = [];
+            childIndices = null;
 
             if (building == null || buildingElement == null || openingProperties == null)
             {
@@ -284,6 +313,7 @@ namespace SAM.Analytical.Tas
                     return null;
                 }
 
+                childIndices = new List<int>() { 0 };
                 return new List<TBD.ApertureType>() { apertureType };
             }
 
@@ -297,6 +327,7 @@ namespace SAM.Analytical.Tas
                 }
 
                 List<TBD.ApertureType> result = new List<TBD.ApertureType>();
+                childIndices = new List<int>();
                 for (int i =0; i < singleOpeningProperties.Count; i++)
                 {
                     int index = singleOpeningProperties.Count == 1 ? -1 : i + 1;
@@ -312,6 +343,7 @@ namespace SAM.Analytical.Tas
                     }
 
                     result.Add(apertureType);
+                    childIndices.Add(i);
                 }
 
                 return result;
@@ -320,6 +352,39 @@ namespace SAM.Analytical.Tas
             notes.Add(NotePrefix_Issue + string.Format("Aperture type '{0}': opening properties of type {1} are neither single nor multiple, so no aperture control was written.", name ?? buildingElement.name, openingProperties.GetType().Name));
 
             return null;
+        }
+
+        /// <summary>
+        /// Maps a write's returned aperture types back onto the opening's child properties:
+        /// <paramref name="delivered"/>[i] is whether the aperture type child i's write returned carries a
+        /// schedule read back off the TBD, and <paramref name="apertureTypesByChild"/>[i] is that aperture
+        /// type itself (null where child i's write was refused, so a failure can still be described).
+        /// <paramref name="childIndices"/> is the correspondence the write reported - parallel to
+        /// <paramref name="apertureTypes"/>, the child index each returned aperture type came from - so a
+        /// compacted, partially successful multiple-opening write cannot shift a later child into child 0's
+        /// slot.
+        /// </summary>
+        private static void ScheduleDeliveryByChild(List<TBD.ApertureType> apertureTypes, List<int> childIndices, int childCount, out bool[] delivered, out TBD.ApertureType[] apertureTypesByChild)
+        {
+            delivered = new bool[childCount];
+            apertureTypesByChild = new TBD.ApertureType[childCount];
+
+            if (apertureTypes == null || childIndices == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < apertureTypes.Count; i++)
+            {
+                int childIndex = i < childIndices.Count ? childIndices[i] : -1;
+                if (childIndex < 0 || childIndex >= childCount)
+                {
+                    continue;
+                }
+
+                apertureTypesByChild[childIndex] = apertureTypes[i];
+                delivered[childIndex] = ApertureTypeSchedule(apertureTypes[i]) != null;
+            }
         }
 
         /// <summary>

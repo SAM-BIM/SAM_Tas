@@ -133,15 +133,16 @@ namespace SAM.Analytical.Tas
         
         public AnalyticalModel Calculate(AnalyticalModel analyticalModel)
         {
+            //A calculator instance can be re-run; each run reports only its own notes. Cleared ahead of the
+            //validation gate below, so a run rejected there leaves no previous run's notes visible either.
+            notes.Clear();
+
             Started?.Invoke(this, new System.EventArgs());
 
             if (analyticalModel == null || WorkflowSettings == null)
             {
                 return null;
             }
-
-            //A calculator instance can be re-run; each run reports only its own notes.
-            notes.Clear();
 
             // Before anything else: the setup below unconditionally deletes an existing .t3d, and the .tbd
             // too when RemoveExistingTBD is set, all of it ahead of the first Step. A caller handing in an
