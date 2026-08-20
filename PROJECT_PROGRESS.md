@@ -4,13 +4,16 @@
 `feature/partf-terminal-transfer-compliance` (PR: SAM_Tas#29 against `sow/2026-Q3`)
 
 ## Last updated
-2026-08-20 - TAS availability schedule export accepted on the licensed PC; TPD preparation hardened.
+2026-08-20 (second pass) - final review cleanup: two P2 Codex findings against `7ef2aff3` investigated
+against `296882e7`, both confirmed and fixed; 151/151 tests green Debug + Release.
 
 ## Current status
 The Part O availability schedule export is **complete and accepted on licensed TAS**. The mapping fix
 landed in `7ef2aff3f3f81949be8b15bf6a797848c2800bf2` ("fix: correct TAS availability schedule mapping")
 and the acceptance run passed with no warnings. Two further Codex findings on the TPD-full preparation
-are implemented and tested. The schedule-removal transition (D3) remains deferred.
+are implemented and tested. The final review cleanup (below) fixed the WorkflowCalculator stale-notes gate
+and made the MultipleOpeningProperties schedule diagnostic per-child. The schedule-removal transition (D3)
+remains deferred.
 
 ## TAS availability schedule export - accepted
 Accepted commit: `7ef2aff3f3f81949be8b15bf6a797848c2800bf2`.
@@ -40,6 +43,28 @@ Writing 0-based against a 1-based convention had put every hour one slot early -
 completely.
 
 ## Completed (this session)
+Final review cleanup - two P2 findings from a Codex review of `7ef2aff3`, verified against `296882e7`
+and both confirmed:
+
+- **`WorkflowCalculator.Calculate` stale notes.** The validation gate (`analyticalModel == null ||
+  WorkflowSettings == null`) returned BEFORE `notes.Clear()`, so a re-used calculator whose next run was
+  rejected still exposed the previous run's notes. Fixed by clearing at the top of `Calculate`, ahead of
+  the gate. Regression: `WorkflowCalculatorTests` (3 tests; the previous run is simulated by writing the
+  private notes list, the only COM-free way to populate it).
+- **`SetApertureTypes` / `UpdateBuildingElements` schedule diagnostics checked only `apertureTypes[0]`.**
+  For `MultipleOpeningProperties` the returned list is compacted (refused children are absent), so child
+  order does not survive partial failure - checking the first entry both falsely reported a missing
+  schedule when child 0 was unrestricted and child 1 was scheduled-and-delivered, and hid a later child's
+  failure behind child 0's schedule. Fix: the write overload now reports the correspondence
+  (`out List<int> childIndices`, parallel to the returned list), each requesting child is read back against
+  the aperture type ITS write returned (`ScheduleDeliveryByChild` + `ApertureTypeSchedule`), and the
+  requested/written counters count per requesting child. New COM-free seams `Query.OpeningScheduleRequests`
+  and `Query.UndeliveredOpeningScheduleRequests` carry the pairing decision; strict refusal behaviour of
+  `SetApertureType` is untouched. Regression: `OpeningScheduleDeliveryTests` (14 tests) covering
+  Unrestricted+NightClosed, NightClosed+Unrestricted, NightClosed+NightClosed and the child-0-only failure
+  modes. Summary note wording adjusted ("opening(s) requested") since counts are now per child.
+
+Earlier this branch (`296882e7` and before):
 - `ResultantTemperaturePreparation.Transferred`: a non-null but EMPTY `IndexedDoubles` zone-temperature
   series is now skipped exactly as an absent one is. It counted towards the payload before, so
   `TryBeginSecondPass` considered the transfer usable and copied the TBD, and the COM write beyond that
@@ -70,6 +95,16 @@ lines still reach the canvas.
   geometry check, and the D2 proposal introduced a tolerance inconsistency. No D2 code exists here.
 
 ## Files changed
+Final review cleanup (committed 2026-08-20 as "fix: verify opening schedules per child and clear workflow
+notes per run" + "docs: record final Part O review cleanup"):
+- `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs`
+- `SAM_Tas/SAM.Analytical.Tas/Modify/SetApertureTypes.cs`
+- `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateBuildingElements.cs`
+- `SAM_Tas/SAM.Analytical.Tas/Query/OpeningScheduleRequests.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/WorkflowCalculatorTests.cs` (new, +3)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/OpeningScheduleDeliveryTests.cs` (new, +14)
+
+Previous session:
 - `SAM_Tas/SAM.Analytical.Tas.TPD/Classes/ResultantTemperaturePreparation.cs`
 - `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PreparationBoundaryTests.cs` (+2)
 - `PROJECT_PROGRESS.md` (this file)
@@ -77,8 +112,8 @@ lines still reach the canvas.
 ## Validation
 - `SAM_Tas.sln` built with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
   pre-existing MSB3270 (MSIL vs AMD64 interop) and MSB3277 (System.Memory unification) warnings.
-- `SAM.Analytical.Tas.TM59.Tests` Debug: **134 passed, 0 failed**. Release: **134 passed, 0 failed**
-  (was 132; +2 new).
+- `SAM.Analytical.Tas.TM59.Tests` Debug: **151 passed, 0 failed**. Release: **151 passed, 0 failed**
+  (was 134; +17 new for the two cleanup findings).
 - Note the documented build order: the test project references already-built assemblies by `HintPath`
   (the COM-referencing projects cannot be built by the .NET Core MSBuild), so the SAM libraries and
   `SAM_Tas.sln` must be built before `dotnet test`. See `SAM.Analytical.Tas.TM59.Tests/TESTING.md`.
@@ -88,5 +123,9 @@ lines still reach the canvas.
   licensed acceptance run recorded above, which has now passed.
 
 ## Next step
+- Cleanup committed and pushed on 2026-08-20; PR #29 description updated (validation counts 134 -> 151,
+  licensed acceptance paragraph, superseded "schedules unwritten" statements).
 - D3 transition design pass, if it is still wanted.
-- The rounds 1-2 Codex backlog on PR #29 was not re-triaged in this pass.
+- The rounds 1-2 Codex backlog on PR #29 was not re-triaged in this pass; a fresh `@codex review` of the
+  current head was requested on 2026-08-20 but the connector declined (usage limit / account connection) -
+  re-request once the Codex account is usable.
