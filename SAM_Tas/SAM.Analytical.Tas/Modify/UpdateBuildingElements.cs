@@ -205,27 +205,30 @@ namespace SAM.Analytical.Tas
                             List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp);
                             notes.AddRange(notes_Temp ?? []);
 
-                            //Only an aperture that states an availability schedule is narrated. Every other
-                            //opening writes its aperture type here as it always has and says nothing, so the
-                            //Part O lines are not buried under one remark per window.
+                            //Only an aperture that states an availability schedule is tracked here, and only
+                            //one that did NOT end up carrying a schedule is narrated. A successful write
+                            //contributes to the counters and says nothing, so an ordinary run does not put
+                            //one remark on the canvas per window.
                             if (TryDescribeScheduleRequest(openingProperties, out string description_Request))
                             {
                                 count_ScheduleRequested++;
 
-                                string readBack = apertureTypes == null || apertureTypes.Count == 0 ? null : DescribeApertureTypeProfile(apertureTypes[0]);
-                                if (readBack != null)
+                                TBD.ApertureType apertureType = apertureTypes == null || apertureTypes.Count == 0 ? null : apertureTypes[0];
+                                if (ApertureTypeSchedule(apertureType) != null)
                                 {
                                     count_ScheduleWritten++;
                                 }
-
-                                notes.Add(string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by GUID; {4}; requested {5}; {6}",
-                                    buildingElement.name,
-                                    buildingElement.GUID,
-                                    aperture.Name,
-                                    aperture.Guid,
-                                    DescribeOpeningProperties(openingProperties),
-                                    description_Request,
-                                    readBack == null ? "NO aperture type or profile came back from the write - the refusal reported alongside names the reason." : string.Format("aperture type '{0}' read back as {1}", apertureTypes[0]?.name, readBack)));
+                                else
+                                {
+                                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by GUID; {4}; requested {5}; but {6}",
+                                        buildingElement.name,
+                                        buildingElement.GUID,
+                                        aperture.Name,
+                                        aperture.Guid,
+                                        DescribeOpeningProperties(openingProperties),
+                                        description_Request,
+                                        apertureType == null ? "NO aperture type came back from the write - the refusal reported alongside names the reason." : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType.name, DescribeApertureTypeProfile(apertureType) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
+                                }
                             }
                         }
 

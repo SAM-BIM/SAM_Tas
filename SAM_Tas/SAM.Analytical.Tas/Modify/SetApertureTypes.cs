@@ -200,27 +200,28 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    //An aperture that DOES carry a Part O restriction or an explicit schedule is reported in
-                    //full, and the profile is read back from the TBD rather than restated from the SAM side -
-                    //a note that merely echoed the request would claim success the TBD had not delivered.
-                    string readBack = DescribeApertureTypeProfile(apertureTypes[0]);
-                    if (readBack != null)
+                    //An aperture that DOES carry a Part O restriction or an explicit schedule has the
+                    //schedule read back off the TBD rather than restated from the SAM side - a note that
+                    //merely echoed the request would claim success the TBD had not delivered. Success is
+                    //counted and says nothing; only a schedule that did not arrive is narrated.
+                    if (ApertureTypeSchedule(apertureTypes[0]) != null)
                     {
                         count_ScheduleWritten++;
                     }
+                    else
+                    {
+                        notes.Add(NotePrefix_Issue + string.Format("{0} matched SAM aperture '{1}' ({2}); {3}; TBD building element '{4}' ({5}); requested {6}; but aperture type '{7}' carries no schedule afterwards - it read back as {8}",
+                            identity_Temp,
+                            aperture.Name,
+                            aperture.Guid,
+                            DescribeOpeningProperties(openingProperties),
+                            buildingElement.name,
+                            GUID,
+                            description_Request,
+                            apertureTypes[0]?.name,
+                            DescribeApertureTypeProfile(apertureTypes[0]) ?? "NO PROFILE - the aperture type came back without a TBD profile to read."));
+                    }
 
-                    notes.Add(string.Format("{0} matched SAM aperture '{1}' ({2}); {3}; TBD building element '{4}' ({5}); requested {6}; aperture type '{7}' read back as {8}",
-                        identity_Temp,
-                        aperture.Name,
-                        aperture.Guid,
-                        DescribeOpeningProperties(openingProperties),
-                        buildingElement.name,
-                        GUID,
-                        description_Request,
-                        apertureTypes[0]?.name,
-                        readBack ?? "NO PROFILE - the aperture type came back without a TBD profile to read."));
-
-                    //Reported after the success line so the evidence sits with the aperture it belongs to.
                     //This is the ONLY place the candidate set is examined, and it is examined for the record,
                     //never to select: it establishes whether the first-match rule above had a choice to get
                     //wrong before anything about that rule is changed.
@@ -418,11 +419,36 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// The schedule the TBD profile actually carries, READ BACK off the object the write returned, or
+        /// null where the aperture type exposes no profile or that profile points at no schedule. This is
+        /// the distinction the whole Part O schedule investigation turned on - "SAM asked for a schedule"
+        /// against "the TBD profile carries one" - and it is what the requested/written counters compare.
+        /// <para>
+        /// Presence is all that is checked here: the values are already verified against the request inside
+        /// <see cref="SetApertureType(Building, buildingElement, ISingleOpeningProperties, out string, string, int)"/>,
+        /// which refuses rather than assigning a schedule that does not match.
+        /// </para>
+        /// </summary>
+        private static schedule ApertureTypeSchedule(TBD.ApertureType apertureType)
+        {
+            if (apertureType == null)
+            {
+                return null;
+            }
+
+            dynamic @dynamic = apertureType;
+
+            profile profile = @dynamic.GetProfile();
+
+            return profile?.schedule;
+        }
+
+        /// <summary>
         /// The TBD aperture type's profile, READ BACK off the object the write returned: type, factor,
-        /// setback, function and the schedule it points at with that schedule's own 24 values. This is the
-        /// evidence that separates "SAM asked for a schedule" from "the TBD profile carries one", which is
-        /// the distinction the whole Part O schedule investigation turns on. Returns null where the aperture
-        /// type exposes no profile at all.
+        /// setback, function and the schedule it points at with that schedule's own 24 values. Used only to
+        /// describe a FAILURE - an aperture that asked for a schedule and did not get one - where knowing
+        /// what the profile does carry is what identifies the reason. Returns null where the aperture type
+        /// exposes no profile at all.
         /// </summary>
         private static string DescribeApertureTypeProfile(TBD.ApertureType apertureType)
         {

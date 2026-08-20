@@ -147,6 +147,207 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         // -------------------------------------------------------------------------------------------------
+        // TBD COM boundary: hour index and value encoding
+        // -------------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// A stand-in for a <c>TBD.schedule</c>'s value store, addressed exactly as TAS addresses it: slots
+        /// 1..24, where slot n is the hour ENDING at n:00. Slot 0 exists only so the array can be indexed
+        /// without an offset of its own - production must never write it, and these tests assert that.
+        /// <para>
+        /// An ON hour is handed back the way TAS hands it back: the <c>VARIANT_BOOL</c> TRUE bit pattern, -1.
+        /// </para>
+        /// </summary>
+        private sealed class FakeTBDSchedule
+        {
+            private readonly int[] slots = new int[25];
+
+            public void SetValue(int index_TBD, int value)
+            {
+                slots[index_TBD] = value;
+            }
+
+            public int GetValue(int index_TBD)
+            {
+                //TAS returns TRUE as the VARIANT_BOOL bit pattern, not as the 1 that was written.
+                return slots[index_TBD] == 0 ? 0 : -1;
+            }
+
+            /// <summary>Whether the hour ending at <paramref name="hourEnding"/>:00 is ON.</summary>
+            public bool IsOnForHourEnding(int hourEnding)
+            {
+                return slots[hourEnding] != 0;
+            }
+
+            public bool Slot0Untouched
+            {
+                get { return slots[0] == 0; }
+            }
+        }
+
+        /// <summary>What <c>Modify.SetScheduleValues</c> does, minus the COM object.</summary>
+        private static FakeTBDSchedule Write(int[] values)
+        {
+            FakeTBDSchedule schedule = new FakeTBDSchedule();
+            for (int hour = 0; hour < values.Length; hour++)
+            {
+                schedule.SetValue(TasQuery.ScheduleIndexTBD(hour), values[hour]);
+            }
+
+            return schedule;
+        }
+
+        /// <summary>What <c>Query.HourlyValues</c> does, minus the COM object.</summary>
+        private static int[] Read(FakeTBDSchedule schedule)
+        {
+            int[] result = new int[24];
+            for (int hour = 0; hour < 24; hour++)
+            {
+                result[hour] = TasQuery.ScheduleValueFromTBD(schedule.GetValue(TasQuery.ScheduleIndexTBD(hour)));
+            }
+
+            return result;
+        }
+
+        // --- value encoding ---
+
+        [Test]
+        public void ScheduleValueFromTBD_ZeroAndOne_AreUnchanged()
+        {
+            Assert.That(TasQuery.ScheduleValueFromTBD(0), Is.EqualTo(0));
+            Assert.That(TasQuery.ScheduleValueFromTBD(1), Is.EqualTo(1));
+        }
+
+        /// <summary>
+        /// TAS hands an ON hour back as the <c>VARIANT_BOOL</c> TRUE bit pattern, -1, not as the 1 that was
+        /// written. Comparing the raw value against the SAM value refused every schedule the export created.
+        /// </summary>
+        [Test]
+        public void ScheduleValueFromTBD_VariantBoolTrue_IsOne()
+        {
+            Assert.That(TasQuery.ScheduleValueFromTBD(-1), Is.EqualTo(1));
+        }
+
+        /// <summary>
+        /// Only -1 is folded onto 1. Anything else passes through so it still fails the caller's comparison -
+        /// an unexpected read-back must refuse, not be quietly taken for "true".
+        /// </summary>
+        [Test]
+        public void ScheduleValueFromTBD_UnexpectedValue_IsPassedThroughNotTreatedAsTrue()
+        {
+            foreach (int value in new[] { 2, 3, 7, -2, -255, int.MaxValue, int.MinValue })
+            {
+                Assert.That(TasQuery.ScheduleValueFromTBD(value), Is.EqualTo(value), $"value {value}");
+            }
+        }
+
+        // --- hour index ---
+
+        /// <summary>
+        /// TBD's 24-slot hourly indexed properties are 1-based hour-ending: SAM hour h (h:00 to (h+1):00) is
+        /// TBD slot h + 1, the hour ending at (h+1):00. Writing 0-based put every hour one cell early.
+        /// </summary>
+        [Test]
+        public void ScheduleIndexTBD_MapsSamHourToTheOneBasedHourEndingSlot()
+        {
+            Assert.That(TasQuery.ScheduleIndexTBD(0), Is.EqualTo(1), "00:00-01:00 is the hour ending 01:00");
+            Assert.That(TasQuery.ScheduleIndexTBD(8), Is.EqualTo(9), "08:00-09:00 is the hour ending 09:00");
+            Assert.That(TasQuery.ScheduleIndexTBD(22), Is.EqualTo(23), "22:00-23:00 is the hour ending 23:00");
+            Assert.That(TasQuery.ScheduleIndexTBD(23), Is.EqualTo(24), "23:00-24:00 is the hour ending 24:00");
+        }
+
+        [Test]
+        public void ScheduleHourFromTBD_IsTheInverseOfScheduleIndexTBD()
+        {
+            for (int hour = 0; hour < 24; hour++)
+            {
+                Assert.That(TasQuery.ScheduleHourFromTBD(TasQuery.ScheduleIndexTBD(hour)), Is.EqualTo(hour), $"hour {hour}");
+            }
+        }
+
+        /// <summary>
+        /// The whole SAM day occupies TBD slots 1..24. Slot 0 is not a TAS hour and must never be written -
+        /// writing it is what left 23:00-24:00 (slot 24) unwritten at the other end of the day.
+        /// </summary>
+        [Test]
+        public void WrittenSlots_AreOneToTwentyFour_AndSlotZeroIsNeverTouched()
+        {
+            FakeTBDSchedule schedule = Write(Enumerable.Repeat(1, 24).ToArray());
+
+            Assert.That(schedule.Slot0Untouched, Is.True, "slot 0 is not a TAS hour");
+            for (int hourEnding = 1; hourEnding <= 24; hourEnding++)
+            {
+                Assert.That(schedule.IsOnForHourEnding(hourEnding), Is.True, $"hour ending {hourEnding}:00");
+            }
+        }
+
+        // --- the two conventions together ---
+
+        /// <summary>
+        /// <b>The regression this boundary exists for.</b> PartO_DayOpen_08_23 must land in TAS as
+        /// OFF 00:00-08:00, ON 08:00-23:00, OFF 23:00-24:00 - 15 ON cells, the first being the hour ending
+        /// 09:00 and the last the hour ending 23:00. Before the fix the block sat one cell early, at the
+        /// hours ending 08:00 to 22:00, which is what a licensed TAS displayed as 07:00-08:00 to 21:00-22:00.
+        /// </summary>
+        [Test]
+        public void PartODayOpen_LandsOnTheIntendedTasHours()
+        {
+            FakeTBDSchedule schedule = Write(Schedule(PartOName, 8, 23).ScheduleValues());
+
+            for (int hourEnding = 1; hourEnding <= 8; hourEnding++)
+            {
+                Assert.That(schedule.IsOnForHourEnding(hourEnding), Is.False, $"00:00-08:00 must be OFF; hour ending {hourEnding}:00");
+            }
+
+            for (int hourEnding = 9; hourEnding <= 23; hourEnding++)
+            {
+                Assert.That(schedule.IsOnForHourEnding(hourEnding), Is.True, $"08:00-23:00 must be ON; hour ending {hourEnding}:00");
+            }
+
+            Assert.That(schedule.IsOnForHourEnding(24), Is.False, "23:00-24:00 must be OFF");
+
+            int count_On = Enumerable.Range(1, 24).Count(schedule.IsOnForHourEnding);
+            Assert.That(count_On, Is.EqualTo(15), "an 08-23 window is 15 whole hours");
+        }
+
+        /// <summary>
+        /// Read-back inverts both conventions, so SAM sees its canonical 24-value 0/1 representation again:
+        /// same values, same signature, domain model still binary.
+        /// </summary>
+        [Test]
+        public void ReadBack_RestoresTheCanonicalSamSchedule()
+        {
+            DailyAvailabilitySchedule source = Schedule(PartOName, 8, 23);
+            int[] written = source.ScheduleValues();
+
+            int[] readBack = Read(Write(written));
+
+            Assert.That(readBack, Is.EqualTo(written));
+            Assert.That(readBack.All(x => x == 0 || x == 1), Is.True);
+            Assert.That(TasQuery.ScheduleValuesEqual(readBack, written), Is.True);
+            Assert.That(TasQuery.ScheduleSignature(readBack), Is.EqualTo(source.Signature));
+            Assert.That(TasQuery.ScheduleSignature(readBack), Is.EqualTo("00FFFE"));
+        }
+
+        /// <summary>
+        /// Neither conversion may rescue a schedule that genuinely did not persist. An all-zero read-back is
+        /// the exact corruption the write verification was added for, and it still refuses; so does a
+        /// different window, and so does an unexpected raw value.
+        /// </summary>
+        [Test]
+        public void ReadBack_StillRefusesAGenuineMismatch()
+        {
+            int[] written = IntWindow(8, 23);
+
+            Assert.That(TasQuery.ScheduleValuesEqual(Read(Write(new int[24])), written), Is.False, "the values were lost");
+            Assert.That(TasQuery.ScheduleValuesEqual(Read(Write(IntWindow(9, 21))), written), Is.False, "a different window");
+
+            int[] unexpected = Read(Write(written));
+            unexpected[8] = TasQuery.ScheduleValueFromTBD(7);
+            Assert.That(TasQuery.ScheduleValuesEqual(unexpected, written), Is.False, "an unexpected raw value is not taken for true");
+        }
+
+        // -------------------------------------------------------------------------------------------------
         // Value equality
         // -------------------------------------------------------------------------------------------------
 
