@@ -1,7 +1,6 @@
-﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
-using System;
 using System.Collections.Generic;
 using TBD;
 
@@ -16,21 +15,44 @@ namespace SAM.Analytical.Tas
 
         /// <summary>
         /// Writes the aperture control (factor, discharge coefficient, day types and - where the opening
-        /// properties carry one - an availability profile/schedule) for one TBD building element.
+        /// properties carry one - an availability schedule) for one TBD building element.
         /// <para>
-        /// <b>A <c>Profile</c> and a <c>Function</c> are not mutually exclusive.</b> When both are present,
-        /// <c>profile.type</c> is set to <c>ticFunctionProfile</c> so the function governs the base opening
-        /// curve, but the schedule stays assigned as an availability multiplier on top of it - the same
-        /// combination <see cref="AssignApertureTypes(Building, buildingElement, System.Collections.Generic.IEnumerable{dayType}, ApertureConstruction)"/>
-        /// already writes for its own day/night split. A profile with no function present is written as
+        /// <b>A schedule and a Function are not mutually exclusive.</b> When both are present,
+        /// <c>profile.type</c> is <c>ticFunctionProfile</c> so the function governs the base opening curve,
+        /// and the schedule stays assigned as an availability multiplier on top of it - the same combination
+        /// <see cref="AssignApertureTypes(Building, buildingElement, IEnumerable{dayType}, ApertureConstruction)"/>
+        /// already writes for its own day/night split. A schedule with no function is written as
         /// <c>ticValueProfile</c>, where the schedule's own values are the whole curve.
         /// </para>
         /// <para>
-        /// <b>Reuse, not overwrite.</b> The schedule is looked up by name and reused if it already exists
-        /// (so repeated preparation/export does not duplicate schedules), and if the matched TBD aperture
-        /// type already carries a schedule under a different name, this refuses rather than overwriting it
-        /// - that schedule was not written by this method's own naming, so it may be user-authored control
-        /// this method has no business erasing.
+        /// <b>Write order matters, and the schedule goes LAST.</b> The profile's mode is established first
+        /// (<c>value</c>, <c>factor</c>, <c>setbackValue</c>, <c>type</c>, <c>function</c>) and
+        /// <c>profile.schedule</c> is assigned only after that. Previously <c>profile.type</c> was set to
+        /// <c>ticFunctionProfile</c> AFTER the schedule had been assigned, which risked the mode change
+        /// discarding the schedule reference. The assignment is then read straight back and its values
+        /// re-verified, so a schedule-write failure and a profile-assignment failure report as two different
+        /// things instead of both surfacing as "the schedule is wrong in TAS".
+        /// </para>
+        /// <para>
+        /// <b><c>setbackValue</c> is part of the schedule's meaning.</b> A TBD schedule selects between the
+        /// profile's own value/function for an ON hour and its <c>setbackValue</c> for an OFF hour, so an
+        /// availability schedule is only meaningful alongside a setback of 0. It is written explicitly
+        /// whenever a schedule is written, rather than relied on to be 0 already.
+        /// </para>
+        /// <para>
+        /// <b>Reuse, never overwrite.</b> Schedules are matched by their 24 VALUES, not by name - see
+        /// <see cref="Create.GetOrCreateSchedule(Building, DailyAvailabilitySchedule, out string)"/> - so
+        /// repeated export reuses one building-level schedule instead of duplicating it. If the matched TBD
+        /// aperture type already carries a schedule, that schedule is retained when its values equal the
+        /// requested ones (behaviourally the same control), and the write is REFUSED when they differ: a
+        /// differently-valued schedule may be user-authored control this method has no business erasing.
+        /// Value equality is the test; the name is not.
+        /// </para>
+        /// <para>
+        /// Every failure below returns null with <paramref name="refusal"/> set. Nothing is written on a
+        /// refusal, and no TBD schedule is created before the SAM-side source has been validated -
+        /// <c>TBD.Building</c> has no <c>RemoveSchedule</c>, so a schedule created in error could not be
+        /// withdrawn.
         /// </para>
         /// </summary>
         /// <param name="refusal">Why nothing was written, or null on success.</param>
@@ -59,18 +81,27 @@ namespace SAM.Analytical.Tas
                 name_Temp = string.Format("{0} {1}", name_Temp, index);
             }
 
+            //Resolve the SAM-side schedule source first. This touches no COM at all, so an opening that
+            //states an unusable schedule is refused before anything in the TBD has been created or changed.
+            bool scheduleRequested = singleOpeningProperties.TryGetOpeningScheduleSource(out string name_Schedule, out int[] values_Schedule, out string refusal_Source);
+            if (refusal_Source != null)
+            {
+                refusal = string.Format("Aperture type '{0}': {1}", name_Temp, refusal_Source);
+                return null;
+            }
+
             bool apertureType_Existed = building.ApertureType(name_Temp) != null;
 
             TBD.ApertureType result = building.ApertureType(name_Temp);
             if(result == null)
             {
                 result = building.AddApertureType(null);
-                result.name = name_Temp;
-            }
+                if (result == null)
+                {
+                    return null;
+                }
 
-            if(result == null)
-            {
-                return null;
+                result.name = name_Temp;
             }
 
             if (singleOpeningProperties.TryGetValue(OpeningPropertiesParameter.Description, out string description))
@@ -80,62 +111,41 @@ namespace SAM.Analytical.Tas
 
             dynamic @dynamic = result;
 
-            @dynamic.dischargeCoefficient = System.Convert.ToSingle(singleOpeningProperties.GetDischargeCoefficient());
-
             profile profile = @dynamic.GetProfile();
-            profile.value = 1;
-            profile.factor = System.Convert.ToSingle(singleOpeningProperties.GetFactor());
-
-            Profile profile_SAM = null;
-            if (singleOpeningProperties is ProfileOpeningProperties profileOpeningProperties)
+            if (profile == null)
             {
-                profile_SAM = profileOpeningProperties.Profile;
-            }
-            else if (singleOpeningProperties is PartOOpeningProperties partOOpeningProperties)
-            {
-                profile_SAM = partOOpeningProperties.Profile;
+                //Everything below writes through this profile, so there is nothing to write to. Reported
+                //rather than thrown, in keeping with this method's other outcomes.
+                refusal = string.Format("Aperture type '{0}' has no TBD profile to write the aperture control to.", name_Temp);
+                return null;
             }
 
-            if (apertureType_Existed && profile_SAM != null)
+            //An aperture type that already carries a schedule is judged by that schedule's VALUES, before
+            //anything is written. Equal values are the same control by another name and are retained;
+            //different values belong to somebody else and are refused, not overwritten.
+            schedule schedule_Resolved = null;
+            if (scheduleRequested && apertureType_Existed)
             {
                 schedule schedule_Existing = profile.schedule;
-                if (schedule_Existing != null && schedule_Existing.name != profile_SAM.Name)
+                if (schedule_Existing != null)
                 {
-                    refusal = string.Format("Aperture type '{0}' already carries a schedule ('{1}') that was not generated by this Part O opening restriction, so it was left untouched rather than overwritten.", name_Temp, schedule_Existing.name);
-                    return null;
-                }
-            }
-
-            if (profile_SAM != null)
-            {
-                //profile.type = ProfileTypes.ticHourlyFunctionProfile;  //TODO: 2023-04-19 To bo implemented once Tas allow ticHourlyFunctionProfile or ticYearlyFunctionProfile
-                schedule schedule = building.Schedules()?.Find(x => x.name == profile_SAM.Name);
-                if(schedule == null)
-                {
-                    schedule = building.AddSchedule();
-                    schedule.name = profile_SAM.Name;
-                }
-
-                double[] values = profile_SAM.GetDailyValues();
-                if(values != null && values.Length == 24)
-                {
-                    for(int i=0; i < 24; i++)
+                    int[] values_Existing = schedule_Existing.HourlyValues();
+                    if (values_Existing != null && Query.ScheduleValuesEqual(values_Existing, values_Schedule))
                     {
-                        schedule.set_values(i, System.Convert.ToInt32(values[i]));
+                        schedule_Resolved = schedule_Existing;
+                    }
+                    else
+                    {
+                        refusal = string.Format("Aperture type '{0}' already carries a schedule ('{1}') whose 24 hourly values differ from the requested availability schedule, so it was left untouched rather than overwritten. Values, not names, decide whether an existing schedule is compatible.", name_Temp, schedule_Existing.name);
+                        return null;
                     }
                 }
-
-                //The default when nothing below claims the profile's base curve. A Function assigned next
-                //overrides this to ticFunctionProfile without clearing the schedule - see the remarks above.
-                profile.type = ProfileTypes.ticValueProfile;
-                profile.schedule = schedule;
             }
 
-            if (singleOpeningProperties.TryGetValue(OpeningPropertiesParameter.Function, out string function))
-            {
-                profile.type = ProfileTypes.ticFunctionProfile;
-                profile.function = function;
-            }
+            @dynamic.dischargeCoefficient = System.Convert.ToSingle(singleOpeningProperties.GetDischargeCoefficient());
+
+            profile.value = 1;
+            profile.factor = System.Convert.ToSingle(singleOpeningProperties.GetFactor());
 
             if (singleOpeningProperties is PartOOpeningProperties partOOpeningProperties_Restriction && partOOpeningProperties_Restriction.OpeningRestriction == OpeningRestriction.AlwaysClosed)
             {
@@ -143,6 +153,59 @@ namespace SAM.Analytical.Tas
                 //multiplies out any function- or schedule-driven curve regardless of what else this opening
                 //carries, without needing a second 24-hour zero schedule purely for symmetry.
                 profile.factor = 0;
+            }
+
+            if (scheduleRequested)
+            {
+                //The schedule's OFF hours select this value, so an availability schedule requires it to be 0.
+                profile.setbackValue = 0;
+            }
+
+            //The profile's mode is established BEFORE the schedule is assigned - see the remarks. A Function
+            //claims the base curve; a schedule on its own is the curve.
+            if (singleOpeningProperties.TryGetValue(OpeningPropertiesParameter.Function, out string function))
+            {
+                profile.type = ProfileTypes.ticFunctionProfile;
+                profile.function = function;
+            }
+            else if (scheduleRequested)
+            {
+                //profile.type = ProfileTypes.ticHourlyFunctionProfile;  //TODO: 2023-04-19 To be implemented once Tas allows ticHourlyFunctionProfile or ticYearlyFunctionProfile
+                profile.type = ProfileTypes.ticValueProfile;
+            }
+
+            if (scheduleRequested)
+            {
+                if (schedule_Resolved == null)
+                {
+                    //Validates, then reuses by value, then creates at most one schedule and verifies its
+                    //write by reading all 24 values back.
+                    schedule_Resolved = building.GetOrCreateSchedule(name_Schedule, values_Schedule, out string refusal_Schedule);
+                    if (schedule_Resolved == null)
+                    {
+                        refusal = string.Format("Aperture type '{0}': {1}", name_Temp, refusal_Schedule ?? "no TBD schedule could be resolved.");
+                        return null;
+                    }
+                }
+
+                profile.schedule = schedule_Resolved;
+
+                //Read the assignment back. This separates "the schedule did not persist its values" from
+                //"the profile did not keep the schedule reference" - the second being what a mode change
+                //after assignment could cause.
+                schedule schedule_Assigned = profile.schedule;
+                if (schedule_Assigned == null)
+                {
+                    refusal = string.Format("Aperture type '{0}': the TBD profile did not retain the assigned schedule '{1}'.", name_Temp, schedule_Resolved.name);
+                    return null;
+                }
+
+                int[] values_Assigned = schedule_Assigned.HourlyValues();
+                if (!Query.ScheduleValuesEqual(values_Assigned, values_Schedule))
+                {
+                    refusal = string.Format("Aperture type '{0}': the schedule assigned to the TBD profile ('{1}') does not read back the requested 24 hourly values.", name_Temp, schedule_Assigned.name);
+                    return null;
+                }
             }
 
             List<dayType> dayTypes = building.DayTypes();
