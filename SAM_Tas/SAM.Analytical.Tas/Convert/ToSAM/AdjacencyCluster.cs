@@ -378,23 +378,20 @@ namespace SAM.Analytical.Tas
                     }
 
                     List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples = keyValuePair.Value;
-                    tuples.Sort((x, y) => y.Item1.GetArea().CompareTo(x.Item1.GetArea()));
 
-                    while (tuples.Count > 0)
+                    // Grouped by the pure, COM-free Query.GroupAperturePolygons rather than in-line: a lone
+                    // pane with no coincident frame is a genuine one-member group (not an empty one that
+                    // silently drops every stamp below), and the group's seed is captured before anything
+                    // is removed, not read back off whatever the shrinking list happens to have at index 0.
+                    foreach (List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples_Temp in Query.GroupAperturePolygons(tuples, Tolerance.MacroDistance))
                     {
-                        Polygon3D polygon3D = tuples[0].Item1;
-                        tuples.RemoveAt(0);
-
-                        List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples_Temp = tuples.FindAll(x => new Face3D(polygon3D).InRange(x.Item1.InternalPoint3D(), Tolerance.MacroDistance));
-
                         Face3D face3D = null;
-                        if (tuples_Temp == null || tuples_Temp.Count == 0)
+                        if (tuples_Temp.Count == 1)
                         {
-                            face3D = new Face3D(polygon3D);
+                            face3D = new Face3D(tuples_Temp[0].Item1);
                         }
                         else
                         {
-                            tuples_Temp.Add(new Tuple<Polygon3D, TBD.IZoneSurface>(polygon3D, tuples[0].Item2));
                             List<Face3D> face3Ds = Geometry.Spatial.Create.Face3Ds(tuples_Temp.ConvertAll(x => x.Item1));
                             if (face3Ds != null && face3Ds.Count != 0)
                             {
@@ -406,8 +403,6 @@ namespace SAM.Analytical.Tas
                                 face3D = face3Ds.FirstOrDefault();
                             }
                         }
-
-                        tuples_Temp.ForEach(x => tuples.Remove(x));
 
                         Aperture aperture = new Aperture(apertureConstruction, face3D);
 
