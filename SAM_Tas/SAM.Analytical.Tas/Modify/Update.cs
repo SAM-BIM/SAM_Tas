@@ -860,15 +860,11 @@ namespace SAM.Analytical.Tas
                                     continue;
                                 }
 
-                                string name = Query.Name(aperture.UniqueName(), false, true, true, false);
-
-                                // Tas stores window/door building elements with a leading
-                                // "Windows: " / "Doors: " prefix (see native .tbd naming). Mirror
-                                // that here so exported -pane/-frame elements match the convention.
-                                string prefix = aperture.ApertureType == ApertureType.Door ? "Doors: " : "Windows: ";
-                                name = string.Concat(prefix, name);
-
-                                Dictionary<string, Tuple<AperturePart, List<zoneSurface>>> dictionary = new Dictionary<string, Tuple<AperturePart, List<zoneSurface>>>();
+                                // The physical surfaces this aperture contributes, frame first then pane -
+                                // one entry per PART, at most two. Keyed by part rather than by the element
+                                // name it used to be keyed by: a building element is now shared between
+                                // equivalent apertures, so its name is no longer this aperture's own.
+                                List<Tuple<AperturePart, List<zoneSurface>>> apertureParts = new List<Tuple<AperturePart, List<zoneSurface>>>();
 
                                 double thickness = double.NaN;
 
@@ -881,8 +877,8 @@ namespace SAM.Analytical.Tas
                                     List<Face3D> face3Ds_Frame = aperture.GetFace3Ds(AperturePart.Frame);
                                     if (face3Ds_Frame != null)
                                     {
-                                        string apertureName_Frame = string.Format("{0} {1}", name, AperturePart.Frame.Sufix());
-                                        dictionary[apertureName_Frame] = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Frame, new List<zoneSurface>());
+                                        Tuple<AperturePart, List<zoneSurface>> aperturePart_Frame = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Frame, new List<zoneSurface>());
+                                        apertureParts.Add(aperturePart_Frame);
                                         foreach (Face3D face3D_Frame in face3Ds_Frame)
                                         {
                                             // here we added fix so Pane/Frame on secnd side will be correctyl shaded...
@@ -896,7 +892,7 @@ namespace SAM.Analytical.Tas
                                             if (zoneSurface != null)
                                             {
                                                 //zoneSurface.reversed = 1;
-                                                dictionary[apertureName_Frame].Item2.Add(zoneSurface);
+                                                aperturePart_Frame.Item2.Add(zoneSurface);
 
                                                 if (updateGuids)
                                                 {
@@ -917,8 +913,8 @@ namespace SAM.Analytical.Tas
                                     List<Face3D> face3Ds_Pane = aperture.GetFace3Ds(AperturePart.Pane);
                                     if (face3Ds_Pane != null)
                                     {
-                                        string apertureName_Pane = string.Format("{0} {1}", name, AperturePart.Pane.Sufix());
-                                        dictionary[apertureName_Pane] = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Pane, new List<zoneSurface>());
+                                        Tuple<AperturePart, List<zoneSurface>> aperturePart_Pane = new Tuple<AperturePart, List<zoneSurface>>(AperturePart.Pane, new List<zoneSurface>());
+                                        apertureParts.Add(aperturePart_Pane);
                                         foreach (Face3D face3D_Pane in face3Ds_Pane)
                                         {
                                             // here we added fix so Pane/Frame on secnd side will be correctyl shaded...
@@ -931,7 +927,7 @@ namespace SAM.Analytical.Tas
                                             zoneSurface zoneSurface = func.Invoke(face3D_Pane);
                                             if (zoneSurface != null)
                                             {
-                                                dictionary[apertureName_Pane].Item2.Add(zoneSurface);
+                                                aperturePart_Pane.Item2.Add(zoneSurface);
 
                                                 if (updateGuids)
                                                 {
@@ -946,87 +942,153 @@ namespace SAM.Analytical.Tas
                                     }
                                 }
 
-                                foreach (KeyValuePair<string, Tuple<AperturePart, List<zoneSurface>>> keyValuePair in dictionary)
+                                foreach (Tuple<AperturePart, List<zoneSurface>> tuple_AperturePart in apertureParts)
                                 {
-                                    buildingElementsByName.TryGetValue(keyValuePair.Key, out buildingElement buildingElement_Aperture);
-                                    if (buildingElement_Aperture == null)
+                                    AperturePart aperturePart = tuple_AperturePart.Item1;
+
+                                    // ---------------------------------------------------------------------
+                                    // A TBD Construction and an aperture buildingElement are both REUSABLE
+                                    // DEFINITIONS, shared by every element and every surface that states the
+                                    // same thing - the same relationship a TBD ApertureType has, one level
+                                    // up. The physical windows are the zoneSurfaces created above, and they
+                                    // stay one per window whatever happens here; what is resolved below is
+                                    // how many DEFINITIONS those surfaces point at.
+                                    //
+                                    // Identity is the DEFINITION and never the name. The previous code looked
+                                    // both objects up BY NAME, which was safe only because the name carried
+                                    // the aperture's own GUID and so matched nothing but itself; with names
+                                    // derived from the reusable SAM ApertureConstruction, a by-name lookup
+                                    // would hand one window another window's glazing. So: full content
+                                    // equality decides reuse, and a name taken by different content gets a
+                                    // deterministic collision suffix rather than being adopted.
+                                    //
+                                    // A shared definition is IMMUTABLE. On a hit nothing whatever is written
+                                    // to it - not even rewritten to the same value - because every other
+                                    // aperture referencing it would see the write.
+                                    // ---------------------------------------------------------------------
+
+                                    ApertureConstruction apertureConstruction = aperture.ApertureConstruction;
+
+                                    //The refusals below are deliberately discarded: this entry point has no notes
+                                    //channel, and adding one would change Modify.Update's signature and every caller
+                                    //of it. What a refusal costs is diagnosability, not correctness - the outcome is
+                                    //always the conservative one, an extra definition or none. Stage 3 owns reporting.
+                                    ConstructionDefinition constructionDefinition = apertureConstruction.ConstructionDefinition(aperturePart, materialLibrary, out string _);
+
+                                    TBD.Construction construction_TBD = buildingReuseCache.FindConstruction(constructionDefinition);
+                                    if (construction_TBD == null && apertureConstruction != null)
                                     {
-
-                                        AperturePart aperturePart = keyValuePair.Value.Item1;
-
-                                        TBD.Construction construction_TBD = null;
-
-                                        ApertureConstruction apertureConstruction = aperture.ApertureConstruction;
-                                        if (apertureConstruction != null)
+                                        //The whole namespace: the cache's own pass over the building, plus
+                                        //everything this export has created since - the panel constructions
+                                        //included, because they share it.
+                                        string constructionName = Query.ConstructionName(buildingReuseCache.ConstructionNames().Concat(constructionsByName.Keys), constructionDefinition, apertureConstruction.Name, out string _);
+                                        if (constructionName != null)
                                         {
-                                            string constructionName = string.Format("{0} {1}", Query.Name(aperture.UniqueName(), false, true, false, false), aperturePart.Sufix());
+                                            construction_TBD = building.AddConstruction(null);
+                                            construction_TBD.name = constructionName;
 
-                                            constructionsByName.TryGetValue(constructionName ?? string.Empty, out construction_TBD);
-                                            if (construction_TBD == null)
+                                            //Reserved the moment the name exists in the TBD, BEFORE anything
+                                            //else is written: a creation whose write later fails is never
+                                            //withdrawn, so it must never become reusable - but its name still
+                                            //occupies the namespace.
+                                            buildingReuseCache.ReserveConstruction(construction_TBD);
+
+                                            if (apertureConstruction.Transparent(materialLibrary, aperturePart))
                                             {
-                                                construction_TBD = building.AddConstruction(null);
-                                                construction_TBD.name = constructionName;
+                                                construction_TBD.type = TBD.ConstructionTypes.tcdTransparentConstruction;
+                                            }
 
-                                                if (apertureConstruction.Transparent(materialLibrary, keyValuePair.Value.Item1))
+                                            List<ConstructionLayer> constructionLayers = apertureConstruction.GetConstructionLayers(aperturePart);
+                                            if (constructionLayers != null && constructionLayers.Count != 0)
+                                            {
+                                                int index = 1;
+                                                foreach (ConstructionLayer constructionLayer in constructionLayers)
                                                 {
-                                                    construction_TBD.type = TBD.ConstructionTypes.tcdTransparentConstruction;
-                                                }
-
-                                                List<ConstructionLayer> constructionLayers = apertureConstruction.GetConstructionLayers(aperturePart);
-                                                if (constructionLayers != null && constructionLayers.Count != 0)
-                                                {
-                                                    int index = 1;
-                                                    foreach (ConstructionLayer constructionLayer in constructionLayers)
+                                                    Material material = materialLibrary?.GetMaterial(constructionLayer.Name) as Material;
+                                                    if (material == null)
                                                     {
-                                                        Material material = materialLibrary?.GetMaterial(constructionLayer.Name) as Material;
-                                                        if (material == null)
-                                                        {
-                                                            continue;
-                                                        }
+                                                        continue;
+                                                    }
 
-                                                        TBD.material material_TBD = construction_TBD.AddMaterial(material);
-                                                        if (material_TBD != null)
-                                                        {
-                                                            material_TBD.width = System.Convert.ToSingle(constructionLayer.Thickness);
-                                                            construction_TBD.materialWidth[index] = System.Convert.ToSingle(constructionLayer.Thickness);
-                                                            index++;
-                                                        }
+                                                    TBD.material material_TBD = construction_TBD.AddMaterial(material);
+                                                    if (material_TBD != null)
+                                                    {
+                                                        material_TBD.width = System.Convert.ToSingle(constructionLayer.Thickness);
+                                                        construction_TBD.materialWidth[index] = System.Convert.ToSingle(constructionLayer.Thickness);
+                                                        index++;
                                                     }
                                                 }
-
-                                                constructions.Add(construction_TBD);
-                                                if (!string.IsNullOrEmpty(construction_TBD.name))
-                                                    constructionsByName[construction_TBD.name] = construction_TBD;
                                             }
-                                        }
 
-                                        if (construction_TBD != null)
-                                        {
-                                            ApertureType apertureType = aperture.ApertureType;
+                                            constructions.Add(construction_TBD);
+                                            if (!string.IsNullOrEmpty(construction_TBD.name))
+                                                constructionsByName[construction_TBD.name] = construction_TBD;
 
-                                            buildingElement_Aperture = building.AddBuildingElement();
-                                            buildingElement_Aperture.name = keyValuePair.Key;
-
-                                            buildingElement_Aperture.SetColor(aperture, aperturePart);
-
-                                            buildingElement_Aperture.BEType = Query.BEType(keyValuePair.Value.Item1);
-                                            buildingElement_Aperture.AssignConstruction(construction_TBD);
-                                            buildingElements.Add(buildingElement_Aperture);
-                                            if (!string.IsNullOrEmpty(buildingElement_Aperture.name))
-                                                buildingElementsByName[buildingElement_Aperture.name] = buildingElement_Aperture;
-                                        }
-
-
-
-                                        if (aperturePart == AperturePart.Pane && aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
-                                        {
-                                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement_Aperture, openingProperties, null, buildingReuseCache);
+                                            //The write is complete, so the reservation becomes a reusable
+                                            //registration - unless the content could not be predicted, in
+                                            //which case the construction stands but is never shared.
+                                            if (constructionDefinition != null && constructionDefinition.Proven)
+                                            {
+                                                buildingReuseCache.RegisterConstruction(construction_TBD, constructionDefinition);
+                                            }
                                         }
                                     }
 
+                                    buildingElement buildingElement_Aperture = null;
+
+                                    if (construction_TBD != null)
+                                    {
+                                        BuildingElementDefinition buildingElementDefinition = aperture.BuildingElementDefinition(aperturePart, constructionDefinition, buildingReuseCache.DayTypeNames, out string _);
+
+                                        buildingElement_Aperture = buildingReuseCache.FindApertureBuildingElement(buildingElementDefinition);
+                                        if (buildingElement_Aperture == null)
+                                        {
+                                            string buildingElementName = Query.BuildingElementName(buildingReuseCache.BuildingElementNames().Concat(buildingElementsByName.Keys), buildingElementDefinition, apertureConstruction.Name, out string _);
+                                            if (buildingElementName != null)
+                                            {
+                                                buildingElement_Aperture = building.AddBuildingElement();
+                                                buildingElement_Aperture.name = buildingElementName;
+
+                                                buildingReuseCache.ReserveApertureBuildingElement(buildingElement_Aperture);
+
+                                                buildingElement_Aperture.SetColor(aperture, aperturePart);
+
+                                                buildingElement_Aperture.BEType = Query.BEType(aperturePart);
+                                                buildingElement_Aperture.AssignConstruction(construction_TBD);
+                                                buildingElements.Add(buildingElement_Aperture);
+                                                if (!string.IsNullOrEmpty(buildingElement_Aperture.name))
+                                                    buildingElementsByName[buildingElement_Aperture.name] = buildingElement_Aperture;
+
+                                                //The openings are written ONCE, onto the element that will
+                                                //now stand for every equivalent aperture. Only a pane carries
+                                                //them, exactly as before.
+                                                int count_ApertureTypes = 0;
+                                                if (aperturePart == AperturePart.Pane && aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
+                                                {
+                                                    List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement_Aperture, openingProperties, null, buildingReuseCache);
+                                                    count_ApertureTypes = apertureTypes == null ? 0 : apertureTypes.Count;
+                                                }
+
+                                                //Shareable only once the element really carries what the
+                                                //definition says it carries. A partly written opening set
+                                                //would otherwise be handed to the next aperture as though it
+                                                //were complete - and a shared element is never written to
+                                                //again, so there would be no correcting it.
+                                                if (buildingElementDefinition != null && buildingElementDefinition.Proven && count_ApertureTypes == buildingElementDefinition.ApertureTypeCount)
+                                                {
+                                                    buildingReuseCache.RegisterApertureBuildingElement(buildingElement_Aperture, buildingElementDefinition);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    //Identity stamps are per PHYSICAL aperture and are unchanged. After
+                                    //sharing, many apertures legitimately stamp the same BuildingElementGuid;
+                                    //the ZoneSurfaceReferences written above stay one per physical surface,
+                                    //which is what the TSD result mapping and the import both key on.
                                     if (updateGuids && buildingElement_Aperture != null)
                                     {
-                                        ApertureParameter apertureParameter = keyValuePair.Value.Item1 == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
+                                        ApertureParameter apertureParameter = aperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
 
                                         Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
                                         aperture_Temp.SetValue(apertureParameter, buildingElement_Aperture.GUID);
@@ -1034,7 +1096,7 @@ namespace SAM.Analytical.Tas
                                         panel_Temp.AddAperture(aperture_Temp);
                                     }
 
-                                    foreach (zoneSurface zoneSurface in keyValuePair.Value.Item2)
+                                    foreach (zoneSurface zoneSurface in tuple_AperturePart.Item2)
                                     {
                                         if (buildingElement_Aperture != null)
                                         {
@@ -1047,7 +1109,7 @@ namespace SAM.Analytical.Tas
                                             dictionary_Aperture[aperture.Guid] = zoneSurfaces_Aperture;
                                         }
 
-                                        zoneSurfaces_Aperture.Add(new Tuple<AperturePart, zoneSurface, bool>(keyValuePair.Value.Item1, zoneSurface, dictionary_Panel.ContainsKey(panel.Guid)));
+                                        zoneSurfaces_Aperture.Add(new Tuple<AperturePart, zoneSurface, bool>(aperturePart, zoneSurface, dictionary_Panel.ContainsKey(panel.Guid)));
                                     }
                                 }
                             }

@@ -1,27 +1,461 @@
 # Project Progress
 
 ## Branch
-`feature/tas-aperturetype-reuse` (off `sow/2026-Q3`; PR #30)
+`feature/tas-aperture-definition-reuse` (off `sow/2026-Q3` at `f3f5802`, i.e. after PR #30 merged).
+Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 
 ## Last updated
-2026-08-21 - Stage 1 implemented, validated on licensed TAS, and committed in two commits; a focused
-correction pass the same day hardened it (exact float collision identity, name reservation on late
-failure, full read-back verification of new shared types). The two Codex review findings on PR #30 were
-then fixed: index-derived reuse ordinal for the compatibility overload, and signed-zero normalisation in
-definition equality/hashing.
+2026-08-21 - **Licensed-TAS acceptance COMPLETE. Every merge-gate row passes.** Object counts,
+repeat-export (+ the one genuine defect it caught, now fixed), all 18 definition-variant scenarios, the
+SAM -> TBD -> save/reopen -> SAM round trip, the **A/B TAS/TSD simulation** and the **real shaded-project
+regression** are all done and PASS - see "Stage 2 - licensed acceptance progress" below.
+
+The headline: on a real 9-zone Part O model with 20 pane+frame windows, Stage 2 collapses 40 aperture
+building elements to 3 while leaving all 110 physical `zoneSurface`s, their geometry and their construction
+assignments byte-identical, and a full-year TAS simulation of both exports agrees on **4,616,520 result
+values with zero differences** - not "within solver noise", bit-identical. The shaded-project regression
+(`UpdateShading` -> TAS -> `Create.SolarModel` -> `CopyResults` -> aperture solar-result mapping) is
+likewise identical on every one of its 114 compared fields, with the same sharing (6 aperture elements -> 2)
+in effect.
+
+**Immediate next step:** open the Stage 2 PR. No production code changed after `97d1ab4f`; the only commits
+since are documentation recording this acceptance.
 
 ## Current status
-**Stage 1 (reusable TBD aperture types) is complete, validated and committed.** The export now shares one
-`TBD.ApertureType` across every building element stating the same opening control, instead of creating one
-per aperture per opening child. Constructions and building elements are still one per aperture - that is
-Stage 2, deliberately not started.
+**Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
+same opening control. Full detail, the S1-C0 probe result and the licensed-TAS acceptance table live in
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`.
 
-Full detail, invariants, the S1-C0 probe result and the licensed-TAS acceptance table live in
-`SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`. The frozen three-stage plan this implements is
-`C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21);
-sections D and J govern Stage 1 and must be followed without redesign.
+**Stage 2 is implemented and has PASSED the licensed-TAS gate** (2026-08-21, EDSL Tas build 17044).
+The direct `Modify.Update` export now shares
+one `TBD.Construction` and one aperture `TBD.buildingElement` across every aperture stating the same
+content, instead of creating one per aperture per part. 200 identical windows go from 400 constructions and
+400 elements to 2 and 2, while all 400 physical `zoneSurface`s remain. Full detail, invariants, seed gates,
+deliberate limitations and the acceptance table live in
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE.md`.
 
-### Stage 1 correction pass (2026-08-21, same branch, commits rewritten in place)
+The frozen three-stage plan both implement is
+`C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21).
+Stage 3 (physical-instance identity hardening on update/round-trip, the `UpdateBuildingElements`
+name-decode replacement, import grouping, refusal reporting on `Modify.Update`) is **not started**.
+Its first item is a known, already-planned consequence of Stage 2 that PR #31's Codex review caught
+independently: `UpdateBuildingElements` degrades (note-based, not silent corruption) when fed a Stage-2
+TBD, because Stage 2 element names no longer carry a single aperture's GUID by design — see
+`APERTURE_DEFINITION_REUSE.md`, "Known limitation: `UpdateBuildingElements` on a Stage-2 TBD".
+
+---
+
+## Stage 2 - blocking merge gate (ALL ROWS NOW PASS - see "licensed acceptance progress" below)
+
+These were the merge conditions. All three are now satisfied on licensed TAS; the evidence is recorded in
+the acceptance section below and summarised in `APERTURE_DEFINITION_REUSE.md`'s table.
+
+1. **A/B simulation.** Export the same real model twice - once with the old per-aperture building-element
+   behaviour (`sow/2026-Q3`) and once with shared elements (this branch) - run TAS/TSD on both, and compare
+   zone results. They must be numerically equivalent within normal solver noise.
+2. **One real shaded project**, checking `UpdateShading`, `CopyResults` and aperture solar-result mapping.
+   `CopyResults` already matches apertures to solar surfaces by GEOMETRY (its own comment records that the
+   stamped building-element GUID is really the shared *construction* GUID), so sharing should not affect it -
+   but confirm rather than assume.
+3. **Object counts and round trip**, per the table in `APERTURE_DEFINITION_REUSE.md`: 200 identical windows
+   -> 400 surfaces / 2 constructions / 2 elements with Stage 1 counts unchanged; several constructions,
+   several opening controls, sealed windows, doors; a repeated export adding nothing; and
+   SAM -> TBD -> SAM preserving aperture count, geometry, pane/frame classification, construction layers and
+   `OpeningProperties`.
+
+**One thing only licensed TAS can settle:** what a freshly added `TBD.buildingElement` carries for `ground`,
+`markDelete` and `width`. The building-element seed gate refuses anything non-zero there, because the export
+writes none of them. If TBD's own default is non-zero, no seeded element is ever adopted - safe in itself
+(under-reuse, never unsafe sharing), but the "repeated export adds nothing" row would fail and a third
+export could then hit the double-name refusal. That row is what detects it; if it fails, relax those three
+fields to "equal to what a freshly created element reports" rather than "zero".
+
+**RESOLVED on licensed TAS (2026-08-21):** a freshly created `TBD.buildingElement` reports `ground=0`,
+`markDelete=0`, `width=0`, `ghost=0` - live and after save/reopen. The seed gate's zero assumption was
+already correct for these three fields; **no fix was needed there.**
+
+**A genuine defect WAS found, one level down, by the exact same class of check** - see "Stage 2 - licensed
+acceptance progress" below: `Query.ConstructionMaterialDefinition`'s opaque/transparent branches assumed a
+fresh `TBD.material`'s untouched `dynamicViscosity`/`convectionCoefficient` read back as `0`; licensed TAS
+reports `1E-05`/`0.001`. Fixed and verified - see that section.
+
+---
+
+## Stage 2 - licensed acceptance progress (this session, on this machine)
+
+**Environment:** EDSL Tas build 17044, `HKLM\SOFTWARE\EDSL\TasManager`, COM confirmed live
+(`New-Object -ComObject TBD.Document` succeeds). A standalone harness (`Gate.exe`, **not committed** - see
+"Licensed harness" below, same discipline as Stage 1's) drives the real `Modify.Update` against real `.tbd`
+files through TBD COM.
+
+### 0. Starting-state confirmation - PASS
+Branch `feature/tas-aperture-definition-reuse`; HEAD contains `a178124` and `a5a98ed`; base `f3f5802` is an
+ancestor; `git status` clean; `git diff --stat f3f5802..HEAD` touches only
+`SAM_Tas/SAM.Analytical.Tas/**`, `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ApertureDefinitionReuseTests.cs`,
+and the two docs (`APERTURE_DEFINITION_REUSE.md`, `PROJECT_PROGRESS.md`) - no `SAM`, `SAM_Tas_Grasshopper`,
+`UpdateBuildingElements`/`UpdateIds`/import-grouping/gbXML/T3D files touched. `SAM.Analytical.Tas.csproj`
+builds clean (0 errors, Debug) against the licensed interop.
+
+### 1. Fresh-object defaults probe - PASS, no gate fix needed
+`Gate.exe probe`: a fresh `TBD.buildingElement` -> `ground=0 markDelete=0 width=0 ghost=0 BEType=0
+colour=0`, unchanged after save/reopen. Matches the seed gate's assumption exactly.
+
+### 2A. 200 identical pane+frame windows, first export - PASS
+`Gate.exe counts 200`: 400 aperture zoneSurfaces (200 pane + 200 frame) over 200 physical apertures; exactly
+**2** aperture Constructions (`SIM_EXT_GLZ -pane`, `SIM_EXT_GLZ -frame`); exactly **2** aperture
+BuildingElements (`Windows: SIM_EXT_GLZ -pane`, `Windows: SIM_EXT_GLZ -frame`); **1** Stage 1 ApertureType
+(`Opening Cd0.395 F1`, identical opening control on all 200); **0** schedules (no schedule-bearing control
+used); 2 distinct aperture BuildingElement guids; 0 part-mismatched surfaces (every element's own
+construction is the same part as the element).
+
+### 2B. Repeat export into the same store - FOUND A GENUINE DEFECT, THEN FIXED, THEN PASS
+**First run (before the fix):** the second `Modify.Update` call into the SAME open building produced
+`+2 Construction, +2 BuildingElement` (collision-suffixed names, e.g. `SIM_EXT_GLZ_5EFF1698 -pane`,
+`Windows: SIM_EXT_GLZ_A47E0E09 -pane`) instead of `+0` - a real "repeated export adds nothing" **failure**.
+
+**Diagnosis.** Neither the seed gate's own refusal checks were firing (`Gate.exe diagnose` showed both the
+original and the new collision-suffixed objects individually passing their seed gates with `proven=true`) -
+the mismatch was in field-by-field content EQUALITY between the fresh, factory-computed
+`ConstructionDefinition` and the one read back off the just-created `TBD.Construction`. A targeted
+field-by-field diff (`Gate.exe diffconstruction`) isolated it to exactly two fields on every opaque
+(`Timber`) and transparent (`Glass 6mm`) material layer: `dynamicViscosity` and `convectionCoefficient`.
+`Query.ConstructionMaterialDefinition` (the COM-free mirror of `Modify.UpdateMaterial`) assumed these read
+back as `0` for opaque/transparent materials, because `UpdateMaterial` never writes them for those two
+kinds (only for `GasMaterial`) - the code's own comment already said "a fresh TBD material's own values
+stand", it just had the value wrong. Licensed TAS reports `dynamicViscosity = 1E-05` and
+`convectionCoefficient = 0.001` on a material `construction.AddMaterial()` creates and the opaque/transparent
+`UpdateMaterial` overload leaves those two fields untouched on - confirmed by reading back three separate
+already-exported opaque/transparent materials (frame Timber, both pane Glass 6mm layers), all agreeing
+exactly, while the one Gas layer (which IS written) matched the mirror already.
+
+**Fix applied:** `SAM_Tas/SAM.Analytical.Tas/Query/ConstructionMaterialDefinition.cs` - the opaque and
+transparent branches now use the confirmed TAS defaults (`1E-05f`/`0.001f`, named constants
+`FreshOpaqueOrTransparentDynamicViscosity`/`FreshOpaqueOrTransparentConvectionCoefficient`) instead of `0`
+for these two fields. This is exactly the same class of correction the merge-gate note already anticipated
+for the BuildingElement seed gate's `ground`/`markDelete`/`width` (which turned out not to need it) - here
+applied one level down, on the construction-material mirror, where it genuinely was needed. Nothing about
+the conservative foreign-object refusal gates was touched or weakened; this is purely the "what does a
+value we never write read back as" mirror.
+
+**Verification after the fix:**
+- `SAM.Analytical.Tas.csproj` rebuilds clean (Debug, 0 errors).
+- `SAM.Analytical.Tas.TM59.Tests` (net8.0): **337/337 pass** (was already 337/337 before the fix - the fix
+  only changes what a value the tests never assert on-the-nose reads back as on real TAS; no COM-free test
+  regressed or needed updating).
+- `Gate.exe counts 200` re-run end to end: repeat-export deltas are now **Construction +0, BuildingElement
+  +0, ApertureType +0, schedule +0, distinct aperture BE guid +0, part-mismatched surface +0** - the gate
+  row now passes. (Zone +1 and aperture zoneSurface +400 on the repeat are expected: a repeat export adds a
+  second zone/set of physical surfaces, exactly as Stage 1's own repeat-export scenario does.)
+
+### 3. Definition variants - PASS, all 18
+`Gate.exe variants`: construction variants C1-C8 (identical pane+frame reuse; different material; different
+width; different layer order; frame-shared-across-different-panes; different frame material; pane-never-
+equals-frame-even-with-identical-layers; same preferred name + different content -> deterministic
+hash-suffixed distinct names) and building-element variants B1-B8 (different construction; different
+colour; different opening control; no-openings bare element; opening multiplicity; one-vs-two-identical-
+openings; window != door; `ApertureType.Undefined` still gets an element) **all match expectations**, and no
+generated name contains a physical aperture GUID or `aperture.UniqueName()` in any scenario.
+
+**B2 (colour) needed the harness's own expectation corrected, not the code.** First run expected 4 elements
+(2 colours x 2 parts) and got 3; diagnosed by reading `Query/Color.cs` (pre-Stage-2, untouched by this
+branch's diff - confirmed via `git log`/`git diff f3f5802..HEAD`): `ApertureParameter.Color` only overrides
+the **pane's** colour; the frame always takes the type-derived default regardless. So 2 panes (one per
+colour) + 1 shared frame = 3 is the CORRECT expected count. Harness fixed, re-run, all 18 pass.
+
+### 4. Round trip - PASS, both former failures diagnosed by a licensed A/B against `f3f5802`
+The two rows previously recorded here as unexplained failures (geometry, construction layers) were
+**over-strict harness assertions, not Stage 2 regressions.** Settled by running the SAME round trip twice on
+this machine - once with `SAM.Analytical.Tas.dll` built from `f3f5802`, once from HEAD - over one small
+deterministic model, and diffing field by field. Method and result:
+
+**Method.** A minimal `net8.0-windows` console harness (`RT.exe`, not committed, same discipline as the rest)
+builds one 5 x 4 x 3 m space with two 1.0 x 1.2 m `SIM_EXT_GLZ` windows (3-layer pane Glass/Air/Glass +
+Timber frame; window 1 carries `PartOOpeningProperties`, window 2 none), then runs
+`analyticalModel.ToTBD(path)` -> save/close -> `Convert.ToSAM(path, false)`, dumping ~520 named fields per
+run: SAM-side aperture geometry, part faces, layers, materials, opening properties and identity stamps;
+TBD-side constructions, every material property, both stored widths, building elements, colours, `BEType`
+and aperture types. Only `SAM.Analytical.Tas.dll` differs between the two runs; every other assembly, the
+model and the code path are identical. Both sides were run twice - fully deterministic apart from
+TAS-assigned GUIDs, including the collision-suffix hash.
+
+**Result.** Of the ~520 fields: **219 SAM-side fields (every geometry, area, coordinate, layer, material,
+transparency, opening-property and count field) are identical between baseline and Stage 2, and all 186
+`tbd.construction` material/width fields are identical too.** The only differences are the intended Stage 2
+sharing effects - aperture building elements 4 -> 3 (the frame is now shared by both windows; the two panes
+stay separate because they genuinely differ: openable vs fixed changes both `Modify.SetColor`'s colour and
+the aperture-type count), the definition-derived names, and the `BuildingElementGuid` stamps that follow
+from them - plus TAS's own per-run GUIDs.
+
+- **PASS** - physical aperture count preserved (2 -> 2) on both sides; sharing a `BuildingElementGuid` does
+  not collapse physical apertures (invariant 9).
+- **PASS** - `OpeningProperties` preserved on both sides (1 -> 1 aperture carrying one).
+- **PASS** - pane/frame classification preserved on both sides.
+- **PASS (was FAIL)** - geometry. The physical geometry round-trips exactly: the exported pane surface is
+  0.99 m2 and the frame surface 0.21 m2, which is exactly what `Aperture.GetFace3Ds(Pane/Frame)` derives
+  from the 1.2 m2 source aperture, and the imported aperture's external edge is the same 1.2 m2 rectangle at
+  the same coordinates. What differs is only the imported `Aperture`'s composite `Face3D`: the export writes
+  frame and pane as two surfaces, and `Convert.ToSAM` reassembles them into one face with a hole, so
+  `GetFace3D().GetArea()` reads 0.21 (ring) where the source read 1.2 (solid). Comparing that composite area
+  to the source's is what the old assertion did, and it is the wrong comparison - the derived part faces,
+  which are what TAS simulates, agree to the last digit. **Identical on `f3f5802`.**
+- **PASS (was FAIL)** - construction layers. Every orig -> round-trip layer difference is float read-back or
+  a field TBD does not store, and every one of them is byte-identical on baseline: layer thicknesses
+  `0.016 -> 0.016000001` and `0.05 -> 0.050000001` (`Convert.ToSingle`), `ThermalConductivity
+  0.13 -> 0.129999995`, `Material.Group -> empty` (TBD has no such field), and - the first differing field
+  walking the pane layers in order - `Glass 6mm` `SpecificHeatCapacity 750 -> NaN` and `Density
+  2500 -> NaN`, because the TBD transparent `UpdateMaterial` overload writes neither (already documented in
+  `Query/ConstructionMaterialDefinition.cs`). Layer ORDER, names, count, `additionalHeatTransfer` (0),
+  construction type (`tcdTransparentConstruction` pane / `tcdOpaqueConstruction` frame) and both stored
+  widths all round-trip exactly. **Identical on `f3f5802`.**
+
+Two further pre-existing behaviours the A/B surfaced, both identical on baseline and therefore out of scope
+here (noted so they are not rediscovered): `Convert.ToSAM` groups a zone's aperture surfaces by
+`ApertureConstruction` guid and pairs them by descending area, so with two identical windows the imported
+`Frame`/`Pane` `ZoneSurfaceReference`s can cross-pair between windows; and a `PartOOpeningProperties`
+returns as a `ProfileOpeningProperties`. Neither is caused or changed by Stage 2.
+
+### 5. A/B TAS/TSD simulation - PASS, bit-identical
+**Model:** `C:\Users\Virtual Machine\Documents\SAM_daily\2026-08-05-PartO\SAM_zoningAM_v2.sam` - a real
+9-zone Part O flat: 9 spaces, 50 panels, **20 apertures, every one pane+frame and every one carrying
+`PartOOpeningProperties`**, all on the single `SIM_EXT_GLZ` aperture construction. Exported through
+`analyticalModel.ToTBD(path)` with the model's OWN embedded weather (`United Kingdom, London`, lat 51.48,
+lon -0.45) so both sides get byte-identical weather, then `Modify.Simulate(tbd, tsd, 1, 365)` - the same
+full-year run period, timestep, controls and shading on both sides. The only difference between the two
+runs is which `SAM.Analytical.Tas.dll` sits next to the harness.
+
+**Pre-simulation equivalence - confirmed BEFORE simulating, as the gate requires:**
+
+| | baseline `f3f5802` | Stage 2 |
+|---|---|---|
+| zones | 9 | 9 |
+| physical `zoneSurface`s | 110 | 110 |
+| of which aperture surfaces | 40 | 40 |
+| total surface area | 3379.999993533 m2 | 3379.999993533 m2 |
+| total aperture surface area | 64.799998492 m2 | 64.799998492 m2 |
+| Constructions (aperture) | 6 (2) | 6 (2) |
+| `ApertureType`s | 2 | 2 |
+| **aperture BuildingElements** | **40** | **3** |
+
+All **110 per-surface rows are byte-identical** - area, `type`, orientation, inclination, altitude,
+altitudeRange, room-surface count, the construction assigned, `BEType`, colour and aperture-type count -
+and all **510 construction/material/width lines are byte-identical**. Only the element NAMES differ, by
+design: baseline writes one element per aperture per part (`Windows: SIM_EXT_GLZ <aperture-guid> -pane`),
+Stage 2 writes `Windows: SIM_EXT_GLZ -frame` shared by all 20 windows plus two panes,
+`Windows: SIM_EXT_GLZ -pane` and `Windows: SIM_EXT_GLZ_AAF00869 -pane`, because the model states two
+distinct opening controls (`Opening Cd0.411 F1` and `Opening Cd0.477 F1`) - the same two `ApertureType`s
+both sides already carry.
+
+**Numeric result comparison:** 22 zone variables x 9 zones x 8760 h = 1,734,480 values, plus 7 surface
+variables x 47 TSD surface records x 8760 h = 2,882,040 values.
+
+- **values compared: 4,616,520**
+- **values differing: 0**
+- **maximum absolute difference: 0** (no location - there is no differing value)
+- **maximum relative difference: 0** (same)
+- verdict: **exactly zero**, not floating/solver noise. The two TSDs agree bit for bit.
+
+Zone variables compared: DryBulbTemperature, MeanRadiantTemperature, ResultantTemperature, SensibleLoad,
+HeatingLoad, CoolingLoad, SolarGain, LightingGain, InfiltrationVentilationGain, AirMovementGain,
+BuildingHeatTransfer, ExternalConductionOpaque, ExternalConductionGlazing, OccupantSensibleGain,
+EquipmentSensibleGain, HumidityRatio, relativeHumidity, LatentLoad, Infiltration, Ventilation,
+ZoneApertureFlowIn, ZoneApertureFlowOut. Surface variables: InternalSolarGain, ExternalSolarGain,
+InternalConduction, ExternalConduction, ApertureFlowIn, ApertureFlowOut, ApertureOpening. Five of the zone
+variables (SensibleLoad, HeatingLoad, CoolingLoad, Ventilation, AirMovementGain) are all-zero in this
+unconditioned model - stated so the count is not read as 22 independently varying quantities; the other 17
+carry real magnitudes (e.g. ExternalSolarGain up to 9956.4, InfiltrationVentilationGain up to 12345.1,
+DryBulbTemperature up to 31.77).
+
+### 6. Real shaded-project regression - PASS
+**Model:** `C:\Users\Virtual Machine\Documents\SAM_daily\2026-08-13-Shading\test-file-kolobrzeg.sam` -
+one room with a real shading context (56 panels for one space; location Kolobrzeg, lat 54.18, lon 15.58)
+and 3 pane+frame apertures. The Part O model above was tried first and produced no SAM solar results at all
+(see the note below), so this is the model the regression actually ran on.
+
+**Chain exercised, end to end, on both sides:** `SAM.Analytical.SolarCalculator.Modify.Simulate_Coverage`
+over TAS's own 25 representative shade days x 24 h = 600 timesteps (56 surfaces, 62 coverage results
+including each aperture's own `-pane`/`-frame` surfaces) -> `analyticalModel.ToTBD` -> `Modify.UpdateShading`
+-> `Modify.Simulate(1, 365)` -> `Create.SolarModel(building)` -> `Modify.CopyResults` -> aperture
+solar-result mapping.
+
+**Stage 2 sharing was really in effect here** - aperture BuildingElements 6 -> 2 - while the physical side
+stayed identical (12 zoneSurfaces, 6 of them aperture, total area 76.947999999 m2, 5 constructions, both
+sides).
+
+| Field | baseline `f3f5802` | Stage 2 |
+|---|---|---|
+| SAM coverage results attached | 62 (56 panels + aperture parts) | 62 |
+| `UpdateShading` returned | true | true |
+| TAS shade-day calendar | 25 days, no fallback | 25 days, no fallback |
+| shade-proportion values read back | 7200 | 7200 |
+| surfaces carrying shade data | 12 | 12 |
+| `Create.SolarModel` linked faces / coverage results / values | 12 / 12 / 3096 | 12 / 12 / 3096 |
+| `CopyResults` apertures with results | 3 | 3 |
+| `CopyResults` pane / frame / panel results | 5 / 5 / 62 | 5 / 5 / 62 |
+| per-aperture result rows (name, count, sum, max) | 10 | 10, identical |
+
+**114 comparable dumped fields, 0 differing** - including every per-surface shade-proportion value count,
+sum and max, and every per-aperture coverage row. The TAS simulation of the two shaded exports was compared
+the same way as step 5: **928,560 values, 0 differing, max absolute difference 0.**
+
+Re-running the same regression on the Part O model gave **146 comparable fields, 0 differing** and
+**4,616,520 TSD values, 0 differing** as well, but with the shading chain empty on both sides (see below),
+so it corroborates rather than adds coverage.
+
+**Two harness-side findings, neither a Stage 2 issue, recorded so they are not rediscovered:**
+- The shade read-back **must reopen the TBD read-WRITE**. On a read-only reopen TAS reports no shade-day
+  calendar at all and `GetShadeProportion` returns -1 for every hour, so the whole chain looks empty.
+  `Modify.LogShadeRoundTrip` already documents this; the harness hit it first-hand. `SAMTBDDocument.Dispose`
+  only `close()`s, so a read-write reopen does not modify the file.
+- `SAM.Analytical.SolarCalculator`'s `Simulate` and `Simulate_Coverage` both return **zero results** for the
+  Part O model (`SAM_zoningAM_v2.sam`) even though it has a Location, weather data and 21 sun-exposed faces
+  (9 roofs + 12 external walls), returning in ~0.1 s. The same calls work on the Kolobrzeg model. This lives
+  in the sibling `SAM_SolarCalculator` repo, is untouched by this branch's diff, and was **not** chased -
+  it is out of scope for Stage 2. It is only why the shaded regression uses the Kolobrzeg model.
+
+### A/B build recipe (proven)
+`git worktree add
+../SAM_Tas_baseline_f3f5802 f3f5802` next to this checkout so its `..\..\..\SAM\build` hint paths still
+resolve, then run MSBuild's `-t:Restore` and `-t:Build` as SEPARATE invocations (a combined
+`-t:Restore,Build` fails with `CS0518 Predefined type 'System.String' is not defined` because the build
+half does not pick up the assets the restore half just wrote). Use the .NET Framework MSBuild
+(`vswhere -latest -find MSBuild\**\Bin\MSBuild.exe`) - `dotnet build` cannot run `ResolveComReference`.
+`git diff f3f5802..HEAD` touches only `SAM.Analytical.Tas`, so the A/B is a one-DLL swap in an otherwise
+identical output folder.
+
+### Licensed harness (not committed - same discipline as Stage 1's `APERTURE_TYPE_REUSE.md` harness)
+A standalone `net8.0-windows` console project (`Gate.exe`), referencing the built
+`SAM_Tas/build/*.dll` set (SAM.Core/SAM.Analytical/SAM.Geometry/SAM.Weather/SAM.Architectural,
+SAM.*.Tas, the Interop.* PIAs) by `HintPath` off a `LibsDir` MSBuild property, so the SAME harness binary
+can be pointed at either this branch's `SAM.Analytical.Tas.dll` or the `sow/2026-Q3` baseline's for the A/B.
+Commands implemented: `probe`, `sanity`, `diagnose <tbd>`, `diffconstruction <tbd>`, `counts <n>`,
+`variants`, `roundtrip`, `inspect <model>`, `export <model> <weather|-> <tbd>`, `simulate <tbd> <tsd>`,
+`compare <tsdA> <tsdB>`, `shaded <model> <weather|-> <dir>`. Source lived in a scratchpad and **has since
+been lost with that session** - if this needs re-running from a fresh checkout, re-derive it from this
+description and `ApertureDefinitionReuseTests.cs`'s fixture builders (`Library()`, `Glazing()`, `PartO()`)
+rather than trying to recover the scratchpad files.
+
+Steps 4, 5 and 6 were done with a second, smaller harness (`RT.exe`, also scratchpad-only), which is the
+simpler thing to re-derive: `Program.cs` + `Commands.cs`, referencing the same DLL set with
+`<Private>true</Private>` so the whole dependency closure lands in `bin`, plus
+`<UseWindowsForms>true</UseWindowsForms>` (without it `SAM.Analytical.Query.Color` dies on
+`System.Drawing.Common is not supported on this platform`) and the `SAM_SolarCalculator/build` assemblies
+for step 6. It prints one `key<TAB>value` line per observed field so two runs diff mechanically. Commands:
+
+    RT.exe rt <label> <outdir>                          # step 4: synthetic 2-window round trip
+    RT.exe inspect <model.sam> <out.txt>                # what a real model carries
+    RT.exe export <model.sam> <weather|-> <tbd> <out>   # ToTBD + full pre-simulation dump
+    RT.exe surfaces <tbd> <out.txt>                     # pre-simulation dump of an existing TBD
+    RT.exe sim <tbd> <tsd> <dayFirst> <dayLast>         # Modify.Simulate
+    RT.exe compare <tsdA> <tsdB> <out.txt>              # the numeric A/B over zone + surface variables
+    RT.exe shaded <model.sam> <weather|-> <label> <dir> # Simulate_Coverage -> ToTBD -> UpdateShading
+                                                        #   -> simulate -> SolarModel -> CopyResults
+
+Run each from two folder copies that differ only in `SAM.Analytical.Tas.dll`. The pre-simulation dump
+deliberately reports each surface's geometry and construction assignment on one line and its building-element
+NAME on another, because Stage 2 changes the name on purpose and only the first line is an A/B assertion.
+
+**Important environment note found while building the harness:** target **`net8.0-windows`**, matching
+`benchmark/SAM.Analytical.Tas.Benchmark.Cli` (the repo's own licensed-TAS CLI), NOT `net48`/`net481`. A
+`net48` console host reproduces a genuine, deterministic `SAM.Core` defect
+(`SAM.Core.Modify.SetValue(ParameterizedSAMObject, Assembly, ...)` re-adds the very `ParameterSet` it just
+populated via `parameterizedSAMObject.Add(parameterSet)`, which self-`Copy()`s onto itself) on the FIRST
+ever `.SetValue(SomeEnumParameter, value)` call on any object, because .NET Framework's
+`Dictionary<TKey,TValue>` bumps its mutation-version counter on every indexer write, including a same-key
+overwrite, so the self-enumerate-while-write throws `InvalidOperationException: Collection was modified`.
+.NET 8's `Dictionary` does not bump the version on a same-key overwrite, so the identical call sequence is
+harmless there - matching why the committed `net8.0` test suite and the `net8.0-windows` benchmark CLI never
+hit it. This is a **pre-existing `SAM.Core` defect, out of scope for Stage 2** (it lives in the sibling `SAM`
+repo, is unrelated to aperture-definition reuse, and is dormant under every environment this codebase is
+actually run in) - noted here only so it is not rediscovered from scratch; not fixed, not filed.
+Confirmed empirically with an isolated `sanity` probe (single `Space`, three `SetValue` calls) before
+retargeting.
+
+Two more harmless SAM.Core/SAM.Analytical quirks the harness had to route around while building its own
+synthetic test model (again, not Stage 2, not fixed): `Create.AdjacencyCluster(shells, spaces)` and
+`Create.Panels(shell)` both eventually touch `SAM.Analytical.ActiveSetting.Setting`, whose cold-start
+`GetDefault()` hits the exact same self-`Copy()` pattern above on its own second `SetValue` call in a
+process with no prior SAM settings load (e.g. this bare console harness, never the NUnit test host or a
+Revit/Grasshopper session, both of which warm this differently). Routed around by assembling the harness's
+`AdjacencyCluster`/`Panel`s by hand from `Query.PanelType(Vector3D)` and
+`Create.Panel(Construction, PanelType, Face3D)` (both pure, no `ActiveSetting` touch) instead.
+
+## Stage 2 - what landed
+
+- `Classes/ConstructionMaterialDefinition.cs`, `ConstructionLayerDefinition.cs`,
+  `ConstructionDefinition.cs`, `ApertureTypeAssignment.cs`, `BuildingElementDefinition.cs`,
+  `BuildingElementSeed.cs` - immutable, COM-free value equality over the whole of what the export writes.
+- `Query/ConstructionMaterialDefinition.cs` - the COM-free MIRROR of `Modify.UpdateMaterial`, field for
+  field and clamp for clamp. This is what lets a construction already in the TBD be proven equal to one
+  about to be written.
+- `Query/ConstructionDefinition.cs`, `Query/BuildingElementDefinition.cs` - COM-free factories from a SAM
+  `ApertureConstruction` / `Aperture`.
+- `Query/ConstructionDefinitionTBD.cs`, `Query/BuildingElementDefinitionTBD.cs` - seed READERS. They read
+  and decide nothing.
+- `Query/BuildingElementDefinitionSeed.cs` - both seed GATES, as pure functions of what was read, which is
+  what makes them testable with no installed TAS.
+- `Query/ConstructionSignature.cs`, `ConstructionName.cs`, `BuildingElementName.cs` - deterministic
+  FNV-1a signatures over exact Single bit patterns, and definition-derived naming.
+- `Classes/BuildingReuseCache.cs` - extended with constructions and aperture building elements. Purely
+  additive: 378 lines added, 7 removed, and all 7 are doc rewording. Stage 1's schedules, aperture types,
+  day types and assignment tracking are byte-for-byte unchanged.
+- `Modify/Update.cs` - the aperture block of the direct export resolves DEFINITIONS instead of names. The
+  physical-surface block, the panel block and the identity stamps are unchanged.
+
+## Stage 2 - decisions worth not re-deriving
+
+- **The bug this fixes is not just duplication.** Both objects were looked up BY NAME, and a name match was
+  taken as a content match. That was harmless only while the name carried the aperture's GUID; once names
+  are derived from the reusable SAM `ApertureConstruction`, a by-name lookup would hand one window another
+  window's glazing. Hence full content equality, and a deterministic collision suffix rather than adoption.
+- **`AperturePart` is construction identity even though TAS does not store it.** The aperture import pairs a
+  window's two constructions by stripping the `-pane`/`-frame` suffix and reading each side's layers, so a
+  pane and a frame with identical layers must not collapse - the round trip would lose half the window.
+  For the same reason the collision discriminator goes on the BASE (`SIM_EXT_GLZ_1F3A0C21 -pane`), keeping
+  the part suffix terminal.
+- **Underscores are KEPT in the construction name base**, unlike Stage 1's aperture-type naming. Real names
+  are full of them (`SIM_EXT_GLZ`) and this base is the round-trip identity of the `ApertureConstruction`;
+  stripping them silently renamed it. Found by a test, not by inspection.
+- **The new names match what the TCD route already writes** (`Convert.ToTCD_Constructions`:
+  `apertureConstruction.Name + " -pane"`), so the two routes agree and the round-tripped
+  `ApertureConstruction` now carries the model's own name instead of an aperture's unique name. That is a
+  genuine round-trip improvement, not just a rename.
+- **NaN compares equal to NaN in the Stage 2 definitions**, unlike Stage 1's `ApertureTypeDefinition`. A
+  material that states no conductivity stores NaN; under `==` such a layer would never equal itself and
+  every window would get its own construction. NaN is normalised to the canonical `float.NaN` on the way in
+  so the bit-pattern signature stays in agreement with equality, as signed zero already was.
+- **`ApertureType.Undefined` is a distinct value, not a missing one.** Refusing it would take a building
+  element away from an aperture that used to get one (the `Windows: ` prefix has always covered everything
+  that is not a door). It shares among its own kind and never merges with a real window.
+- **Mirror bugs can only cause under-reuse.** Two layers created in one export run through the same mirror
+  on the same input, so a mirror that disagreed with the writer would give both the same answer and both
+  the same TBD material. What it would cost is recognising a SEEDED construction.
+- **Refusals are discarded on this path.** `Modify.Update` returns `void` with no notes channel and adding
+  one would change its signature and every caller. Every outcome is the conservative one, so what is lost is
+  diagnosability. Stage 3 owns reporting.
+- **`UpdateBuildingElements` is unaffected**, despite decoding aperture GUIDs out of element names: it runs
+  only on the gbXML/T3D route in `WorkflowCalculator`, never after a direct `Modify.Update`.
+- **Seed classification is deferred** to the first lookup that needs it. `Modify.UpdateIZAMs` re-enters
+  `Modify.Update` once per air handling unit with a synthetic, aperture-less cluster, and classifying every
+  seeded construction's layers on each pass would be a per-IZAM COM cost paid for nothing.
+
+## Stage 2 - validation performed
+
+- `SAM_Tas.sln` builds with 0 errors (Debug) after the change; `SAM.Analytical.Tas` alone also builds clean.
+- `SAM.Analytical.Tas.TM59.Tests`: **337/337 pass**. 233 pre-existing (unchanged, including all 80 Stage 1
+  aperture-type tests) plus **104 new** in `ApertureDefinitionReuseTests.cs`.
+- The new tests found two genuine defects, both fixed before commit: the construction name base was
+  stripping underscores (so `SIM_EXT_GLZ` became `SIMEXTGLZ`), and an `ApertureType.Undefined` aperture was
+  being refused a building element altogether.
+- Licensed TAS: **not run.** See the merge gate above.
+
+---
+
+## Stage 1 (merged as PR #30) - retained for continuity
+
+The subsections below describe Stage 1 as it was developed on `feature/tas-aperturetype-reuse`; "same
+branch" in them means that branch, not this one.
+
+### Stage 1 correction pass (2026-08-21, on `feature/tas-aperturetype-reuse`, commits rewritten in place)
 
 Three focused fixes, no architecture change:
 
@@ -56,7 +490,7 @@ per `APERTURE_TYPE_REUSE.md`); the produced `.tbd` files live under `%TEMP%\aper
 Next step: open the Stage 1 PR (two commits: `feat(tas): reuse equivalent aperture types`,
 `test(tas): validate aperture type reuse`).
 
-### Codex review fixes (2026-08-21, same branch, one commit on top of the two Stage 1 commits)
+### Codex review fixes (2026-08-21, on `feature/tas-aperturetype-reuse`, one commit on top of the two Stage 1 commits)
 
 The Codex review of PR #30 raised two genuine findings; both are fixed:
 
