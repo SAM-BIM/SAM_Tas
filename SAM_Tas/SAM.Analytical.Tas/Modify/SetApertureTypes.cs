@@ -106,6 +106,10 @@ namespace SAM.Analytical.Tas
             // re-walked every panel each time (O(apertures * panels) on a 625-zone TM59 model).
             List<Tuple<BoundingBox3D, Aperture>> aperturesIndex = adjacencyCluster.AperturesWithBoundingBoxes();
 
+            //One COM pass over the building's reusable definitions, for the whole match. Without it every
+            //opening child re-read every aperture type and every schedule in the building.
+            BuildingReuseCache cache = new BuildingReuseCache(building);
+
             List<TBD.ApertureType> result = new List<TBD.ApertureType>();
 
             int count_Seen = 0;
@@ -184,7 +188,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Write, out List<int> childIndices);
+                    List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Write, out List<int> childIndices, null, cache);
                     if(apertureTypes == null || apertureTypes.Count == 0)
                     {
                         notes.AddRange(notes_Write ?? []);
@@ -266,9 +270,9 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
-        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, string name = null)
+        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, string name = null, BuildingReuseCache cache = null)
         {
-            return SetApertureTypes(building, buildingElement, openingProperties, out List<string> _, name);
+            return SetApertureTypes(building, buildingElement, openingProperties, out List<string> _, name, cache);
         }
 
         /// <summary>
@@ -277,9 +281,9 @@ namespace SAM.Analytical.Tas
         /// call instead of discarding it - the drop that previously made an incompatible or unprovable
         /// schedule invisible to the workflow.
         /// </summary>
-        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, out List<string> notes, string name = null)
+        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, out List<string> notes, string name = null, BuildingReuseCache cache = null)
         {
-            return SetApertureTypes(building, buildingElement, openingProperties, out notes, out List<int> _, name);
+            return SetApertureTypes(building, buildingElement, openingProperties, out notes, out List<int> _, name, cache);
         }
 
         /// <summary>
@@ -292,8 +296,17 @@ namespace SAM.Analytical.Tas
         /// on the aperture type this child got" need exactly this; checking the FIRST returned aperture type
         /// instead is what made a schedule delivered to a later child look missing, and one missing from a
         /// later child look delivered.
+        /// <para>
+        /// <b>Multiplicity is preserved exactly.</b> N opening children produce N distinct TBD aperture
+        /// types even when the children are identical: TAS keeps one entry per type on an element, so
+        /// assigning one type twice would collapse a two-opening window into a one-opening window. What
+        /// identical children DO share is with other elements - every window's second identical opening
+        /// uses the one type keyed at ordinal 2. See
+        /// <see cref="Query.ApertureTypeOrdinals(IEnumerable{ApertureTypeDefinition})"/>.
+        /// </para>
         /// </summary>
-        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, out List<string> notes, out List<int> childIndices, string name = null)
+        /// <param name="cache">The open document's reuse cache, or null to build a single-use one.</param>
+        public static List<TBD.ApertureType> SetApertureTypes(this Building building, buildingElement buildingElement, IOpeningProperties openingProperties, out List<string> notes, out List<int> childIndices, string name = null, BuildingReuseCache cache = null)
         {
             notes = [];
             childIndices = null;
@@ -304,9 +317,11 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            BuildingReuseCache cache_Temp = cache ?? new BuildingReuseCache(building);
+
             if(openingProperties is ISingleOpeningProperties)
             {
-                TBD.ApertureType apertureType = SetApertureType(building, buildingElement, (ISingleOpeningProperties)openingProperties, out string refusal, name);
+                TBD.ApertureType apertureType = SetApertureType(building, buildingElement, (ISingleOpeningProperties)openingProperties, out string refusal, name, -1, cache_Temp, 1);
                 if(apertureType == null)
                 {
                     notes.Add(NotePrefix_Issue + string.Format("Aperture type '{0}': {1}", name ?? buildingElement.name, refusal ?? "the aperture type could not be written, and the write reported no reason."));
@@ -326,6 +341,18 @@ namespace SAM.Analytical.Tas
                     return null;
                 }
 
+                //Resolved COM-free, for the whole element at once, because a child's ordinal is a property
+                //of the children BEFORE it: two identical children are occurrence 1 and occurrence 2 of one
+                //definition, whereas two different children are both occurrence 1 of their own.
+                List<ApertureTypeDefinition> apertureTypeDefinitions = new List<ApertureTypeDefinition>();
+                List<string> dayTypeNames = cache_Temp.DayTypeNames;
+                foreach (ISingleOpeningProperties single in singleOpeningProperties)
+                {
+                    apertureTypeDefinitions.Add(single.ApertureTypeDefinition(dayTypeNames, out string _));
+                }
+
+                List<int> ordinals = Query.ApertureTypeOrdinals(apertureTypeDefinitions);
+
                 List<TBD.ApertureType> result = new List<TBD.ApertureType>();
                 childIndices = new List<int>();
                 for (int i =0; i < singleOpeningProperties.Count; i++)
@@ -335,7 +362,7 @@ namespace SAM.Analytical.Tas
                     //index: named deliberately - the name argument stays defaulted here, as it always has.
                     //Passing the caller's name into this branch would rename every aperture type a
                     //multiple-opening aperture produces.
-                    TBD.ApertureType apertureType = SetApertureType(building, buildingElement, singleOpeningProperties[i], out string refusal, index: index);
+                    TBD.ApertureType apertureType = SetApertureType(building, buildingElement, singleOpeningProperties[i], out string refusal, null, index, cache_Temp, i < ordinals.Count ? ordinals[i] : -1);
                     if (apertureType == null)
                     {
                         notes.Add(NotePrefix_Issue + string.Format("Aperture type '{0}' (opening {1} of {2}): {3}", buildingElement.name, i + 1, singleOpeningProperties.Count, refusal ?? "the aperture type could not be written, and the write reported no reason."));
