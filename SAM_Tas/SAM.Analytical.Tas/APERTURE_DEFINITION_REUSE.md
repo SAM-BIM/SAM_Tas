@@ -6,7 +6,9 @@ cache extension this stage needs.
 
 **Scope: the direct `Modify.Update` export only.** The gbXML/T3D route, `UpdateBuildingElements`,
 `UpdateIds`, the import grouping, Stage 1 aperture-type and schedule semantics and the legacy aperture
-workflows are all untouched.
+workflows are all untouched — their CODE is unchanged. One of them has a KNOWN, ALREADY-ACCEPTED behavioural
+consequence when pointed at a Stage-2 TBD, spelled out where it belongs below rather than left implicit in
+"untouched": see "Known limitation: `UpdateBuildingElements` on a Stage-2 TBD".
 
 ---
 
@@ -279,6 +281,43 @@ construction), so it only separates pane-construction from frame-construction". 
 do not degrade that mapping — but the shaded-project run confirms it rather than assuming it.
 
 ---
+
+## Known limitation: `UpdateBuildingElements` on a Stage-2 TBD
+
+`Modify.UpdateBuildingElements` is a separate, public, supported follow-up API (also exposed as the
+`Tas.UpdateBuildingElements` Grasshopper component) that re-applies colour, opening-control writes and
+`FeatureShade`s onto an *already-exported* TBD, without a full re-export. It identifies the SAM aperture a
+`TBD.buildingElement` belongs to by decoding the aperture's own GUID out of the element's **name**
+(`Query.UniqueNameDecomposition` → `AdjacencyCluster.GetAperture(guid)`).
+
+That decode was safe as long as every aperture element's name carried its own aperture's GUID — true for
+every element the direct export wrote before this stage. Stage 2 element names are **definition-derived**
+(`Windows: SIM_EXT_GLZ -pane`, invariant 4 above) and carry no physical aperture identity at all — by design,
+since one shared element can now legitimately belong to many apertures, so there is no longer a single GUID
+that could go in the name.
+
+**Consequence:** feeding a Stage-2-produced TBD into `UpdateBuildingElements` cannot resolve any aperture
+element by name. Per element this means: colour falls back to the generic per-`ApertureType` default instead
+of the aperture's own (`Query.Color`); the opening-control/schedule write and the `FeatureShade` write are
+both skipped entirely for that element. This is **not silent corruption** — the 4-argument overload
+(`out List<string> notes`) increments `count_GlazingWithoutAperture` and reports it in the summary note the
+same way it already does for any TAS-authored/legacy TBD with no GUID-carrying name — but the 2-argument
+overload the Grasshopper component calls **discards `notes`**, so that surface reports only a boolean
+`successful`, with no visibility into the degradation. This second gap pre-dates Stage 2 (it already applied
+to any TAS-authored TBD) — Stage 2 adds a new, common case that triggers it.
+
+This was foreseen and explicitly deferred when the three-stage plan was approved: *"A Stage-2 TBD fed to
+[`UpdateBuildingElements`] hits the existing `count_GlazingWithoutAperture` note — degraded but honest;
+Stage 3 restores it via the instance mapping."* The fix — resolving elements via the definition-membership
+map (`Pane/FrameBuildingElementGuid` → stamped apertures) and the `ZoneSurfaceReference` surface index
+instead of name decoding, with name decoding kept only as the legacy fallback — is Stage 3's own first item
+(§F.1–F.3 of the plan), not something this stage can do without either putting physical identity back into
+shared names (defeating the point of sharing) or building the Stage 3 machinery early.
+
+**Until Stage 3 lands:** a model export pipeline that relies on `UpdateBuildingElements` as a follow-up step
+after the direct `Modify.Update` export (rather than a full re-export) will not get colour/opening-control/
+feature-shade updates on aperture elements from that follow-up call. A full re-export via `Modify.Update`
+itself is unaffected — it writes constructions and elements directly, never through this name-decode path.
 
 ## Out of scope for Stage 2
 

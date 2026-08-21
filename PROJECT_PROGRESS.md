@@ -38,6 +38,10 @@ The frozen three-stage plan both implement is
 `C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21).
 Stage 3 (physical-instance identity hardening on update/round-trip, the `UpdateBuildingElements`
 name-decode replacement, import grouping, refusal reporting on `Modify.Update`) is **not started**.
+Its first item is a known, already-planned consequence of Stage 2 that PR #31's Codex review caught
+independently: `UpdateBuildingElements` degrades (note-based, not silent corruption) when fed a Stage-2
+TBD, because Stage 2 element names no longer carry a single aperture's GUID by design — see
+`APERTURE_DEFINITION_REUSE.md`, "Known limitation: `UpdateBuildingElements` on a Stage-2 TBD".
 
 ---
 
