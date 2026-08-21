@@ -227,18 +227,19 @@ element are **never written to** and a distinct collision-suffixed object is cre
 several opening controls, sealed windows and doors resolves to one definition each with no physical GUID in
 any generated name.
 
-### Licensed TAS — IN PROGRESS (this session; EDSL Tas build 17044)
-
-**This stage must not be merged until every row here passes.**
+### Licensed TAS — COMPLETE, every row passes (2026-08-21; EDSL Tas build 17044)
 
 | Scenario | Expected | Result |
 |---|---|---|
 | 200 identical windows, direct export | 400 aperture surfaces; **2** constructions; **2** elements; Stage 1 type and schedule counts unchanged | **PASS** — 400 (200 pane + 200 frame); 2 constructions; 2 elements; 1 ApertureType, 0 schedules |
-| several constructions / controls / sealed windows / doors | one definition each, no GUID in any name | not yet run |
+| several constructions / controls / sealed windows / doors | one definition each, no GUID in any name | **PASS** — all 18 definition-variant scenarios (C1–C8, B1–B8) |
 | repeated export | **0** additional equivalent definitions | **PASS, after a fix** — see below |
-| round trip SAM → TBD → SAM | aperture count, geometry, pane/frame classification, construction layers, `OpeningProperties` all preserved | not yet run |
-| **A/B simulation** — same real model exported with the old per-aperture behaviour and with shared elements, both run through TAS/TSD | zone results numerically equivalent within solver noise | not yet run |
-| one real shaded project | `UpdateShading`, `CopyResults` and aperture solar-result mapping unaffected | not yet run |
+| round trip SAM → TBD → SAM | aperture count, geometry, pane/frame classification, construction layers, `OpeningProperties` all preserved | **PASS, A/B against `f3f5802`** — see below |
+| **A/B simulation** — same real model exported with the old per-aperture behaviour and with shared elements, both run through TAS/TSD | zone results numerically equivalent within solver noise | **PASS — exactly identical, not merely within noise.** Real 9-zone Part O model, 20 pane+frame windows, model's own weather, full year 1–365 both sides. Aperture building elements 40 → 3; all 110 physical `zoneSurface` rows and all 510 construction/material/width lines byte-identical *before* simulating. **4,616,520 result values compared (22 zone variables × 9 zones + 7 surface variables × 47 surface records, × 8760 h); 0 differing; max absolute and relative difference 0.** |
+| one real shaded project | `UpdateShading`, `CopyResults` and aperture solar-result mapping unaffected | **PASS.** Kolobrzeg room with real shading context, 3 pane+frame apertures, aperture elements 6 → 2. Full chain `Simulate_Coverage` → `ToTBD` → `UpdateShading` → TAS 1–365 → `Create.SolarModel` → `CopyResults`: **114 compared fields, 0 differing** (shade-day calendar, 7200 shade-proportion reads over 12 shaded surfaces, 12 linked faces / 12 coverage results / 3096 coverage values, 3 apertures mapped with 5 pane + 5 frame + 62 panel results and identical per-aperture sums), plus **928,560 TSD values, 0 differing.** |
+
+Full evidence, the pre-simulation equivalence table and the per-variable breakdown are in
+`PROJECT_PROGRESS.md`, "5. A/B TAS/TSD simulation" and "6. Real shaded-project regression".
 
 **Confirmed on licensed TAS:** the value a freshly added `buildingElement` carries for `ground`,
 `markDelete` and `width` is `0` for all three, live and after save/reopen — exactly what the seed gate
@@ -258,6 +259,19 @@ the material mirror rather than the building-element seed gate. Fixed by using t
 for those two fields on the opaque/transparent branches; verified end to end (repeat export now shows `+0`
 on Construction/BuildingElement/ApertureType/schedule/distinct-BE-guid) and against the full COM-free suite
 (337/337, unchanged). The conservative foreign-object refusal gates were not touched.
+
+**The round-trip row is an A/B, not an absolute comparison.** Comparing a round-tripped SAM model with its
+source finds real differences that have nothing to do with this stage — the import reassembles the exported
+pane and frame surfaces into one `Face3D` with a hole, so the aperture's own `GetFace3D().GetArea()` reads
+the frame ring rather than the whole opening; layer thicknesses come back through `float`; TBD stores no
+material `Group`, and its transparent `UpdateMaterial` overload writes neither `specificHeat` nor `density`,
+so both read back `NaN`. The row therefore asks only whether **Stage 2 differs from the `f3f5802` baseline**,
+and it does not: running the identical model and code path with only `SAM.Analytical.Tas.dll` swapped, all
+219 SAM-side fields and all 186 TBD construction/material fields are identical, and the only differences are
+the intended sharing effects (aperture building elements 4 → 3 over two windows, definition-derived names,
+and the `BuildingElementGuid` stamps that follow). Physical geometry is untouched: pane 0.99 m², frame
+0.21 m², exactly what `Aperture.GetFace3Ds` derives from the 1.2 m² source aperture, on both sides.
+Full field-by-field record in `PROJECT_PROGRESS.md`, "4. Round trip".
 
 `CopyResults` already matches apertures to solar surfaces by **geometry**, having recorded that the stamped
 building-element GUID "is actually the *construction* GUID (shared across all surfaces using the same

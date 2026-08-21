@@ -5,29 +5,29 @@
 Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 
 ## Last updated
-2026-08-21 - **Licensed-TAS acceptance IN PROGRESS, session paused here to switch machines.** Object counts,
-repeat-export (+ the one genuine defect it caught, now fixed) and all 18 definition-variant scenarios are
-done and PASS - see "Stage 2 - licensed acceptance progress" below. Round trip is PARTWAY: aperture count
-and `OpeningProperties` count PASS, but geometry (max area difference ~1.03 m2) and construction-layer
-comparison FAIL on the very first run, **not yet diagnosed** - status unknown (likely a harness geometry
-fidelity issue rather than a Stage 2 defect, since Stage 2 states physical surfaces/geometry are untouched,
-but this is NOT confirmed - do not assume). The A/B TAS/TSD simulation and the shaded-project regression
-have not been started. **The user is switching to another laptop with no TAS licence - the licensed run
-must continue on a TAS-licensed machine** (this one, when back, or another one that also has a working EDSL
-Tas licence).
+2026-08-21 - **Licensed-TAS acceptance COMPLETE. Every merge-gate row passes.** Object counts,
+repeat-export (+ the one genuine defect it caught, now fixed), all 18 definition-variant scenarios, the
+SAM -> TBD -> save/reopen -> SAM round trip, the **A/B TAS/TSD simulation** and the **real shaded-project
+regression** are all done and PASS - see "Stage 2 - licensed acceptance progress" below.
 
-**Immediate next step on resume:** diagnose the round-trip geometry/layer failures first (see "Round trip -
-IN PROGRESS, 2 unexplained failures" below for exactly where to pick up: `Aperture.GetThickness`/
-`GetFace3Ds(AperturePart)` were being read when the session paused, to check whether the harness's synthetic
-apertures state a frame thickness/offset TAS-side reconstruction expects that the harness never set -
-before concluding this is a real defect.**
+The headline: on a real 9-zone Part O model with 20 pane+frame windows, Stage 2 collapses 40 aperture
+building elements to 3 while leaving all 110 physical `zoneSurface`s, their geometry and their construction
+assignments byte-identical, and a full-year TAS simulation of both exports agrees on **4,616,520 result
+values with zero differences** - not "within solver noise", bit-identical. The shaded-project regression
+(`UpdateShading` -> TAS -> `Create.SolarModel` -> `CopyResults` -> aperture solar-result mapping) is
+likewise identical on every one of its 114 compared fields, with the same sharing (6 aperture elements -> 2)
+in effect.
+
+**Immediate next step:** open the Stage 2 PR. No production code changed after `97d1ab4f`; the only commits
+since are documentation recording this acceptance.
 
 ## Current status
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
 same opening control. Full detail, the S1-C0 probe result and the licensed-TAS acceptance table live in
 `SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`.
 
-**Stage 2 is implemented and awaiting the licensed-TAS gate.** The direct `Modify.Update` export now shares
+**Stage 2 is implemented and has PASSED the licensed-TAS gate** (2026-08-21, EDSL Tas build 17044).
+The direct `Modify.Update` export now shares
 one `TBD.Construction` and one aperture `TBD.buildingElement` across every aperture stating the same
 content, instead of creating one per aperture per part. 200 identical windows go from 400 constructions and
 400 elements to 2 and 2, while all 400 physical `zoneSurface`s remain. Full detail, invariants, seed gates,
@@ -41,9 +41,10 @@ name-decode replacement, import grouping, refusal reporting on `Modify.Update`) 
 
 ---
 
-## Stage 2 - blocking merge gate (NOT yet done)
+## Stage 2 - blocking merge gate (ALL ROWS NOW PASS - see "licensed acceptance progress" below)
 
-Do not merge Stage 2 without these. They need licensed TAS on this machine.
+These were the merge conditions. All three are now satisfied on licensed TAS; the evidence is recorded in
+the acceptance section below and summarised in `APERTURE_DEFINITION_REUSE.md`'s table.
 
 1. **A/B simulation.** Export the same real model twice - once with the old per-aperture building-element
    behaviour (`sow/2026-Q3`) and once with shared elements (this branch) - run TAS/TSD on both, and compare
@@ -157,48 +158,165 @@ branch's diff - confirmed via `git log`/`git diff f3f5802..HEAD`): `AperturePara
 the **pane's** colour; the frame always takes the type-derived default regardless. So 2 panes (one per
 colour) + 1 shared frame = 3 is the CORRECT expected count. Harness fixed, re-run, all 18 pass.
 
-### 4. Round trip - IN PROGRESS, 2 unexplained failures (session paused here)
-`Gate.exe roundtrip` (25 windows, two distinct constructions, half with `OpeningProperties`, all through
-`Modify.Update` -> `Convert.ToSAM(TBD.Building)`):
+### 4. Round trip - PASS, both former failures diagnosed by a licensed A/B against `f3f5802`
+The two rows previously recorded here as unexplained failures (geometry, construction layers) were
+**over-strict harness assertions, not Stage 2 regressions.** Settled by running the SAME round trip twice on
+this machine - once with `SAM.Analytical.Tas.dll` built from `f3f5802`, once from HEAD - over one small
+deterministic model, and diffing field by field. Method and result:
 
-- **PASS** - physical aperture count preserved (25 -> 25): shared `BuildingElementGuid` does **not**
-  collapse physical apertures, confirming invariant 9 (`BuildingElementGuid` is reuse-definition binding,
-  not physical identity) round-trips correctly even though only 4 distinct BE guids cover 25 apertures.
-- **PASS** - `OpeningProperties` preserved (13 -> 13 apertures carrying one).
-- **PASS** - pane/frame classification preserved (every imported construction has both a pane and a frame
-  layer list).
-- **FAIL** - geometry: max aperture area difference ~1.03 m2 (source apertures are nominally 1.0 m wide x
-  1.2 m tall = 1.2 m2, so this is not solver noise - something is materially different).
-- **FAIL** - construction layers: 1 mismatch reported between a source `ApertureConstruction`'s
-  pane/frame layers and the corresponding imported one.
+**Method.** A minimal `net8.0-windows` console harness (`RT.exe`, not committed, same discipline as the rest)
+builds one 5 x 4 x 3 m space with two 1.0 x 1.2 m `SIM_EXT_GLZ` windows (3-layer pane Glass/Air/Glass +
+Timber frame; window 1 carries `PartOOpeningProperties`, window 2 none), then runs
+`analyticalModel.ToTBD(path)` -> save/close -> `Convert.ToSAM(path, false)`, dumping ~520 named fields per
+run: SAM-side aperture geometry, part faces, layers, materials, opening properties and identity stamps;
+TBD-side constructions, every material property, both stored widths, building elements, colours, `BEType`
+and aperture types. Only `SAM.Analytical.Tas.dll` differs between the two runs; every other assembly, the
+model and the code path are identical. Both sides were run twice - fully deterministic apart from
+TAS-assigned GUIDs, including the collision-suffix hash.
 
-**Not yet diagnosed - genuinely unknown whether this is a harness artifact or a real defect.** Was mid-way
-through reading `Aperture.GetThickness(AperturePart)` / `Aperture.GetFace3Ds(AperturePart)`
-(`SAM/SAM.Analytical/Classes/Aperture.cs:283` and `:119`) to check whether the harness's synthetic
-apertures (`Gate/src/Runs.cs: RoundTrip()`, built via plain `new Aperture(apertureConstruction, polygon3D)`
-with no explicit frame width/offset parameter set) state a frame geometry the way a real, Revit-derived
-aperture would, or whether they degenerate to a zero-width/coincident frame that then reads back
-differently once through TBD. **Stage 2 does not touch physical geometry or the layer WRITE path at all**
-(see invariant 10 and "What each file does" in `APERTURE_DEFINITION_REUSE.md` - `Modify/Update.cs`'s
-physical-surface block is unchanged), which is why a harness-geometry explanation is the leading hypothesis
-- but this must be CONFIRMED, not assumed, before concluding the round-trip row passes. If it turns out to
-be real, the geometry read (`Convert.ToSAM_AdjacencyCluster`/`ToSAM_ApertureConstruction`) is Stage-3-owned
-territory per the doc's "Out of scope for Stage 2" section, and it may indicate Stage 2 exposed a
-pre-existing issue there rather than caused one - re-run the SAME round trip against the `sow/2026-Q3`
-baseline (see "A/B" below for how to build that side) to tell those apart before touching any code.
+**Result.** Of the ~520 fields: **219 SAM-side fields (every geometry, area, coordinate, layer, material,
+transparency, opening-property and count field) are identical between baseline and Stage 2, and all 186
+`tbd.construction` material/width fields are identical too.** The only differences are the intended Stage 2
+sharing effects - aperture building elements 4 -> 3 (the frame is now shared by both windows; the two panes
+stay separate because they genuinely differ: openable vs fixed changes both `Modify.SetColor`'s colour and
+the aperture-type count), the definition-derived names, and the `BuildingElementGuid` stamps that follow
+from them - plus TAS's own per-run GUIDs.
 
-### 5-6. A/B TAS/TSD simulation and real shaded-project regression - NOT YET RUN
-Harness commands are implemented (`export`, `simulate`, `compare`, `shaded`) but not yet exercised. For the
-A/B: build the harness a second time with `LibsDir` pointed at a `SAM_Tas/build` produced from the
-`sow/2026-Q3` baseline checkout (a separate worktree/clone, since this checkout is on
-`feature/tas-aperture-definition-reuse`), export the SAME real model through both, simulate both, then
-`Gate.exe compare <tsdA> <tsdB>`. For the shaded project: the user's real Part O model at
-`C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-07-15 PartO\SAM_zoningAM.sam`
-(confirmed to exist, 128 KB, itself a zip `AnalyticalModel`) plus a weather file (e.g.
-`GBR_London_TRY.epw` in the same folder) is a good candidate - not yet tried.
+- **PASS** - physical aperture count preserved (2 -> 2) on both sides; sharing a `BuildingElementGuid` does
+  not collapse physical apertures (invariant 9).
+- **PASS** - `OpeningProperties` preserved on both sides (1 -> 1 aperture carrying one).
+- **PASS** - pane/frame classification preserved on both sides.
+- **PASS (was FAIL)** - geometry. The physical geometry round-trips exactly: the exported pane surface is
+  0.99 m2 and the frame surface 0.21 m2, which is exactly what `Aperture.GetFace3Ds(Pane/Frame)` derives
+  from the 1.2 m2 source aperture, and the imported aperture's external edge is the same 1.2 m2 rectangle at
+  the same coordinates. What differs is only the imported `Aperture`'s composite `Face3D`: the export writes
+  frame and pane as two surfaces, and `Convert.ToSAM` reassembles them into one face with a hole, so
+  `GetFace3D().GetArea()` reads 0.21 (ring) where the source read 1.2 (solid). Comparing that composite area
+  to the source's is what the old assertion did, and it is the wrong comparison - the derived part faces,
+  which are what TAS simulates, agree to the last digit. **Identical on `f3f5802`.**
+- **PASS (was FAIL)** - construction layers. Every orig -> round-trip layer difference is float read-back or
+  a field TBD does not store, and every one of them is byte-identical on baseline: layer thicknesses
+  `0.016 -> 0.016000001` and `0.05 -> 0.050000001` (`Convert.ToSingle`), `ThermalConductivity
+  0.13 -> 0.129999995`, `Material.Group -> empty` (TBD has no such field), and - the first differing field
+  walking the pane layers in order - `Glass 6mm` `SpecificHeatCapacity 750 -> NaN` and `Density
+  2500 -> NaN`, because the TBD transparent `UpdateMaterial` overload writes neither (already documented in
+  `Query/ConstructionMaterialDefinition.cs`). Layer ORDER, names, count, `additionalHeatTransfer` (0),
+  construction type (`tcdTransparentConstruction` pane / `tcdOpaqueConstruction` frame) and both stored
+  widths all round-trip exactly. **Identical on `f3f5802`.**
 
-Continue all of steps 3 (done) through 6 in a session on a TAS-licensed machine; do not attempt the licensed
-rows on a machine without a working TAS licence.
+Two further pre-existing behaviours the A/B surfaced, both identical on baseline and therefore out of scope
+here (noted so they are not rediscovered): `Convert.ToSAM` groups a zone's aperture surfaces by
+`ApertureConstruction` guid and pairs them by descending area, so with two identical windows the imported
+`Frame`/`Pane` `ZoneSurfaceReference`s can cross-pair between windows; and a `PartOOpeningProperties`
+returns as a `ProfileOpeningProperties`. Neither is caused or changed by Stage 2.
+
+### 5. A/B TAS/TSD simulation - PASS, bit-identical
+**Model:** `C:\Users\Virtual Machine\Documents\SAM_daily\2026-08-05-PartO\SAM_zoningAM_v2.sam` - a real
+9-zone Part O flat: 9 spaces, 50 panels, **20 apertures, every one pane+frame and every one carrying
+`PartOOpeningProperties`**, all on the single `SIM_EXT_GLZ` aperture construction. Exported through
+`analyticalModel.ToTBD(path)` with the model's OWN embedded weather (`United Kingdom, London`, lat 51.48,
+lon -0.45) so both sides get byte-identical weather, then `Modify.Simulate(tbd, tsd, 1, 365)` - the same
+full-year run period, timestep, controls and shading on both sides. The only difference between the two
+runs is which `SAM.Analytical.Tas.dll` sits next to the harness.
+
+**Pre-simulation equivalence - confirmed BEFORE simulating, as the gate requires:**
+
+| | baseline `f3f5802` | Stage 2 |
+|---|---|---|
+| zones | 9 | 9 |
+| physical `zoneSurface`s | 110 | 110 |
+| of which aperture surfaces | 40 | 40 |
+| total surface area | 3379.999993533 m2 | 3379.999993533 m2 |
+| total aperture surface area | 64.799998492 m2 | 64.799998492 m2 |
+| Constructions (aperture) | 6 (2) | 6 (2) |
+| `ApertureType`s | 2 | 2 |
+| **aperture BuildingElements** | **40** | **3** |
+
+All **110 per-surface rows are byte-identical** - area, `type`, orientation, inclination, altitude,
+altitudeRange, room-surface count, the construction assigned, `BEType`, colour and aperture-type count -
+and all **510 construction/material/width lines are byte-identical**. Only the element NAMES differ, by
+design: baseline writes one element per aperture per part (`Windows: SIM_EXT_GLZ <aperture-guid> -pane`),
+Stage 2 writes `Windows: SIM_EXT_GLZ -frame` shared by all 20 windows plus two panes,
+`Windows: SIM_EXT_GLZ -pane` and `Windows: SIM_EXT_GLZ_AAF00869 -pane`, because the model states two
+distinct opening controls (`Opening Cd0.411 F1` and `Opening Cd0.477 F1`) - the same two `ApertureType`s
+both sides already carry.
+
+**Numeric result comparison:** 22 zone variables x 9 zones x 8760 h = 1,734,480 values, plus 7 surface
+variables x 47 TSD surface records x 8760 h = 2,882,040 values.
+
+- **values compared: 4,616,520**
+- **values differing: 0**
+- **maximum absolute difference: 0** (no location - there is no differing value)
+- **maximum relative difference: 0** (same)
+- verdict: **exactly zero**, not floating/solver noise. The two TSDs agree bit for bit.
+
+Zone variables compared: DryBulbTemperature, MeanRadiantTemperature, ResultantTemperature, SensibleLoad,
+HeatingLoad, CoolingLoad, SolarGain, LightingGain, InfiltrationVentilationGain, AirMovementGain,
+BuildingHeatTransfer, ExternalConductionOpaque, ExternalConductionGlazing, OccupantSensibleGain,
+EquipmentSensibleGain, HumidityRatio, relativeHumidity, LatentLoad, Infiltration, Ventilation,
+ZoneApertureFlowIn, ZoneApertureFlowOut. Surface variables: InternalSolarGain, ExternalSolarGain,
+InternalConduction, ExternalConduction, ApertureFlowIn, ApertureFlowOut, ApertureOpening. Five of the zone
+variables (SensibleLoad, HeatingLoad, CoolingLoad, Ventilation, AirMovementGain) are all-zero in this
+unconditioned model - stated so the count is not read as 22 independently varying quantities; the other 17
+carry real magnitudes (e.g. ExternalSolarGain up to 9956.4, InfiltrationVentilationGain up to 12345.1,
+DryBulbTemperature up to 31.77).
+
+### 6. Real shaded-project regression - PASS
+**Model:** `C:\Users\Virtual Machine\Documents\SAM_daily\2026-08-13-Shading\test-file-kolobrzeg.sam` -
+one room with a real shading context (56 panels for one space; location Kolobrzeg, lat 54.18, lon 15.58)
+and 3 pane+frame apertures. The Part O model above was tried first and produced no SAM solar results at all
+(see the note below), so this is the model the regression actually ran on.
+
+**Chain exercised, end to end, on both sides:** `SAM.Analytical.SolarCalculator.Modify.Simulate_Coverage`
+over TAS's own 25 representative shade days x 24 h = 600 timesteps (56 surfaces, 62 coverage results
+including each aperture's own `-pane`/`-frame` surfaces) -> `analyticalModel.ToTBD` -> `Modify.UpdateShading`
+-> `Modify.Simulate(1, 365)` -> `Create.SolarModel(building)` -> `Modify.CopyResults` -> aperture
+solar-result mapping.
+
+**Stage 2 sharing was really in effect here** - aperture BuildingElements 6 -> 2 - while the physical side
+stayed identical (12 zoneSurfaces, 6 of them aperture, total area 76.947999999 m2, 5 constructions, both
+sides).
+
+| Field | baseline `f3f5802` | Stage 2 |
+|---|---|---|
+| SAM coverage results attached | 62 (56 panels + aperture parts) | 62 |
+| `UpdateShading` returned | true | true |
+| TAS shade-day calendar | 25 days, no fallback | 25 days, no fallback |
+| shade-proportion values read back | 7200 | 7200 |
+| surfaces carrying shade data | 12 | 12 |
+| `Create.SolarModel` linked faces / coverage results / values | 12 / 12 / 3096 | 12 / 12 / 3096 |
+| `CopyResults` apertures with results | 3 | 3 |
+| `CopyResults` pane / frame / panel results | 5 / 5 / 62 | 5 / 5 / 62 |
+| per-aperture result rows (name, count, sum, max) | 10 | 10, identical |
+
+**114 comparable dumped fields, 0 differing** - including every per-surface shade-proportion value count,
+sum and max, and every per-aperture coverage row. The TAS simulation of the two shaded exports was compared
+the same way as step 5: **928,560 values, 0 differing, max absolute difference 0.**
+
+Re-running the same regression on the Part O model gave **146 comparable fields, 0 differing** and
+**4,616,520 TSD values, 0 differing** as well, but with the shading chain empty on both sides (see below),
+so it corroborates rather than adds coverage.
+
+**Two harness-side findings, neither a Stage 2 issue, recorded so they are not rediscovered:**
+- The shade read-back **must reopen the TBD read-WRITE**. On a read-only reopen TAS reports no shade-day
+  calendar at all and `GetShadeProportion` returns -1 for every hour, so the whole chain looks empty.
+  `Modify.LogShadeRoundTrip` already documents this; the harness hit it first-hand. `SAMTBDDocument.Dispose`
+  only `close()`s, so a read-write reopen does not modify the file.
+- `SAM.Analytical.SolarCalculator`'s `Simulate` and `Simulate_Coverage` both return **zero results** for the
+  Part O model (`SAM_zoningAM_v2.sam`) even though it has a Location, weather data and 21 sun-exposed faces
+  (9 roofs + 12 external walls), returning in ~0.1 s. The same calls work on the Kolobrzeg model. This lives
+  in the sibling `SAM_SolarCalculator` repo, is untouched by this branch's diff, and was **not** chased -
+  it is out of scope for Stage 2. It is only why the shaded regression uses the Kolobrzeg model.
+
+### A/B build recipe (proven)
+`git worktree add
+../SAM_Tas_baseline_f3f5802 f3f5802` next to this checkout so its `..\..\..\SAM\build` hint paths still
+resolve, then run MSBuild's `-t:Restore` and `-t:Build` as SEPARATE invocations (a combined
+`-t:Restore,Build` fails with `CS0518 Predefined type 'System.String' is not defined` because the build
+half does not pick up the assets the restore half just wrote). Use the .NET Framework MSBuild
+(`vswhere -latest -find MSBuild\**\Bin\MSBuild.exe`) - `dotnet build` cannot run `ResolveComReference`.
+`git diff f3f5802..HEAD` touches only `SAM.Analytical.Tas`, so the A/B is a one-DLL swap in an otherwise
+identical output folder.
 
 ### Licensed harness (not committed - same discipline as Stage 1's `APERTURE_TYPE_REUSE.md` harness)
 A standalone `net8.0-windows` console project (`Gate.exe`), referencing the built
@@ -207,10 +325,30 @@ SAM.*.Tas, the Interop.* PIAs) by `HintPath` off a `LibsDir` MSBuild property, s
 can be pointed at either this branch's `SAM.Analytical.Tas.dll` or the `sow/2026-Q3` baseline's for the A/B.
 Commands implemented: `probe`, `sanity`, `diagnose <tbd>`, `diffconstruction <tbd>`, `counts <n>`,
 `variants`, `roundtrip`, `inspect <model>`, `export <model> <weather|-> <tbd>`, `simulate <tbd> <tsd>`,
-`compare <tsdA> <tsdB>`, `shaded <model> <weather|-> <dir>`. Source lives in this session's scratchpad
-(`.../scratchpad/gate/src/*.cs`) - not durable across machines/sessions; if this needs re-running from a
-fresh checkout, re-derive it from this description and `ApertureDefinitionReuseTests.cs`'s fixture builders
-(`Library()`, `Glazing()`, `PartO()`) rather than trying to recover the scratchpad files.
+`compare <tsdA> <tsdB>`, `shaded <model> <weather|-> <dir>`. Source lived in a scratchpad and **has since
+been lost with that session** - if this needs re-running from a fresh checkout, re-derive it from this
+description and `ApertureDefinitionReuseTests.cs`'s fixture builders (`Library()`, `Glazing()`, `PartO()`)
+rather than trying to recover the scratchpad files.
+
+Steps 4, 5 and 6 were done with a second, smaller harness (`RT.exe`, also scratchpad-only), which is the
+simpler thing to re-derive: `Program.cs` + `Commands.cs`, referencing the same DLL set with
+`<Private>true</Private>` so the whole dependency closure lands in `bin`, plus
+`<UseWindowsForms>true</UseWindowsForms>` (without it `SAM.Analytical.Query.Color` dies on
+`System.Drawing.Common is not supported on this platform`) and the `SAM_SolarCalculator/build` assemblies
+for step 6. It prints one `key<TAB>value` line per observed field so two runs diff mechanically. Commands:
+
+    RT.exe rt <label> <outdir>                          # step 4: synthetic 2-window round trip
+    RT.exe inspect <model.sam> <out.txt>                # what a real model carries
+    RT.exe export <model.sam> <weather|-> <tbd> <out>   # ToTBD + full pre-simulation dump
+    RT.exe surfaces <tbd> <out.txt>                     # pre-simulation dump of an existing TBD
+    RT.exe sim <tbd> <tsd> <dayFirst> <dayLast>         # Modify.Simulate
+    RT.exe compare <tsdA> <tsdB> <out.txt>              # the numeric A/B over zone + surface variables
+    RT.exe shaded <model.sam> <weather|-> <label> <dir> # Simulate_Coverage -> ToTBD -> UpdateShading
+                                                        #   -> simulate -> SolarModel -> CopyResults
+
+Run each from two folder copies that differ only in `SAM.Analytical.Tas.dll`. The pre-simulation dump
+deliberately reports each surface's geometry and construction assignment on one line and its building-element
+NAME on another, because Stage 2 changes the name on purpose and only the first line is an A/B assertion.
 
 **Important environment note found while building the harness:** target **`net8.0-windows`**, matching
 `benchmark/SAM.Analytical.Tas.Benchmark.Cli` (the repo's own licensed-TAS CLI), NOT `net48`/`net481`. A
