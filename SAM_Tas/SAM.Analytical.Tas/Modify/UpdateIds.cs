@@ -107,6 +107,16 @@ namespace SAM.Analytical.Tas
                                         aperture.SetValue(apertureParameter_2, zoneSurfaceReference);
                                     }
 
+                                    // The definition-binding stamp: which TBD building element this physical
+                                    // surface's own element currently is. Re-stamped every pass, unlike the
+                                    // ZoneSurfaceReference pair above, because it names a DEFINITION rather
+                                    // than a physical instance - many apertures may legitimately share it,
+                                    // and it is what lets a later Modify.UpdateBuildingElements pass resolve
+                                    // an aperture's element WITHOUT decoding a GUID out of the element's own
+                                    // name (which a shared, definition-derived name no longer carries).
+                                    ApertureParameter buildingElementGuidParameter = aperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
+                                    aperture.SetValue(buildingElementGuidParameter, zoneSurface.buildingElement?.GUID);
+
                                     panel.RemoveAperture(aperture.Guid);
                                     panel.AddAperture(aperture);
                                     adjacencyCluster.AddObject(panel);

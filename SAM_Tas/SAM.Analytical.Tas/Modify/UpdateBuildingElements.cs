@@ -2,6 +2,7 @@
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Core.Tas;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TBD;
@@ -41,15 +42,53 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// One member of a shared aperture building element: the SAM aperture, and which half of it this
+        /// element is (fixed to the element's own <c>BEType</c>-derived part - a stamp claiming the wrong
+        /// part is a data inconsistency this never acts on).
+        /// </summary>
+        private readonly struct ApertureMember
+        {
+            public readonly Aperture Aperture;
+            public readonly AperturePart AperturePart;
+
+            public ApertureMember(Aperture aperture, AperturePart aperturePart)
+            {
+                Aperture = aperture;
+                AperturePart = aperturePart;
+            }
+        }
+
+        /// <summary>
         /// The same update, reporting the aperture-type refusals the write would otherwise drop silently.
         /// <para>
         /// <b>This is the FIRST of the two aperture-control write paths</b>, and the one that matters most
-        /// to a Part O diagnosis: it identifies the SAM aperture from the GUID encoded in the TBD building
-        /// element's own name, not from geometry, so it reaches apertures the later geometric
+        /// to a Part O diagnosis: it identifies the SAM aperture(s) a TBD building element stands for, then
+        /// writes colour, opening controls and feature shades - reaching apertures the later geometric
         /// <see cref="SetApertureTypes(Building, AdjacencyCluster, out List{string}, double)"/> step can
         /// miss entirely. A schedule written here is already on the aperture type by the time that step
         /// runs, which then reuses it by value. Knowing which of the two paths wrote a schedule - or that
         /// neither did - is the point of reporting from both.
+        /// </para>
+        /// <para>
+        /// <b>Resolution order, per element: (1) the definition-membership map, (2) legacy GUID-in-name
+        /// decoding.</b> An aperture stamps <see cref="Analytical.Tas.ApertureParameter.PaneBuildingElementGuid"/>/
+        /// <see cref="Analytical.Tas.ApertureParameter.FrameBuildingElementGuid"/> with the GUID of the TBD
+        /// element its export bound it to (<c>Modify.UpdateIds</c>) - many apertures may legitimately stamp
+        /// the SAME element under Stage 2's sharing, so an element can have more than one member. An element
+        /// no aperture stamps (every TAS-authored/legacy TBD element, and any Stage-2 element from before
+        /// this stamping existed) falls back to the ORIGINAL single-aperture name decode, unchanged, so
+        /// every legacy TBD behaves exactly as it always has.
+        /// </para>
+        /// <para>
+        /// <b>A shared element is never mutated once resolved with more than one current member.</b> Each
+        /// member's own required colour/opening-control state is compared against what the element ALREADY
+        /// carries (read before this pass writes anything). A member matching stays with the element - zero
+        /// writes, since every other member would see them. A member that no longer matches (its SAM
+        /// aperture changed since the export that bound it) is SPLIT onto its own element - reused if an
+        /// equivalent one already exists, created otherwise - and only that member's own physical
+        /// pane/frame <c>zoneSurface</c>s, resolved from its <c>Pane/FrameZoneSurfaceReference_1/2</c>
+        /// stamps, are rebound to it. The original element is never written to and, if every member
+        /// diverges, is simply left in place unused.
         /// </para>
         /// </summary>
         public static bool UpdateBuildingElements(this TBDDocument tBDDocument, AnalyticalModel analyticalModel, out List<string> notes)
@@ -60,6 +99,7 @@ namespace SAM.Analytical.Tas
             int count_ScheduleWritten = 0;
             int count_GlazingWithoutConstruction = 0;
             int count_GlazingWithoutAperture = 0;
+            int count_MembersSplit = 0;
 
             if (tBDDocument == null || analyticalModel == null)
                 return false;
@@ -103,6 +143,17 @@ namespace SAM.Analytical.Tas
             // aperture type in the building per opening child. Its lifetime is this one open document.
             BuildingReuseCache buildingReuseCache = new BuildingReuseCache(building);
 
+            // The DEFINITION-MEMBERSHIP MAP: TBD element GUID -> every aperture (and which half of it) that
+            // currently stamps that element as its binding. Built once from the SAM side; an element absent
+            // here was never bound by this stamping (a TAS-authored/legacy element, or a Stage-2 element
+            // exported before UpdateIds stamped this) and resolves through the legacy fallback instead.
+            Dictionary<string, List<ApertureMember>> membershipByElementGuid = BuildMembershipMap(analyticalModel.AdjacencyCluster);
+
+            // The SURFACE INDEX: (ZoneGuid, SurfaceNumber) -> the physical zoneSurface, for resolving a
+            // divergent member's OWN pane/frame surfaces off its ZoneSurfaceReference stamps, so a rebind
+            // touches only that member's surfaces and never another aperture sharing the same element.
+            Dictionary<string, TBD.IZoneSurface> surfaceIndex = BuildSurfaceIndex(building);
+
             foreach (buildingElement buildingElement in buildingElements)
             {
                 string name = Query.Name(buildingElement);
@@ -127,31 +178,6 @@ namespace SAM.Analytical.Tas
 
                 if(construction == null)
                 {
-                    HashSet<string> elementWords = new HashSet<string>();
-                    foreach (string w in name.Split(' '))
-                    {
-                        if (!string.IsNullOrWhiteSpace(w))
-                            elementWords.Add(w);
-                    }
-
-                    if (elementWords.Count != 0)
-                    {
-                        foreach (KeyValuePair<TBD.Construction, HashSet<string>> entry in constructionWordSets)
-                        {
-                            // Original behaviour: construction matches when every word of the construction's name
-                            // appears in the element's name (i.e. constructionWords is a subset of elementWords).
-                            if (entry.Value.IsSubsetOf(elementWords))
-                            {
-                                construction = entry.Key;
-                                break;
-                            }
-                        }
-                    }
-
-                }
-                    
-                if (construction == null)
-                {
                     //A glazing element that never finds a construction leaves this loop before the aperture
                     //block below, so it silently receives no aperture control either - a Part O schedule on
                     //that aperture would never be written on this path at all.
@@ -166,6 +192,122 @@ namespace SAM.Analytical.Tas
                 TBD.BuildingElementType buildingElementType = (TBD.BuildingElementType)buildingElement.BEType;
                 if(buildingElementType == TBD.BuildingElementType.GLAZING || buildingElementType == TBD.BuildingElementType.FRAMEELEMENT)
                 {
+                    AperturePart aperturePart = AperturePart.Undefined;
+                    switch (buildingElementType)
+                    {
+                        case TBD.BuildingElementType.GLAZING:
+                            aperturePart = AperturePart.Pane;
+                            break;
+
+                        case TBD.BuildingElementType.FRAMEELEMENT:
+                            aperturePart = AperturePart.Frame;
+                            break;
+                    }
+
+                    List<ApertureMember> members = null;
+                    if (!string.IsNullOrWhiteSpace(buildingElement.GUID) && membershipByElementGuid.TryGetValue(buildingElement.GUID, out List<ApertureMember> members_Temp) && members_Temp != null && members_Temp.Count != 0)
+                    {
+                        //Defensive: a member's own part must agree with this element's part. A mismatch is a
+                        //stale or corrupted stamp, not something to act on.
+                        members = members_Temp.FindAll(x => x.AperturePart == aperturePart);
+                    }
+
+                    if (members != null && members.Count != 0)
+                    {
+                        // ---------------------------------------------------------------------------------
+                        // STAGE 3 PATH: one or more apertures stamp this element as their binding. Split any
+                        // that no longer match what the element currently carries onto their own element;
+                        // the element itself is never written to on this path.
+                        // ---------------------------------------------------------------------------------
+
+                        uint colour_Current = buildingElement.colour;
+                        List<ApertureTypeDefinition> assignments_Current = buildingReuseCache.ExistingAssignments(buildingElement).ConvertAll(x => x.Value);
+
+                        ConstructionDefinition constructionDefinition_Element = null;
+
+                        foreach (ApertureMember member in members)
+                        {
+                            if (Query.ApertureMatchesExistingAssignment(member.Aperture, member.AperturePart, colour_Current, assignments_Current, buildingReuseCache.DayTypeNames))
+                            {
+                                //Already what this member asks for - zero writes, exactly as every other
+                                //member sharing this element would see them.
+                                continue;
+                            }
+
+                            //The element's own construction, read once and reused for every divergent
+                            //member of this element - construction identity on this route comes from the
+                            //by-name match above, not from anything an individual aperture states.
+                            if (constructionDefinition_Element == null)
+                            {
+                                constructionDefinition_Element = construction.ConstructionDefinition(out string _);
+                            }
+
+                            BuildingElementDefinition buildingElementDefinition_Required = member.Aperture.BuildingElementDefinition(member.AperturePart, constructionDefinition_Element, buildingReuseCache.DayTypeNames, out string _);
+
+                            buildingElement buildingElement_Target = buildingReuseCache.FindApertureBuildingElement(buildingElementDefinition_Required);
+                            bool created = false;
+                            if (buildingElement_Target == null)
+                            {
+                                string name_ApertureConstruction = member.Aperture.ApertureConstruction?.Name;
+                                string name_Target = Query.BuildingElementName(buildingReuseCache.BuildingElementNames(), buildingElementDefinition_Required, name_ApertureConstruction, out string _);
+                                if (name_Target != null)
+                                {
+                                    buildingElement_Target = building.AddBuildingElement();
+                                    buildingElement_Target.name = name_Target;
+
+                                    buildingReuseCache.ReserveApertureBuildingElement(buildingElement_Target);
+
+                                    buildingElement_Target.SetColor(member.Aperture, member.AperturePart);
+                                    buildingElement_Target.BEType = Query.BEType(member.AperturePart);
+                                    buildingElement_Target.AssignConstruction(construction);
+                                    created = true;
+
+                                    int count_ApertureTypes = 0;
+                                    if (member.AperturePart == AperturePart.Pane)
+                                    {
+                                        count_ApertureTypes = WriteOpeningControl(building, buildingElement_Target, member.Aperture, "the definition-membership map", buildingReuseCache, notes, ref count_ScheduleRequested, ref count_ScheduleWritten);
+                                    }
+
+                                    if (buildingElementDefinition_Required != null && buildingElementDefinition_Required.Proven && count_ApertureTypes == buildingElementDefinition_Required.ApertureTypeCount)
+                                    {
+                                        buildingReuseCache.RegisterApertureBuildingElement(buildingElement_Target, buildingElementDefinition_Required);
+                                    }
+                                }
+                            }
+
+                            if (buildingElement_Target == null)
+                            {
+                                notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) no longer matches TBD building element '{2}' ({3}) it is stamped to, and no name could be chosen for a replacement; it was left bound to the element it no longer matches.",
+                                    member.Aperture.Name, member.Aperture.Guid, buildingElement.name, buildingElement.GUID));
+                                continue;
+                            }
+
+                            count_MembersSplit++;
+
+                            //A NEWLY CREATED element's own feature shade follows its one founding member -
+                            //an element found by FindApertureBuildingElement already has whatever members
+                            //share it, and writing to it here would be exactly the mutation this whole path
+                            //exists to avoid.
+                            if (created && member.AperturePart == AperturePart.Pane && member.Aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade_New))
+                            {
+                                SetFeatureShades(building, buildingElement_Target, featureShade_New);
+                            }
+
+                            RebindMemberSurfaces(analyticalModel.AdjacencyCluster, surfaceIndex, member, buildingElement, buildingElement_Target, notes);
+                        }
+
+                        //Construction is assigned to every element every pass, exactly as before - it is not
+                        //part of what a member can diverge on within this route.
+                        buildingElement.AssignConstruction(construction);
+                        continue;
+                    }
+
+                    // -------------------------------------------------------------------------------------
+                    // LEGACY PATH: no aperture stamps this element. Unchanged from before Stage 3 - every
+                    // TAS-authored/legacy TBD resolves exactly as it always has, one element to one aperture
+                    // decoded from the element's own name.
+                    // -------------------------------------------------------------------------------------
+
                     Aperture aperture = null;
                     if(Query.UniqueNameDecomposition(buildingElement.name, out string prefix, out string name_Temp, out System.Guid? guid, out int id) && guid != null && guid.HasValue)
                     {
@@ -177,18 +319,6 @@ namespace SAM.Analytical.Tas
                         //The name did not decode to a GUID, or it did and the SAM model has no such
                         //aperture. Either way this pane gets no aperture control from this path.
                         count_GlazingWithoutAperture++;
-                    }
-
-                    AperturePart aperturePart = AperturePart.Undefined;
-                    switch (buildingElementType)
-                    {
-                        case TBD.BuildingElementType.GLAZING:
-                            aperturePart = AperturePart.Pane;
-                            break;
-
-                        case TBD.BuildingElementType.FRAMEELEMENT:
-                            aperturePart = AperturePart.Frame;
-                            break;
                     }
 
                     if(aperturePart != AperturePart.Undefined)
@@ -205,43 +335,7 @@ namespace SAM.Analytical.Tas
 
                     if(aperture != null && aperturePart == AperturePart.Pane)
                     {
-                        if(aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
-                        {
-                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp, out List<int> childIndices, null, buildingReuseCache);
-                            notes.AddRange(notes_Temp ?? []);
-
-                            //Only an aperture that states an availability schedule is tracked here, and only
-                            //a child whose schedule did NOT end up on the aperture type its own write
-                            //returned is narrated. A successful write contributes to the counters and says
-                            //nothing, so an ordinary run does not put one remark on the canvas per window.
-                            if (TryDescribeScheduleRequest(openingProperties, out string description_Request))
-                            {
-                                List<bool> scheduleRequests = openingProperties.OpeningScheduleRequests();
-                                int count_Requested = scheduleRequests.FindAll(x => x).Count;
-                                count_ScheduleRequested += count_Requested;
-
-                                ScheduleDeliveryByChild(apertureTypes, childIndices, scheduleRequests.Count, out bool[] delivered, out TBD.ApertureType[] apertureTypesByChild);
-
-                                List<int> undelivered = openingProperties.UndeliveredOpeningScheduleRequests(delivered);
-                                count_ScheduleWritten += count_Requested - undelivered.Count;
-
-                                foreach (int childIndex in undelivered)
-                                {
-                                    TBD.ApertureType apertureType = apertureTypesByChild[childIndex];
-                                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by GUID; {4}; requested {5}; but the schedule for {6} did not arrive - {7}",
-                                        buildingElement.name,
-                                        buildingElement.GUID,
-                                        aperture.Name,
-                                        aperture.Guid,
-                                        DescribeOpeningProperties(openingProperties),
-                                        description_Request,
-                                        scheduleRequests.Count == 1 ? "the opening" : string.Format("opening {0} of {1}", childIndex + 1, scheduleRequests.Count),
-                                        apertureType == null
-                                            ? "its write was refused - the refusal reported alongside this line names the reason."
-                                            : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType.name, DescribeApertureTypeProfile(apertureType) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
-                                }
-                            }
-                        }
+                        WriteOpeningControl(building, buildingElement, aperture, "GUID", buildingReuseCache, notes, ref count_ScheduleRequested, ref count_ScheduleWritten);
 
                         if (aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade))
                         {
@@ -257,7 +351,7 @@ namespace SAM.Analytical.Tas
 
             //Summarised at the front, so a reader sees what this path achieved before the individual lines.
             List<string> notes_Summary = [];
-            notes_Summary.Add(string.Format("Building elements: {0} opening(s) requested an availability schedule on the GUID-matched path, {1} of those read a schedule back off the TBD profile.", count_ScheduleRequested, count_ScheduleWritten));
+            notes_Summary.Add(string.Format("Building elements: {0} opening(s) requested an availability schedule, {1} of those read a schedule back off the TBD profile.", count_ScheduleRequested, count_ScheduleWritten));
 
             if (count_ScheduleRequested != count_ScheduleWritten)
             {
@@ -274,9 +368,230 @@ namespace SAM.Analytical.Tas
                 notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} GLAZING element(s) did not resolve to a SAM aperture from their own name, so no aperture control was written for them on this path.", count_GlazingWithoutAperture));
             }
 
+            if (count_MembersSplit != 0)
+            {
+                notes_Summary.Add(string.Format("Building elements: {0} aperture(s) no longer matched the shared element they were stamped to and were split onto their own element.", count_MembersSplit));
+            }
+
             notes.InsertRange(0, notes_Summary);
 
             return true;
+        }
+
+        /// <summary>
+        /// Writes a pane's opening control and narrates any availability-schedule request that did not
+        /// arrive, under whichever resolution method identified <paramref name="aperture"/> - reused by both
+        /// the definition-membership path and the legacy GUID-decode path so the diagnosis reads the same
+        /// way regardless of which one found the aperture. Returns how many aperture types the write
+        /// produced.
+        /// </summary>
+        private static int WriteOpeningControl(Building building, buildingElement buildingElement, Aperture aperture, string resolvedBy, BuildingReuseCache buildingReuseCache, List<string> notes, ref int count_ScheduleRequested, ref int count_ScheduleWritten)
+        {
+            if (!aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
+            {
+                return 0;
+            }
+
+            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp, out List<int> childIndices, null, buildingReuseCache);
+            notes.AddRange(notes_Temp ?? []);
+
+            //Only an aperture that states an availability schedule is tracked here, and only a child whose
+            //schedule did NOT end up on the aperture type its own write returned is narrated. A successful
+            //write contributes to the counters and says nothing, so an ordinary run does not put one remark
+            //on the canvas per window.
+            if (TryDescribeScheduleRequest(openingProperties, out string description_Request))
+            {
+                List<bool> scheduleRequests = openingProperties.OpeningScheduleRequests();
+                int count_Requested = scheduleRequests.FindAll(x => x).Count;
+                count_ScheduleRequested += count_Requested;
+
+                ScheduleDeliveryByChild(apertureTypes, childIndices, scheduleRequests.Count, out bool[] delivered, out TBD.ApertureType[] apertureTypesByChild);
+
+                List<int> undelivered = openingProperties.UndeliveredOpeningScheduleRequests(delivered);
+                count_ScheduleWritten += count_Requested - undelivered.Count;
+
+                foreach (int childIndex in undelivered)
+                {
+                    TBD.ApertureType apertureType = apertureTypesByChild[childIndex];
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by {4}; {5}; requested {6}; but the schedule for {7} did not arrive - {8}",
+                        buildingElement.name,
+                        buildingElement.GUID,
+                        aperture.Name,
+                        aperture.Guid,
+                        resolvedBy,
+                        DescribeOpeningProperties(openingProperties),
+                        description_Request,
+                        scheduleRequests.Count == 1 ? "the opening" : string.Format("opening {0} of {1}", childIndex + 1, scheduleRequests.Count),
+                        apertureType == null
+                            ? "its write was refused - the refusal reported alongside this line names the reason."
+                            : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType.name, DescribeApertureTypeProfile(apertureType) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
+                }
+            }
+
+            return apertureTypes == null ? 0 : apertureTypes.Count;
+        }
+
+        /// <summary>
+        /// Rebinds ONLY <paramref name="member"/>'s own physical pane/frame <c>zoneSurface</c>s - resolved
+        /// from its <c>Pane/FrameZoneSurfaceReference_1/2</c> stamps via <paramref name="surfaceIndex"/> -
+        /// from <paramref name="buildingElement_From"/> to <paramref name="buildingElement_To"/>, then
+        /// re-stamps the member's own <c>Pane/FrameBuildingElementGuid</c> to the new binding. Refuses a
+        /// surface it cannot resolve, or whose CURRENT element does not match what the member claims (a
+        /// stale stamp), rather than rebinding something another aperture might actually own.
+        /// </summary>
+        private static void RebindMemberSurfaces(AdjacencyCluster adjacencyCluster, Dictionary<string, TBD.IZoneSurface> surfaceIndex, ApertureMember member, buildingElement buildingElement_From, buildingElement buildingElement_To, List<string> notes)
+        {
+            ApertureParameter parameter_1 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_1 : ApertureParameter.PaneZoneSurfaceReference_1;
+            ApertureParameter parameter_2 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_2;
+
+            bool reboundAny = false;
+
+            foreach (ApertureParameter parameter in new[] { parameter_1, parameter_2 })
+            {
+                if (!member.Aperture.TryGetValue(parameter, out Core.Tas.ZoneSurfaceReference zoneSurfaceReference) || zoneSurfaceReference == null)
+                {
+                    continue;
+                }
+
+                string key = SurfaceKey(zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber);
+                if (!surfaceIndex.TryGetValue(key, out TBD.IZoneSurface zoneSurface) || zoneSurface == null)
+                {
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface (zone {2}, surface {3}) that could not be found in the TBD; that surface was left unbound.",
+                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
+                    continue;
+                }
+
+                //Stale-stamp guard: only rebind a surface that currently points at the element the aperture
+                //claims. A surface pointing somewhere else was reassigned by something outside this stamp's
+                //knowledge, and rebinding it would risk taking a surface that is no longer this aperture's.
+                string buildingElementGuid_Current = zoneSurface.buildingElement?.GUID;
+                if (!string.IsNullOrWhiteSpace(buildingElementGuid_Current) && buildingElementGuid_Current != buildingElement_From.GUID)
+                {
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1})'s surface (zone {2}, surface {3}) is currently bound to a different element than the aperture's own stamp claims; it was left unbound rather than guessed at.",
+                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
+                    continue;
+                }
+
+                zoneSurface.buildingElement = buildingElement_To;
+                reboundAny = true;
+            }
+
+            if (reboundAny)
+            {
+                ApertureParameter guidParameter = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
+
+                Aperture aperture_Temp = adjacencyCluster.GetAperture(member.Aperture.Guid, out Panel panel_Temp);
+                if (aperture_Temp != null && panel_Temp != null)
+                {
+                    aperture_Temp.SetValue(guidParameter, buildingElement_To.GUID);
+                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
+                    panel_Temp.AddAperture(aperture_Temp);
+                    adjacencyCluster.AddObject(panel_Temp);
+                }
+            }
+        }
+
+        /// <summary>
+        /// TBD element GUID -> every aperture (and which half of it) currently stamping that element as its
+        /// binding, read from <see cref="Analytical.Tas.ApertureParameter.PaneBuildingElementGuid"/>/
+        /// <see cref="Analytical.Tas.ApertureParameter.FrameBuildingElementGuid"/> across every aperture in
+        /// the model. An aperture stamping neither is absent from every entry - it resolves through the
+        /// legacy fallback instead.
+        /// </summary>
+        private static Dictionary<string, List<ApertureMember>> BuildMembershipMap(AdjacencyCluster adjacencyCluster)
+        {
+            Dictionary<string, List<ApertureMember>> result = new Dictionary<string, List<ApertureMember>>();
+
+            List<Panel> panels = adjacencyCluster?.GetPanels();
+            if (panels == null)
+            {
+                return result;
+            }
+
+            foreach (Panel panel in panels)
+            {
+                List<Aperture> apertures = panel?.Apertures;
+                if (apertures == null)
+                {
+                    continue;
+                }
+
+                foreach (Aperture aperture in apertures)
+                {
+                    if (aperture == null)
+                    {
+                        continue;
+                    }
+
+                    Add(ApertureParameter.PaneBuildingElementGuid, AperturePart.Pane);
+                    Add(ApertureParameter.FrameBuildingElementGuid, AperturePart.Frame);
+
+                    void Add(ApertureParameter guidParameter, AperturePart aperturePart)
+                    {
+                        if (!aperture.TryGetValue(guidParameter, out string buildingElementGuid) || string.IsNullOrWhiteSpace(buildingElementGuid))
+                        {
+                            return;
+                        }
+
+                        if (!result.TryGetValue(buildingElementGuid, out List<ApertureMember> members))
+                        {
+                            members = new List<ApertureMember>();
+                            result[buildingElementGuid] = members;
+                        }
+
+                        members.Add(new ApertureMember(aperture, aperturePart));
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// (ZoneGuid, SurfaceNumber) -> the physical <c>zoneSurface</c>, over every zone in the building -
+        /// the resolution <see cref="RebindMemberSurfaces"/> needs to turn a
+        /// <see cref="Core.Tas.ZoneSurfaceReference"/> stamp back into the real TBD object.
+        /// </summary>
+        private static Dictionary<string, TBD.IZoneSurface> BuildSurfaceIndex(Building building)
+        {
+            Dictionary<string, TBD.IZoneSurface> result = new Dictionary<string, TBD.IZoneSurface>();
+
+            List<TBD.zone> zones = building.Zones();
+            if (zones == null)
+            {
+                return result;
+            }
+
+            foreach (TBD.zone zone in zones)
+            {
+                if (zone == null)
+                {
+                    continue;
+                }
+
+                List<TBD.IZoneSurface> zoneSurfaces = zone.ZoneSurfaces();
+                if (zoneSurfaces == null)
+                {
+                    continue;
+                }
+
+                foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces)
+                {
+                    if (zoneSurface == null)
+                    {
+                        continue;
+                    }
+
+                    result[SurfaceKey(zone.GUID, zoneSurface.number)] = zoneSurface;
+                }
+            }
+
+            return result;
+        }
+
+        private static string SurfaceKey(string zoneGuid, int surfaceNumber)
+        {
+            return string.Format("{0}|{1}", zoneGuid, surfaceNumber);
         }
     }
 }
