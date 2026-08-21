@@ -227,24 +227,37 @@ element are **never written to** and a distinct collision-suffixed object is cre
 several opening controls, sealed windows and doors resolves to one definition each with no physical GUID in
 any generated name.
 
-### Licensed TAS — NOT YET RUN
+### Licensed TAS — IN PROGRESS (this session; EDSL Tas build 17044)
 
-**This stage must not be merged without it.** The two items below are the gate.
+**This stage must not be merged until every row here passes.**
 
-| Scenario | Expected |
-|---|---|
-| 200 identical windows, direct export | 400 aperture surfaces; **2** constructions; **2** elements; Stage 1 type and schedule counts unchanged |
-| several constructions / controls / sealed windows / doors | one definition each, no GUID in any name |
-| repeated export | **0** additional equivalent definitions |
-| round trip SAM → TBD → SAM | aperture count, geometry, pane/frame classification, construction layers, `OpeningProperties` all preserved |
-| **A/B simulation** — same real model exported with the old per-aperture behaviour and with shared elements, both run through TAS/TSD | zone results numerically equivalent within solver noise |
-| one real shaded project | `UpdateShading`, `CopyResults` and aperture solar-result mapping unaffected |
+| Scenario | Expected | Result |
+|---|---|---|
+| 200 identical windows, direct export | 400 aperture surfaces; **2** constructions; **2** elements; Stage 1 type and schedule counts unchanged | **PASS** — 400 (200 pane + 200 frame); 2 constructions; 2 elements; 1 ApertureType, 0 schedules |
+| several constructions / controls / sealed windows / doors | one definition each, no GUID in any name | not yet run |
+| repeated export | **0** additional equivalent definitions | **PASS, after a fix** — see below |
+| round trip SAM → TBD → SAM | aperture count, geometry, pane/frame classification, construction layers, `OpeningProperties` all preserved | not yet run |
+| **A/B simulation** — same real model exported with the old per-aperture behaviour and with shared elements, both run through TAS/TSD | zone results numerically equivalent within solver noise | not yet run |
+| one real shaded project | `UpdateShading`, `CopyResults` and aperture solar-result mapping unaffected | not yet run |
 
-**Specifically to confirm on licensed TAS**, because it cannot be established without it: the value a
-freshly added `buildingElement` carries for `ground`, `markDelete` and `width`. The seed gate refuses
-anything non-zero there. If TBD's own default is non-zero, no seeded element is ever adopted — safe in
-itself (under-reuse), but it would make the "repeated export adds nothing" row fail, and a third export
-could then hit the double-name refusal. The repeated-export row is what detects this.
+**Confirmed on licensed TAS:** the value a freshly added `buildingElement` carries for `ground`,
+`markDelete` and `width` is `0` for all three, live and after save/reopen — exactly what the seed gate
+already assumed. **No fix was needed here.**
+
+**A fix WAS needed one level down, on the construction-material mirror**, found by this exact repeated-export
+row. `Query.ConstructionMaterialDefinition` (`Query/ConstructionMaterialDefinition.cs`) mirrors what
+`Modify.UpdateMaterial` writes onto a fresh `TBD.material`; it assumed a fresh, untouched
+`dynamicViscosity`/`convectionCoefficient` reads back as `0` for opaque and transparent materials (accurate
+that the opaque/transparent `UpdateMaterial` overloads never write them — only a `GasMaterial` does — but
+wrong about what TAS's own default for an untouched field is). Licensed TAS reports `1E-05`/`0.001`, not
+`0`. That mismatch made every opaque/transparent layer compare as content-different from its own
+just-created seed, so a repeated export created a second, collision-suffixed Construction and
+BuildingElement instead of reusing the first — the exact "repeated export adds nothing" failure this row
+exists to catch, and the same class of issue anticipated below for `ground`/`markDelete`/`width`, just on
+the material mirror rather than the building-element seed gate. Fixed by using the confirmed TAS defaults
+for those two fields on the opaque/transparent branches; verified end to end (repeat export now shows `+0`
+on Construction/BuildingElement/ApertureType/schedule/distinct-BE-guid) and against the full COM-free suite
+(337/337, unchanged). The conservative foreign-object refusal gates were not touched.
 
 `CopyResults` already matches apertures to solar surfaces by **geometry**, having recorded that the stamped
 building-element GUID "is actually the *construction* GUID (shared across all surfaces using the same

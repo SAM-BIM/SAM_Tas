@@ -5,9 +5,22 @@
 Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 
 ## Last updated
-2026-08-21 - **Stage 2 (reusable TBD aperture constructions and building elements) implemented, unit- and
-fake-COM-validated, and committed in two commits. NOT yet validated on licensed TAS, and must not be
-merged until it is** - see "Stage 2 - blocking merge gate" below.
+2026-08-21 - **Licensed-TAS acceptance IN PROGRESS, session paused here to switch machines.** Object counts,
+repeat-export (+ the one genuine defect it caught, now fixed) and all 18 definition-variant scenarios are
+done and PASS - see "Stage 2 - licensed acceptance progress" below. Round trip is PARTWAY: aperture count
+and `OpeningProperties` count PASS, but geometry (max area difference ~1.03 m2) and construction-layer
+comparison FAIL on the very first run, **not yet diagnosed** - status unknown (likely a harness geometry
+fidelity issue rather than a Stage 2 defect, since Stage 2 states physical surfaces/geometry are untouched,
+but this is NOT confirmed - do not assume). The A/B TAS/TSD simulation and the shaded-project regression
+have not been started. **The user is switching to another laptop with no TAS licence - the licensed run
+must continue on a TAS-licensed machine** (this one, when back, or another one that also has a working EDSL
+Tas licence).
+
+**Immediate next step on resume:** diagnose the round-trip geometry/layer failures first (see "Round trip -
+IN PROGRESS, 2 unexplained failures" below for exactly where to pick up: `Aperture.GetThickness`/
+`GetFace3Ds(AperturePart)` were being read when the session paused, to check whether the harness's synthetic
+apertures state a frame thickness/offset TAS-side reconstruction expects that the harness never set -
+before concluding this is a real defect.**
 
 ## Current status
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
@@ -51,6 +64,178 @@ writes none of them. If TBD's own default is non-zero, no seeded element is ever
 (under-reuse, never unsafe sharing), but the "repeated export adds nothing" row would fail and a third
 export could then hit the double-name refusal. That row is what detects it; if it fails, relax those three
 fields to "equal to what a freshly created element reports" rather than "zero".
+
+**RESOLVED on licensed TAS (2026-08-21):** a freshly created `TBD.buildingElement` reports `ground=0`,
+`markDelete=0`, `width=0`, `ghost=0` - live and after save/reopen. The seed gate's zero assumption was
+already correct for these three fields; **no fix was needed there.**
+
+**A genuine defect WAS found, one level down, by the exact same class of check** - see "Stage 2 - licensed
+acceptance progress" below: `Query.ConstructionMaterialDefinition`'s opaque/transparent branches assumed a
+fresh `TBD.material`'s untouched `dynamicViscosity`/`convectionCoefficient` read back as `0`; licensed TAS
+reports `1E-05`/`0.001`. Fixed and verified - see that section.
+
+---
+
+## Stage 2 - licensed acceptance progress (this session, on this machine)
+
+**Environment:** EDSL Tas build 17044, `HKLM\SOFTWARE\EDSL\TasManager`, COM confirmed live
+(`New-Object -ComObject TBD.Document` succeeds). A standalone harness (`Gate.exe`, **not committed** - see
+"Licensed harness" below, same discipline as Stage 1's) drives the real `Modify.Update` against real `.tbd`
+files through TBD COM.
+
+### 0. Starting-state confirmation - PASS
+Branch `feature/tas-aperture-definition-reuse`; HEAD contains `a178124` and `a5a98ed`; base `f3f5802` is an
+ancestor; `git status` clean; `git diff --stat f3f5802..HEAD` touches only
+`SAM_Tas/SAM.Analytical.Tas/**`, `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ApertureDefinitionReuseTests.cs`,
+and the two docs (`APERTURE_DEFINITION_REUSE.md`, `PROJECT_PROGRESS.md`) - no `SAM`, `SAM_Tas_Grasshopper`,
+`UpdateBuildingElements`/`UpdateIds`/import-grouping/gbXML/T3D files touched. `SAM.Analytical.Tas.csproj`
+builds clean (0 errors, Debug) against the licensed interop.
+
+### 1. Fresh-object defaults probe - PASS, no gate fix needed
+`Gate.exe probe`: a fresh `TBD.buildingElement` -> `ground=0 markDelete=0 width=0 ghost=0 BEType=0
+colour=0`, unchanged after save/reopen. Matches the seed gate's assumption exactly.
+
+### 2A. 200 identical pane+frame windows, first export - PASS
+`Gate.exe counts 200`: 400 aperture zoneSurfaces (200 pane + 200 frame) over 200 physical apertures; exactly
+**2** aperture Constructions (`SIM_EXT_GLZ -pane`, `SIM_EXT_GLZ -frame`); exactly **2** aperture
+BuildingElements (`Windows: SIM_EXT_GLZ -pane`, `Windows: SIM_EXT_GLZ -frame`); **1** Stage 1 ApertureType
+(`Opening Cd0.395 F1`, identical opening control on all 200); **0** schedules (no schedule-bearing control
+used); 2 distinct aperture BuildingElement guids; 0 part-mismatched surfaces (every element's own
+construction is the same part as the element).
+
+### 2B. Repeat export into the same store - FOUND A GENUINE DEFECT, THEN FIXED, THEN PASS
+**First run (before the fix):** the second `Modify.Update` call into the SAME open building produced
+`+2 Construction, +2 BuildingElement` (collision-suffixed names, e.g. `SIM_EXT_GLZ_5EFF1698 -pane`,
+`Windows: SIM_EXT_GLZ_A47E0E09 -pane`) instead of `+0` - a real "repeated export adds nothing" **failure**.
+
+**Diagnosis.** Neither the seed gate's own refusal checks were firing (`Gate.exe diagnose` showed both the
+original and the new collision-suffixed objects individually passing their seed gates with `proven=true`) -
+the mismatch was in field-by-field content EQUALITY between the fresh, factory-computed
+`ConstructionDefinition` and the one read back off the just-created `TBD.Construction`. A targeted
+field-by-field diff (`Gate.exe diffconstruction`) isolated it to exactly two fields on every opaque
+(`Timber`) and transparent (`Glass 6mm`) material layer: `dynamicViscosity` and `convectionCoefficient`.
+`Query.ConstructionMaterialDefinition` (the COM-free mirror of `Modify.UpdateMaterial`) assumed these read
+back as `0` for opaque/transparent materials, because `UpdateMaterial` never writes them for those two
+kinds (only for `GasMaterial`) - the code's own comment already said "a fresh TBD material's own values
+stand", it just had the value wrong. Licensed TAS reports `dynamicViscosity = 1E-05` and
+`convectionCoefficient = 0.001` on a material `construction.AddMaterial()` creates and the opaque/transparent
+`UpdateMaterial` overload leaves those two fields untouched on - confirmed by reading back three separate
+already-exported opaque/transparent materials (frame Timber, both pane Glass 6mm layers), all agreeing
+exactly, while the one Gas layer (which IS written) matched the mirror already.
+
+**Fix applied:** `SAM_Tas/SAM.Analytical.Tas/Query/ConstructionMaterialDefinition.cs` - the opaque and
+transparent branches now use the confirmed TAS defaults (`1E-05f`/`0.001f`, named constants
+`FreshOpaqueOrTransparentDynamicViscosity`/`FreshOpaqueOrTransparentConvectionCoefficient`) instead of `0`
+for these two fields. This is exactly the same class of correction the merge-gate note already anticipated
+for the BuildingElement seed gate's `ground`/`markDelete`/`width` (which turned out not to need it) - here
+applied one level down, on the construction-material mirror, where it genuinely was needed. Nothing about
+the conservative foreign-object refusal gates was touched or weakened; this is purely the "what does a
+value we never write read back as" mirror.
+
+**Verification after the fix:**
+- `SAM.Analytical.Tas.csproj` rebuilds clean (Debug, 0 errors).
+- `SAM.Analytical.Tas.TM59.Tests` (net8.0): **337/337 pass** (was already 337/337 before the fix - the fix
+  only changes what a value the tests never assert on-the-nose reads back as on real TAS; no COM-free test
+  regressed or needed updating).
+- `Gate.exe counts 200` re-run end to end: repeat-export deltas are now **Construction +0, BuildingElement
+  +0, ApertureType +0, schedule +0, distinct aperture BE guid +0, part-mismatched surface +0** - the gate
+  row now passes. (Zone +1 and aperture zoneSurface +400 on the repeat are expected: a repeat export adds a
+  second zone/set of physical surfaces, exactly as Stage 1's own repeat-export scenario does.)
+
+### 3. Definition variants - PASS, all 18
+`Gate.exe variants`: construction variants C1-C8 (identical pane+frame reuse; different material; different
+width; different layer order; frame-shared-across-different-panes; different frame material; pane-never-
+equals-frame-even-with-identical-layers; same preferred name + different content -> deterministic
+hash-suffixed distinct names) and building-element variants B1-B8 (different construction; different
+colour; different opening control; no-openings bare element; opening multiplicity; one-vs-two-identical-
+openings; window != door; `ApertureType.Undefined` still gets an element) **all match expectations**, and no
+generated name contains a physical aperture GUID or `aperture.UniqueName()` in any scenario.
+
+**B2 (colour) needed the harness's own expectation corrected, not the code.** First run expected 4 elements
+(2 colours x 2 parts) and got 3; diagnosed by reading `Query/Color.cs` (pre-Stage-2, untouched by this
+branch's diff - confirmed via `git log`/`git diff f3f5802..HEAD`): `ApertureParameter.Color` only overrides
+the **pane's** colour; the frame always takes the type-derived default regardless. So 2 panes (one per
+colour) + 1 shared frame = 3 is the CORRECT expected count. Harness fixed, re-run, all 18 pass.
+
+### 4. Round trip - IN PROGRESS, 2 unexplained failures (session paused here)
+`Gate.exe roundtrip` (25 windows, two distinct constructions, half with `OpeningProperties`, all through
+`Modify.Update` -> `Convert.ToSAM(TBD.Building)`):
+
+- **PASS** - physical aperture count preserved (25 -> 25): shared `BuildingElementGuid` does **not**
+  collapse physical apertures, confirming invariant 9 (`BuildingElementGuid` is reuse-definition binding,
+  not physical identity) round-trips correctly even though only 4 distinct BE guids cover 25 apertures.
+- **PASS** - `OpeningProperties` preserved (13 -> 13 apertures carrying one).
+- **PASS** - pane/frame classification preserved (every imported construction has both a pane and a frame
+  layer list).
+- **FAIL** - geometry: max aperture area difference ~1.03 m2 (source apertures are nominally 1.0 m wide x
+  1.2 m tall = 1.2 m2, so this is not solver noise - something is materially different).
+- **FAIL** - construction layers: 1 mismatch reported between a source `ApertureConstruction`'s
+  pane/frame layers and the corresponding imported one.
+
+**Not yet diagnosed - genuinely unknown whether this is a harness artifact or a real defect.** Was mid-way
+through reading `Aperture.GetThickness(AperturePart)` / `Aperture.GetFace3Ds(AperturePart)`
+(`SAM/SAM.Analytical/Classes/Aperture.cs:283` and `:119`) to check whether the harness's synthetic
+apertures (`Gate/src/Runs.cs: RoundTrip()`, built via plain `new Aperture(apertureConstruction, polygon3D)`
+with no explicit frame width/offset parameter set) state a frame geometry the way a real, Revit-derived
+aperture would, or whether they degenerate to a zero-width/coincident frame that then reads back
+differently once through TBD. **Stage 2 does not touch physical geometry or the layer WRITE path at all**
+(see invariant 10 and "What each file does" in `APERTURE_DEFINITION_REUSE.md` - `Modify/Update.cs`'s
+physical-surface block is unchanged), which is why a harness-geometry explanation is the leading hypothesis
+- but this must be CONFIRMED, not assumed, before concluding the round-trip row passes. If it turns out to
+be real, the geometry read (`Convert.ToSAM_AdjacencyCluster`/`ToSAM_ApertureConstruction`) is Stage-3-owned
+territory per the doc's "Out of scope for Stage 2" section, and it may indicate Stage 2 exposed a
+pre-existing issue there rather than caused one - re-run the SAME round trip against the `sow/2026-Q3`
+baseline (see "A/B" below for how to build that side) to tell those apart before touching any code.
+
+### 5-6. A/B TAS/TSD simulation and real shaded-project regression - NOT YET RUN
+Harness commands are implemented (`export`, `simulate`, `compare`, `shaded`) but not yet exercised. For the
+A/B: build the harness a second time with `LibsDir` pointed at a `SAM_Tas/build` produced from the
+`sow/2026-Q3` baseline checkout (a separate worktree/clone, since this checkout is on
+`feature/tas-aperture-definition-reuse`), export the SAME real model through both, simulate both, then
+`Gate.exe compare <tsdA> <tsdB>`. For the shaded project: the user's real Part O model at
+`C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-07-15 PartO\SAM_zoningAM.sam`
+(confirmed to exist, 128 KB, itself a zip `AnalyticalModel`) plus a weather file (e.g.
+`GBR_London_TRY.epw` in the same folder) is a good candidate - not yet tried.
+
+Continue all of steps 3 (done) through 6 in a session on a TAS-licensed machine; do not attempt the licensed
+rows on a machine without a working TAS licence.
+
+### Licensed harness (not committed - same discipline as Stage 1's `APERTURE_TYPE_REUSE.md` harness)
+A standalone `net8.0-windows` console project (`Gate.exe`), referencing the built
+`SAM_Tas/build/*.dll` set (SAM.Core/SAM.Analytical/SAM.Geometry/SAM.Weather/SAM.Architectural,
+SAM.*.Tas, the Interop.* PIAs) by `HintPath` off a `LibsDir` MSBuild property, so the SAME harness binary
+can be pointed at either this branch's `SAM.Analytical.Tas.dll` or the `sow/2026-Q3` baseline's for the A/B.
+Commands implemented: `probe`, `sanity`, `diagnose <tbd>`, `diffconstruction <tbd>`, `counts <n>`,
+`variants`, `roundtrip`, `inspect <model>`, `export <model> <weather|-> <tbd>`, `simulate <tbd> <tsd>`,
+`compare <tsdA> <tsdB>`, `shaded <model> <weather|-> <dir>`. Source lives in this session's scratchpad
+(`.../scratchpad/gate/src/*.cs`) - not durable across machines/sessions; if this needs re-running from a
+fresh checkout, re-derive it from this description and `ApertureDefinitionReuseTests.cs`'s fixture builders
+(`Library()`, `Glazing()`, `PartO()`) rather than trying to recover the scratchpad files.
+
+**Important environment note found while building the harness:** target **`net8.0-windows`**, matching
+`benchmark/SAM.Analytical.Tas.Benchmark.Cli` (the repo's own licensed-TAS CLI), NOT `net48`/`net481`. A
+`net48` console host reproduces a genuine, deterministic `SAM.Core` defect
+(`SAM.Core.Modify.SetValue(ParameterizedSAMObject, Assembly, ...)` re-adds the very `ParameterSet` it just
+populated via `parameterizedSAMObject.Add(parameterSet)`, which self-`Copy()`s onto itself) on the FIRST
+ever `.SetValue(SomeEnumParameter, value)` call on any object, because .NET Framework's
+`Dictionary<TKey,TValue>` bumps its mutation-version counter on every indexer write, including a same-key
+overwrite, so the self-enumerate-while-write throws `InvalidOperationException: Collection was modified`.
+.NET 8's `Dictionary` does not bump the version on a same-key overwrite, so the identical call sequence is
+harmless there - matching why the committed `net8.0` test suite and the `net8.0-windows` benchmark CLI never
+hit it. This is a **pre-existing `SAM.Core` defect, out of scope for Stage 2** (it lives in the sibling `SAM`
+repo, is unrelated to aperture-definition reuse, and is dormant under every environment this codebase is
+actually run in) - noted here only so it is not rediscovered from scratch; not fixed, not filed.
+Confirmed empirically with an isolated `sanity` probe (single `Space`, three `SetValue` calls) before
+retargeting.
+
+Two more harmless SAM.Core/SAM.Analytical quirks the harness had to route around while building its own
+synthetic test model (again, not Stage 2, not fixed): `Create.AdjacencyCluster(shells, spaces)` and
+`Create.Panels(shell)` both eventually touch `SAM.Analytical.ActiveSetting.Setting`, whose cold-start
+`GetDefault()` hits the exact same self-`Copy()` pattern above on its own second `SetValue` call in a
+process with no prior SAM settings load (e.g. this bare console harness, never the NUnit test host or a
+Revit/Grasshopper session, both of which warm this differently). Routed around by assembling the harness's
+`AdjacencyCluster`/`Panel`s by hand from `Query.PanelType(Vector3D)` and
+`Create.Panel(Construction, PanelType, Face3D)` (both pure, no `ActiveSetting` touch) instead.
 
 ## Stage 2 - what landed
 

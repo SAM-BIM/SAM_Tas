@@ -39,6 +39,23 @@ namespace SAM.Analytical.Tas
         /// kinds the write knows how to store. An unrecognised kind makes the construction UNPROVEN rather
         /// than throwing: it is still created exactly as before, but it never takes part in reuse.
         /// </returns>
+        /// <remarks>
+        /// <b>Licensed-TAS-confirmed defaults for a freshly added <c>TBD.material</c>.</b> The opaque and
+        /// transparent <c>UpdateMaterial</c> overloads never touch <c>dynamicViscosity</c> or
+        /// <c>convectionCoefficient</c> - those are written only for a <see cref="GasMaterial"/> - so a
+        /// fresh material's OWN TAS-native values stand, exactly as the comment on this method already
+        /// said. What was wrong was the assumed value: confirmed on licensed TAS (a real construction
+        /// exported with an opaque and a transparent layer, read back after save/reopen) that a fresh
+        /// <c>TBD.material</c> reports <c>dynamicViscosity = 1E-05</c> and
+        /// <c>convectionCoefficient = 0.001</c>, not zero. Reporting zero here made every repeat export
+        /// see its own just-created opaque/transparent materials as different content from what was
+        /// asked for - safe (under-reuse only, never unsafe sharing, per the class-level remarks above)
+        /// but it meant a second export of the same model never satisfied "+0 Construction/BuildingElement",
+        /// and a third export could then hit the double-name-collision refusal.
+        /// </remarks>
+        private const float FreshOpaqueOrTransparentDynamicViscosity = 1E-05f;
+        private const float FreshOpaqueOrTransparentConvectionCoefficient = 0.001f;
+
         public static ConstructionMaterialDefinition ConstructionMaterialDefinition(this Core.IMaterial material)
         {
             if (material == null)
@@ -68,8 +85,8 @@ namespace SAM.Analytical.Tas
                     //Not written by the opaque overload - a fresh TBD material's own values stand.
                     solarTransmittance: 0,
                     lightTransmittance: 0,
-                    dynamicViscosity: 0,
-                    convectionCoefficient: 0,
+                    dynamicViscosity: FreshOpaqueOrTransparentDynamicViscosity,
+                    convectionCoefficient: FreshOpaqueOrTransparentConvectionCoefficient,
                     isBlind: 0);
             }
 
@@ -97,8 +114,9 @@ namespace SAM.Analytical.Tas
                     solarTransmittance: ToSingle(transparentMaterial.GetValue<double>(TransparentMaterialParameter.SolarTransmittance)),
                     lightTransmittance: ToSingle(transparentMaterial.GetValue<double>(TransparentMaterialParameter.LightTransmittance)),
 
-                    dynamicViscosity: 0,
-                    convectionCoefficient: 0,
+                    //Not written by the transparent overload either - same fresh-material defaults as opaque.
+                    dynamicViscosity: FreshOpaqueOrTransparentDynamicViscosity,
+                    convectionCoefficient: FreshOpaqueOrTransparentConvectionCoefficient,
 
                     //Written as the 1/0 TBD stores, not as a bool.
                     isBlind: transparentMaterial.GetValue<bool>(TransparentMaterialParameter.IsBlind) ? 1 : 0);
