@@ -378,7 +378,7 @@ namespace SAM.Analytical.Tas
                 zoneSurfaceReference_Temp = null;
                 if (aperture.TryGetValue(ApertureParameter.FrameZoneSurfaceReference_1, out zoneSurfaceReference_Temp) && zoneSurfaceReference_Temp != null)
                 {
-                    if(zoneSurfaceReference_Temp.SurfaceNumber == zoneSurfaceReference.SurfaceNumber)
+                    if(ZoneSurfaceReferencesMatch(zoneSurfaceReference_Temp, zoneSurfaceReference))
                     {
                         aperturePart = Analytical.AperturePart.Frame;
                         return aperture;
@@ -388,7 +388,7 @@ namespace SAM.Analytical.Tas
                 zoneSurfaceReference_Temp = null;
                 if (aperture.TryGetValue(ApertureParameter.FrameZoneSurfaceReference_2, out zoneSurfaceReference_Temp) && zoneSurfaceReference_Temp != null)
                 {
-                    if (zoneSurfaceReference_Temp.SurfaceNumber == zoneSurfaceReference.SurfaceNumber)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_Temp, zoneSurfaceReference))
                     {
                         aperturePart = Analytical.AperturePart.Frame;
                         return aperture;
@@ -398,7 +398,7 @@ namespace SAM.Analytical.Tas
                 zoneSurfaceReference_Temp = null;
                 if (aperture.TryGetValue(ApertureParameter.PaneZoneSurfaceReference_1, out zoneSurfaceReference_Temp) && zoneSurfaceReference_Temp != null)
                 {
-                    if (zoneSurfaceReference_Temp.SurfaceNumber == zoneSurfaceReference.SurfaceNumber)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_Temp, zoneSurfaceReference))
                     {
                         aperturePart = Analytical.AperturePart.Pane;
                         return aperture;
@@ -408,7 +408,7 @@ namespace SAM.Analytical.Tas
                 zoneSurfaceReference_Temp = null;
                 if (aperture.TryGetValue(ApertureParameter.PaneZoneSurfaceReference_2, out zoneSurfaceReference_Temp) && zoneSurfaceReference_Temp != null)
                 {
-                    if (zoneSurfaceReference_Temp.SurfaceNumber == zoneSurfaceReference.SurfaceNumber)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_Temp, zoneSurfaceReference))
                     {
                         aperturePart = Analytical.AperturePart.Pane;
                         return aperture;
@@ -417,6 +417,43 @@ namespace SAM.Analytical.Tas
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Whether two <see cref="Core.Tas.ZoneSurfaceReference"/>s name the same physical surface.
+        /// <para>
+        /// <b>SurfaceNumber alone is not unique across a building</b> - TAS numbers surfaces per zone, so
+        /// zone A's surface 5 and zone B's surface 5 are different surfaces that happen to share a number.
+        /// Comparing SurfaceNumber only, as this used to, matches the first same-numbered surface in
+        /// whichever zone happens to be checked first - silently wrong whenever two zones' surface numbers
+        /// overlap, which they routinely do.
+        /// </para>
+        /// <para>
+        /// <b>ZoneGuid disambiguates it, when both sides carry one.</b> A reference missing a ZoneGuid (an
+        /// older stamp, or one this export never set) falls back to SurfaceNumber alone, exactly as before -
+        /// this is a strict tightening, never a new refusal: anything that matched before still matches:
+        /// only a same-numbered surface in a DIFFERENT, GUID-stated zone stops matching.
+        /// </para>
+        /// <para>
+        /// A standalone, non-overloaded public method (rather than folded into the heavily COM-overloaded
+        /// <c>Match</c> family) deliberately - so it, and only the pure comparison the ZoneGuid fix actually
+        /// is, can be exercised from a COM-free test project without pulling in the TBD/TAS3D interop every
+        /// other <c>Match</c> overload needs.
+        /// </para>
+        /// </summary>
+        public static bool ZoneSurfaceReferencesMatch(Core.Tas.ZoneSurfaceReference a, Core.Tas.ZoneSurfaceReference b)
+        {
+            if (a == null || b == null || a.SurfaceNumber != b.SurfaceNumber)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(a.ZoneGuid) || string.IsNullOrWhiteSpace(b.ZoneGuid))
+            {
+                return true;
+            }
+
+            return a.ZoneGuid == b.ZoneGuid;
         }
 
         public static Construction Match(this TAS3D.Element element, IEnumerable<Construction> constructions)

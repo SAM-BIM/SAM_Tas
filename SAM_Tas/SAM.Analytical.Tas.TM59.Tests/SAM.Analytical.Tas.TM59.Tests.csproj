@@ -46,6 +46,12 @@
     <Reference Include="SAM.Analytical.Tas">
       <HintPath>..\..\build\SAM.Analytical.Tas.dll</HintPath>
     </Reference>
+    <!-- InstanceIdentityTests needs the plain SAM.Core.Tas.ZoneSurfaceReference value type. Referenced as a
+         built DLL for the same COM-avoidance reason as SAM.Analytical.Tas above - ZoneSurfaceReference
+         itself touches no COM type, so this pulls in no TAS interop either. -->
+    <Reference Include="SAM.Core.Tas">
+      <HintPath>..\..\build\SAM.Core.Tas.dll</HintPath>
+    </Reference>
     <!-- For the step 9 boundary tests: the TPD-full preparation (ResultantTemperaturePreparation) and the
          legacy approximate TPD preparation (ApproximateResultantTemperatureMap). Both types are deliberately
          free of TAS COM types, so exercising them never forces the CLR to load Interop.TBD / Interop.TPD -
