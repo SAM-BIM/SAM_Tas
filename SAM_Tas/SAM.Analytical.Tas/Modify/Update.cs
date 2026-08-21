@@ -555,6 +555,12 @@ namespace SAM.Analytical.Tas
                     constructionsByName[c.name] = c;
             }
 
+            // The building's reusable definitions - schedules and aperture types - read once for the whole
+            // export. A TBD aperture type is shared by every element stating the same opening control, so
+            // this is what lets 200 identical windows resolve to one type and 200 assignments instead of
+            // one type each. Its lifetime is this one open document.
+            BuildingReuseCache buildingReuseCache = new BuildingReuseCache(building);
+
             foreach (Space space in spaces)
             {
                 Shell shell = adjacencyCluster.Shell(space);
@@ -1014,7 +1020,7 @@ namespace SAM.Analytical.Tas
 
                                         if (aperturePart == AperturePart.Pane && aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
                                         {
-                                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement_Aperture, openingProperties);
+                                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement_Aperture, openingProperties, null, buildingReuseCache);
                                         }
                                     }
 

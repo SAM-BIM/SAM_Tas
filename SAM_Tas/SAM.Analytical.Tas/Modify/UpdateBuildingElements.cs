@@ -98,6 +98,11 @@ namespace SAM.Analytical.Tas
                     constructionWordSets.Add(new KeyValuePair<TBD.Construction, HashSet<string>>(c, wordSet));
             }
 
+            // The building's reusable definitions - schedules and aperture types - read once for the whole
+            // pass, so an element's opening control is found by definition instead of by re-scanning every
+            // aperture type in the building per opening child. Its lifetime is this one open document.
+            BuildingReuseCache buildingReuseCache = new BuildingReuseCache(building);
+
             foreach (buildingElement buildingElement in buildingElements)
             {
                 string name = Query.Name(buildingElement);
@@ -202,7 +207,7 @@ namespace SAM.Analytical.Tas
                     {
                         if(aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
                         {
-                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp, out List<int> childIndices);
+                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp, out List<int> childIndices, null, buildingReuseCache);
                             notes.AddRange(notes_Temp ?? []);
 
                             //Only an aperture that states an availability schedule is tracked here, and only

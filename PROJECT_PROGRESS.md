@@ -1,14 +1,126 @@
 # Project Progress
 
 ## Branch
-`feature/partf-terminal-transfer-compliance` (PR: SAM_Tas#29 against `sow/2026-Q3`)
+`feature/tas-aperturetype-reuse` (off `sow/2026-Q3`; PR #30)
 
 ## Last updated
-2026-08-20 (final pre-merge pass) - rounds 1-2 Codex backlog re-triaged against current source; two
-further correctness fixes applied; 153/153 tests green Debug + Release; SAM_Tas.sln 0 errors both
-configurations.
+2026-08-21 - Stage 1 implemented, validated on licensed TAS, and committed in two commits; a focused
+correction pass the same day hardened it (exact float collision identity, name reservation on late
+failure, full read-back verification of new shared types). The two Codex review findings on PR #30 were
+then fixed: index-derived reuse ordinal for the compatibility overload, and signed-zero normalisation in
+definition equality/hashing.
 
 ## Current status
+**Stage 1 (reusable TBD aperture types) is complete, validated and committed.** The export now shares one
+`TBD.ApertureType` across every building element stating the same opening control, instead of creating one
+per aperture per opening child. Constructions and building elements are still one per aperture - that is
+Stage 2, deliberately not started.
+
+Full detail, invariants, the S1-C0 probe result and the licensed-TAS acceptance table live in
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`. The frozen three-stage plan this implements is
+`C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21);
+sections D and J govern Stage 1 and must be followed without redesign.
+
+### Stage 1 correction pass (2026-08-21, same branch, commits rewritten in place)
+
+Three focused fixes, no architecture change:
+
+- **Exact numeric collision identity.** Display names stay rounded (`Opening Cd0.62 F1`), but
+  `Query.ApertureTypeSignature` now carries the **exact IEEE-754 Single bit pattern** of Cd and factor
+  (`SingleBitsHex`), so two TAS float definitions like `0.6201`/`0.6202` can never share a deterministic
+  collision identity. Equality was and stays exact float equality.
+- **Name reservation vs reusable registration.** `BuildingReuseCache` now separates the two:
+  `ReserveScheduleName` / `ScheduleNames()` and `ReserveApertureType` hold the namespace of a created
+  object whose write later fails (no `RemoveSchedule`; a created aperture type is left in place by
+  policy), without ever making it reusable. `RegisterApertureType` upgrades a reservation in place,
+  identified by the same COM reference. `GetOrCreateSchedule` reserves on naming; the shared
+  `SetApertureType` path reserves on naming.
+- **Full read-back verification of newly created shared types.** After the complete write (Cd,
+  description, profile value/factor/setback/type/function, schedule, day types), the new type is read
+  back through the existing seed reader and must equal the requested definition; otherwise the write
+  refuses, keeping the name reserved and the object non-reusable and unassigned. Runs only for newly
+  created definitions.
+
+Files changed: `Query/ApertureTypeSignature.cs`, `Classes/BuildingReuseCache.cs`,
+`Create/GetOrCreateSchedule.cs`, `Modify/SetApertureType.cs`, plus tests and docs.
+
+Validation: `SAM_Tas.sln` 0 errors Debug + Release; `SAM.Analytical.Tas.TM59.Tests` **230/230** both
+configurations (77 in `ApertureTypeReuseTests.cs`, incl. close-float collision, late-failure
+name-reservation and read-back mismatch/refusal; existing schedule tests unchanged). Licensed-TAS
+acceptance re-run on this machine after the hardening: 200 identical windows -> 1 ApertureType
+(`Opening Cd0.395 F1 S00FFFE`) + 1 schedule + 200 assignments; repeat export -> +0/+0, no second
+openings; 5 variants -> 5 distinct types; 50 windows x 2 identical children -> exactly 2 ordinal types.
+No issue notes anywhere. The acceptance harness remains uncommitted (rebuilt as a scratch net481 console
+per `APERTURE_TYPE_REUSE.md`); the produced `.tbd` files live under `%TEMP%\aperture-accept`.
+
+Next step: open the Stage 1 PR (two commits: `feat(tas): reuse equivalent aperture types`,
+`test(tas): validate aperture type reuse`).
+
+### Codex review fixes (2026-08-21, same branch, one commit on top of the two Stage 1 commits)
+
+The Codex review of PR #30 raised two genuine findings; both are fixed:
+
+- **P1 - index-derived reuse ordinal for the compatibility overload.** The
+  `SetApertureType(building, buildingElement, single, out refusal, name, index)` overload forwarded a
+  fixed ordinal, so two calls for two identical indexed openings both resolved to occurrence 1 and the
+  second collapsed into the first's assignment. The legacy 1-based `index` now doubles as the reuse
+  ordinal via the new COM-free `Query.ApertureTypeOrdinal(int)` (position is the occurrence - exact for
+  identical children, conservative for different ones). The multiple-opening entry point already
+  computes the true per-definition occurrence and is unaffected.
+- **P2 - signed-zero hashing.** `ApertureTypeDefinition.Equals` uses float equality under which `-0f`
+  and `+0f` are equal, while the signature hashed their distinct IEEE-754 bit patterns, so an equal pair
+  could produce different hash codes (the .NET dictionary contract). The constructor now normalises
+  signed zero to positive zero for Cd and factor, keeping `Equals`, `GetHashCode` and the deterministic
+  name signature in agreement.
+
+Files changed: `Classes/ApertureTypeDefinition.cs`, `Query/ApertureTypeDefinition.cs`,
+`Modify/SetApertureType.cs`, `APERTURE_TYPE_REUSE.md`, plus tests.
+
+Validation: `SAM_Tas.sln` 0 errors Debug + Release (CI recipe: sibling deps at `sow/2026-Q3` rebuilt
+first); `SAM.Analytical.Tas.TM59.Tests` **233/233** Debug + Release (was 230/230; +3 regression tests:
+`Equality_SignedZero_NormalisesBeforeEqualityAndHashing`, `Ordinal_IndexDerived_IsThePosition`,
+`Export_TwoIdenticalIndexedWrites_ProduceTwoTypesAndTwoAssignments`).
+
+### Stage 1 - what landed
+
+- `Classes/ApertureTypeDefinition.cs` - immutable value equality over Cd, factor (after the Part O
+  `AlwaysClosed -> 0` override), profile mode, function text, the 24 schedule values, description and
+  day-type membership. COM-free.
+- `Query/ApertureType{Definition,DefinitionTBD,Signature,Index,Name,Reconciliation}.cs` - the COM-free
+  factory and ordinal keying, the seed reader (existing type -> definition, or a refusal), deterministic
+  FNV-1a signature/collision hash, first-equal lookup, name derivation/decomposition/legacy-name test, and
+  the reconciliation decision (Create / Reuse / Legacy / Refuse).
+- `Classes/BuildingReuseCache.cs` - one COM pass over schedules, aperture types and day types; lifetime is
+  one open document. Replaces two full aperture-type scans per opening child and a per-child rebuild of
+  every schedule's 24 values.
+- `Create/GetOrCreateSchedule.cs` - cache-taking overload only; behaviour identical, `cache: null` is the
+  original byte for byte.
+- `Modify/SetApertureType.cs` - the reuse path, plus `SetApertureType_Named` holding the previous
+  per-element write verbatim for the legacy fence.
+- Cache threaded through `Modify/SetApertureTypes.cs`, `Modify/Update.cs`,
+  `Modify/UpdateBuildingElements.cs`. Every new parameter is optional and defaults to null, so all
+  pre-existing call sites compile and behave unchanged.
+
+### Stage 1 - decisions worth not re-deriving
+
+- **S1-C0 = Outcome A (day-type membership is readable).** `TBD.IApertureType.GetDayType(int)` exists in
+  the Interop.TBD metadata and licensed TAS confirms faithful read-back, including across save/reopen.
+  Membership is therefore an equality field - compared **as a set**, because TAS reports it in the order
+  `SetDayType` was called in, not calendar order. The conservative Outcome B policy is NOT in force.
+- **Reuse writes nothing.** A shared definition is immutable; anything short of full equality creates a new
+  type under a deterministic, collision-suffixed name. Proven by write-log assertions on the fakes.
+- **`sheltered` is a conservative seed gate** added beyond the plan's list: SAM never writes it, so
+  adopting a sheltered type would apply a shelter the model does not state. Refusing to reuse is the safe
+  direction.
+- **The licensed-TAS acceptance harness is not committed.** `SAM.Analytical.Tas.TM59.Tests` deliberately
+  carries no COM reference (`TESTING.md`), and adding a second COM-referencing project is out of Stage 1's
+  scope. The scenarios and their results are recorded in `APERTURE_TYPE_REUSE.md` so the run can be
+  reproduced.
+
+---
+
+## Previous branch (merged): `feature/partf-terminal-transfer-compliance` (SAM_Tas#29)
+
 The Part O availability schedule export is **complete and accepted on licensed TAS**. The mapping fix
 landed in `7ef2aff3f3f81949be8b15bf6a797848c2800bf2` ("fix: correct TAS availability schedule mapping")
 and the acceptance run passed with no warnings. Two further Codex findings on the TPD-full preparation
@@ -121,7 +233,28 @@ lines still reach the canvas.
   geometry check, and the D2 proposal introduced a tolerance inconsistency. No D2 code exists here.
 
 ## Files changed
-Final pre-merge pass (this session):
+
+Stage 1 - reusable aperture types (this session, branch `feature/tas-aperturetype-reuse`):
+- `SAM_Tas/SAM.Analytical.Tas/Classes/ApertureTypeDefinition.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Classes/BuildingReuseCache.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Enums/ApertureTypeProfileMode.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Enums/ApertureTypeReconciliation.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ApertureTypeDefinition.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ApertureTypeDefinitionTBD.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ApertureTypeSignature.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ApertureTypeIndex.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ApertureTypeName.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ApertureTypeReconciliation.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Create/GetOrCreateSchedule.cs` (cache overload only)
+- `SAM_Tas/SAM.Analytical.Tas/Modify/SetApertureType.cs`
+- `SAM_Tas/SAM.Analytical.Tas/Modify/SetApertureTypes.cs`
+- `SAM_Tas/SAM.Analytical.Tas/Modify/Update.cs` (cache construction + one call site)
+- `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateBuildingElements.cs` (cache construction + one call site)
+- `SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md` (new)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ApertureTypeReuseTests.cs` (new, +80)
+- `PROJECT_PROGRESS.md` (this file)
+
+Final pre-merge pass (previous branch):
 - `SAM_Tas/SAM.Analytical.Tas.TPD/Classes/ApproximateResultantTemperatureMap.cs`
 - `SAM_Tas/SAM.Analytical.Tas.TM59/Classes/PartODiagnosticLog.cs`
 - `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PreparationBoundaryTests.cs` (+2)
@@ -143,22 +276,42 @@ Previous session:
 - `PROJECT_PROGRESS.md` (this file)
 
 ## Validation
-- `SAM_Tas.sln` built with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
+- `SAM_Tas.sln` rebuilt with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
   pre-existing MSB3270 (MSIL vs AMD64 interop) and MSB3277 (System.Memory unification) warnings.
-- `SAM.Analytical.Tas.TM59.Tests` Debug: **153 passed, 0 failed**. Release: **153 passed, 0 failed**
-  (was 151; +2 new for the final-pass fixes).
+- `SAM.Analytical.Tas.TM59.Tests` Debug: **233 passed, 0 failed**. Release: **233 passed, 0 failed**
+  (153 pre-existing, unmodified, + 80 aperture-type-reuse tests - 77 Stage 1 + 3 for the Codex fixes:
+  signed-zero equality/hashing, index-derived ordinal mapping, and the indexed-twins write regression).
+- Licensed TAS acceptance (2026-08-21, before the Codex fixes; the fixes are COM-free seams exercised by
+  the tests above - the licensed harness was not re-run for them), all pass, driven
+  through the real `Modify.SetApertureTypes` -> `SetApertureType` -> `BuildingReuseCache` ->
+  `Create.GetOrCreateSchedule` against a real `.tbd` created and reopened via `TBD.TBDDocument`:
+  - 200 identical windows -> **1 ApertureType** (`Opening Cd0.395 F1 S00FFFE`), **1 schedule**, 200
+    assignments, no issue notes;
+  - repeat export into that TBD -> **0** additional types/schedules, no element gained a second opening;
+  - 10 **new** elements added to the saved TBD -> **0** additional types/schedules, each adopts the
+    **seeded** type (so the seed read survives save/reopen);
+  - 5 control variants over 200 windows -> **5 ApertureTypes**, names distinct, none carrying aperture
+    identity;
+  - 50 windows x 2 identical children -> **exactly 2 ApertureTypes**, every element keeps both openings;
+  - legacy per-element type -> written in place, no shared type created alongside;
+  - stale shared type -> refused with the type named, Cd unchanged, no second opening, no replacement type.
 - Note the documented build order: the test project references already-built assemblies by `HintPath`
   (the COM-referencing projects cannot be built by the .NET Core MSBuild), so the SAM libraries and
   `SAM_Tas.sln` must be built before `dotnet test`. See `SAM.Analytical.Tas.TM59.Tests/TESTING.md`.
+  This session followed the CI recipe: sibling deps cloned at `sow/2026-Q3`, benchmark schema built,
+  all dependency solutions rebuilt with the Framework MSBuild, then `SAM_Tas.sln` Debug + Release and
+  `dotnet test` per configuration.
 
 ## Issues / blockers
-- None blocking. The real TBD/COM write is not exercisable without an installed TAS; it is covered by the
-  licensed acceptance run recorded above, which has now passed.
-- Fresh Codex review on the current head is unavailable: `@codex review` is refused by
-  `chatgpt-codex-connector[bot]` ("create a Codex account and connect to github"). The delta after the
-  latest Codex-reviewed SHA (`7ef2aff3`) was reviewed manually.
+- **None blocking Stage 1.**
+- Open question for Stage 2, not Stage 1: whether one `buildingElement` shared across many openable
+  windows' surfaces is simulator-equivalent. The frozen plan gates the Stage 2 merge on a manual
+  licensed-TAS TSD A/B result-equality test; the panel path's existing behaviour is precedent, not proof.
+- Carried over from the previous branch: D3 (schedule-removal transition) and D2 (aperture matching)
+  remain deferred - see **Deferred** above.
 
 ## Next step
-- Commit and push the final-pass fixes, then merge PR #29 after SAM #73 and SAM_Systems #14.
-- The rounds 1-2 Codex backlog on PR #29 is now fully triaged (see above); the deferred items go to the
-  next branch along with the D3 transition design pass.
+- PR #30 is open against `sow/2026-Q3`; the two Codex review findings are fixed, committed and pushed,
+  and CI (build + SPDX) runs on the new head. Merge PR #30 once CI is green and the review approves.
+- Stage 2 (`ConstructionDefinition` + `BuildingElementDefinition`, direct-export path only) follows the
+  frozen plan section E on its own branch. Do not start it inside this one.
