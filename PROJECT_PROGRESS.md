@@ -112,6 +112,91 @@ pull_request) + spdx all pass. Licensed TAS: not run - S3-C3 owns that gate.
 
 ---
 
+## Stage 3 - physical aperture instance identity (IN PROGRESS)
+
+Branch `feature/tas-aperture-instance-identity`, off `sow/2026-Q3` at `fd8016f` (Stage 1 + Stage 2 merged).
+Goal: harden physical-instance identity so Stage 2's SHARED definitions can never make two physical
+apertures collapse, cross-bind, or update the wrong TAS surface. Stage 1/2 definition sharing must be
+preserved unchanged.
+
+### Physical-identity assumptions found in the pre-Stage-3 code
+
+1. **`Modify.UpdateBuildingElements`** resolves the SAM aperture by decoding a GUID out of the TBD building
+   element's NAME. A Stage 2 element name is definition-derived, so this resolves nothing - the already
+   documented, already accepted Stage 2 degradation. It then writes colour, opening controls and feature
+   shades straight onto the element, and `AssignConstruction`s a by-name-matched construction onto it: all
+   three would MUTATE a shared definition.
+2. **`Modify.Update` (export)** stamped `Pane`/`FrameZoneSurfaceReference_1/2` inline as each surface was
+   created, filling `_1` then `_2` in creation order and only where the slot was EMPTY. On a model already
+   stamped by a previous export that leaves a stale `_1` and overwrites `_2`; and a pane split into several
+   faces filled both slots from ONE side, losing the other side.
+3. **`Convert.ToSAM` import grouping** buckets aperture surfaces by CONSTRUCTION GUID - shared by every
+   window of that construction after Stage 2 - sorts by descending AREA, and then records the wrong
+   `zoneSurface` for the outer half: it takes `tuples[0].Item2` AFTER removing the seed, i.e. the next entry
+   in the area-sorted list. With two effectively identical windows, window A's aperture is stamped with
+   window B's frame surface number and building-element GUID. This is the cross-pairing Stage 2's licensed
+   round trip exposed. Separately, a surface that finds no partner contributes NO surface reference at all
+   (frameless window loses its physical identity), pane/frame is read off the construction-name suffix rather
+   than `BEType`, and a two-sided aperture's second side is skipped entirely, so `_2` is never written.
+4. **`Modify.UpdateIds`** clears the PANEL references but not the APERTURE ones, then fills `_1`-if-empty-
+   else-`_2`, so a repeated run appends to `_2` and can swap sides.
+5. **`Query.Match`** (three overloads) compares `SurfaceNumber` ONLY, ignoring the zone - a TAS surface
+   number is scoped to its zone, so surface 7 in zone A matches surface 7 in zone B. One overload also tests
+   `zoneSurfaceReference_1` inside the `_2` branch (copy/paste), and one aborts the whole scan on a null
+   list entry instead of skipping it.
+
+### What now constitutes physical identity
+
+`{ ZoneGuid, SurfaceNumber }`, as one immutable value-equal type, and nothing else. A building-element GUID,
+a construction GUID, an aperture type, a definition name and a surface area are all properties of a SHARED
+DEFINITION or of a shape after Stage 2, and none can tell two identical windows apart.
+
+### Files added so far (all build clean)
+
+| File | Role |
+|---|---|
+| `Classes/ZoneSurfaceKey.cs` | `{ ZoneGuid, SurfaceNumber }`, immutable, value equality, normalised zone GUID. COM-free. |
+| `Query/ZoneSurfaceKey.cs` | Zone-GUID normalisation and the factories. A half-populated stamp yields NO key rather than a wildcard. |
+| `Classes/AperturePhysicalIdentity.cs` | One SAM aperture's four stamps plus its two definition bindings, read into values. |
+| `Query/AperturePhysicalIdentity.cs` | COM-free factory from a SAM `Aperture`, and the whole-model index factory. |
+| `Classes/AperturePhysicalIndex.cs` | Surface -> (aperture, part, side), REFUSING any key two apertures claim. Cannot look up by building-element GUID. |
+| `Classes/ApertureSurfaceBinding.cs` | The per-surface update inputs, the `ApertureSurfaceAction` outcomes and the decision fields. |
+| `Query/ApertureSurfaceActions.cs` | The whole update decision, pure: ambiguous / unresolved / part mismatch / already bound / rebind / write-in-place / refuse-shared. Needs every binding at once because exclusivity is not a local property. |
+| `Classes/ApertureSurfaceGroup.cs` | Import candidate + group values. |
+| `Query/ApertureSurfaceGroups.cs` | The import grouping, pure: part from `BEType`, pairing by geometric CONTAINMENT only, ambiguity refuses. |
+| `Query/ApertureZoneSurfaceSides.cs` | Canonical `_1`/`_2` assignment - a slot is a SIDE and a side is a ZONE, ordered by zone GUID - plus the parameter maps and the clear-before-fill helper. |
+| `Modify/ResolveApertureDefinition.cs` | Stage 2's resolve-or-create for aperture constructions and elements, lifted verbatim out of `Modify.Update` so the export and the in-place update cannot drift apart. |
+
+### Files changed so far
+
+- `Modify/Update.cs` - uses the two extracted resolvers; aperture surfaces now collected with their ZONE and
+  PANEL (`ApertureZoneSurfaceRecord`); the four inline stamp blocks replaced by ONE deferred canonical pass
+  that clears both slots and refills them per side. Definition sharing behaviour unchanged.
+
+### Still to do
+
+- `Modify/UpdateBuildingElements.cs` - physical resolution, split/rebind, merge-back, legacy fallback gated
+  to elements no resolved surface points at, feature shades only where the element is exclusive.
+- `Modify/UpdateIds.cs` - clear aperture stamps, zone-aware resolution, canonical sides.
+- `Convert/ToSAM/AdjacencyCluster.cs` - grouping via `Query.ApertureSurfaceGroups`, side 2 stamped onto the
+  existing aperture instead of skipped.
+- `Query/Match.cs` - honour the zone GUID; fix the `_2` branch and the null-entry abort.
+- `SAM.Analytical.Tas.TM59.Tests/ApertureInstanceIdentityTests.cs` - the new COM-free suite.
+- Docs: `APERTURE_INSTANCE_IDENTITY.md`; the Stage 2 "Known limitation" section to be marked resolved.
+- Licensed TAS acceptance: scenarios A-E, TAS/TSD A/B, shaded-project result mapping.
+
+### Validation so far
+
+`SAM.Analytical.Tas.csproj` builds clean. Baseline before any Stage 3 change: 337/337 COM-free tests pass
+(`dotnet test SAM_Tas/SAM.Analytical.Tas.TM59.Tests -c Debug`).
+
+### Exact recommended next step
+
+Merge/rebase the branch onto the updated `sow/2026-Q3` (the user has a further PR to merge there), then
+implement `Modify.UpdateBuildingElements` against `Query.ApertureSurfaceActions`.
+
+---
+
 ## Stage 2 - blocking merge gate (ALL ROWS NOW PASS - see "licensed acceptance progress" below)
 
 These were the merge conditions. All three are now satisfied on licensed TAS; the evidence is recorded in

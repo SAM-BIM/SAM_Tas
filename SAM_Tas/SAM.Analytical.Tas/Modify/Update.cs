@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Core;
@@ -535,7 +535,11 @@ namespace SAM.Analytical.Tas
             Plane plane = Plane.WorldXY;
 
             Dictionary<Guid, List<Tuple<zoneSurface, bool>>> dictionary_Panel = new Dictionary<Guid, List<Tuple<zoneSurface, bool>>>();
-            Dictionary<Guid, List<Tuple<AperturePart, zoneSurface, bool>>> dictionary_Aperture = new Dictionary<Guid, List<Tuple<AperturePart, zoneSurface, bool>>>();
+            //Every physical surface each aperture contributed, with the ZONE it is in and the PANEL it came
+            //from. The zone is what makes a surface number an identity - numbers are scoped to their zone - and
+            //the two together are what gets stamped back, ONCE, after every surface of every aperture exists.
+            //See the canonical stamping pass at the end of this method.
+            Dictionary<Guid, List<ApertureZoneSurfaceRecord>> dictionary_Aperture = new Dictionary<Guid, List<ApertureZoneSurfaceRecord>>();
 
             // Hoist these out of the per-space loop. They were being refetched via COM PER SPACE and then
             // linear-scanned per panel (lines below) — O(spaces * panels * existingElements).
@@ -894,14 +898,8 @@ namespace SAM.Analytical.Tas
                                                 //zoneSurface.reversed = 1;
                                                 aperturePart_Frame.Item2.Add(zoneSurface);
 
-                                                if (updateGuids)
-                                                {
-                                                    Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
-                                                    ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.FrameZoneSurfaceReference_1) ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.FrameZoneSurfaceReference_1;
-                                                    aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
-                                                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
-                                                    panel_Temp.AddAperture(aperture_Temp);
-                                                }
+                                                //The stamp is deferred to the canonical pass at the end of
+                                                //this method, which can see both sides of the aperture at once.
                                             }
                                         }
                                     }
@@ -929,14 +927,7 @@ namespace SAM.Analytical.Tas
                                             {
                                                 aperturePart_Pane.Item2.Add(zoneSurface);
 
-                                                if (updateGuids)
-                                                {
-                                                    Aperture aperture_Temp = panel_Temp.GetAperture(aperture.Guid);
-                                                    ApertureParameter apertureParameter = aperture_Temp.HasValue(ApertureParameter.PaneZoneSurfaceReference_1) ? ApertureParameter.PaneZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_1;
-                                                    aperture_Temp.SetValue(apertureParameter, new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zone.GUID));
-                                                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
-                                                    panel_Temp.AddAperture(aperture_Temp);
-                                                }
+                                                //Stamped by the canonical pass at the end of this method.
                                             }
                                         }
                                     }
@@ -1103,13 +1094,20 @@ namespace SAM.Analytical.Tas
                                             zoneSurface.buildingElement = buildingElement_Aperture;
                                         }
 
-                                        if (!dictionary_Aperture.TryGetValue(aperture.Guid, out List<Tuple<AperturePart, zoneSurface, bool>> zoneSurfaces_Aperture) || zoneSurfaces_Aperture == null)
+                                        if (!dictionary_Aperture.TryGetValue(aperture.Guid, out List<ApertureZoneSurfaceRecord> zoneSurfaces_Aperture) || zoneSurfaces_Aperture == null)
                                         {
-                                            zoneSurfaces_Aperture = new List<Tuple<AperturePart, zoneSurface, bool>>();
+                                            zoneSurfaces_Aperture = new List<ApertureZoneSurfaceRecord>();
                                             dictionary_Aperture[aperture.Guid] = zoneSurfaces_Aperture;
                                         }
 
-                                        zoneSurfaces_Aperture.Add(new Tuple<AperturePart, zoneSurface, bool>(aperturePart, zoneSurface, dictionary_Panel.ContainsKey(panel.Guid)));
+                                        zoneSurfaces_Aperture.Add(new ApertureZoneSurfaceRecord
+                                        {
+                                            AperturePart = aperturePart,
+                                            ZoneSurface = zoneSurface,
+                                            Reverse = dictionary_Panel.ContainsKey(panel.Guid),
+                                            ZoneGuid = zone.GUID,
+                                            PanelGuid = panel.Guid
+                                        });
                                     }
                                 }
                             }
@@ -1216,7 +1214,7 @@ namespace SAM.Analytical.Tas
                 }
             }
 
-            foreach (KeyValuePair<Guid, List<Tuple<AperturePart, zoneSurface, bool>>> keyValuePair in dictionary_Aperture)
+            foreach (KeyValuePair<Guid, List<ApertureZoneSurfaceRecord>> keyValuePair in dictionary_Aperture)
             {
                 if (keyValuePair.Value == null || keyValuePair.Value.Count <= 1)
                 {
@@ -1225,7 +1223,7 @@ namespace SAM.Analytical.Tas
 
                 List<zoneSurface> zoneSurfaces = null;
 
-                zoneSurfaces = keyValuePair.Value.FindAll(x => x.Item1 == AperturePart.Frame).ConvertAll(x => x.Item2);
+                zoneSurfaces = keyValuePair.Value.FindAll(x => x.AperturePart == AperturePart.Frame).ConvertAll(x => x.ZoneSurface);
                 if (zoneSurfaces.Count == 2)
                 {
                     zoneSurfaces[1].linkSurface = zoneSurfaces[0];
@@ -1233,31 +1231,102 @@ namespace SAM.Analytical.Tas
                 }
 
 
-                zoneSurfaces = keyValuePair.Value.FindAll(x => x.Item1 == AperturePart.Pane).ConvertAll(x => x.Item2);
+                zoneSurfaces = keyValuePair.Value.FindAll(x => x.AperturePart == AperturePart.Pane).ConvertAll(x => x.ZoneSurface);
                 if (zoneSurfaces.Count == 2)
                 {
                     zoneSurfaces[1].linkSurface = zoneSurfaces[0];
                     zoneSurfaces[0].linkSurface = zoneSurfaces[1];
                 }
 
-                foreach (Tuple<AperturePart, zoneSurface, bool> tuple in keyValuePair.Value)
+                foreach (ApertureZoneSurfaceRecord record in keyValuePair.Value)
                 {
-                    if (!tuple.Item3)
+                    if (!record.Reverse)
                     {
                         continue;
                     }
 
-                    float orientation = tuple.Item2.orientation;
+                    float orientation = record.ZoneSurface.orientation;
                     orientation += 180;
                     if (orientation >= 360)
                     {
                         orientation -= 360;
                     }
-                    tuple.Item2.orientation = orientation;
+                    record.ZoneSurface.orientation = orientation;
 
-                    tuple.Item2.reversed = 1;  // only second panel window does not workk internla
+                    record.ZoneSurface.reversed = 1;  // only second panel window does not workk internla
                 }
             }
+
+            // -----------------------------------------------------------------------------------------------
+            // THE PHYSICAL IDENTITY STAMPS, written once, now that every surface of every aperture exists.
+            //
+            // Deferred deliberately. A slot is a SIDE, and both sides of an internal aperture are only known
+            // after both zones have been walked. The inline write this replaces filled _1 then _2 in creation
+            // order and only where the slot was EMPTY, which gave two defects:
+            //
+            //   * re-exporting a model that was already stamped left the previous run's _1 in place - pointing
+            //     at whatever surface number TAS has since assigned to something else - and overwrote _2;
+            //   * an aperture whose pane is split into several faces filled BOTH slots from ONE side, so the
+            //     other side had no stamp at all.
+            //
+            // Both slots are therefore CLEARED and refilled from Query.ApertureZoneSurfaceSides: one slot per
+            // ZONE, ordered by zone GUID. That makes the answer a property of the model rather than of an
+            // enumeration order, so the same aperture lands the same way round on every run, and the export,
+            // the import and UpdateIds all agree.
+            //
+            // The BuildingElementGuid stamps stay where they are written above: they are definition BINDINGS,
+            // not physical identity, and after Stage 2 many apertures legitimately carry the same one.
+            // -----------------------------------------------------------------------------------------------
+            if (updateGuids)
+            {
+                foreach (KeyValuePair<Guid, List<ApertureZoneSurfaceRecord>> keyValuePair in dictionary_Aperture)
+                {
+                    List<ApertureZoneSurfaceRecord> records = keyValuePair.Value;
+                    if (records == null || records.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    Panel panel = adjacencyCluster.GetObject<Panel>(records[0].PanelGuid);
+                    Aperture aperture = panel?.GetAperture(keyValuePair.Key);
+                    if (aperture == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (AperturePart aperturePart in new AperturePart[] { AperturePart.Pane, AperturePart.Frame })
+                    {
+                        //Modify.SetApertureZoneSurfaceReferences owns the whole rule - clear both slots, order
+                        //by zone, preserve the caller's spelling of the GUID - and the import and UpdateIds
+                        //call the same one, which is what keeps the three paths from disagreeing.
+                        aperture.SetApertureZoneSurfaceReferences(aperturePart, records.FindAll(x => x.AperturePart == aperturePart).ConvertAll(x => new Core.Tas.ZoneSurfaceReference(x.ZoneSurface.number, x.ZoneGuid)), out string _);
+                    }
+
+                    panel.RemoveAperture(aperture.Guid);
+                    panel.AddAperture(aperture);
+                    adjacencyCluster.AddObject(panel);
+                }
+            }
+        }
+
+        /// <summary>
+        /// One physical aperture surface the export created, with the zone it lives in and the panel it came
+        /// from - everything the deferred identity stamp needs. The zone is the half of physical identity a
+        /// surface number does not carry: numbers are scoped to their zone, so a number alone names a surface in
+        /// every zone in the building.
+        /// </summary>
+        private sealed class ApertureZoneSurfaceRecord
+        {
+            public AperturePart AperturePart;
+
+            public zoneSurface ZoneSurface;
+
+            /// <summary>Whether this is the second side of a panel already exported, which is what reverses it.</summary>
+            public bool Reverse;
+
+            public string ZoneGuid;
+
+            public Guid PanelGuid;
         }
     }
 }

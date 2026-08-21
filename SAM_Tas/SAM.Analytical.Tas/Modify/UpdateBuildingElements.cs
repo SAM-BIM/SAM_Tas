@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Core.Tas;
@@ -154,7 +154,22 @@ namespace SAM.Analytical.Tas
             // The SURFACE INDEX: (ZoneGuid, SurfaceNumber) -> the physical zoneSurface, for resolving a
             // divergent member's OWN pane/frame surfaces off its ZoneSurfaceReference stamps, so a rebind
             // touches only that member's surfaces and never another aperture sharing the same element.
-            Dictionary<string, TBD.IZoneSurface> surfaceIndex = BuildSurfaceIndex(building);
+            Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> surfaceIndex = BuildSurfaceIndex(building);
+
+            // The PHYSICAL INDEX, over the SAM side: which aperture, part and side each physical surface
+            // belongs to - and, crucially, which physical surfaces MORE THAN ONE aperture claims. The
+            // membership map above is keyed by building-element GUID, which many apertures share by design,
+            // so it cannot see that; and the surface index is last-wins, so it cannot either. A surface two
+            // apertures stamp identifies neither, and rebinding it would move a surface that is arguably the
+            // other aperture's. AperturePhysicalIndex detects the collision when it is built and refuses that
+            // key from then on, which is what RebindMemberSurfaces consults below.
+            AperturePhysicalIndex aperturePhysicalIndex = Query.AperturePhysicalIndex(analyticalModel.AdjacencyCluster?.GetApertures());
+
+            List<KeyValuePair<ZoneSurfaceKey, string>> ambiguities = aperturePhysicalIndex.Ambiguities();
+            foreach (KeyValuePair<ZoneSurfaceKey, string> ambiguity in ambiguities)
+            {
+                notes.Add(Modify.NotePrefix_Issue + "Building elements: " + ambiguity.Value);
+            }
 
             foreach (buildingElement buildingElement in buildingElements)
             {
@@ -347,7 +362,7 @@ namespace SAM.Analytical.Tas
                                 SetFeatureShades(building, buildingElement_Target, featureShade_Required);
                             }
 
-                            RebindMemberSurfaces(analyticalModel.AdjacencyCluster, surfaceIndex, member, buildingElement, buildingElement_Target, notes);
+                            RebindMemberSurfaces(analyticalModel.AdjacencyCluster, surfaceIndex, aperturePhysicalIndex, member, buildingElement, buildingElement_Target, notes);
                         }
 
                         //Construction is assigned to every element every pass, exactly as before - it is not
@@ -420,6 +435,11 @@ namespace SAM.Analytical.Tas
             if (count_GlazingWithoutAperture != 0)
             {
                 notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} GLAZING element(s) did not resolve to a SAM aperture from their own name, so no aperture control was written for them on this path.", count_GlazingWithoutAperture));
+            }
+
+            if (ambiguities.Count != 0)
+            {
+                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} physical surface(s) are claimed by more than one SAM aperture; those apertures were not rebound rather than one of them being picked.", ambiguities.Count));
             }
 
             if (count_MembersSplit != 0)
@@ -500,7 +520,7 @@ namespace SAM.Analytical.Tas
         /// member claims (a stale stamp), is refused rather than guessed at.
         /// </para>
         /// </summary>
-        private static void RebindMemberSurfaces(AdjacencyCluster adjacencyCluster, Dictionary<string, TBD.IZoneSurface> surfaceIndex, ApertureMember member, buildingElement buildingElement_From, buildingElement buildingElement_To, List<string> notes)
+        private static void RebindMemberSurfaces(AdjacencyCluster adjacencyCluster, Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> surfaceIndex, AperturePhysicalIndex aperturePhysicalIndex, ApertureMember member, buildingElement buildingElement_From, buildingElement buildingElement_To, List<string> notes)
         {
             ApertureParameter parameter_1 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_1 : ApertureParameter.PaneZoneSurfaceReference_1;
             ApertureParameter parameter_2 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_2;
@@ -515,11 +535,32 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                string key = SurfaceKey(zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber);
-                if (!surfaceIndex.TryGetValue(key, out TBD.IZoneSurface zoneSurface) || zoneSurface == null)
+                ZoneSurfaceKey zoneSurfaceKey = Query.ZoneSurfaceKey(zoneSurfaceReference);
+                if (zoneSurfaceKey == null)
                 {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface (zone {2}, surface {3}) that could not be found in the TBD; none of its surfaces were rebound.",
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface that does not locate one (zone '{2}', surface {3}); none of its surfaces were rebound.",
                         member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
+                    return;
+                }
+
+                //CONTESTED-SURFACE GUARD, on the SAM side. The stale-stamp guard below asks whether the TBD
+                //surface still points where this aperture thinks it does; this asks the other question - whether
+                //any OTHER aperture also claims it. Both have to hold. A surface two apertures stamp identifies
+                //neither of them, and moving it would take one window's glazing on the strength of another
+                //window's change.
+                if (!aperturePhysicalIndex.TryResolve(zoneSurfaceKey, out System.Guid apertureGuid_Owner, out AperturePart aperturePart_Owner, out int _, out string refusal_Owner)
+                    || apertureGuid_Owner != member.Aperture.Guid
+                    || aperturePart_Owner != member.AperturePart)
+                {
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) claims physical surface {2} as its {3}, but that surface does not resolve back to it{4}; none of its surfaces were rebound.",
+                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceKey, member.AperturePart, refusal_Owner == null ? string.Empty : " - " + refusal_Owner));
+                    return;
+                }
+
+                if (!surfaceIndex.TryGetValue(zoneSurfaceKey, out TBD.IZoneSurface zoneSurface) || zoneSurface == null)
+                {
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface ({2}) that could not be found in the TBD; none of its surfaces were rebound.",
+                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceKey));
                     return;
                 }
 
@@ -529,8 +570,8 @@ namespace SAM.Analytical.Tas
                 string buildingElementGuid_Current = zoneSurface.buildingElement?.GUID;
                 if (!string.IsNullOrWhiteSpace(buildingElementGuid_Current) && buildingElementGuid_Current != buildingElement_From.GUID)
                 {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1})'s surface (zone {2}, surface {3}) is currently bound to a different element than the aperture's own stamp claims; none of its surfaces were rebound rather than guessed at.",
-                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1})'s surface ({2}) is currently bound to a different element than the aperture's own stamp claims; none of its surfaces were rebound rather than guessed at.",
+                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceKey));
                     return;
                 }
 
@@ -621,9 +662,9 @@ namespace SAM.Analytical.Tas
         /// the resolution <see cref="RebindMemberSurfaces"/> needs to turn a
         /// <see cref="Core.Tas.ZoneSurfaceReference"/> stamp back into the real TBD object.
         /// </summary>
-        private static Dictionary<string, TBD.IZoneSurface> BuildSurfaceIndex(Building building)
+        private static Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> BuildSurfaceIndex(Building building)
         {
-            Dictionary<string, TBD.IZoneSurface> result = new Dictionary<string, TBD.IZoneSurface>();
+            Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> result = new Dictionary<ZoneSurfaceKey, TBD.IZoneSurface>();
 
             List<TBD.zone> zones = building.Zones();
             if (zones == null)
@@ -651,16 +692,18 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    result[SurfaceKey(zone.GUID, zoneSurface.number)] = zoneSurface;
+                    //Keyed by ZoneSurfaceKey rather than a formatted string, so this index and every other
+                    //physical comparison in the codebase agree about what one surface is - including that two
+                    //spellings of one zone GUID are one zone.
+                    ZoneSurfaceKey zoneSurfaceKey = Query.ZoneSurfaceKey(zone.GUID, zoneSurface.number);
+                    if (zoneSurfaceKey != null)
+                    {
+                        result[zoneSurfaceKey] = zoneSurface;
+                    }
                 }
             }
 
             return result;
-        }
-
-        private static string SurfaceKey(string zoneGuid, int surfaceNumber)
-        {
-            return string.Format("{0}|{1}", zoneGuid, surfaceNumber);
         }
     }
 }

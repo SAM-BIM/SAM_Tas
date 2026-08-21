@@ -174,10 +174,31 @@ namespace SAM.Analytical.Tas
 
         public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, double tolerance = Core.Tolerance.MacroDistance)
         {
+            return Match(zoneSurface, panels, null, tolerance);
+        }
+
+        /// <summary>
+        /// The panel one zone surface belongs to, resolved from the stamps first and from geometry second.
+        /// <para>
+        /// <b><paramref name="zoneGuid"/> is the half of physical identity a surface number does not carry.</b>
+        /// TAS numbers surfaces PER ZONE, so zone A's surface 5 and zone B's surface 5 are different surfaces
+        /// that share a number, and the stamp comparison this overload exists for used to test the number
+        /// alone - matching the first same-numbered panel in whichever zone was scanned first. Passing the
+        /// surface's own zone makes the comparison identify a surface instead of a number. Omitting it (the
+        /// parameterless overload) keeps the old number-only behaviour, which is what a caller with no zone in
+        /// hand had before; the comparison itself also falls back to the number whenever either side states no
+        /// zone, so this is a strict tightening - nothing that matched stops matching except a same-numbered
+        /// surface in a different, GUID-stated zone.
+        /// </para>
+        /// </summary>
+        public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, string zoneGuid, double tolerance = Core.Tolerance.MacroDistance)
+        {
             if (zoneSurface == null || panels == null  || panels.Count == 0)
             {
                 return null;
             }
+
+            Core.Tas.ZoneSurfaceReference zoneSurfaceReference_Surface = new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zoneGuid);
 
             foreach (Panel panel in panels)
             {
@@ -188,15 +209,17 @@ namespace SAM.Analytical.Tas
 
                 if (panel.TryGetValue(PanelParameter.ZoneSurfaceReference_1, out Core.Tas.ZoneSurfaceReference zoneSurfaceReference_1) && zoneSurfaceReference_1 != null)
                 {
-                    if(zoneSurfaceReference_1.SurfaceNumber == zoneSurface.number)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_1, zoneSurfaceReference_Surface))
                     {
                         return panel;
                     }
                 }
 
+                //Tested against the _2 stamp. This read _1 again - a copy/paste that made the second slot
+                //unreachable, and threw outright on a panel carrying _2 without _1.
                 if (panel.TryGetValue(PanelParameter.ZoneSurfaceReference_2, out Core.Tas.ZoneSurfaceReference zoneSurfaceReference_2) && zoneSurfaceReference_2 != null)
                 {
-                    if (zoneSurfaceReference_1.SurfaceNumber == zoneSurface.number)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_2, zoneSurfaceReference_Surface))
                     {
                         return panel;
                     }
@@ -257,6 +280,22 @@ namespace SAM.Analytical.Tas
 
         public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance)
         {
+            return Match(zoneSurface, apertures, null, out aperturePart, tolerance);
+        }
+
+        /// <summary>
+        /// The aperture, and which half of it, one zone surface belongs to - from the stamps first, geometry
+        /// second.
+        /// <para>
+        /// <b><paramref name="zoneGuid"/> is what makes the stamp comparison an identity.</b> Same reasoning as
+        /// <see cref="Match(TBD.IZoneSurface, List{Panel}, string, double)"/>: a surface number is scoped to
+        /// its zone, so comparing numbers alone can hand a surface in one zone to an aperture in another. That
+        /// matters more here than for a panel - after Stage 2 the two apertures involved may share a building
+        /// element, a construction and an aperture type, so nothing downstream would look wrong.
+        /// </para>
+        /// </summary>
+        public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, string zoneGuid, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance)
+        {
             aperturePart = Analytical.AperturePart.Undefined;
 
             if (zoneSurface == null || apertures == null || apertures.Count == 0)
@@ -265,6 +304,10 @@ namespace SAM.Analytical.Tas
             }
 
             TBD.buildingElement buildingElement = zoneSurface.buildingElement;
+            if (buildingElement == null)
+            {
+                return null;
+            }
 
             ApertureType apertureType = ApertureType(buildingElement.BEType);
             if (apertureType == Analytical.ApertureType.Undefined)
@@ -278,8 +321,10 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            ApertureParameter apertureParameter_1 = aperturePart == Analytical.AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_1 : ApertureParameter.PaneZoneSurfaceReference_1;
-            ApertureParameter apertureParameter_2 = aperturePart == Analytical.AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_2;
+            ApertureParameter apertureParameter_1 = ApertureZoneSurfaceReferenceParameter(aperturePart, 1);
+            ApertureParameter apertureParameter_2 = ApertureZoneSurfaceReferenceParameter(aperturePart, 2);
+
+            Core.Tas.ZoneSurfaceReference zoneSurfaceReference_Surface = new Core.Tas.ZoneSurfaceReference(zoneSurface.number, zoneGuid);
 
             foreach (Aperture aperture in apertures)
             {
@@ -290,7 +335,7 @@ namespace SAM.Analytical.Tas
 
                 if (aperture.TryGetValue(apertureParameter_1, out Core.Tas.ZoneSurfaceReference zoneSurfaceReference_1) && zoneSurfaceReference_1 != null)
                 {
-                    if (zoneSurface.number == zoneSurfaceReference_1.SurfaceNumber)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_1, zoneSurfaceReference_Surface))
                     {
                         return aperture;
                     }
@@ -298,7 +343,7 @@ namespace SAM.Analytical.Tas
 
                 if (aperture.TryGetValue(apertureParameter_2, out Core.Tas.ZoneSurfaceReference zoneSurfaceReference_2) && zoneSurfaceReference_2 != null)
                 {
-                    if (zoneSurface.number == zoneSurfaceReference_2.SurfaceNumber)
+                    if (ZoneSurfaceReferencesMatch(zoneSurfaceReference_2, zoneSurfaceReference_Surface))
                     {
                         return aperture;
                     }
@@ -367,9 +412,12 @@ namespace SAM.Analytical.Tas
 
             foreach(Aperture aperture in apertures)
             {
+                //A null entry SKIPS. This returned, abandoning the whole search: one null in the list and
+                //every aperture after it became unresolvable, so a surface that had a perfectly good stamp
+                //further down the list silently matched nothing.
                 if(aperture == null)
                 {
-                    return null;
+                    continue;
                 }
 
                 Core.Tas.ZoneSurfaceReference zoneSurfaceReference_Temp = null;
@@ -453,7 +501,9 @@ namespace SAM.Analytical.Tas
                 return true;
             }
 
-            return a.ZoneGuid == b.ZoneGuid;
+            //Normalised rather than compared raw, so this and ZoneSurfaceKey - the two places a physical
+            //surface is compared - cannot disagree about whether two spellings of one GUID are one zone.
+            return NormalizeZoneGuid(a.ZoneGuid) == NormalizeZoneGuid(b.ZoneGuid);
         }
 
         public static Construction Match(this TAS3D.Element element, IEnumerable<Construction> constructions)
