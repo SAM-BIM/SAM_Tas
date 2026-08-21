@@ -10,12 +10,22 @@ namespace SAM.Analytical.Tas
     /// <b>One COM pass over a TBD's reusable definitions, held for the length of one open-document
     /// operation.</b>
     /// <para>
-    /// A <c>TBD.schedule</c> and a <c>TBD.ApertureType</c> are building-level definitions shared by every
-    /// element that needs them, so an export's job is to find the one that already says what this opening
-    /// says and assign it - not to make another. Finding it used to mean re-reading the building: the
-    /// aperture-control write scanned every aperture type in the building TWICE per opening child, and the
-    /// schedule write rebuilt every schedule's 24 values per child. On a model with hundreds of windows
-    /// that is the quadratic term. This class reads each collection once and answers from memory.
+    /// A <c>TBD.schedule</c>, a <c>TBD.ApertureType</c>, a <c>TBD.Construction</c> and an aperture's
+    /// <c>TBD.buildingElement</c> are all building-level definitions shared by every element that needs
+    /// them, so an export's job is to find the one that already says what this window says and assign it -
+    /// not to make another. Finding it used to mean re-reading the building: the aperture-control write
+    /// scanned every aperture type in the building TWICE per opening child, and the schedule write rebuilt
+    /// every schedule's 24 values per child. On a model with hundreds of windows that is the quadratic
+    /// term. This class reads each collection once and answers from memory.
+    /// </para>
+    /// <para>
+    /// <b>Four collections, one discipline.</b> Schedules and aperture types are Stage 1; aperture
+    /// constructions and aperture building elements are Stage 2, and they are held exactly the same way -
+    /// classified once, matched by full definitional equality and never by name, registered as reusable only
+    /// after a write has completed, and reserved by name from the moment an object exists.
+    /// Every construction and element NAME is held, because a name occupies the namespace whatever it names,
+    /// but only APERTURE ones are ever classified or offered for reuse: a panel's element and construction
+    /// are resolved by the direct export's own by-name dictionaries and this class takes no part in that.
     /// </para>
     /// <para>
     /// <b>Lifetime is one open document.</b> It holds live COM references, and the workflow re-opens the
@@ -49,8 +59,32 @@ namespace SAM.Analytical.Tas
             public string Refusal;
         }
 
+        private sealed class ConstructionEntry
+        {
+            public TBD.Construction Construction;
+            public string Name;
+            public ConstructionDefinition Definition;
+            public string Refusal;
+
+            /// <summary>A construction that was in the TBD before this export, still awaiting its content read.</summary>
+            public bool Seed_Unclassified;
+        }
+
+        private sealed class BuildingElementEntry
+        {
+            public TBD.buildingElement BuildingElement;
+            public string Name;
+            public BuildingElementDefinition Definition;
+            public string Refusal;
+
+            /// <summary>An element that was in the TBD before this export, still awaiting its content read.</summary>
+            public bool Seed_Unclassified;
+        }
+
         private readonly List<KeyValuePair<TBD.schedule, int[]>> schedules = new List<KeyValuePair<TBD.schedule, int[]>>();
         private readonly List<ApertureTypeEntry> apertureTypes = new List<ApertureTypeEntry>();
+        private readonly List<ConstructionEntry> constructions = new List<ConstructionEntry>();
+        private readonly List<BuildingElementEntry> buildingElements = new List<BuildingElementEntry>();
         private readonly List<TBD.dayType> dayTypes = new List<TBD.dayType>();
         private readonly List<string> dayTypeNames = new List<string>();
 
@@ -59,6 +93,10 @@ namespace SAM.Analytical.Tas
         //still occupies the namespace.
         private readonly HashSet<string> scheduleNames_Reserved = new HashSet<string>();
 
+        //Whether the deferred content read over the constructions and aperture building elements that were
+        //already in the TBD has happened. See EnsureSeedClassification.
+        private bool classified_Seeds;
+
         //Captured the first time an element is touched, i.e. BEFORE this export assigns anything to it.
         //That snapshot is what "already carried" means; everything after it is this export's own work.
         private readonly Dictionary<string, List<KeyValuePair<string, ApertureTypeDefinition>>> assignments_Existing = new Dictionary<string, List<KeyValuePair<string, ApertureTypeDefinition>>>();
@@ -66,7 +104,10 @@ namespace SAM.Analytical.Tas
         private readonly Dictionary<string, HashSet<string>> assignments_Current = new Dictionary<string, HashSet<string>>();
 
         /// <summary>
-        /// Reads the building's schedules, aperture types and day types once.
+        /// Reads the building's schedules, aperture types and day types, and the NAMES of its constructions
+        /// and building elements - one pass, no per-object content beyond that. The content read that decides
+        /// construction and element reuse is deferred to the first lookup that needs it; see
+        /// <see cref="EnsureSeedClassification"/>.
         /// </summary>
         public BuildingReuseCache(TBD.Building building)
         {
@@ -119,6 +160,117 @@ namespace SAM.Analytical.Tas
                     dayTypes.Add(dayType);
                     dayTypeNames.Add(dayType.name);
                 }
+            }
+
+            //Constructions and building elements: only their NAMES are read here. A name is what occupies the
+            //namespace, and it is one property read; the CONTENT read that decides reuse is deferred to
+            //EnsureSeedClassification, because a great many exports never need it. Modify.UpdateIZAMs, for
+            //one, re-enters Modify.Update once per air handling unit with a synthetic, aperture-less cluster:
+            //classifying every seeded construction's layers on each of those passes would be a per-IZAM COM
+            //cost paid for an answer nothing asks for.
+            List<TBD.Construction> constructions_Building = building.Constructions();
+            if (constructions_Building != null)
+            {
+                foreach (TBD.Construction construction in constructions_Building)
+                {
+                    if (construction == null)
+                    {
+                        continue;
+                    }
+
+                    constructions.Add(new ConstructionEntry
+                    {
+                        Construction = construction,
+                        Name = construction.name,
+                        Definition = null,
+                        Refusal = null,
+                        Seed_Unclassified = true
+                    });
+                }
+            }
+
+            List<TBD.buildingElement> buildingElements_Building = building.BuildingElements();
+            if (buildingElements_Building != null)
+            {
+                foreach (TBD.buildingElement buildingElement in buildingElements_Building)
+                {
+                    if (buildingElement == null)
+                    {
+                        continue;
+                    }
+
+                    buildingElements.Add(new BuildingElementEntry
+                    {
+                        BuildingElement = buildingElement,
+                        Name = buildingElement.name,
+                        Definition = null,
+                        Refusal = null,
+                        Seed_Unclassified = true
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads what the constructions and aperture building elements that were ALREADY in the TBD hold -
+        /// once, the first time a reuse lookup needs to know, and never again.
+        /// <para>
+        /// Deferred rather than done in the constructor because the answer is only ever needed by an export
+        /// that actually places an aperture, and because the cheap half of it - the names, which is what
+        /// collision avoidance needs - is already in hand. Only objects carrying this export's own
+        /// <c>-pane</c>/<c>-frame</c> naming are read at all: a panel's construction can never be an aperture
+        /// reuse candidate, so reading its layers would be COM traffic spent on an answer that is already
+        /// "no". Elements are classified after constructions because classifying an element reads its
+        /// construction.
+        /// </para>
+        /// </summary>
+        private void EnsureSeedClassification()
+        {
+            if (classified_Seeds)
+            {
+                return;
+            }
+
+            //Set BEFORE the pass: classifying a building element reads its openings, and this must not
+            //re-enter itself part way through.
+            classified_Seeds = true;
+
+            foreach (ConstructionEntry constructionEntry in constructions)
+            {
+                if (!constructionEntry.Seed_Unclassified)
+                {
+                    continue;
+                }
+
+                constructionEntry.Seed_Unclassified = false;
+
+                if (!Query.TryDecomposeConstructionName(constructionEntry.Name, out string _, out AperturePart _))
+                {
+                    constructionEntry.Refusal = "TBD construction outside this export's aperture naming convention.";
+                    continue;
+                }
+
+                constructionEntry.Definition = constructionEntry.Construction.ConstructionDefinition(out string refusal);
+                constructionEntry.Refusal = refusal;
+            }
+
+            foreach (BuildingElementEntry buildingElementEntry in buildingElements)
+            {
+                if (!buildingElementEntry.Seed_Unclassified)
+                {
+                    continue;
+                }
+
+                buildingElementEntry.Seed_Unclassified = false;
+
+                if (!Query.TryDecomposeBuildingElementName(buildingElementEntry.Name, out string _, out ApertureType _, out AperturePart _))
+                {
+                    buildingElementEntry.Refusal = "TBD building element outside this export's aperture naming convention.";
+                    continue;
+                }
+
+                buildingElementEntry.Definition = buildingElementEntry.BuildingElement.BuildingElementDefinition(this, out string refusal);
+                buildingElementEntry.Refusal = refusal;
             }
         }
 
@@ -322,6 +474,225 @@ namespace SAM.Analytical.Tas
                 Definition = null,
                 Ordinal = ordinal < 1 ? 1 : ordinal,
                 Refusal = refusal ?? "Aperture type created by this export whose write did not complete, so it is not reusable."
+            });
+        }
+
+        /// <summary>
+        /// Every construction name in the building, including this export's own creations and including
+        /// constructions that may not be reused - a name occupies the namespace whatever its content, so a
+        /// new construction must not be given it.
+        /// </summary>
+        public List<string> ConstructionNames()
+        {
+            return constructions.Select(x => x.Name).ToList();
+        }
+
+        /// <summary>
+        /// The reusable aperture construction holding exactly <paramref name="constructionDefinition"/>, or
+        /// null.
+        /// <para>
+        /// Matching consults REUSABLE entries only, and identity is the definition: the type, the ordered
+        /// layers with their materials and widths, the additional heat transfer, the description and which
+        /// half of a window it is. The NAME takes no part - which is the whole of the fix here. The previous
+        /// behaviour on this path adopted any construction whose name matched, whatever its layers; once
+        /// names are derived from the reusable SAM <c>ApertureConstruction</c> rather than from the
+        /// aperture's GUID, that would hand one window another window's glazing.
+        /// </para>
+        /// </summary>
+        public TBD.Construction FindConstruction(ConstructionDefinition constructionDefinition)
+        {
+            if (constructionDefinition == null || !constructionDefinition.Proven)
+            {
+                return null;
+            }
+
+            EnsureSeedClassification();
+
+            foreach (ConstructionEntry constructionEntry in constructions)
+            {
+                if (constructionEntry.Definition == null)
+                {
+                    continue;
+                }
+
+                if (constructionEntry.Definition.Equals(constructionDefinition))
+                {
+                    return constructionEntry.Construction;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Why a seeded aperture construction may not be reused, or null.</summary>
+        public string ConstructionRefusal(string name)
+        {
+            EnsureSeedClassification();
+
+            return name == null ? null : constructions.Find(x => x.Name == name)?.Refusal;
+        }
+
+        /// <summary>
+        /// Remembers an aperture construction this export created and finished writing, so the next window
+        /// reuses it. A construction reserved at creation time is upgraded in place, identified by the SAME
+        /// COM reference rather than by name.
+        /// </summary>
+        public void RegisterConstruction(TBD.Construction construction, ConstructionDefinition constructionDefinition)
+        {
+            if (construction == null)
+            {
+                return;
+            }
+
+            ConstructionEntry constructionEntry = constructions.Find(x => ReferenceEquals(x.Construction, construction));
+            if (constructionEntry != null)
+            {
+                constructionEntry.Definition = constructionDefinition;
+                constructionEntry.Refusal = null;
+                return;
+            }
+
+            constructions.Add(new ConstructionEntry
+            {
+                Construction = construction,
+                Name = construction.name,
+                Definition = constructionDefinition,
+                Refusal = null
+            });
+        }
+
+        /// <summary>
+        /// Reserves a created construction's name WITHOUT making it reusable - called the moment a created
+        /// construction is named, so that a write which does not complete leaves an object that can never be
+        /// handed to the next window, while its name still occupies the namespace.
+        /// </summary>
+        public void ReserveConstruction(TBD.Construction construction, string refusal = null)
+        {
+            if (construction == null)
+            {
+                return;
+            }
+
+            if (constructions.Exists(x => ReferenceEquals(x.Construction, construction)))
+            {
+                return;
+            }
+
+            constructions.Add(new ConstructionEntry
+            {
+                Construction = construction,
+                Name = construction.name,
+                Definition = null,
+                Refusal = refusal ?? "Construction created by this export whose write did not complete, so it is not reusable."
+            });
+        }
+
+        /// <summary>
+        /// Every building element name in the building, including this export's own creations and including
+        /// elements that may not be shared.
+        /// </summary>
+        public List<string> BuildingElementNames()
+        {
+            return buildingElements.Select(x => x.Name).ToList();
+        }
+
+        /// <summary>
+        /// The reusable aperture building element matching exactly
+        /// <paramref name="buildingElementDefinition"/>, or null.
+        /// <para>
+        /// Matching consults REUSABLE entries only, and identity is the definition - window or door, pane or
+        /// frame, <c>BEType</c>, colour, construction content and the ordered openings with their
+        /// occurrences. On a hit the caller assigns the element to this aperture's <c>zoneSurface</c>es and
+        /// writes NOTHING to the element itself: every other aperture referencing it would see the write.
+        /// </para>
+        /// </summary>
+        public TBD.buildingElement FindApertureBuildingElement(BuildingElementDefinition buildingElementDefinition)
+        {
+            if (buildingElementDefinition == null || !buildingElementDefinition.Proven)
+            {
+                return null;
+            }
+
+            EnsureSeedClassification();
+
+            foreach (BuildingElementEntry buildingElementEntry in buildingElements)
+            {
+                if (buildingElementEntry.Definition == null)
+                {
+                    continue;
+                }
+
+                if (buildingElementEntry.Definition.Equals(buildingElementDefinition))
+                {
+                    return buildingElementEntry.BuildingElement;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Why a seeded aperture building element may not be shared, or null.</summary>
+        public string BuildingElementRefusal(string name)
+        {
+            EnsureSeedClassification();
+
+            return name == null ? null : buildingElements.Find(x => x.Name == name)?.Refusal;
+        }
+
+        /// <summary>
+        /// Remembers an aperture building element this export created and finished writing - construction
+        /// assigned, colour and <c>BEType</c> set, and its openings written - so the next equivalent aperture
+        /// shares it. An element reserved at creation time is upgraded in place, identified by the SAME COM
+        /// reference rather than by name.
+        /// </summary>
+        public void RegisterApertureBuildingElement(TBD.buildingElement buildingElement, BuildingElementDefinition buildingElementDefinition)
+        {
+            if (buildingElement == null)
+            {
+                return;
+            }
+
+            BuildingElementEntry buildingElementEntry = buildingElements.Find(x => ReferenceEquals(x.BuildingElement, buildingElement));
+            if (buildingElementEntry != null)
+            {
+                buildingElementEntry.Definition = buildingElementDefinition;
+                buildingElementEntry.Refusal = null;
+                return;
+            }
+
+            buildingElements.Add(new BuildingElementEntry
+            {
+                BuildingElement = buildingElement,
+                Name = buildingElement.name,
+                Definition = buildingElementDefinition,
+                Refusal = null
+            });
+        }
+
+        /// <summary>
+        /// Reserves a created aperture building element's name WITHOUT making it shareable - called the
+        /// moment a created element is named. An element whose openings were only partly written must never
+        /// be handed to the next aperture as though it carried them all, but its name still occupies the
+        /// namespace.
+        /// </summary>
+        public void ReserveApertureBuildingElement(TBD.buildingElement buildingElement, string refusal = null)
+        {
+            if (buildingElement == null)
+            {
+                return;
+            }
+
+            if (buildingElements.Exists(x => ReferenceEquals(x.BuildingElement, buildingElement)))
+            {
+                return;
+            }
+
+            buildingElements.Add(new BuildingElementEntry
+            {
+                BuildingElement = buildingElement,
+                Name = buildingElement.name,
+                Definition = null,
+                Refusal = refusal ?? "Building element created by this export whose write did not complete, so it is not shareable."
             });
         }
 
