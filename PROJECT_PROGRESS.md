@@ -1,47 +1,98 @@
 # Project Progress
 
 ## Branch
-`feature/tas-aperture-definition-reuse` (off `sow/2026-Q3` at `f3f5802`, i.e. after PR #30 merged).
+`sow/2026-Q3-instance-identity` (off the PR #31 merge `fd8016f6` on `sow/2026-Q3`).
 Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
+Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-21 - **Licensed-TAS acceptance COMPLETE. Every merge-gate row passes.** Object counts,
-repeat-export (+ the one genuine defect it caught, now fixed), all 18 definition-variant scenarios, the
-SAM -> TBD -> save/reopen -> SAM round trip, the **A/B TAS/TSD simulation** and the **real shaded-project
-regression** are all done and PASS - see "Stage 2 - licensed acceptance progress" below.
+2026-08-21 - **Stage 3 under way: S3-C1 and S3-C2 implemented; PR #32 open; its five Codex review
+findings fixed.**
 
-The headline: on a real 9-zone Part O model with 20 pane+frame windows, Stage 2 collapses 40 aperture
-building elements to 3 while leaving all 110 physical `zoneSurface`s, their geometry and their construction
-assignments byte-identical, and a full-year TAS simulation of both exports agrees on **4,616,520 result
-values with zero differences** - not "within solver noise", bit-identical. The shaded-project regression
-(`UpdateShading` -> TAS -> `Create.SolarModel` -> `CopyResults` -> aperture solar-result mapping) is
-likewise identical on every one of its 114 compared fields, with the same sharing (6 aperture elements -> 2)
-in effect.
-
-**Immediate next step:** open the Stage 2 PR. No production code changed after `97d1ab4f`; the only commits
-since are documentation recording this acceptance.
+**Immediate next step:** merge PR #32 once CI is green, then S3-C3 - the licensed-TAS gated acceptance
+(double round trip with zero new definitions on the second export, and the change/split scenario on a real
+update path) plus the identity-mechanism handover doc.
 
 ## Current status
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
 same opening control. Full detail, the S1-C0 probe result and the licensed-TAS acceptance table live in
 `SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`.
 
-**Stage 2 is implemented and has PASSED the licensed-TAS gate** (2026-08-21, EDSL Tas build 17044).
-The direct `Modify.Update` export now shares
-one `TBD.Construction` and one aperture `TBD.buildingElement` across every aperture stating the same
-content, instead of creating one per aperture per part. 200 identical windows go from 400 constructions and
-400 elements to 2 and 2, while all 400 physical `zoneSurface`s remain. Full detail, invariants, seed gates,
-deliberate limitations and the acceptance table live in
-`SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE.md`.
+**Stage 2 is merged** (PR #31, 2026-08-21). The direct `Modify.Update` export shares one `TBD.Construction`
+and one aperture `TBD.buildingElement` across every aperture stating the same content, instead of creating
+one per aperture per part. 200 identical windows go from 400 constructions and 400 elements to 2 and 2,
+while all 400 physical `zoneSurface`s remain. Full detail, invariants, seed gates, deliberate limitations
+and the acceptance table live in `SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE.md`.
 
-The frozen three-stage plan both implement is
+**Stage 3 (physical-instance identity hardening) is in progress** on
+`sow/2026-Q3-instance-identity` (PR #32 -> `sow/2026-Q3`):
+
+- **S3-C1 done** (`11a856a1`) - `UpdateBuildingElements` resolves which SAM aperture(s) a TBD building
+  element stands for via STAMPS, not name-decode: `Modify.UpdateIds` now also stamps each aperture's
+  `Pane/FrameBuildingElementGuid` with the GUID of the TBD element its export bound it to; the update path
+  resolves through a definition-membership map built from those stamps (many apertures may stamp one
+  shared element), falling back to the ORIGINAL single-aperture GUID-in-name decode, byte-for-byte
+  unchanged, for every element no aperture stamps (all TAS-authored/legacy TBDs). A shared element is never
+  mutated; a divergent member is split onto its own element and only its own stamped surfaces are rebound.
+  Also fixes `Query.Match`'s ZoneSurfaceReference overload comparing SurfaceNumber alone across zones
+  (TAS numbers surfaces PER ZONE) - now requires ZoneGuid agreement when both sides state one, exposed as
+  COM-free `Query.ZoneSurfaceReferencesMatch`.
+- **S3-C2 done** (`c79be01d`) - the aperture import's inline polygon grouping extracted as COM-free
+  `Query.GroupAperturePolygons`, fixing two real import bugs with one root cause (the seed's key half was
+  read back off the shrunk tuple list): a seed with a coincident partner got a DIFFERENT aperture's
+  surface key attached, and a lone pane with no coincident frame produced an EMPTY group - no
+  ZoneSurfaceReference, no BuildingElementGuid, no imported OpeningProperties for that aperture at all.
+- **S3-C3 remaining** - licensed-TAS gated acceptance (double round trip with zero new definitions on the
+  second export, and the change/split scenario on a real update path) plus the identity-mechanism handover
+  doc.
+
+The frozen three-stage plan is
 `C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21).
-Stage 3 (physical-instance identity hardening on update/round-trip, the `UpdateBuildingElements`
-name-decode replacement, import grouping, refusal reporting on `Modify.Update`) is **not started**.
-Its first item is a known, already-planned consequence of Stage 2 that PR #31's Codex review caught
-independently: `UpdateBuildingElements` degrades (note-based, not silent corruption) when fed a Stage-2
-TBD, because Stage 2 element names no longer carry a single aperture's GUID by design — see
-`APERTURE_DEFINITION_REUSE.md`, "Known limitation: `UpdateBuildingElements` on a Stage-2 TBD".
+Stage 3's first item was a known, already-planned consequence of Stage 2 that PR #31's Codex review caught
+independently: `UpdateBuildingElements` degraded (note-based, not silent corruption) when fed a Stage-2
+TBD, because Stage 2 element names no longer carry a single aperture's GUID by design - see
+`APERTURE_DEFINITION_REUSE.md`, "Known limitation: `UpdateBuildingElements` on a Stage-2 TBD". S3-C1 is
+the fix.
+
+## Stage 3 - Codex review fixes (PR #32, this session)
+
+The Codex review of PR #32 raised five findings; all are fixed:
+
+- **P1 - legacy word-set construction fallback restored** (`Modify/UpdateBuildingElements.cs`). The Stage 3
+  rewrite kept building `constructionWordSets` but stopped USING it, so a legacy element whose name carried
+  all of a construction's words without either side being a literal suffix fell through to the null check
+  and got no construction, colour, opening controls or schedules. The subset-of-words fallback is restored
+  after the exact/suffix matches, before the null check.
+- **P1 - feature shade joins the split decision** (`Query/ApertureMatchesExistingAssignment.cs`, new
+  `Query/FeatureShadesMatch.cs`, call site). A stamped pane adding, removing or changing ONLY its
+  `FeatureShade` still matched on colour and openings, so it stayed bound and never reached
+  `SetFeatureShades`. The element's current shade (read once via `GetFeatureShade(1)`, converted to SAM) is
+  now compared by CONTENT - float-precision, NaN-aware, name/description excluded (TAS auto-names shades) -
+  and a mismatch splits exactly as a colour change does. Consequential invariant: a pane stating a shade
+  never takes the reuse cache (a shade-carrying element is never shareable - the seed gate's own rule), is
+  always created fresh, gets the shade written, and is NOT registered for reuse.
+- **P1 - a lone pane is no longer stamped as its own frame** (`Convert/ToSAM/AdjacencyCluster.cs`). S3-C2's
+  one-member groups newly fed singletons into a fallback that assigned `zoneSurfaces_Aperture[0]` to BOTH
+  pane and frame, and frame-first reference matching then classified the pane as a frame. A singleton now
+  keeps only the part its construction name (or, suffixless, its element's `BEType`) states; the `[0]`
+  fabrication fallback is retained for multi-member groups only.
+- **P2 - rebind validates the complete surface set before moving any** (`RebindMemberSurfaces`). A
+  two-sided member whose second surface was missing/stale previously rebound the first and still advanced
+  the BuildingElementGuid stamp, splitting the aperture across old and new elements. Now any resolution or
+  stale-stamp failure rebinds NONE of the member's surfaces and leaves its stamp untouched.
+- **P1 - this file updated** (it still read "Stage 3 not started" and recommended opening the
+  already-merged Stage 2 PR).
+
+Files changed: `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateBuildingElements.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Query/ApertureMatchesExistingAssignment.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Query/FeatureShadesMatch.cs` (new),
+`SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/AdjacencyCluster.cs`,
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/InstanceIdentityTests.cs` (+9 tests: shade add/remove/change,
+float round-trip stability, frame-ignores-shade, `FeatureShadesMatch` null/text/NaN cases), this file.
+
+Validation: `SAM.Analytical.Tas.csproj` builds with 0 errors in Debug AND Release (Framework MSBuild; the
+MSB3270 COM-architecture warnings are pre-existing). `SAM.Analytical.Tas.TM59.Tests`: **365/365 pass** in
+both configurations (356 pre-existing, unchanged, + 9 new). Licensed TAS: not run - S3-C3 owns that gate.
 
 ---
 

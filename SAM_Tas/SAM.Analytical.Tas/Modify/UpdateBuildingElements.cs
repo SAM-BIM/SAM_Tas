@@ -81,13 +81,15 @@ namespace SAM.Analytical.Tas
         /// </para>
         /// <para>
         /// <b>A shared element is never mutated once resolved with more than one current member.</b> Each
-        /// member's own required colour/opening-control state is compared against what the element ALREADY
-        /// carries (read before this pass writes anything). A member matching stays with the element - zero
-        /// writes, since every other member would see them. A member that no longer matches (its SAM
-        /// aperture changed since the export that bound it) is SPLIT onto its own element - reused if an
-        /// equivalent one already exists, created otherwise - and only that member's own physical
-        /// pane/frame <c>zoneSurface</c>s, resolved from its <c>Pane/FrameZoneSurfaceReference_1/2</c>
-        /// stamps, are rebound to it. The original element is never written to and, if every member
+        /// member's own required colour, opening-control and feature-shade state is compared against what
+        /// the element ALREADY carries (read before this pass writes anything). A member matching stays
+        /// with the element - zero writes, since every other member would see them. A member that no longer
+        /// matches (its SAM aperture changed since the export that bound it) is SPLIT onto its own
+        /// element - reused if an equivalent one already exists, created otherwise (always created when the
+        /// member states a feature shade: a shade-carrying element is never shareable) - and only that
+        /// member's own physical pane/frame <c>zoneSurface</c>s, resolved from its
+        /// <c>Pane/FrameZoneSurfaceReference_1/2</c> stamps, are rebound to it, validated as a complete set
+        /// before any one of them moves. The original element is never written to and, if every member
         /// diverges, is simply left in place unused.
         /// </para>
         /// </summary>
@@ -176,6 +178,35 @@ namespace SAM.Analytical.Tas
                     }
                 }
 
+                if (construction == null)
+                {
+                    //The legacy word-set fallback, kept for element names that carry every word of a
+                    //construction's name without either side being a literal suffix of the other (a naming
+                    //case TAS-authored TBDs genuinely produce). Without it such a glazing element falls
+                    //through to the null check below and misses its construction, colour, opening controls
+                    //and availability schedules even though the index was built.
+                    HashSet<string> elementWords = new HashSet<string>();
+                    foreach (string w in name.Split(' '))
+                    {
+                        if (!string.IsNullOrWhiteSpace(w))
+                            elementWords.Add(w);
+                    }
+
+                    if (elementWords.Count != 0)
+                    {
+                        foreach (KeyValuePair<TBD.Construction, HashSet<string>> entry in constructionWordSets)
+                        {
+                            //Original behaviour: a construction matches when every word of its name appears
+                            //in the element's name (the construction's words are a subset of the element's).
+                            if (entry.Value.IsSubsetOf(elementWords))
+                            {
+                                construction = entry.Key;
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 if(construction == null)
                 {
                     //A glazing element that never finds a construction leaves this loop before the aperture
@@ -223,11 +254,16 @@ namespace SAM.Analytical.Tas
                         uint colour_Current = buildingElement.colour;
                         List<ApertureTypeDefinition> assignments_Current = buildingReuseCache.ExistingAssignments(buildingElement).ConvertAll(x => x.Value);
 
+                        //The element's current feature shade, read once like its colour - a pane whose
+                        //stated shade no longer matches this has diverged and must be split, or it would
+                        //keep the stale shade and never reach SetFeatureShades.
+                        FeatureShade featureShade_Current = Convert.ToSAM(buildingElement.GetFeatureShade(1));
+
                         ConstructionDefinition constructionDefinition_Element = null;
 
                         foreach (ApertureMember member in members)
                         {
-                            if (Query.ApertureMatchesExistingAssignment(member.Aperture, member.AperturePart, colour_Current, assignments_Current, buildingReuseCache.DayTypeNames))
+                            if (Query.ApertureMatchesExistingAssignment(member.Aperture, member.AperturePart, colour_Current, assignments_Current, buildingReuseCache.DayTypeNames, featureShade_Current))
                             {
                                 //Already what this member asks for - zero writes, exactly as every other
                                 //member sharing this element would see them.
@@ -244,7 +280,14 @@ namespace SAM.Analytical.Tas
 
                             BuildingElementDefinition buildingElementDefinition_Required = member.Aperture.BuildingElementDefinition(member.AperturePart, constructionDefinition_Element, buildingReuseCache.DayTypeNames, out string _);
 
-                            buildingElement buildingElement_Target = buildingReuseCache.FindApertureBuildingElement(buildingElementDefinition_Required);
+                            //A pane stating a feature shade must land on its OWN newly created element: a
+                            //shade-carrying element is never shareable (the seed gate refuses it), so a
+                            //cache hit would be a shade-less element the shade could not be written to
+                            //without spreading it to every other member sharing it.
+                            FeatureShade featureShade_Required = null;
+                            bool featureShade_Stated = member.AperturePart == AperturePart.Pane && member.Aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out featureShade_Required) && featureShade_Required != null;
+
+                            buildingElement buildingElement_Target = featureShade_Stated ? null : buildingReuseCache.FindApertureBuildingElement(buildingElementDefinition_Required);
                             bool created = false;
                             if (buildingElement_Target == null)
                             {
@@ -268,7 +311,10 @@ namespace SAM.Analytical.Tas
                                         count_ApertureTypes = WriteOpeningControl(building, buildingElement_Target, member.Aperture, "the definition-membership map", buildingReuseCache, notes, ref count_ScheduleRequested, ref count_ScheduleWritten);
                                     }
 
-                                    if (buildingElementDefinition_Required != null && buildingElementDefinition_Required.Proven && count_ApertureTypes == buildingElementDefinition_Required.ApertureTypeCount)
+                                    //A shade-stated member's element is never registered: it is about to
+                                    //carry a feature shade, and the reuse invariant (the seed gate) is that
+                                    //a shade-carrying element is never shared.
+                                    if (!featureShade_Stated && buildingElementDefinition_Required != null && buildingElementDefinition_Required.Proven && count_ApertureTypes == buildingElementDefinition_Required.ApertureTypeCount)
                                     {
                                         buildingReuseCache.RegisterApertureBuildingElement(buildingElement_Target, buildingElementDefinition_Required);
                                     }
@@ -284,13 +330,13 @@ namespace SAM.Analytical.Tas
 
                             count_MembersSplit++;
 
-                            //A NEWLY CREATED element's own feature shade follows its one founding member -
-                            //an element found by FindApertureBuildingElement already has whatever members
-                            //share it, and writing to it here would be exactly the mutation this whole path
-                            //exists to avoid.
-                            if (created && member.AperturePart == AperturePart.Pane && member.Aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade_New))
+                            //A NEWLY CREATED element's own feature shade follows its one founding member.
+                            //(The shade-stated case above never takes the cache, so a found element - which
+                            //already has whatever members share it - is never written to here: exactly the
+                            //mutation this whole path exists to avoid.)
+                            if (created && featureShade_Stated)
                             {
-                                SetFeatureShades(building, buildingElement_Target, featureShade_New);
+                                SetFeatureShades(building, buildingElement_Target, featureShade_Required);
                             }
 
                             RebindMemberSurfaces(analyticalModel.AdjacencyCluster, surfaceIndex, member, buildingElement, buildingElement_Target, notes);
@@ -435,16 +481,24 @@ namespace SAM.Analytical.Tas
         /// Rebinds ONLY <paramref name="member"/>'s own physical pane/frame <c>zoneSurface</c>s - resolved
         /// from its <c>Pane/FrameZoneSurfaceReference_1/2</c> stamps via <paramref name="surfaceIndex"/> -
         /// from <paramref name="buildingElement_From"/> to <paramref name="buildingElement_To"/>, then
-        /// re-stamps the member's own <c>Pane/FrameBuildingElementGuid</c> to the new binding. Refuses a
-        /// surface it cannot resolve, or whose CURRENT element does not match what the member claims (a
-        /// stale stamp), rather than rebinding something another aperture might actually own.
+        /// re-stamps the member's own <c>Pane/FrameBuildingElementGuid</c> to the new binding.
+        /// <para>
+        /// <b>The complete intended surface set is resolved and validated before anything is rebound.</b>
+        /// A two-sided member whose second surface is missing or stale must not leave its first surface
+        /// already moved while the second stays behind - the aperture would be split across the old and new
+        /// elements, with the stamp below then calling the new element authoritative over a surface still
+        /// bound to the old one. Any failure therefore rebinds NONE of the member's surfaces and leaves its
+        /// stamp untouched. A surface it cannot resolve, or whose CURRENT element does not match what the
+        /// member claims (a stale stamp), is refused rather than guessed at.
+        /// </para>
         /// </summary>
         private static void RebindMemberSurfaces(AdjacencyCluster adjacencyCluster, Dictionary<string, TBD.IZoneSurface> surfaceIndex, ApertureMember member, buildingElement buildingElement_From, buildingElement buildingElement_To, List<string> notes)
         {
             ApertureParameter parameter_1 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_1 : ApertureParameter.PaneZoneSurfaceReference_1;
             ApertureParameter parameter_2 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_2;
 
-            bool reboundAny = false;
+            //Phase 1: resolve and validate EVERY intended surface first.
+            List<TBD.IZoneSurface> zoneSurfaces_ToRebind = new List<TBD.IZoneSurface>(2);
 
             foreach (ApertureParameter parameter in new[] { parameter_1, parameter_2 })
             {
@@ -456,9 +510,9 @@ namespace SAM.Analytical.Tas
                 string key = SurfaceKey(zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber);
                 if (!surfaceIndex.TryGetValue(key, out TBD.IZoneSurface zoneSurface) || zoneSurface == null)
                 {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface (zone {2}, surface {3}) that could not be found in the TBD; that surface was left unbound.",
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface (zone {2}, surface {3}) that could not be found in the TBD; none of its surfaces were rebound.",
                         member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
-                    continue;
+                    return;
                 }
 
                 //Stale-stamp guard: only rebind a surface that currently points at the element the aperture
@@ -467,27 +521,34 @@ namespace SAM.Analytical.Tas
                 string buildingElementGuid_Current = zoneSurface.buildingElement?.GUID;
                 if (!string.IsNullOrWhiteSpace(buildingElementGuid_Current) && buildingElementGuid_Current != buildingElement_From.GUID)
                 {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1})'s surface (zone {2}, surface {3}) is currently bound to a different element than the aperture's own stamp claims; it was left unbound rather than guessed at.",
+                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1})'s surface (zone {2}, surface {3}) is currently bound to a different element than the aperture's own stamp claims; none of its surfaces were rebound rather than guessed at.",
                         member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
-                    continue;
+                    return;
                 }
 
-                zoneSurface.buildingElement = buildingElement_To;
-                reboundAny = true;
+                zoneSurfaces_ToRebind.Add(zoneSurface);
             }
 
-            if (reboundAny)
+            if (zoneSurfaces_ToRebind.Count == 0)
             {
-                ApertureParameter guidParameter = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
+                return;
+            }
 
-                Aperture aperture_Temp = adjacencyCluster.GetAperture(member.Aperture.Guid, out Panel panel_Temp);
-                if (aperture_Temp != null && panel_Temp != null)
-                {
-                    aperture_Temp.SetValue(guidParameter, buildingElement_To.GUID);
-                    panel_Temp.RemoveAperture(aperture_Temp.Guid);
-                    panel_Temp.AddAperture(aperture_Temp);
-                    adjacencyCluster.AddObject(panel_Temp);
-                }
+            //Phase 2: every intended surface validated - rebind them together, then advance the stamp.
+            foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces_ToRebind)
+            {
+                zoneSurface.buildingElement = buildingElement_To;
+            }
+
+            ApertureParameter guidParameter = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
+
+            Aperture aperture_Temp = adjacencyCluster.GetAperture(member.Aperture.Guid, out Panel panel_Temp);
+            if (aperture_Temp != null && panel_Temp != null)
+            {
+                aperture_Temp.SetValue(guidParameter, buildingElement_To.GUID);
+                panel_Temp.RemoveAperture(aperture_Temp.Guid);
+                panel_Temp.AddAperture(aperture_Temp);
+                adjacencyCluster.AddObject(panel_Temp);
             }
         }
 

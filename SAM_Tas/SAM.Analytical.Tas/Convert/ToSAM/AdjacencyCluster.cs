@@ -443,14 +443,46 @@ namespace SAM.Analytical.Tas
 
                             }
 
-                            if (zoneSurface_Frame == null)
+                            if (zoneSurfaces_Aperture.Count == 1)
                             {
-                                zoneSurface_Frame = zoneSurfaces_Aperture[0];
-                            }
+                                //A single-member group is exactly what its one surface already claims to
+                                //be: a lone pane with no separately written frame ring is NOT also its own
+                                //frame. (This block only sees singletons since GroupAperturePolygons made a
+                                //lone pane a genuine one-member group; the [0] fallbacks in the else below
+                                //predate that and would stamp one physical glazing surface as both pane and
+                                //frame, and frame-first reference matching then classifies the pane as a
+                                //frame.) When the construction name carries no -pane/-frame suffix, take the
+                                //part from the surface's own element type instead of fabricating the
+                                //missing half.
+                                if (zoneSurface_Pane == null && zoneSurface_Frame == null)
+                                {
+                                    TBD.buildingElement buildingElement_Singleton = zoneSurfaces_Aperture[0]?.buildingElement;
+                                    if (buildingElement_Singleton != null)
+                                    {
+                                        switch ((TBD.BuildingElementType)buildingElement_Singleton.BEType)
+                                        {
+                                            case TBD.BuildingElementType.GLAZING:
+                                                zoneSurface_Pane = zoneSurfaces_Aperture[0];
+                                                break;
 
-                            if (zoneSurface_Pane == null)
+                                            case TBD.BuildingElementType.FRAMEELEMENT:
+                                                zoneSurface_Frame = zoneSurfaces_Aperture[0];
+                                                break;
+                                        }
+                                    }
+                                }
+                            }
+                            else
                             {
-                                zoneSurface_Pane = zoneSurfaces_Aperture[0];
+                                if (zoneSurface_Frame == null)
+                                {
+                                    zoneSurface_Frame = zoneSurfaces_Aperture[0];
+                                }
+
+                                if (zoneSurface_Pane == null)
+                                {
+                                    zoneSurface_Pane = zoneSurfaces_Aperture[0];
+                                }
                             }
 
                             if (zoneSurface_Frame != null)

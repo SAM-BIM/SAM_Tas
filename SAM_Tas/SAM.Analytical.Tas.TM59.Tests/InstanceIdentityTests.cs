@@ -19,12 +19,13 @@ namespace SAM.Analytical.Tas.TM59.Tests
     /// two zones' same-numbered surfaces must not be confused once a reference states which zone it means.
     /// </para>
     /// <para>
-    /// <see cref="TasQuery.ApertureMatchesExistingAssignment(Aperture, AperturePart, uint, IEnumerable{ApertureTypeDefinition}, IEnumerable{string})"/> -
-    /// the split/rebind decision: whether a member aperture's own required colour and opening control are
-    /// still exactly what a shared building element already carries, or whether it has drifted and must be
-    /// split onto its own element instead. Both are pure functions of SAM-side, COM-free state - the
-    /// <c>Aperture</c>/<c>Core.Tas.ZoneSurfaceReference</c> value objects and the plain values a caller
-    /// would have already read off the real TBD element - so the decision is testable with no TAS install.
+    /// <see cref="TasQuery.ApertureMatchesExistingAssignment(Aperture, AperturePart, uint, IEnumerable{ApertureTypeDefinition}, IEnumerable{string}, FeatureShade)"/> -
+    /// the split/rebind decision: whether a member aperture's own required colour, opening control and
+    /// feature shade are still exactly what a shared building element already carries, or whether it has
+    /// drifted and must be split onto its own element instead. Both are pure functions of SAM-side,
+    /// COM-free state - the <c>Aperture</c>/<c>Core.Tas.ZoneSurfaceReference</c> value objects and the
+    /// plain values a caller would have already read off the real TBD element - so the decision is
+    /// testable with no TAS install.
     /// </para>
     /// </summary>
     [TestFixture]
@@ -48,7 +49,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 new List<ConstructionLayer> { new ConstructionLayer("Timber", 0.05) });
         }
 
-        private static Aperture Window(IOpeningProperties openingProperties = null, System.Drawing.Color? color = null, double offset = 0)
+        private static Aperture Window(IOpeningProperties openingProperties = null, System.Drawing.Color? color = null, double offset = 0, FeatureShade featureShade = null)
         {
             Polygon3D polygon3D = new Polygon3D(new List<Point3D>
             {
@@ -70,7 +71,17 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 aperture.SetValue(SAM.Analytical.ApertureParameter.Color, color.Value);
             }
 
+            if (featureShade != null)
+            {
+                aperture.SetValue(SAM.Analytical.ApertureParameter.FeatureShade, featureShade);
+            }
+
             return aperture;
+        }
+
+        private static FeatureShade Shade(double overhangDepth = 0.5)
+        {
+            return new FeatureShade("shade", null, 1.0, 2.0, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, overhangDepth, 0.0, 0.5);
         }
 
         private static PartOOpeningProperties PartO(double dischargeCoefficient = 1.2)
@@ -173,6 +184,109 @@ namespace SAM.Analytical.Tas.TM59.Tests
             bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Frame, Colour(aperture, AperturePart.Frame), assignments_Existing, DayTypes);
 
             Assert.That(result, Is.False, "a frame's required assignment list is always empty - it cannot match an element that carries any");
+        }
+
+        // =================================================================================================
+        // ApertureMatchesExistingAssignment - the feature-shade half of the split decision
+        //
+        // A stamped pane that adds, removes or changes ONLY its FeatureShade still matches on colour and
+        // openings, so without a shade comparison it would stay bound and never reach SetFeatureShades.
+        // =================================================================================================
+
+        [Test]
+        public void MatchesExisting_SameFeatureShade_ReturnsTrue()
+        {
+            Aperture aperture = Window(null, System.Drawing.Color.Red, featureShade: Shade(0.5));
+
+            bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Pane, Colour(aperture, AperturePart.Pane), new List<ApertureTypeDefinition>(), DayTypes, Shade(0.5));
+
+            Assert.That(result, Is.True, "an aperture whose stated shade is what the element already carries must match - the zero-writes case");
+        }
+
+        [Test]
+        public void MatchesExisting_ShadeAdded_ReturnsFalse()
+        {
+            Aperture aperture = Window(null, System.Drawing.Color.Red, featureShade: Shade(0.5));
+
+            bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Pane, Colour(aperture, AperturePart.Pane), new List<ApertureTypeDefinition>(), DayTypes, null);
+
+            Assert.That(result, Is.False, "the aperture gained a shade the element does not carry - it must split, not keep the shade-less element");
+        }
+
+        [Test]
+        public void MatchesExisting_ShadeRemoved_ReturnsFalse()
+        {
+            Aperture aperture = Window(null, System.Drawing.Color.Red);
+
+            bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Pane, Colour(aperture, AperturePart.Pane), new List<ApertureTypeDefinition>(), DayTypes, Shade(0.5));
+
+            Assert.That(result, Is.False, "the aperture dropped its shade but the element still carries one - it must split, not keep the stale shade");
+        }
+
+        [Test]
+        public void MatchesExisting_ShadeChanged_ReturnsFalse()
+        {
+            Aperture aperture = Window(null, System.Drawing.Color.Red, featureShade: Shade(0.5));
+
+            bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Pane, Colour(aperture, AperturePart.Pane), new List<ApertureTypeDefinition>(), DayTypes, Shade(0.9));
+
+            Assert.That(result, Is.False, "a different overhang depth is a different shade - the TBD must not retain the previous one");
+        }
+
+        [Test]
+        public void MatchesExisting_ShadeRoundTrippedThroughFloat_ReturnsTrue()
+        {
+            // TBD stores the shade fields as Single, so a shade read back off the element comes back at
+            // float precision. That round trip is NOT a divergence, or every update would re-split every
+            // shaded pane forever.
+            Aperture aperture = Window(null, System.Drawing.Color.Red, featureShade: Shade(0.1));
+            FeatureShade featureShade_Existing = Shade((double)(float)0.1);
+
+            bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Pane, Colour(aperture, AperturePart.Pane), new List<ApertureTypeDefinition>(), DayTypes, featureShade_Existing);
+
+            Assert.That(result, Is.True, "float read-back precision is what a TBD round trip produces - it must not be treated as a change");
+        }
+
+        [Test]
+        public void MatchesExisting_Frame_IgnoresFeatureShade()
+        {
+            // A frame's write never reaches SetFeatureShades, so its split decision is colour alone even
+            // when the aperture states a shade.
+            Aperture aperture = Window(null, System.Drawing.Color.Red, featureShade: Shade(0.5));
+
+            bool result = TasQuery.ApertureMatchesExistingAssignment(aperture, AperturePart.Frame, Colour(aperture, AperturePart.Frame), new List<ApertureTypeDefinition>(), DayTypes, null);
+
+            Assert.That(result, Is.True, "a frame is judged on colour alone; the aperture's shade never enters its comparison");
+        }
+
+        // =================================================================================================
+        // FeatureShadesMatch - the content comparison itself
+        // =================================================================================================
+
+        [Test]
+        public void FeatureShadesMatch_NullCases()
+        {
+            Assert.That(TasQuery.FeatureShadesMatch(null, null), Is.True, "neither side stating a shade is not a divergence");
+            Assert.That(TasQuery.FeatureShadesMatch(Shade(), null), Is.False);
+            Assert.That(TasQuery.FeatureShadesMatch(null, Shade()), Is.False);
+        }
+
+        [Test]
+        public void FeatureShadesMatch_NameAndDescriptionAreNotCompared()
+        {
+            FeatureShade featureShade_1 = Shade();
+            FeatureShade featureShade_2 = new FeatureShade("a TAS-assigned name", "some description", 1.0, 2.0, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, 0.5, 0.0, 0.5);
+
+            Assert.That(TasQuery.FeatureShadesMatch(featureShade_1, featureShade_2), Is.True, "the export creates the TBD shade with a null name, so TAS assigns one - text must not decide equality");
+        }
+
+        [Test]
+        public void FeatureShadesMatch_NaNFieldHandling()
+        {
+            FeatureShade featureShade_NaN = new FeatureShade("a", null, double.NaN, 2.0, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, 0.5, 0.0, 0.5);
+
+            Assert.That(TasQuery.FeatureShadesMatch(Shade(), featureShade_NaN), Is.False, "a field written on one side and absent on the other is a real difference");
+            Assert.That(TasQuery.FeatureShadesMatch(featureShade_NaN, featureShade_NaN), Is.True, "NaN on both sides is a field neither side states, not a difference");
         }
 
         // =================================================================================================
