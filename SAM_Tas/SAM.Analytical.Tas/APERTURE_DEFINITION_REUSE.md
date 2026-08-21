@@ -1,0 +1,260 @@
+# Reusable TBD aperture constructions and building elements (Stage 2)
+
+Stage 2 of the frozen three-stage aperture-definition plan. Stage 1 — reusable
+`TBD.ApertureType`s and schedules — is `APERTURE_TYPE_REUSE.md` and is **unchanged** here except for the
+cache extension this stage needs.
+
+**Scope: the direct `Modify.Update` export only.** The gbXML/T3D route, `UpdateBuildingElements`,
+`UpdateIds`, the import grouping, Stage 1 aperture-type and schedule semantics and the legacy aperture
+workflows are all untouched.
+
+---
+
+## What changed
+
+The direct export used to create **one `TBD.Construction` and one `TBD.buildingElement` per aperture per
+part**, named after `aperture.UniqueName()` — i.e. after the aperture's GUID. Two hundred identical windows
+produced four hundred constructions and four hundred building elements.
+
+They are now **reusable definitions**, exactly as a `TBD.ApertureType` already was:
+
+```text
+200 identical windows
+  → 400 zoneSurfaces          (unchanged: the physical windows)
+  →   2 Constructions         SIM_EXT_GLZ -pane / SIM_EXT_GLZ -frame
+  →   2 buildingElements      Windows: SIM_EXT_GLZ -pane / Windows: SIM_EXT_GLZ -frame
+  →   Stage 1 ApertureTypes and schedules: unchanged
+```
+
+---
+
+## Invariants
+
+1. **A shared definition is immutable.** When an equivalent construction or building element is found,
+   nothing on it is written — not even rewritten to the same value. Every other aperture referencing it
+   would see the write. Pinned by the write-log assertions in
+   `ApertureDefinitionReuseTests.Export_ASharedHit_PerformsNoWritesOnTheSharedDefinitions`.
+
+2. **Identity is the definition, never the name.** This replaces the one genuinely unsafe behaviour on this
+   path: both objects were looked up **by name**, and a name match was taken as content match. That was
+   harmless only because the name carried the aperture's GUID and so matched nothing but itself. With names
+   derived from the reusable SAM `ApertureConstruction`, a by-name lookup would hand one window another
+   window's glazing. So: full content equality decides reuse; a name already taken by *different* content is
+   never adopted and never mutated, and the new object gets a deterministic collision-suffixed name.
+
+   | Definition | Fields |
+   |---|---|
+   | `ConstructionMaterialDefinition` | Every property `TBD.IMaterial` exposes bar `width`: name, type, description, conductivity, specific heat, density, vapour diffusion factor, the four reflectances, the two emissivities, solar and light transmittance, dynamic viscosity, convection coefficient, `isBlind`. |
+   | `ConstructionLayerDefinition` | The material, plus **both** widths TBD stores for a layer (`construction.materialWidth[i]` and `material.width`). |
+   | `ConstructionDefinition` | `AperturePart`, `ConstructionTypes` value, `additionalHeatTransfer`, description, and the **ordered** layers. |
+   | `ApertureTypeAssignment` | One opening: its Stage 1 `ApertureTypeDefinition` plus the **ordinal** — which occurrence of that control it is. |
+   | `BuildingElementDefinition` | `ApertureType` (window/door), `AperturePart`, `BEType`, colour, the `ConstructionDefinition`, and the **ordered** openings. |
+
+   Float comparison is exact, with two deliberate normalisations on the way in: signed zero to positive
+   zero, and any NaN to the canonical `float.NaN`. Both keep `Equals` in agreement with a `GetHashCode`
+   derived from an IEEE-754 bit-pattern signature. NaN compares **equal** to NaN here — unlike Stage 1's
+   `ApertureTypeDefinition`, where Cd and factor are never NaN — because a material that states no
+   conductivity stores NaN, and under `==` such a layer would never equal itself, giving every window its
+   own construction.
+
+3. **`AperturePart` is part of construction identity**, and not because TAS stores it — it does not. The
+   aperture import pairs a window's two constructions by **stripping the `-pane`/`-frame` suffix** from
+   their names and reading each side's layers (`Convert.ToSAM_ApertureConstruction`,
+   `Convert.ToSAM_AdjacencyCluster`). A pane and a frame holding identical layers would otherwise collapse
+   into one construction and the round trip would come back with one half of the window missing.
+
+4. **No generated name contains physical aperture identity.** The base is the SAM
+   `ApertureConstruction`'s own name — a reusable definition shared by every window built from it:
+
+   ```text
+   <ApertureConstruction.Name> -pane                    SIM_EXT_GLZ -pane
+   Windows: |Doors: <ApertureConstruction.Name> -pane   Windows: SIM_EXT_GLZ -pane
+   ```
+
+   This is the shape the TCD route already writes (`Convert.ToTCD_Constructions`), so the two routes now
+   agree, and it is the shape the import reads back — which makes the round-tripped `ApertureConstruction`
+   carry the model's own name instead of an aperture's unique name.
+
+   **The part suffix stays terminal**, so a collision discriminator goes on the BASE:
+   `SIM_EXT_GLZ_1F3A0C21 -pane`. A name ending `-pane_1F3A0C21` would not be recognised as a pane at all.
+   The discriminator is the FNV-1a hash of the full signature — deterministic, so the same definition
+   resolves to the same name on every repeated export, never a TAS/UI-style `(1)`/`(2)` counter.
+
+   **Underscores are kept** in the base, unlike in Stage 1's aperture-type naming. Real construction names
+   are full of them (`SIM_EXT_GLZ`), and this base is the round-trip identity of the `ApertureConstruction`;
+   mangling it to `SIMEXTGLZ` would silently rename the construction on every round trip. The underscore is
+   still the discriminator's separator, so a base itself ending in `_` plus eight hex digits decomposes
+   ambiguously — but only in the BASE, which no production code reads. What decomposition is asked for is the
+   part suffix and the `Windows: `/`Doors: ` prefix, and those stay unambiguous.
+
+5. **Opening multiplicity is preserved exactly.** The openings are an **ordered list of
+   `(definition, ordinal)`**, so a window with two identical openings is not the same definition as a
+   one-opening window, nor as a window carrying only the ordinal-2 type. Stage 1's rule that N children
+   produce N distinct aperture types is untouched; what Stage 2 adds is that the *element* carrying them is
+   shared with every other window stating the same set.
+
+6. **No openings is a definition, not a gap.** A window stating no `OpeningProperties` has an empty list,
+   and every sealed window in the model resolves to the one bare element. An empty list is not equal to a
+   one-entry list.
+
+7. **Windows and doors never merge.** `BEType` is written from the aperture PART, so a door's pane carries
+   the glazing type and `BEType` cannot tell a door from a window. `ApertureType` is therefore a field of the
+   definition in its own right. `ApertureType.Undefined` is a **distinct value, not a missing one**: the
+   write has always handled such an aperture (the `Windows: ` prefix covers everything that is not a door),
+   so refusing it would take a building element away from an aperture that used to get one.
+
+8. **Registration follows a completed write; a name is reserved from the moment an object exists.** Same
+   two-step discipline as Stage 1. A construction is registered as reusable only after its layers are
+   written and its content was predictable; an element only once
+   `SetApertureTypes` returned as many aperture types as the definition claims. A partly written opening set
+   is reserved by name and never shared — a shared element is never written to again, so there would be no
+   correcting it.
+
+9. **Identity stamps are unchanged.** `Pane`/`FrameZoneSurfaceReference` and
+   `Pane`/`FrameBuildingElementGuid` are stamped exactly as before. After sharing, many apertures
+   legitimately stamp the **same** `BuildingElementGuid`; `ZoneSurfaceReference` stays one per physical
+   surface. That is what the TSD result mapping (`Modify.AddResults`) and the import both key on. Stage 3
+   owns hardening update/round-trip identity.
+
+10. **The physical surfaces are untouched.** Every `zoneSurface`, `RoomSurface` and `Perimeter` the export
+    created before, it creates now; the only change in that block is that the two parts are collected in a
+    `List` keyed by part rather than a `Dictionary` keyed by the element name (which is no longer this
+    aperture's own), which also makes the frame-before-pane ordering explicit rather than incidental.
+
+### Seed gates (a pre-existing object this export must not adopt)
+
+Recorded with a reason, contributing its **name** to collision avoidance and nothing else. Both gates are
+pure functions of what was read out of COM (`Query.ConstructionDefinition(string, int, float, string, …)` and
+`Query.BuildingElementDefinition(BuildingElementSeed, …)`), which is what makes them testable without an
+installed TAS.
+
+**Construction:** a name outside the `-pane`/`-frame` convention (which half of a window it is cannot be
+established); materials that will not report; a layer whose material will not read.
+
+**Building element:** a name outside the `Windows: …/-pane` convention; a non-default `ghost`; a non-empty
+`description`; an assigned feature shade; an assigned substitute element; a non-default `ground`,
+`markDelete` or `width`; a construction that fails its own gate; an opening whose control may not be reused
+or whose name does not carry the Stage 1 convention that states its occurrence; any opening at all on a
+frame.
+
+Passing every gate makes an object a **candidate**, not a match; its definition is then compared field by
+field.
+
+### Why the material mirror is safe
+
+`Query.ConstructionMaterialDefinition(Core.IMaterial)` mirrors what `Modify.UpdateMaterial` writes onto a
+fresh `TBD.material`, field for field and clamp for clamp — including the two places the TBD write differs
+from its TCD sibling (opaque stores `tcdOpaqueMaterial` not `tcdOpaqueLayer`; the transparent write touches
+neither `specificHeat` nor `density`). A field an overload leaves alone is reported as the value a fresh TBD
+material holds.
+
+The failure mode is one-directional. Two layers created in one export run through the same mirror on the
+same input, so a mirror that disagreed with the writer could not merge two materials the model states as
+different — it would give the same answer for both, and both would still get the same TBD material. What a
+disagreement would cost is recognising a construction that was **already** in the TBD: under-reuse, never
+unsafe sharing.
+
+---
+
+## What each file does
+
+| File | Role |
+|---|---|
+| `Classes/ConstructionMaterialDefinition.cs` | Immutable value equality over the TBD material fields. COM-free. |
+| `Classes/ConstructionLayerDefinition.cs` | One layer: the material plus both widths TBD stores. |
+| `Classes/ConstructionDefinition.cs` | The construction: part, type, additional heat transfer, description, ordered layers. |
+| `Classes/ApertureTypeAssignment.cs` | One opening: Stage 1 definition plus ordinal. |
+| `Classes/BuildingElementDefinition.cs` | The element: aperture type, part, `BEType`, colour, construction, ordered openings. |
+| `Classes/BuildingElementSeed.cs` | Everything readable off a pre-existing aperture element, read out of COM and into a value. |
+| `Query/ConstructionMaterialDefinition.cs` | The COM-free mirror of `Modify.UpdateMaterial`. |
+| `Query/ConstructionDefinition.cs` | COM-free factory from a SAM `ApertureConstruction` + part + `MaterialLibrary`. |
+| `Query/ConstructionDefinitionTBD.cs` | The seed READER: a `TBD.Construction`/`TBD.material` → values. Decides nothing. |
+| `Query/BuildingElementDefinition.cs` | COM-free factory from a SAM `Aperture`, plus `ApertureTypeAssignments`. |
+| `Query/BuildingElementDefinitionSeed.cs` | The two seed GATES, both pure functions. |
+| `Query/BuildingElementDefinitionTBD.cs` | The seed READER for an element. Decides nothing. |
+| `Query/ConstructionSignature.cs` | Deterministic FNV-1a signatures and collision hashes over exact Single bit patterns. Never `GetHashCode`. |
+| `Query/ConstructionName.cs` | Construction name derivation, sanitisation, decomposition. |
+| `Query/BuildingElementName.cs` | Element name derivation and decomposition; the `Windows: `/`Doors: ` prefixes. |
+| `Classes/BuildingReuseCache.cs` | **Extended**: constructions and aperture building elements alongside Stage 1's schedules and aperture types. Purely additive. |
+| `Modify/Update.cs` | The aperture block of the direct export, rewritten to resolve definitions instead of names. |
+
+**Deferred seed classification.** The cache constructor reads only the NAMES of the building's constructions
+and elements — a name is what occupies the namespace, and it is one property read. The content read that
+decides reuse happens on the first lookup that needs it (`EnsureSeedClassification`). `Modify.UpdateIZAMs`
+re-enters `Modify.Update` once per air handling unit with a synthetic, aperture-less cluster; classifying
+every seeded construction's layers on each of those passes would be a per-IZAM COM cost paid for an answer
+nothing asks for.
+
+---
+
+## Deliberate limitations
+
+- **Refusals are not reported on this entry point.** `Modify.Update` returns `void` and has no notes
+  channel; adding one would change its signature and every caller. The refusals are therefore discarded, and
+  what that costs is diagnosability, not correctness — every outcome is the conservative one, an extra
+  definition or none. Stage 3 owns reporting.
+- **A double name collision refuses, and the surfaces then carry no building element.** Same "rather than
+  guess a third name, write nothing" discipline as Stage 1. Reaching it needs both the preferred and the
+  signature-qualified name taken by content this export cannot adopt.
+- **The panel path still resolves its construction and element by NAME.** Unchanged, and out of Stage 2's
+  scope. Aperture naming consults the panel names too, so an aperture never collides with a panel; the
+  reverse would need a SAM `Construction` literally named `X -pane`.
+
+---
+
+## Acceptance
+
+### COM-free (`SAM.Analytical.Tas.TM59.Tests/ApertureDefinitionReuseTests.cs`, runs in CI)
+
+104 tests. Construction: equality field by field, layer order, both widths, every one of the seventeen
+material-content fields (parameterised), description, pane vs frame with identical layers, NaN and signed
+zero, unproven content, signature determinism and exact bit-pattern identity, the COM-free factory
+(including the skip of a layer the library cannot resolve, and the gas clamp), naming and its deterministic
+collision suffix with the part suffix still terminal, the underscore-preserving base, decomposition, and the
+seed gates including **same name / different content → a different definition**.
+
+Building element: reuse on equal definitions, and a separate definition for a different construction,
+colour, `BEType`, opening control, opening multiplicity or ordinal; windows vs doors; pane vs frame; the
+bare no-openings definition; `ApertureType.Undefined`; every seed gate individually; naming and
+decomposition.
+
+A fake-COM harness whose fakes **record every property set** drives the export decision sequence in
+`Modify.Update`'s own order, delegating every decision to the production helpers: 200 identical windows →
+400 surfaces, 2 constructions, 2 elements; 99 further identical windows add **not one write** to either
+shared object; a repeated export adds nothing; a mismatched existing construction and a mismatched existing
+element are **never written to** and a distinct collision-suffixed object is created instead; 50 windows ×
+2 identical openings keep both openings on one shared element; and a mixed model of several constructions,
+several opening controls, sealed windows and doors resolves to one definition each with no physical GUID in
+any generated name.
+
+### Licensed TAS — NOT YET RUN
+
+**This stage must not be merged without it.** The two items below are the gate.
+
+| Scenario | Expected |
+|---|---|
+| 200 identical windows, direct export | 400 aperture surfaces; **2** constructions; **2** elements; Stage 1 type and schedule counts unchanged |
+| several constructions / controls / sealed windows / doors | one definition each, no GUID in any name |
+| repeated export | **0** additional equivalent definitions |
+| round trip SAM → TBD → SAM | aperture count, geometry, pane/frame classification, construction layers, `OpeningProperties` all preserved |
+| **A/B simulation** — same real model exported with the old per-aperture behaviour and with shared elements, both run through TAS/TSD | zone results numerically equivalent within solver noise |
+| one real shaded project | `UpdateShading`, `CopyResults` and aperture solar-result mapping unaffected |
+
+**Specifically to confirm on licensed TAS**, because it cannot be established without it: the value a
+freshly added `buildingElement` carries for `ground`, `markDelete` and `width`. The seed gate refuses
+anything non-zero there. If TBD's own default is non-zero, no seeded element is ever adopted — safe in
+itself (under-reuse), but it would make the "repeated export adds nothing" row fail, and a third export
+could then hit the double-name refusal. The repeated-export row is what detects this.
+
+`CopyResults` already matches apertures to solar surfaces by **geometry**, having recorded that the stamped
+building-element GUID "is actually the *construction* GUID (shared across all surfaces using the same
+construction), so it only separates pane-construction from frame-construction". Shared elements therefore
+do not degrade that mapping — but the shaded-project run confirms it rather than assuming it.
+
+---
+
+## Out of scope for Stage 2
+
+Physical-instance identity hardening (`ZoneSurfaceReference` resolution on update), the
+`UpdateBuildingElements` name-decode replacement, the import grouping fixes, refusal reporting on
+`Modify.Update`, and the gbXML/T3D route — all Stage 3 or later, all unchanged here.

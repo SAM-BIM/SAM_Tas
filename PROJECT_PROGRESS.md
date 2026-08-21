@@ -1,27 +1,134 @@
 # Project Progress
 
 ## Branch
-`feature/tas-aperturetype-reuse` (off `sow/2026-Q3`; PR #30)
+`feature/tas-aperture-definition-reuse` (off `sow/2026-Q3` at `f3f5802`, i.e. after PR #30 merged).
+Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 
 ## Last updated
-2026-08-21 - Stage 1 implemented, validated on licensed TAS, and committed in two commits; a focused
-correction pass the same day hardened it (exact float collision identity, name reservation on late
-failure, full read-back verification of new shared types). The two Codex review findings on PR #30 were
-then fixed: index-derived reuse ordinal for the compatibility overload, and signed-zero normalisation in
-definition equality/hashing.
+2026-08-21 - **Stage 2 (reusable TBD aperture constructions and building elements) implemented, unit- and
+fake-COM-validated, and committed in two commits. NOT yet validated on licensed TAS, and must not be
+merged until it is** - see "Stage 2 - blocking merge gate" below.
 
 ## Current status
-**Stage 1 (reusable TBD aperture types) is complete, validated and committed.** The export now shares one
-`TBD.ApertureType` across every building element stating the same opening control, instead of creating one
-per aperture per opening child. Constructions and building elements are still one per aperture - that is
-Stage 2, deliberately not started.
+**Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
+same opening control. Full detail, the S1-C0 probe result and the licensed-TAS acceptance table live in
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`.
 
-Full detail, invariants, the S1-C0 probe result and the licensed-TAS acceptance table live in
-`SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`. The frozen three-stage plan this implements is
-`C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21);
-sections D and J govern Stage 1 and must be followed without redesign.
+**Stage 2 is implemented and awaiting the licensed-TAS gate.** The direct `Modify.Update` export now shares
+one `TBD.Construction` and one aperture `TBD.buildingElement` across every aperture stating the same
+content, instead of creating one per aperture per part. 200 identical windows go from 400 constructions and
+400 elements to 2 and 2, while all 400 physical `zoneSurface`s remain. Full detail, invariants, seed gates,
+deliberate limitations and the acceptance table live in
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE.md`.
 
-### Stage 1 correction pass (2026-08-21, same branch, commits rewritten in place)
+The frozen three-stage plan both implement is
+`C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21).
+Stage 3 (physical-instance identity hardening on update/round-trip, the `UpdateBuildingElements`
+name-decode replacement, import grouping, refusal reporting on `Modify.Update`) is **not started**.
+
+---
+
+## Stage 2 - blocking merge gate (NOT yet done)
+
+Do not merge Stage 2 without these. They need licensed TAS on this machine.
+
+1. **A/B simulation.** Export the same real model twice - once with the old per-aperture building-element
+   behaviour (`sow/2026-Q3`) and once with shared elements (this branch) - run TAS/TSD on both, and compare
+   zone results. They must be numerically equivalent within normal solver noise.
+2. **One real shaded project**, checking `UpdateShading`, `CopyResults` and aperture solar-result mapping.
+   `CopyResults` already matches apertures to solar surfaces by GEOMETRY (its own comment records that the
+   stamped building-element GUID is really the shared *construction* GUID), so sharing should not affect it -
+   but confirm rather than assume.
+3. **Object counts and round trip**, per the table in `APERTURE_DEFINITION_REUSE.md`: 200 identical windows
+   -> 400 surfaces / 2 constructions / 2 elements with Stage 1 counts unchanged; several constructions,
+   several opening controls, sealed windows, doors; a repeated export adding nothing; and
+   SAM -> TBD -> SAM preserving aperture count, geometry, pane/frame classification, construction layers and
+   `OpeningProperties`.
+
+**One thing only licensed TAS can settle:** what a freshly added `TBD.buildingElement` carries for `ground`,
+`markDelete` and `width`. The building-element seed gate refuses anything non-zero there, because the export
+writes none of them. If TBD's own default is non-zero, no seeded element is ever adopted - safe in itself
+(under-reuse, never unsafe sharing), but the "repeated export adds nothing" row would fail and a third
+export could then hit the double-name refusal. That row is what detects it; if it fails, relax those three
+fields to "equal to what a freshly created element reports" rather than "zero".
+
+## Stage 2 - what landed
+
+- `Classes/ConstructionMaterialDefinition.cs`, `ConstructionLayerDefinition.cs`,
+  `ConstructionDefinition.cs`, `ApertureTypeAssignment.cs`, `BuildingElementDefinition.cs`,
+  `BuildingElementSeed.cs` - immutable, COM-free value equality over the whole of what the export writes.
+- `Query/ConstructionMaterialDefinition.cs` - the COM-free MIRROR of `Modify.UpdateMaterial`, field for
+  field and clamp for clamp. This is what lets a construction already in the TBD be proven equal to one
+  about to be written.
+- `Query/ConstructionDefinition.cs`, `Query/BuildingElementDefinition.cs` - COM-free factories from a SAM
+  `ApertureConstruction` / `Aperture`.
+- `Query/ConstructionDefinitionTBD.cs`, `Query/BuildingElementDefinitionTBD.cs` - seed READERS. They read
+  and decide nothing.
+- `Query/BuildingElementDefinitionSeed.cs` - both seed GATES, as pure functions of what was read, which is
+  what makes them testable with no installed TAS.
+- `Query/ConstructionSignature.cs`, `ConstructionName.cs`, `BuildingElementName.cs` - deterministic
+  FNV-1a signatures over exact Single bit patterns, and definition-derived naming.
+- `Classes/BuildingReuseCache.cs` - extended with constructions and aperture building elements. Purely
+  additive: 378 lines added, 7 removed, and all 7 are doc rewording. Stage 1's schedules, aperture types,
+  day types and assignment tracking are byte-for-byte unchanged.
+- `Modify/Update.cs` - the aperture block of the direct export resolves DEFINITIONS instead of names. The
+  physical-surface block, the panel block and the identity stamps are unchanged.
+
+## Stage 2 - decisions worth not re-deriving
+
+- **The bug this fixes is not just duplication.** Both objects were looked up BY NAME, and a name match was
+  taken as a content match. That was harmless only while the name carried the aperture's GUID; once names
+  are derived from the reusable SAM `ApertureConstruction`, a by-name lookup would hand one window another
+  window's glazing. Hence full content equality, and a deterministic collision suffix rather than adoption.
+- **`AperturePart` is construction identity even though TAS does not store it.** The aperture import pairs a
+  window's two constructions by stripping the `-pane`/`-frame` suffix and reading each side's layers, so a
+  pane and a frame with identical layers must not collapse - the round trip would lose half the window.
+  For the same reason the collision discriminator goes on the BASE (`SIM_EXT_GLZ_1F3A0C21 -pane`), keeping
+  the part suffix terminal.
+- **Underscores are KEPT in the construction name base**, unlike Stage 1's aperture-type naming. Real names
+  are full of them (`SIM_EXT_GLZ`) and this base is the round-trip identity of the `ApertureConstruction`;
+  stripping them silently renamed it. Found by a test, not by inspection.
+- **The new names match what the TCD route already writes** (`Convert.ToTCD_Constructions`:
+  `apertureConstruction.Name + " -pane"`), so the two routes agree and the round-tripped
+  `ApertureConstruction` now carries the model's own name instead of an aperture's unique name. That is a
+  genuine round-trip improvement, not just a rename.
+- **NaN compares equal to NaN in the Stage 2 definitions**, unlike Stage 1's `ApertureTypeDefinition`. A
+  material that states no conductivity stores NaN; under `==` such a layer would never equal itself and
+  every window would get its own construction. NaN is normalised to the canonical `float.NaN` on the way in
+  so the bit-pattern signature stays in agreement with equality, as signed zero already was.
+- **`ApertureType.Undefined` is a distinct value, not a missing one.** Refusing it would take a building
+  element away from an aperture that used to get one (the `Windows: ` prefix has always covered everything
+  that is not a door). It shares among its own kind and never merges with a real window.
+- **Mirror bugs can only cause under-reuse.** Two layers created in one export run through the same mirror
+  on the same input, so a mirror that disagreed with the writer would give both the same answer and both
+  the same TBD material. What it would cost is recognising a SEEDED construction.
+- **Refusals are discarded on this path.** `Modify.Update` returns `void` with no notes channel and adding
+  one would change its signature and every caller. Every outcome is the conservative one, so what is lost is
+  diagnosability. Stage 3 owns reporting.
+- **`UpdateBuildingElements` is unaffected**, despite decoding aperture GUIDs out of element names: it runs
+  only on the gbXML/T3D route in `WorkflowCalculator`, never after a direct `Modify.Update`.
+- **Seed classification is deferred** to the first lookup that needs it. `Modify.UpdateIZAMs` re-enters
+  `Modify.Update` once per air handling unit with a synthetic, aperture-less cluster, and classifying every
+  seeded construction's layers on each pass would be a per-IZAM COM cost paid for nothing.
+
+## Stage 2 - validation performed
+
+- `SAM_Tas.sln` builds with 0 errors (Debug) after the change; `SAM.Analytical.Tas` alone also builds clean.
+- `SAM.Analytical.Tas.TM59.Tests`: **337/337 pass**. 233 pre-existing (unchanged, including all 80 Stage 1
+  aperture-type tests) plus **104 new** in `ApertureDefinitionReuseTests.cs`.
+- The new tests found two genuine defects, both fixed before commit: the construction name base was
+  stripping underscores (so `SIM_EXT_GLZ` became `SIMEXTGLZ`), and an `ApertureType.Undefined` aperture was
+  being refused a building element altogether.
+- Licensed TAS: **not run.** See the merge gate above.
+
+---
+
+## Stage 1 (merged as PR #30) - retained for continuity
+
+The subsections below describe Stage 1 as it was developed on `feature/tas-aperturetype-reuse`; "same
+branch" in them means that branch, not this one.
+
+### Stage 1 correction pass (2026-08-21, on `feature/tas-aperturetype-reuse`, commits rewritten in place)
 
 Three focused fixes, no architecture change:
 
@@ -56,7 +163,7 @@ per `APERTURE_TYPE_REUSE.md`); the produced `.tbd` files live under `%TEMP%\aper
 Next step: open the Stage 1 PR (two commits: `feat(tas): reuse equivalent aperture types`,
 `test(tas): validate aperture type reuse`).
 
-### Codex review fixes (2026-08-21, same branch, one commit on top of the two Stage 1 commits)
+### Codex review fixes (2026-08-21, on `feature/tas-aperturetype-reuse`, one commit on top of the two Stage 1 commits)
 
 The Codex review of PR #30 raised two genuine findings; both are fixed:
 

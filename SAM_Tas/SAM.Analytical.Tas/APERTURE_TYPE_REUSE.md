@@ -224,6 +224,10 @@ above.
 
 ## Out of scope for Stage 1
 
+> Construction and BuildingElement sharing is **Stage 2** and is now implemented - see
+> [APERTURE_DEFINITION_REUSE.md](APERTURE_DEFINITION_REUSE.md). Nothing in this document changed for it
+> except the `BuildingReuseCache` extension it needed.
+
 Construction sharing, BuildingElement sharing, physical-instance identity (`ZoneSurfaceReference`
 resolution), the `UpdateBuildingElements` name-decode replacement, the import grouping fixes, and the
 gbXML/T3D route — all unchanged. On the gbXML route TAS itself authors one building element per aperture
