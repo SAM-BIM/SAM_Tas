@@ -79,6 +79,9 @@ jobs:
             # Current sow branch: base_ref on PR events, ref_name on push events.
             $sowRef = if ($baseRef -match '^sow/') { $baseRef } elseif ($refName -match '^sow/') { $refName } else { '' }
             if ($sowRef -and $sowRef -ne $headRef) { $candidates += $sowRef }
+            # A sow FEATURE branch (sow/2026-Q3-foo) has no counterpart in dependency repos, but its
+            # quarter branch does. On push events base_ref is empty, so derive the quarter from ref_name.
+            if ($refName -match '^(sow/\d{4}-Q\d)' -and $Matches[1] -ne $sowRef -and $Matches[1] -ne $headRef) { $candidates += $Matches[1] }
             $candidates += 'sow/2026-Q2'
             $cloned = $false
             foreach ($cand in $candidates) {
@@ -122,6 +125,9 @@ jobs:
             if ($headRef) { $candidates += $headRef }
             $sowRef = if ($baseRef -match '^sow/') { $baseRef } elseif ($refName -match '^sow/') { $refName } else { '' }
             if ($sowRef -and $sowRef -ne $headRef) { $candidates += $sowRef }
+            # A sow FEATURE branch (sow/2026-Q3-foo) has no counterpart in dependency repos, but its
+            # quarter branch does. On push events base_ref is empty, so derive the quarter from ref_name.
+            if ($refName -match '^(sow/\d{4}-Q\d)' -and $Matches[1] -ne $sowRef -and $Matches[1] -ne $headRef) { $candidates += $Matches[1] }
             $candidates += 'sow/2026-Q2'
             $cloned = $false
             foreach ($cand in $candidates) {
