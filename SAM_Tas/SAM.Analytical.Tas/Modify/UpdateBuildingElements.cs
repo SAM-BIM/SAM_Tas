@@ -37,6 +37,30 @@ namespace SAM.Analytical.Tas
 
         public static bool UpdateBuildingElements(this TBDDocument tBDDocument, AnalyticalModel analyticalModel)
         {
+            return UpdateBuildingElements(tBDDocument, analyticalModel, out List<string> _);
+        }
+
+        /// <summary>
+        /// The same update, reporting the aperture-type refusals the write would otherwise drop silently.
+        /// <para>
+        /// <b>This is the FIRST of the two aperture-control write paths</b>, and the one that matters most
+        /// to a Part O diagnosis: it identifies the SAM aperture from the GUID encoded in the TBD building
+        /// element's own name, not from geometry, so it reaches apertures the later geometric
+        /// <see cref="SetApertureTypes(Building, AdjacencyCluster, out List{string}, double)"/> step can
+        /// miss entirely. A schedule written here is already on the aperture type by the time that step
+        /// runs, which then reuses it by value. Knowing which of the two paths wrote a schedule - or that
+        /// neither did - is the point of reporting from both.
+        /// </para>
+        /// </summary>
+        public static bool UpdateBuildingElements(this TBDDocument tBDDocument, AnalyticalModel analyticalModel, out List<string> notes)
+        {
+            notes = [];
+
+            int count_ScheduleRequested = 0;
+            int count_ScheduleWritten = 0;
+            int count_GlazingWithoutConstruction = 0;
+            int count_GlazingWithoutAperture = 0;
+
             if (tBDDocument == null || analyticalModel == null)
                 return false;
 
@@ -122,7 +146,17 @@ namespace SAM.Analytical.Tas
                 }
                     
                 if (construction == null)
+                {
+                    //A glazing element that never finds a construction leaves this loop before the aperture
+                    //block below, so it silently receives no aperture control either - a Part O schedule on
+                    //that aperture would never be written on this path at all.
+                    if ((TBD.BuildingElementType)buildingElement.BEType == TBD.BuildingElementType.GLAZING)
+                    {
+                        count_GlazingWithoutConstruction++;
+                    }
+
                     continue;
+                }
 
                 TBD.BuildingElementType buildingElementType = (TBD.BuildingElementType)buildingElement.BEType;
                 if(buildingElementType == TBD.BuildingElementType.GLAZING || buildingElementType == TBD.BuildingElementType.FRAMEELEMENT)
@@ -131,6 +165,13 @@ namespace SAM.Analytical.Tas
                     if(Query.UniqueNameDecomposition(buildingElement.name, out string prefix, out string name_Temp, out System.Guid? guid, out int id) && guid != null && guid.HasValue)
                     {
                         aperture = analyticalModel.AdjacencyCluster.GetAperture(guid.Value);
+                    }
+
+                    if (aperture == null && buildingElementType == TBD.BuildingElementType.GLAZING)
+                    {
+                        //The name did not decode to a GUID, or it did and the SAM model has no such
+                        //aperture. Either way this pane gets no aperture control from this path.
+                        count_GlazingWithoutAperture++;
                     }
 
                     AperturePart aperturePart = AperturePart.Undefined;
@@ -161,7 +202,40 @@ namespace SAM.Analytical.Tas
                     {
                         if(aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties))
                         {
-                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties);
+                            List<TBD.ApertureType> apertureTypes = SetApertureTypes(building, buildingElement, openingProperties, out List<string> notes_Temp, out List<int> childIndices);
+                            notes.AddRange(notes_Temp ?? []);
+
+                            //Only an aperture that states an availability schedule is tracked here, and only
+                            //a child whose schedule did NOT end up on the aperture type its own write
+                            //returned is narrated. A successful write contributes to the counters and says
+                            //nothing, so an ordinary run does not put one remark on the canvas per window.
+                            if (TryDescribeScheduleRequest(openingProperties, out string description_Request))
+                            {
+                                List<bool> scheduleRequests = openingProperties.OpeningScheduleRequests();
+                                int count_Requested = scheduleRequests.FindAll(x => x).Count;
+                                count_ScheduleRequested += count_Requested;
+
+                                ScheduleDeliveryByChild(apertureTypes, childIndices, scheduleRequests.Count, out bool[] delivered, out TBD.ApertureType[] apertureTypesByChild);
+
+                                List<int> undelivered = openingProperties.UndeliveredOpeningScheduleRequests(delivered);
+                                count_ScheduleWritten += count_Requested - undelivered.Count;
+
+                                foreach (int childIndex in undelivered)
+                                {
+                                    TBD.ApertureType apertureType = apertureTypesByChild[childIndex];
+                                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: TBD building element '{0}' ({1}) resolved SAM aperture '{2}' ({3}) by GUID; {4}; requested {5}; but the schedule for {6} did not arrive - {7}",
+                                        buildingElement.name,
+                                        buildingElement.GUID,
+                                        aperture.Name,
+                                        aperture.Guid,
+                                        DescribeOpeningProperties(openingProperties),
+                                        description_Request,
+                                        scheduleRequests.Count == 1 ? "the opening" : string.Format("opening {0} of {1}", childIndex + 1, scheduleRequests.Count),
+                                        apertureType == null
+                                            ? "its write was refused - the refusal reported alongside this line names the reason."
+                                            : string.Format("aperture type '{0}' carries no schedule afterwards - it read back as {1}", apertureType.name, DescribeApertureTypeProfile(apertureType) ?? "NO PROFILE - the aperture type came back without a TBD profile to read.")));
+                                }
+                            }
                         }
 
                         if (aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade))
@@ -175,6 +249,27 @@ namespace SAM.Analytical.Tas
 
                 buildingElement.AssignConstruction(construction);
             }
+
+            //Summarised at the front, so a reader sees what this path achieved before the individual lines.
+            List<string> notes_Summary = [];
+            notes_Summary.Add(string.Format("Building elements: {0} opening(s) requested an availability schedule on the GUID-matched path, {1} of those read a schedule back off the TBD profile.", count_ScheduleRequested, count_ScheduleWritten));
+
+            if (count_ScheduleRequested != count_ScheduleWritten)
+            {
+                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} of {1} requested availability schedules did NOT read one back off the TBD on this path.", count_ScheduleRequested - count_ScheduleWritten, count_ScheduleRequested));
+            }
+
+            if (count_GlazingWithoutConstruction != 0)
+            {
+                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} GLAZING element(s) matched no construction and were skipped before any aperture control was written for them.", count_GlazingWithoutConstruction));
+            }
+
+            if (count_GlazingWithoutAperture != 0)
+            {
+                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} GLAZING element(s) did not resolve to a SAM aperture from their own name, so no aperture control was written for them on this path.", count_GlazingWithoutAperture));
+            }
+
+            notes.InsertRange(0, notes_Summary);
 
             return true;
         }

@@ -43,6 +43,19 @@ namespace SAM.Analytical.Tas
             Space space = new Space(zoneData.name, null);
             space.Add(parameterSet);
 
+            // Stamp the zone identity explicitly, as the TBD conversion below does. TAS retains the TBD zone's
+            // guid on the zone in the TSD, so this is the same identity the design side carries - the
+            // surface-result attachment in Modify.AddResults already relies on that equality.
+            // The generic Create.ParameterSet_Space above cannot supply it: the TypeMap entry is registered,
+            // but the mapper reads the source property by the SAM-side parameter name ("Zone Guid") rather
+            // than the TAS-side one ("zoneGUID"), so the value is silently never carried across.
+            // Blank stays blank - a space with no stated identity must fall back to the unique-name rule in
+            // SimulationSpaceMap rather than state an empty key, which that class refuses instead of matching.
+            if (!string.IsNullOrWhiteSpace(zoneData.zoneGUID))
+            {
+                space.SetValue(SpaceParameter.ZoneGuid, zoneData.zoneGUID);
+            }
+
             return space;
         }
 
