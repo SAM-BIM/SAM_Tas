@@ -250,16 +250,50 @@ sharing expectations intact).
 `GroupAperturePolygonsTests.cs` and the membership/split half of `InstanceIdentityTests.cs` cover the import
 grouping and the split decision.
 
-### Licensed TAS — NOT YET RUN
+### Licensed TAS (2026-08-22, EDSL Tas, `TBD.exe` under `C:\Program Files\Environmental Design Solutions Limited\Tas`)
 
-**Stage 3 is not mergeable until this passes.** Scenarios A–E (200 identical windows; split one; merge back;
-identical-geometry collision round trip; two-zone aperture through export → update → save/reopen → import),
-the TAS/TSD A/B against post-Stage-2 `sow/2026-Q3`, and one shaded-project result-mapping regression
-(`UpdateShading` → TAS → `CopyResults`, checking pane/frame/panel solar results stay attached to the correct
-PHYSICAL aperture rather than merely the correct shared definition).
+Every run is an **A/B**: one harness binary, two folder copies differing in `SAM.Analytical.Tas.dll` alone
+(A = `sow/2026-Q3` at `0f66b11`, i.e. after PR #32; B = this branch). The harness observes the TBD through raw
+COM accessors and its own copies of the identity primitives, never through the code under test.
 
-Stage 3 hardens identity without changing model state, so the A/B is expected to be exactly or
-solver-noise equivalent; the actual maximum numerical differences are to be reported, not assumed.
+| Scenario | Baseline (A) | Stage 3 (B) |
+|---|---|---|
+| **A - 200 identical windows**, synthetic, export + `UpdateIds`, then two further `UpdateBuildingElements` + `UpdateIds` passes | 400 surfaces, 2 elements, 1 ApertureType - but the first repeated pass adds **400 stamps** and produces **400 collisions** | **PASS.** 200 pane + 200 frame surfaces; 2 aperture elements; 1 distinct pane element; 1 ApertureType. Repeated twice: **0 stamps changed, 0 added, 0 collisions, 0 surfaces rebound** |
+| **B - split one aperture** (10 shared windows, one changes its opening restriction to Night Closed) | splits, but see C | **PASS.** 3 elements (was 2), 2 distinct pane elements, **exactly 1 surface rebound and it is the changed aperture's**, old element still carries the other 9, 10 panes + 10 frames intact, all 20 stamps unchanged, 0 collisions |
+| **C - merge it back** | **FAIL** - 4 failures: the aperture never returns to the shared element, its stamp stays on the split element | **PASS.** All 10 pane surfaces back on **one** element - the ORIGINAL - no new equivalent definition, counts unchanged |
+| **D - identical-geometry collision, `SAM -> TBD -> SAM`**, real `ModelA.sam` (2 zones, 14 apertures **all sharing one `ApertureConstruction`**) | **FAIL** - all **28 stamps unresolved**, **3 collisions** | **PASS.** 28 stamps all resolving to the right zone/surface/part, 0 collisions; 14 apertures imported; **every pane and frame stamp lands 0.0000 m from its own aperture's centroid** (cross-pair tolerance 1.0833 m) |
+| **E - two-zone aperture**, real model with one aperture injected into the shared wall, through export -> 2x update -> save/reopen -> import | **FAIL** - 10 failures: 28 unresolved, 3 collisions, and **13 panes / 14 frames spuriously two-sided** where only one aperture is; after import **0** two-sided | **PASS.** 16 panes + 16 frames; 32 stamps all resolving; exactly **1** two-sided pane and **1** two-sided frame; sides one per zone with `_1` the lower zone GUID; **2 linked pane surfaces and 2 linked frame surfaces**; two repeated updates change nothing; after save/reopen/import still exactly 1 two-sided pane and 1 two-sided frame |
+| **Pre-simulation TBD A/B** - export `ModelA.sam` with each DLL and dump every fact TAS reads (constructions with layers/widths/conductivities, elements with `BEType`/colour/construction/aperture types, aperture types with Cd, and all 40 surfaces with area/type/orientation/inclination/altitude/reversed/element/link/polygon centroid+area) | - | **IDENTICAL on every one of 61 dumped facts.** The export writes the same TBD either way, as expected: its only Stage 3 change is where the SAM-side stamps are written |
+| **TAS/TSD A/B** - TAS run on both exported TBDs, 14 days, then every hourly zone and surface variable differenced | - | **173,376 values compared, 0 differing, max absolute difference 0, max relative difference 0.** Exactly identical, not merely within solver noise |
+| **Result-mapping stamp input** (what `Modify.AddResults` keys on, real `ModelA.sam`, 14 apertures) | **54 stamps** - nearly double the correct number | **28 stamps** - exactly 14 panes + 14 frames |
+
+**Not run, and not claimed:** the shading-specific chain (`Simulate_Coverage`, `UpdateShading`,
+`Create.SolarModel`, `CopyResults` pane/frame/panel solar mapping). `Modify.AddResults` itself was driven to
+the point of consuming the stamps, but its in-process completion is blocked by a harness limitation rather
+than a Stage 3 one: `SAMTBDDocument.Dispose` closes the shared TAS COM server, so after a few document
+open/close cycles in one process a subsequent TSD read fails with "RPC server is unavailable" - **identically
+on both builds**. What IS established is that the stamp set `AddResults` consumes is exactly correct here and
+was badly wrong before (28 vs 54), and that `CopyResults` matches apertures to solar surfaces by GEOMETRY
+rather than by the stamps (recorded in `APERTURE_DEFINITION_REUSE.md`), so shared definitions do not degrade
+it.
+
+**Two pre-existing behaviours the A/B settled as NOT Stage 3's:**
+
+1. **`UpdateConstructions` duplicates aperture constructions on a Stage-2 TBD.** The first
+   `UpdateBuildingElements` pass takes the construction count 4 to 8, and it then stays put.
+   `UpdateConstructions` derives aperture construction names from `apertureConstruction.UniqueName()`, which
+   carries the `Windows: ` prefix, where the Stage 2 export writes `<ApertureConstruction.Name> -pane`; the two
+   disagree, so a duplicate, unused set is added. **Identical on both builds.** The duplicates are inert - no
+   surface points at them and no element is rebound because of them.
+2. **The `Modify.Update` export's own `updateGuids` stamping never reaches the caller.** `Modify.Update` opens
+   with `adjacencyCluster = adjacencyCluster.UpdateNormals(...)`, which returns a NEW cluster, so every stamp
+   the `updateGuids` branch writes goes onto a clone that is discarded when the method returns. The supported
+   way to get stamps into a SAM model is `Modify.UpdateIds`, which mutates the cluster it is handed, and that
+   is the path this gate exercises throughout. The Stage 3 change to that branch is therefore a correctness fix
+   to code whose output is currently dropped, not an observable behaviour change; the plumbing was deliberately
+   NOT altered, because turning it on would start mutating caller models on two public entry points
+   (`WorkflowCalculator` and `SAM.Analytical.Tas.TM59.Convert.ToTBD`) that pass `updateGuids: true` today and
+   get nothing.
 
 ---
 

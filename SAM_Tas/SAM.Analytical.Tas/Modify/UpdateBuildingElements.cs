@@ -222,6 +222,25 @@ namespace SAM.Analytical.Tas
                     }
                 }
 
+                if (construction == null)
+                {
+                    //LAST RESORT: the construction the element ITSELF already carries.
+                    //
+                    //Every match above derives the construction from the element's NAME, and an element this
+                    //path created by SPLITTING a shared definition carries a collision-discriminated name -
+                    //"Windows: SIM_EXT_GLZ_1F3A0C21 -pane" - which no construction is named and which the
+                    //word-set test cannot match either, since the discriminated base is a different word.
+                    //Such an element was therefore skipped before the aperture block on every SUBSEQUENT
+                    //pass, which meant a split aperture could never be updated again, and in particular could
+                    //never MERGE BACK when its definition became equivalent to the shared one once more.
+                    //
+                    //It always has a construction to fall back on - the split assigned it one when it was
+                    //created - so asking the element beats re-deriving from a name. The name matches stay
+                    //FIRST, because re-deriving is how an updated construction reaches an element at all;
+                    //this only rescues the elements for which no name answer exists.
+                    construction = buildingElement.GetConstruction();
+                }
+
                 if(construction == null)
                 {
                     //A glazing element that never finds a construction leaves this loop before the aperture

@@ -10,19 +10,29 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-21 - **Stage 3 code work COMPLETE; the licensed-TAS gate is the only thing outstanding.** PR #32
-(S3-C1 + S3-C2) is merged. `feature/tas-aperture-instance-identity` closes six further identity gaps it left,
-adds the handover doc `SAM_Tas/SAM.Analytical.Tas/APERTURE_INSTANCE_IDENTITY.md`, and takes the COM-free suite
-to **415/415**.
+2026-08-22 - **Stage 3 COMPLETE, licensed gate PASSED.** PR #32 (S3-C1 + S3-C2) is merged;
+`feature/tas-aperture-instance-identity` closes six further identity gaps it left, adds the handover doc
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_INSTANCE_IDENTITY.md`, takes the COM-free suite to **415/415**, and has
+been through a full licensed-TAS A/B against the `0f66b11` baseline.
 
 Physical aperture identity is now `{ ZoneGuid, SurfaceNumber }` and nothing else, held as one value type
-(`ZoneSurfaceKey`) that every physical comparison in the codebase goes through. A surface claimed by two
-apertures REFUSES rather than resolving to whichever was enumerated first. The `_1`/`_2` slots are canonical -
-a slot is a SIDE and a side is a ZONE - and all three write paths (export, import, `UpdateIds`) go through one
-mutator that clears before it fills, so a repeated update is a no-op instead of a reshuffle.
+(`ZoneSurfaceKey`) that every physical comparison goes through. A surface claimed by two apertures REFUSES
+rather than resolving to whichever was enumerated first. The `_1`/`_2` slots are canonical - a slot is a SIDE
+and a side is a ZONE - and all three write paths (export, import, `UpdateIds`) go through one mutator that
+clears before it fills.
 
-**Immediate next step:** run the licensed-TAS gate (scenarios A-E, the TAS/TSD A/B against post-Stage-2
-`sow/2026-Q3`, and one shaded-project result-mapping regression). Do NOT open the PR before it passes.
+**Licensed headline (2026-08-22, EDSL Tas):** every scenario passes on this branch and FAILS on the baseline.
+200 identical windows repeat-update with 0 stamps changed and 0 collisions where the baseline produces 400
+collisions; a split rebinds exactly one surface and merges back onto the original element where the baseline
+strands it; a real 2-zone model with 14 apertures sharing one construction round-trips with every stamp
+0.0000 m from its own aperture where the baseline leaves all 28 unresolved; a two-zone aperture keeps exactly
+one two-sided pane and one two-sided frame through export/update/save/reopen/import where the baseline
+reports 13-14 spuriously two-sided and 0 after import. The exported TBD is **identical on all 61 dumped
+facts** between the two builds, and a TAS run of both agrees on **173,376 result values with 0 differing,
+max absolute and relative difference 0**. Full table in `APERTURE_INSTANCE_IDENTITY.md`.
+
+**Immediate next step:** one focused independent diff review, then the PR. Two legs were NOT run and are not
+claimed - see "Unresolved" in the S3-C3 section.
 
 ## Current status
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
@@ -53,12 +63,13 @@ and the acceptance table live in `SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION
   read back off the shrunk tuple list): a seed with a coincident partner got a DIFFERENT aperture's
   surface key attached, and a lone pane with no coincident frame produced an EMPTY group - no
   ZoneSurfaceReference, no BuildingElementGuid, no imported OpeningProperties for that aperture at all.
-- **S3-C3 in progress** on `feature/tas-aperture-instance-identity` - the handover doc
-  (`APERTURE_INSTANCE_IDENTITY.md`) is written and six further identity gaps PR #32 left are closed (export
+- **S3-C3 DONE** on `feature/tas-aperture-instance-identity` - the handover doc
+  (`APERTURE_INSTANCE_IDENTITY.md`) is written and seven further identity gaps PR #32 left are closed (export
   and `UpdateIds` never cleared their stamps; the import dropped every internal aperture's second side and
   read pane/frame off the construction name; two `Query.Match` overloads still ignored the zone; nothing
-  detected a physical surface claimed by two apertures). 415/415 COM-free tests pass. **The licensed-TAS
-  gate is still outstanding and is the merge blocker** - see the S3-C3 section below.
+  detected a physical surface claimed by two apertures; and an element created by a SPLIT could never be
+  updated again, so a split aperture could never merge back). 415/415 COM-free tests pass, and the
+  **licensed-TAS A/B against the `0f66b11` baseline passes every scenario** - see the S3-C3 section below.
 
 The frozen three-stage plan is
 `C:\Users\Virtual Machine\.claude\plans\you-are-in-plan-lazy-pebble.md` (approved rev. 2, 2026-08-21).
@@ -165,6 +176,14 @@ shade-split naming.
 6. **Nothing detected a physical surface claimed by TWO apertures.** The membership map is keyed by
    building-element GUID (shared by design, so blind to it) and the surface index was last-wins. A contested
    surface would have been rebound to whichever aperture the enumeration reached first.
+7. **An element created by a SPLIT could never be updated again** - found by the licensed gate, not by
+   reading. `UpdateBuildingElements` resolves an element's construction from its NAME and skips the element
+   entirely when none matches; a split-created element carries a collision-discriminated name
+   (`Windows: SIM_EXT_GLZ_1F3A0C21 -pane`) that no construction is named and that the word-set test cannot
+   match either. So every subsequent pass counted it under `count_GlazingWithoutConstruction` and skipped it
+   before the aperture block - which meant a split aperture could never MERGE BACK. Fixed by falling back to
+   the construction the element itself already carries; the name matches stay first, because re-deriving from
+   the name is how an updated construction reaches an element at all.
 
 ### What was added
 
@@ -218,26 +237,75 @@ shade-split naming.
 
 ### Validation performed
 
-- `SAM.Analytical.Tas.csproj` and the full `SAM_Tas.sln` build with **0 errors** in Debug (Framework
-  MSBuild; the MSB3270/MSB3277 warnings are pre-existing).
+- `SAM.Analytical.Tas.csproj` and the full `SAM_Tas.sln` build with **0 errors** in Debug and Release
+  (Framework MSBuild; the MSB3270/MSB3277 warnings are pre-existing).
 - `SAM.Analytical.Tas.TM59.Tests`: **415/415 pass** (369 before this branch, all unchanged and green -
   including Stage 1 `ApertureTypeReuseTests` and Stage 2 `ApertureDefinitionReuseTests` with their sharing
   expectations intact - plus 46 new).
+- **Licensed TAS A/B, 2026-08-22, every scenario PASSES on this branch and FAILS on the `0f66b11` baseline.**
+  Full table in `APERTURE_INSTANCE_IDENTITY.md`, "Licensed TAS". Summary: A (200 identical windows, repeated
+  update) 0 vs 400 collisions; B (split one) exactly 1 surface rebound, old element keeps the other 9;
+  C (merge back) all 10 back on the ORIGINAL element vs baseline stranding it; D (real 2-zone model, 14
+  apertures sharing one construction, `SAM -> TBD -> SAM`) every stamp 0.0000 m from its own aperture vs 28
+  unresolved + 3 collisions; E (two-zone aperture through export/2x update/save/reopen/import) exactly 1
+  two-sided pane and 1 two-sided frame with both link surfaces, vs 13-14 spuriously two-sided and 0 after
+  import. Pre-simulation TBD **identical on all 61 dumped facts**; TAS/TSD A/B **173,376 values, 0 differing,
+  max absolute and relative difference 0**.
 
-### Unresolved / blockers
+### Licensed harness (not committed, same discipline as Stages 1 and 2)
 
-**The licensed-TAS gate has not been run.** It is the merge blocker. Required: scenarios A-E (200 identical
-windows; split one; merge back; identical-geometry collision `SAM -> TBD -> SAM`; two-zone aperture through
-export -> update -> save/reopen -> import), the TAS/TSD A/B against post-Stage-2 `sow/2026-Q3` with actual
-maximum numerical differences reported, and one shaded-project result-mapping regression
-(`UpdateShading` -> TAS -> `CopyResults`) confirming pane/frame/panel solar results stay attached to the
-correct PHYSICAL aperture and not merely the correct shared definition.
+`Gate3.exe`, a `net8.0-windows` console project (`Gate3.csproj`, `Program.cs`, `Model.cs`, `Tbd.cs`,
+`Local.cs`, `Tsd.cs`) referencing the built DLL set by `HintPath` off `TasLibs`/`SamLibs` MSBuild properties,
+so ONE binary runs against either branch's `SAM.Analytical.Tas.dll`. Commands: `probe`, `diag`, `diag2`,
+`diag3`, `imp`, `inspect`, `dump`, `sim`, `cmp`, `results`, `a <n> <dir>`, `b <dir>`, `d <model> <dir>`,
+`e <model> <dir>`. Three things worth not rediscovering:
+
+- **Run it from a SHORT output path.** TAS shows a modal "Fail to save to file" dialog and then dies with
+  "RPC server is unavailable" when the target path is long - the scratchpad path was long enough to trigger
+  it. `C:\Gate3Out` works. Kill any stray `TBD.exe` first; a stuck one holds the file.
+- **Never call a SAM_Tas helper that returns `List<TBD.*>`.** `SAM.Core.Tas` is built with
+  `EmbedInteropTypes=True`, so those signatures cannot cross an assembly boundary at all (CS1769). `Tbd.cs`
+  walks TAS's own 0-based `Get*(index)` accessors instead, which is also the right thing for a harness: what
+  the TBD holds must be observed independently of the code being observed.
+- **`SAMTBDDocument.Dispose` closes the shared TAS COM server**, so a handful of document open/close cycles
+  in one process makes a later TSD read fail. Simulation is therefore run in a CHILD process, and the
+  result-mapping leg still could not be driven to completion in-process.
+
+Real models used: `SAM_Deploy/SAM_SolarCalculator/SAM_SolarCalculator.Tests/Fixtures/ModelA.sam` (2 spaces,
+11 panels, 14 apertures, ALL sharing one `ApertureConstruction` - ideal for the collision scenario). A
+synthetic hand-built box is used for A and B/C; note its hand-wound wall faces do NOT survive
+`Convert.ToSAM` (only the two horizontal panels come back), which is why D and E use a real model.
+
+### Unresolved
+
+**Two legs of the licensed gate were NOT run and are not claimed:**
+
+1. **The shading-specific chain** - `Simulate_Coverage`, `UpdateShading`, `Create.SolarModel`, `CopyResults`
+   pane/frame/panel solar mapping. Not attempted. Mitigating evidence rather than a substitute:
+   `CopyResults` matches apertures to solar surfaces by GEOMETRY, not by the stamps (recorded in
+   `APERTURE_DEFINITION_REUSE.md`), and the TAS/TSD A/B is exactly identical.
+2. **`Modify.AddResults` end to end.** Driven to the point of consuming the stamps, then blocked by the
+   `SAMTBDDocument.Dispose` COM-server teardown described above - **identically on both builds**, so it is a
+   harness limitation, not a Stage 3 behaviour. What IS established is that the stamp set `AddResults` keys on
+   is exactly right here (28 stamps for 14 apertures) and was badly wrong before (54).
+
+**Two pre-existing defects found and deliberately NOT fixed** (both confirmed identical on the baseline, both
+recorded in `APERTURE_INSTANCE_IDENTITY.md`):
+
+1. `Modify.UpdateConstructions` adds a duplicate, unused set of aperture constructions on a Stage-2 TBD
+   (count 4 to 8 on the first `UpdateBuildingElements`, then stable) because its name derivation carries the
+   `Windows: ` prefix where the Stage 2 export does not. Inert - nothing points at the duplicates.
+2. **`Modify.Update`'s own `updateGuids` stamping never reaches the caller**, because the method opens by
+   reassigning its parameter to `adjacencyCluster.UpdateNormals(...)`, which returns a NEW cluster. Every
+   stamp that branch writes lands on a clone that is discarded on return. `Modify.UpdateIds` is the live path
+   and is what the gate exercises. NOT fixed here: turning it on would start mutating caller models on two
+   public entry points (`WorkflowCalculator`, `SAM.Analytical.Tas.TM59.Convert.ToTBD`) that pass
+   `updateGuids: true` today and get nothing, which is well outside what Stage 3 was chartered to change.
+   **Worth a decision before anyone relies on export-side stamping.**
 
 ### Exact recommended next step
 
-Run the licensed-TAS gate on a machine with EDSL Tas installed, reusing the Stage 2 harness recipe in
-"A/B build recipe (proven)" and "Licensed harness" below, adapted to physical-instance identity. Then one
-focused independent diff review, then the PR.
+One focused independent diff review of `0f66b11..HEAD`, then open the PR. The licensed gate is done.
 
 ---
 
