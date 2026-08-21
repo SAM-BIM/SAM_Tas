@@ -292,7 +292,15 @@ namespace SAM.Analytical.Tas
                             if (buildingElement_Target == null)
                             {
                                 string name_ApertureConstruction = member.Aperture.ApertureConstruction?.Name;
-                                string name_Target = Query.BuildingElementName(buildingReuseCache.BuildingElementNames(), buildingElementDefinition_Required, name_ApertureConstruction, out string _);
+
+                                //A shade-stated member names its own element shade-aware: the plain
+                                //two-name budget derives IDENTICAL names for every shade split of one
+                                //definition (the signature excludes the shade), so a second split - or a
+                                //re-split after another shade change - would come back null and leave the
+                                //pane bound to an element whose shade no longer matches.
+                                string name_Target = featureShade_Stated
+                                    ? Query.ShadedBuildingElementName(buildingReuseCache.BuildingElementNames(), buildingElementDefinition_Required, name_ApertureConstruction, featureShade_Required)
+                                    : Query.BuildingElementName(buildingReuseCache.BuildingElementNames(), buildingElementDefinition_Required, name_ApertureConstruction, out string _);
                                 if (name_Target != null)
                                 {
                                     buildingElement_Target = building.AddBuildingElement();

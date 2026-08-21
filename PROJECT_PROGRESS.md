@@ -82,17 +82,33 @@ The Codex review of PR #32 raised five findings; all are fixed:
   stale-stamp failure rebinds NONE of the member's surfaces and leaves its stamp untouched.
 - **P1 - this file updated** (it still read "Stage 3 not started" and recommended opening the
   already-merged Stage 2 PR).
+- **P1 - collision-safe naming for repeated shade splits** (second review round; new
+  `Query/ShadedBuildingElementName.cs`, call site). The plain two-name budget (preferred +
+  signature-qualified) excludes the shade from the signature, so a second shade split of one definition -
+  or a re-split after another shade change - derived a name that was already taken and `BuildingElementName`
+  returned null, leaving the pane bound to the wrong-shaded element. The shade-aware variant falls back to
+  a shade-content discriminator (FNV-1a over the definition signature plus the stored-float bit pattern of
+  every shade field), then a counter, keeping the `Windows: <base>_<8 hex> -pane` convention shape so the
+  name still decomposes.
+- **CI (not Codex, same session):** `build.yml`'s dependency-clone fallback could not map a sow FEATURE
+  branch (`sow/2026-Q3-instance-identity`) to a dependency-repo branch on PUSH events (empty `base_ref`) and
+  fell through the stale hardcoded `sow/2026-Q2` to the default branch, which no longer carries
+  `SAM.Analytical.Benchmark` - every push build failed in the SAM_Validation step while the PR build passed.
+  Both clone steps now derive the quarter branch (`sow/2026-Q3`) from the ref name as a fallback.
 
 Files changed: `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateBuildingElements.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Query/ApertureMatchesExistingAssignment.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Query/FeatureShadesMatch.cs` (new),
+`SAM_Tas/SAM.Analytical.Tas/Query/ShadedBuildingElementName.cs` (new),
 `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/AdjacencyCluster.cs`,
-`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/InstanceIdentityTests.cs` (+9 tests: shade add/remove/change,
-float round-trip stability, frame-ignores-shade, `FeatureShadesMatch` null/text/NaN cases), this file.
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/InstanceIdentityTests.cs` (+13 tests: shade add/remove/change,
+float round-trip stability, frame-ignores-shade, `FeatureShadesMatch` null/text/NaN cases, and the four
+shade-split naming cases), `.github/workflows/build.yml`, this file.
 
 Validation: `SAM.Analytical.Tas.csproj` builds with 0 errors in Debug AND Release (Framework MSBuild; the
-MSB3270 COM-architecture warnings are pre-existing). `SAM.Analytical.Tas.TM59.Tests`: **365/365 pass** in
-both configurations (356 pre-existing, unchanged, + 9 new). Licensed TAS: not run - S3-C3 owns that gate.
+MSB3270 COM-architecture warnings are pre-existing). `SAM.Analytical.Tas.TM59.Tests`: **369/369 pass** in
+both configurations (356 pre-existing, unchanged, + 13 new). CI on the final head: build (push AND
+pull_request) + spdx all pass. Licensed TAS: not run - S3-C3 owns that gate.
 
 ---
 

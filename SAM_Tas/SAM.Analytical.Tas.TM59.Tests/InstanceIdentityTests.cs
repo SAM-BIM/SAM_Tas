@@ -84,6 +84,13 @@ namespace SAM.Analytical.Tas.TM59.Tests
             return new FeatureShade("shade", null, 1.0, 2.0, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, overhangDepth, 0.0, 0.5);
         }
 
+        private static BuildingElementDefinition PaneDefinition()
+        {
+            // Naming needs no resolved construction (its signature renders "unresolved") - the tests below
+            // are about NAME allocation, not reuse, so a bare definition is enough.
+            return new BuildingElementDefinition(ApertureType.Window, AperturePart.Pane, 12, 0x0088CCu, null, null);
+        }
+
         private static PartOOpeningProperties PartO(double dischargeCoefficient = 1.2)
         {
             return new PartOOpeningProperties(dischargeCoefficient, 1.0, 30.0, OpeningRestriction.Unrestricted);
@@ -287,6 +294,75 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(TasQuery.FeatureShadesMatch(Shade(), featureShade_NaN), Is.False, "a field written on one side and absent on the other is a real difference");
             Assert.That(TasQuery.FeatureShadesMatch(featureShade_NaN, featureShade_NaN), Is.True, "NaN on both sides is a field neither side states, not a difference");
+        }
+
+        // =================================================================================================
+        // ShadedBuildingElementName - collision-safe naming for shade splits
+        //
+        // The plain two-name budget (preferred + signature-qualified) excludes the shade from the
+        // signature, so every shade split of one definition would derive the same two names. A null name
+        // leaves the pane bound to the element whose shade no longer matches - these elements are never
+        // reused, so the shade-aware naming must always find one.
+        // =================================================================================================
+
+        [Test]
+        public void ShadedName_FirstSplit_KeepsTheConventionName()
+        {
+            string name = TasQuery.ShadedBuildingElementName(new List<string>(), PaneDefinition(), GlazingName, Shade());
+
+            Assert.That(name, Is.EqualTo("Windows: " + GlazingName + " -pane"), "one shade variant in the building needs no discriminator");
+        }
+
+        [Test]
+        public void ShadedName_TwoShadeSplitsOfOneDefinition_GetDistinctNames()
+        {
+            BuildingElementDefinition definition = PaneDefinition();
+            string preferred = "Windows: " + GlazingName + " -pane";
+
+            string name_1 = TasQuery.ShadedBuildingElementName(new List<string> { preferred }, definition, GlazingName, Shade(0.5));
+            string name_2 = TasQuery.ShadedBuildingElementName(new List<string> { preferred, name_1 }, definition, GlazingName, Shade(0.9));
+
+            Assert.That(name_1, Is.Not.Null);
+            Assert.That(name_2, Is.Not.Null, "the second shade split must not come back nameless - that path leaves the pane bound to the wrong-shaded element");
+            Assert.That(name_2, Is.Not.EqualTo(name_1), "the shade differs, so the shade-content discriminator differs");
+            Assert.That(TasQuery.TryDecomposeBuildingElementName(name_2, out _, out _, out AperturePart aperturePart), Is.True, "the convention shape must survive the discriminator");
+            Assert.That(aperturePart, Is.EqualTo(AperturePart.Pane));
+        }
+
+        [Test]
+        public void ShadedName_ReSplitAfterAnotherShadeChange_DoesNotCollideWithItsOwnPreviousElement()
+        {
+            // The pane was split once (shade 0.5, element created under the signature-qualified name), then
+            // the shade changed to 0.9: the re-split must find a fresh name even though its own previous
+            // element still occupies the qualified one.
+            BuildingElementDefinition definition = PaneDefinition();
+            string preferred = "Windows: " + GlazingName + " -pane";
+            string qualified = string.Format("Windows: {0}_{1} -pane", GlazingName, TasQuery.BuildingElementSignatureHash(definition));
+
+            string name = TasQuery.ShadedBuildingElementName(new List<string> { preferred, qualified }, definition, GlazingName, Shade(0.9));
+
+            Assert.That(name, Is.Not.Null, "without the shade-aware fallback this exact sequence returned null and stranded the pane on the stale shade");
+            Assert.That(name, Is.Not.EqualTo(qualified));
+        }
+
+        [Test]
+        public void ShadedName_IdenticalShadeSplitTwice_CounterKeepsNamesUnique()
+        {
+            // Two identical apertures stating the identical shade (or a shade changed back to a value a
+            // now-unused element still carries): the shade-content discriminator is the SAME, so the
+            // counter is what keeps the second element's name unique. The elements never share.
+            BuildingElementDefinition definition = PaneDefinition();
+            string preferred = "Windows: " + GlazingName + " -pane";
+            string qualified = string.Format("Windows: {0}_{1} -pane", GlazingName, TasQuery.BuildingElementSignatureHash(definition));
+
+            string name_1 = TasQuery.ShadedBuildingElementName(new List<string> { preferred, qualified }, definition, GlazingName, Shade(0.5));
+            string name_2 = TasQuery.ShadedBuildingElementName(new List<string> { preferred, qualified, name_1 }, definition, GlazingName, Shade(0.5));
+
+            Assert.That(name_1, Is.Not.Null);
+            Assert.That(name_2, Is.Not.Null);
+            Assert.That(name_2, Is.Not.EqualTo(name_1));
+            Assert.That(TasQuery.TryDecomposeBuildingElementName(name_2, out _, out _, out AperturePart aperturePart), Is.True);
+            Assert.That(aperturePart, Is.EqualTo(AperturePart.Pane));
         }
 
         // =================================================================================================
