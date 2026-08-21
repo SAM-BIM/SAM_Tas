@@ -105,7 +105,12 @@ namespace SAM.Analytical.Tas
         /// <param name="refusal">Why nothing was written, or null on success.</param>
         public static TBD.ApertureType SetApertureType(this Building building, buildingElement buildingElement, ISingleOpeningProperties singleOpeningProperties, out string refusal, string name = null, int index = -1)
         {
-            return SetApertureType(building, buildingElement, singleOpeningProperties, out refusal, name, index, null, -1);
+            //The legacy 1-based child index doubles as the reuse ordinal on the shared path. Forwarding -1
+            //would make two calls for two identical indexed openings both resolve to occurrence 1, so the
+            //second would reuse the first's type and the assignment guard would silently collapse two
+            //openings into one. Position-derived ordinals keep the two calls two distinct types; the
+            //multiple-opening entry point computes the true per-definition occurrence and is unaffected.
+            return SetApertureType(building, buildingElement, singleOpeningProperties, out refusal, name, index, null, Query.ApertureTypeOrdinal(index));
         }
 
         /// <summary>

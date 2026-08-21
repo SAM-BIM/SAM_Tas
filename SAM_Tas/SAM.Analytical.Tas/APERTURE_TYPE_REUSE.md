@@ -72,7 +72,10 @@ not implemented.
 2. **Identity is the definition, never the name.** `ApertureTypeDefinition` is the whole of it: discharge
    coefficient, opening factor (after the Part O `AlwaysClosed → 0` override), profile mode, function text,
    the 24 schedule values, the description, and day-type membership. Float equality is **exact** (`float`
-   equality). Names are display metadata and are only derived *after* a definition search has failed — so a
+   equality), with one deliberate exception: **signed zero is normalised to positive zero** on the way in,
+   because `-0f` and `+0f` are equal under float comparison while their IEEE-754 bit patterns — and hence
+   their signature hashes — differ; normalising keeps `Equals` and `GetHashCode` in agreement. Names are
+   display metadata and are only derived *after* a definition search has failed — so a
    name collision is necessarily with a different definition. The deterministic collision hash is derived
    from the **exact IEEE-754 bit pattern** of each float, not from the rounded `0.###` display text: two
    TAS float definitions such as `0.6201` and `0.6202` share the readable name `Opening Cd0.62 F1` but can
@@ -102,7 +105,12 @@ not implemented.
    ```
 
    The lookup key is `(definition, ordinal)`. `childIndices` correspondence is unchanged: a refused child is
-   absent from the returned list, never padded.
+   absent from the returned list, never padded. The compatibility overload
+   (`SetApertureType(building, buildingElement, single, out refusal, name, index)`) derives its ordinal from
+   the legacy 1-based `index` (`Query.ApertureTypeOrdinal`): position *is* the occurrence, which is exact
+   for identical children — the case where it matters — and conservative (over-splitting, never collapsing)
+   for different ones. The multiple-opening entry point computes the true per-definition occurrence from the
+   whole sibling set.
 
 5. **The legacy per-element path is untouched.** When every aperture type already on an element is named
    after the element itself, those names carry the aperture GUID and are therefore exclusive to it; the
@@ -155,7 +163,7 @@ sheltered type would apply a shelter the model does not state. Refusing to reuse
 |---|---|
 | `Classes/ApertureTypeDefinition.cs` | Immutable value-equality object over the identity fields. COM-free. |
 | `Enums/ApertureTypeProfileMode.cs` | Plain / ScheduleOnly / Function — which of the three write shapes. |
-| `Query/ApertureTypeDefinition.cs` | COM-free factory from `ISingleOpeningProperties`, plus `ApertureTypeOrdinals`. |
+| `Query/ApertureTypeDefinition.cs` | COM-free factory from `ISingleOpeningProperties`, plus `ApertureTypeOrdinals` and the index-derived `ApertureTypeOrdinal`. |
 | `Query/ApertureTypeDefinitionTBD.cs` | The seed reader: an existing `TBD.ApertureType` → definition, or a refusal. Also `DayTypeNames`. |
 | `Query/ApertureTypeSignature.cs` | Deterministic FNV-1a signature and collision hash over the **exact Single bit patterns**. Never `GetHashCode`. |
 | `Query/ApertureTypeIndex.cs` | First equal definition in a seeded list, or −1. Mirrors `ScheduleIndex`. |
@@ -177,10 +185,12 @@ call sites compile and behave unchanged.
 
 ### COM-free (`SAM.Analytical.Tas.TM59.Tests/ApertureTypeReuseTests.cs`, runs in CI)
 
-77 tests: definition equality field by field (including close floats that round to the same display text),
-day-type set semantics, signature determinism and **exact Single bit-pattern identity**, naming/collision/
-refusal (including distinct deterministic collision names for `0.6201` vs `0.6202`), name decomposition,
-the COM-free factory, ordinals, the reconciliation decision table, and a fake-COM harness whose fakes
+80 tests: definition equality field by field (including close floats that round to the same display text
+and signed zero, which must hash alike because it compares equal), day-type set semantics, signature
+determinism and **exact Single bit-pattern identity**, naming/collision/refusal (including distinct
+deterministic collision names for `0.6201` vs `0.6202`), name decomposition, the COM-free factory, ordinals
+(including the index-derived ordinal the compatibility overload uses), the reconciliation decision table,
+and a fake-COM harness whose fakes
 **record every property set** — `FakeTBDApertureType` / `FakeTBDProfile` / `FakeTBDSchedule` /
 `FakeTBDBuildingElement` / `FakeTBDBuilding`, in the style of `FakeTBDSchedule` in
 `OpeningScheduleResolutionTests`. The harness delegates every decision to the production helpers, so the

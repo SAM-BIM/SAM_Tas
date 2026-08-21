@@ -133,5 +133,25 @@ namespace SAM.Analytical.Tas
 
             return result;
         }
+
+        /// <summary>
+        /// The reuse ordinal a legacy 1-based child <paramref name="index"/> implies for a single-child
+        /// write, or -1 when it implies none.
+        /// <para>
+        /// <b>Why the compatibility overload needs this.</b> A caller that writes an element's children one
+        /// by one through <c>SetApertureType</c>'s legacy <c>index</c> parameter cannot supply the sibling
+        /// set <see cref="ApertureTypeOrdinals(IEnumerable{ApertureTypeDefinition})"/> computes the true
+        /// per-definition occurrence from. Position is therefore used AS the occurrence: position 1 is
+        /// occurrence 1, position 2 is occurrence 2. That is exact for identical children - which is the
+        /// case where the ordinal matters, because two identical children must never silently collapse
+        /// into one assignment - and conservative for different children: the later one gets an occurrence
+        /// higher than 1 and shares no type with occurrence 1, which over-splits by at most the child
+        /// count rather than collapsing anything.
+        /// </para>
+        /// </summary>
+        public static int ApertureTypeOrdinal(int index)
+        {
+            return index >= 1 ? index : -1;
+        }
     }
 }

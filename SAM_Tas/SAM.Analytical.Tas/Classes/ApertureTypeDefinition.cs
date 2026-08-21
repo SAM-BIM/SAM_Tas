@@ -58,8 +58,13 @@ namespace SAM.Analytical.Tas
         /// <param name="dayTypeNames">The names of the day types the control applies on. Order and duplicates are not significant.</param>
         public ApertureTypeDefinition(float dischargeCoefficient, float factor, ApertureTypeProfileMode mode, string function, IEnumerable<int> scheduleValues, string description, IEnumerable<string> dayTypeNames)
         {
-            DischargeCoefficient = dischargeCoefficient;
-            Factor = factor;
+            //Signed zero is normalised to positive zero. Under float equality -0f and +0f are EQUAL, while
+            //the signature hashes their distinct IEEE-754 bit patterns, so without this an equal pair could
+            //produce different hash codes and break the dictionary contract the GetHashCode remarks promise.
+            //Zero is zero to the simulation either way; the name signature then also carries one stable bit
+            //pattern for it. NaN is left untouched: NaN never equals NaN, so its bits may differ freely.
+            DischargeCoefficient = NormalizeZero(dischargeCoefficient);
+            Factor = NormalizeZero(factor);
             Mode = mode;
 
             //A function text is only part of the control in Function mode. Storing it in the other modes
@@ -78,10 +83,10 @@ namespace SAM.Analytical.Tas
                 : dayTypeNames.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         }
 
-        /// <summary>The discharge coefficient, as the <c>float</c> TBD stores. Compared exactly.</summary>
+        /// <summary>The discharge coefficient, as the <c>float</c> TBD stores. Compared exactly; signed zero is normalised to positive zero.</summary>
         public float DischargeCoefficient { get; }
 
-        /// <summary>The opening factor TBD carries, after any AlwaysClosed override. Compared exactly.</summary>
+        /// <summary>The opening factor TBD carries, after any AlwaysClosed override. Compared exactly; signed zero is normalised to positive zero.</summary>
         public float Factor { get; }
 
         /// <summary>Which of the three write shapes this control is.</summary>
@@ -185,6 +190,11 @@ namespace SAM.Analytical.Tas
         private static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        private static float NormalizeZero(float value)
+        {
+            return value == 0 ? 0f : value;
         }
     }
 }

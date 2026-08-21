@@ -294,6 +294,24 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(Definition(factor: 1.0001f), Is.Not.EqualTo(Definition(factor: 1.0002f)));
         }
 
+        /// <summary>
+        /// -0f and +0f are EQUAL under float comparison, so they must hash alike too. The signature hashes
+        /// raw IEEE-754 bit patterns, which differ for signed zero, so the constructor normalises it to
+        /// positive zero - equality and GetHashCode then agree, and the name signature carries one stable
+        /// bit pattern for zero.
+        /// </summary>
+        [Test]
+        public void Equality_SignedZero_NormalisesBeforeEqualityAndHashing()
+        {
+            Assert.That(Definition(dischargeCoefficient: -0f), Is.EqualTo(Definition(dischargeCoefficient: 0f)));
+            Assert.That(Definition(dischargeCoefficient: -0f).GetHashCode(), Is.EqualTo(Definition(dischargeCoefficient: 0f).GetHashCode()));
+
+            Assert.That(Definition(factor: -0f), Is.EqualTo(Definition(factor: 0f)));
+            Assert.That(Definition(factor: -0f).GetHashCode(), Is.EqualTo(Definition(factor: 0f).GetHashCode()));
+
+            Assert.That(TasQuery.ApertureTypeSignature(Definition(factor: -0f)), Is.EqualTo(TasQuery.ApertureTypeSignature(Definition(factor: 0f))));
+        }
+
         /// <summary>The human-readable name keeps its rounded text for the close values.</summary>
         [Test]
         public void Name_CloseFloatsThatShareADisplayText_KeepTheReadableName()
@@ -703,6 +721,19 @@ namespace SAM.Analytical.Tas.TM59.Tests
         public void Ordinals_OfNull_IsEmpty()
         {
             Assert.That(TasQuery.ApertureTypeOrdinals(null), Is.Empty);
+        }
+
+        /// <summary>
+        /// The compatibility overload derives its reuse ordinal from the legacy 1-based child index: any
+        /// position 1 or later is an occurrence, anything else means the first.
+        /// </summary>
+        [Test]
+        public void Ordinal_IndexDerived_IsThePosition()
+        {
+            Assert.That(TasQuery.ApertureTypeOrdinal(-1), Is.EqualTo(-1));
+            Assert.That(TasQuery.ApertureTypeOrdinal(0), Is.EqualTo(-1));
+            Assert.That(TasQuery.ApertureTypeOrdinal(1), Is.EqualTo(1));
+            Assert.That(TasQuery.ApertureTypeOrdinal(2), Is.EqualTo(2));
         }
 
         // -------------------------------------------------------------------------------------------------
@@ -1423,6 +1454,26 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(buildingElement.ApertureTypes.Count, Is.EqualTo(1));
             Assert.That(buildingElement.WriteLog.Count, Is.EqualTo(writes_Element));
+        }
+
+        /// <summary>
+        /// The compatibility overload is called once per indexed child, with the legacy 1-based index
+        /// doubling as the reuse ordinal. Two calls for two identical indexed openings must produce two
+        /// distinct types and two assignments - a fixed ordinal would make the second call reuse the
+        /// first's type and the assignment guard would silently collapse two openings into one.
+        /// </summary>
+        [Test]
+        public void Export_TwoIdenticalIndexedWrites_ProduceTwoTypesAndTwoAssignments()
+        {
+            FakeTBDBuilding building = new FakeTBDBuilding();
+            FakeTBDBuildingElement buildingElement = new FakeTBDBuildingElement("Windows: W01 " + System.Guid.NewGuid() + " -pane");
+
+            Write(building, buildingElement, PartO(), TasQuery.ApertureTypeOrdinal(1), out string _);
+            Write(building, buildingElement, PartO(), TasQuery.ApertureTypeOrdinal(2), out string _);
+
+            Assert.That(building.ApertureTypes.Count, Is.EqualTo(2), "occurrence 1 and occurrence 2 of one control");
+            Assert.That(buildingElement.ApertureTypes.Count, Is.EqualTo(2), "both openings stay assigned");
+            Assert.That(buildingElement.ApertureTypes[0], Is.Not.SameAs(buildingElement.ApertureTypes[1]), "never the same type twice on one element");
         }
 
         // -------------------------------------------------------------------------------------------------

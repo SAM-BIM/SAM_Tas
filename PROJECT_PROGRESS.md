@@ -1,13 +1,14 @@
 # Project Progress
 
 ## Branch
-`feature/tas-aperturetype-reuse` (off `sow/2026-Q3`; PR **not yet opened**)
+`feature/tas-aperturetype-reuse` (off `sow/2026-Q3`; PR #30)
 
 ## Last updated
 2026-08-21 - Stage 1 implemented, validated on licensed TAS, and committed in two commits; a focused
 correction pass the same day hardened it (exact float collision identity, name reservation on late
-failure, full read-back verification of new shared types). 230/230 tests green Debug + Release;
-`SAM_Tas.sln` 0 errors both configurations; licensed-TAS acceptance re-run after the hardening, all pass.
+failure, full read-back verification of new shared types). The two Codex review findings on PR #30 were
+then fixed: index-derived reuse ordinal for the compatibility overload, and signed-zero normalisation in
+definition equality/hashing.
 
 ## Current status
 **Stage 1 (reusable TBD aperture types) is complete, validated and committed.** The export now shares one
@@ -54,6 +55,31 @@ per `APERTURE_TYPE_REUSE.md`); the produced `.tbd` files live under `%TEMP%\aper
 
 Next step: open the Stage 1 PR (two commits: `feat(tas): reuse equivalent aperture types`,
 `test(tas): validate aperture type reuse`).
+
+### Codex review fixes (2026-08-21, same branch, one commit on top of the two Stage 1 commits)
+
+The Codex review of PR #30 raised two genuine findings; both are fixed:
+
+- **P1 - index-derived reuse ordinal for the compatibility overload.** The
+  `SetApertureType(building, buildingElement, single, out refusal, name, index)` overload forwarded a
+  fixed ordinal, so two calls for two identical indexed openings both resolved to occurrence 1 and the
+  second collapsed into the first's assignment. The legacy 1-based `index` now doubles as the reuse
+  ordinal via the new COM-free `Query.ApertureTypeOrdinal(int)` (position is the occurrence - exact for
+  identical children, conservative for different ones). The multiple-opening entry point already
+  computes the true per-definition occurrence and is unaffected.
+- **P2 - signed-zero hashing.** `ApertureTypeDefinition.Equals` uses float equality under which `-0f`
+  and `+0f` are equal, while the signature hashed their distinct IEEE-754 bit patterns, so an equal pair
+  could produce different hash codes (the .NET dictionary contract). The constructor now normalises
+  signed zero to positive zero for Cd and factor, keeping `Equals`, `GetHashCode` and the deterministic
+  name signature in agreement.
+
+Files changed: `Classes/ApertureTypeDefinition.cs`, `Query/ApertureTypeDefinition.cs`,
+`Modify/SetApertureType.cs`, `APERTURE_TYPE_REUSE.md`, plus tests.
+
+Validation: `SAM_Tas.sln` 0 errors Debug + Release (CI recipe: sibling deps at `sow/2026-Q3` rebuilt
+first); `SAM.Analytical.Tas.TM59.Tests` **233/233** Debug + Release (was 230/230; +3 regression tests:
+`Equality_SignedZero_NormalisesBeforeEqualityAndHashing`, `Ordinal_IndexDerived_IsThePosition`,
+`Export_TwoIdenticalIndexedWrites_ProduceTwoTypesAndTwoAssignments`).
 
 ### Stage 1 - what landed
 
@@ -225,7 +251,7 @@ Stage 1 - reusable aperture types (this session, branch `feature/tas-aperturetyp
 - `SAM_Tas/SAM.Analytical.Tas/Modify/Update.cs` (cache construction + one call site)
 - `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateBuildingElements.cs` (cache construction + one call site)
 - `SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md` (new)
-- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ApertureTypeReuseTests.cs` (new, +68)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ApertureTypeReuseTests.cs` (new, +80)
 - `PROJECT_PROGRESS.md` (this file)
 
 Final pre-merge pass (previous branch):
@@ -252,9 +278,11 @@ Previous session:
 ## Validation
 - `SAM_Tas.sln` rebuilt with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
   pre-existing MSB3270 (MSIL vs AMD64 interop) and MSB3277 (System.Memory unification) warnings.
-- `SAM.Analytical.Tas.TM59.Tests` Debug: **221 passed, 0 failed**. Release: **221 passed, 0 failed**
-  (153 pre-existing, unmodified, + 68 new aperture-type-reuse tests).
-- **Licensed TAS acceptance (2026-08-21, TAS COM available on the authoring machine), all pass**, driven
+- `SAM.Analytical.Tas.TM59.Tests` Debug: **233 passed, 0 failed**. Release: **233 passed, 0 failed**
+  (153 pre-existing, unmodified, + 80 aperture-type-reuse tests - 77 Stage 1 + 3 for the Codex fixes:
+  signed-zero equality/hashing, index-derived ordinal mapping, and the indexed-twins write regression).
+- Licensed TAS acceptance (2026-08-21, before the Codex fixes; the fixes are COM-free seams exercised by
+  the tests above - the licensed harness was not re-run for them), all pass, driven
   through the real `Modify.SetApertureTypes` -> `SetApertureType` -> `BuildingReuseCache` ->
   `Create.GetOrCreateSchedule` against a real `.tbd` created and reopened via `TBD.TBDDocument`:
   - 200 identical windows -> **1 ApertureType** (`Opening Cd0.395 F1 S00FFFE`), **1 schedule**, 200
@@ -270,6 +298,9 @@ Previous session:
 - Note the documented build order: the test project references already-built assemblies by `HintPath`
   (the COM-referencing projects cannot be built by the .NET Core MSBuild), so the SAM libraries and
   `SAM_Tas.sln` must be built before `dotnet test`. See `SAM.Analytical.Tas.TM59.Tests/TESTING.md`.
+  This session followed the CI recipe: sibling deps cloned at `sow/2026-Q3`, benchmark schema built,
+  all dependency solutions rebuilt with the Framework MSBuild, then `SAM_Tas.sln` Debug + Release and
+  `dotnet test` per configuration.
 
 ## Issues / blockers
 - **None blocking Stage 1.**
@@ -280,7 +311,7 @@ Previous session:
   remain deferred - see **Deferred** above.
 
 ## Next step
-- Open the PR for `feature/tas-aperturetype-reuse` against `sow/2026-Q3` (not yet opened - the instruction
-  for this session was to stop after Stage 1 is implemented, validated and committed).
+- PR #30 is open against `sow/2026-Q3`; the two Codex review findings are fixed, committed and pushed,
+  and CI (build + SPDX) runs on the new head. Merge PR #30 once CI is green and the review approves.
 - Stage 2 (`ConstructionDefinition` + `BuildingElementDefinition`, direct-export path only) follows the
   frozen plan section E on its own branch. Do not start it inside this one.
