@@ -154,7 +154,7 @@ namespace SAM.Analytical.Tas
             // The SURFACE INDEX: (ZoneGuid, SurfaceNumber) -> the physical zoneSurface, for resolving a
             // divergent member's OWN pane/frame surfaces off its ZoneSurfaceReference stamps, so a rebind
             // touches only that member's surfaces and never another aperture sharing the same element.
-            Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> surfaceIndex = BuildSurfaceIndex(building);
+            Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> surfaceIndex = building.ZoneSurfaceIndex();
 
             //A COM-free mirror of the current bindings, used to validate a complete rebind plan before a
             //replacement element is looked up, reserved, created, or written. It is advanced after each
@@ -659,53 +659,5 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
-        /// <summary>
-        /// (ZoneGuid, SurfaceNumber) -> the physical <c>zoneSurface</c>, over every zone in the building -
-        /// the resolution <see cref="RebindMemberSurfaces"/> needs to turn a
-        /// <see cref="Core.Tas.ZoneSurfaceReference"/> stamp back into the real TBD object.
-        /// </summary>
-        private static Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> BuildSurfaceIndex(Building building)
-        {
-            Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> result = new Dictionary<ZoneSurfaceKey, TBD.IZoneSurface>();
-
-            List<TBD.zone> zones = building.Zones();
-            if (zones == null)
-            {
-                return result;
-            }
-
-            foreach (TBD.zone zone in zones)
-            {
-                if (zone == null)
-                {
-                    continue;
-                }
-
-                List<TBD.IZoneSurface> zoneSurfaces = zone.ZoneSurfaces();
-                if (zoneSurfaces == null)
-                {
-                    continue;
-                }
-
-                foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces)
-                {
-                    if (zoneSurface == null)
-                    {
-                        continue;
-                    }
-
-                    //Keyed by ZoneSurfaceKey rather than a formatted string, so this index and every other
-                    //physical comparison in the codebase agree about what one surface is - including that two
-                    //spellings of one zone GUID are one zone.
-                    ZoneSurfaceKey zoneSurfaceKey = Query.ZoneSurfaceKey(zone.GUID, zoneSurface.number);
-                    if (zoneSurfaceKey != null)
-                    {
-                        result[zoneSurfaceKey] = zoneSurface;
-                    }
-                }
-            }
-
-            return result;
-        }
     }
 }

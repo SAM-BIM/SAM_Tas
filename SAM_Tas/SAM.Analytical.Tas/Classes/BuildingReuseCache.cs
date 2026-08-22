@@ -274,6 +274,73 @@ namespace SAM.Analytical.Tas
             }
         }
 
+        /// <summary>
+        /// <b>Refuses named seeded constructions and building elements, keeping their NAMES only.</b> After
+        /// this they can never be matched as reusable definitions, while their names still occupy the
+        /// namespace so a new definition cannot collide with them - the same "kept as a NAME only" treatment
+        /// a seed that fails its own gate receives.
+        /// <para>
+        /// <b>Why the gbXML route needs it.</b> TAS's own gbXML conversion creates one construction and one
+        /// building element per aperture per part, named after the T3D window - which carries the physical
+        /// aperture GUID. Those objects can pass every content gate, so the cache would happily hand one over
+        /// as reusable, leaving twenty identical windows sharing a definition named after whichever one of
+        /// them was enumerated first. Sharing and instance-naming are mutually exclusive: an instance-named
+        /// definition can never be found again by anything but itself. So the gbXML pass refuses them up
+        /// front (see <c>Query.NamesContainingApertureGuid</c>) and creates definition-named ones instead.
+        /// </para>
+        /// <para>
+        /// Objects this export itself created and registered are untouched by a later call: only entries
+        /// whose name is listed are refused, and this pass lists names read off the building before it wrote
+        /// anything.
+        /// </para>
+        /// </summary>
+        /// <param name="names">The construction and building element names to refuse. Nulls ignored.</param>
+        /// <param name="refusal">Why, for reporting. A default is used when null.</param>
+        /// <returns>How many entries were refused.</returns>
+        public int RefuseSeededDefinitions(IEnumerable<string> names, string refusal = null)
+        {
+            if (names == null)
+            {
+                return 0;
+            }
+
+            HashSet<string> names_Temp = new HashSet<string>(names.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (names_Temp.Count == 0)
+            {
+                return 0;
+            }
+
+            //The content read must have happened first, or a refusal set here would be overwritten by the
+            //classification that runs on the next lookup.
+            EnsureSeedClassification();
+
+            string refusal_Temp = refusal ?? "Definition named after a physical aperture, so it states an instance rather than a reusable definition and was not reused.";
+
+            int result = 0;
+
+            foreach (ConstructionEntry constructionEntry in constructions)
+            {
+                if (constructionEntry.Name != null && names_Temp.Contains(constructionEntry.Name) && constructionEntry.Definition != null)
+                {
+                    constructionEntry.Definition = null;
+                    constructionEntry.Refusal = refusal_Temp;
+                    result++;
+                }
+            }
+
+            foreach (BuildingElementEntry buildingElementEntry in buildingElements)
+            {
+                if (buildingElementEntry.Name != null && names_Temp.Contains(buildingElementEntry.Name) && buildingElementEntry.Definition != null)
+                {
+                    buildingElementEntry.Definition = null;
+                    buildingElementEntry.Refusal = refusal_Temp;
+                    result++;
+                }
+            }
+
+            return result;
+        }
+
         /// <summary>The building this cache was read from.</summary>
         public TBD.Building Building { get; }
 
