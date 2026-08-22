@@ -1,4 +1,4 @@
-# Reusable aperture definitions on the gbXML/T3D route
+﻿# Reusable aperture definitions on the gbXML/T3D route
 
 The standard Grasshopper and SAM_UI workflow — `ToGbXML → WorkflowgbXML` — now gets the same reusable
 aperture definitions the direct `SAMAnalytical.TBD` export has had since Stage 2. Stage 2
@@ -274,3 +274,18 @@ Stage 3's previously accepted scenarios were **not** re-run: this change touches
 - **The doubled `Windows: Windows: ` element prefix is pre-existing** and identical on both routes: on this
   model the SAM `ApertureConstruction` is itself named `Windows: SIM_EXT_GLZ`, and the element naming adds
   its own prefix. Out of scope here.
+- **Two `ApertureConstruction`s sharing identical pane layers but different frame layers do not round-trip
+  as one pane-plus-frame aperture for the SECOND family** — a pre-existing Stage 2 property, confirmed
+  identical on the direct route and unmodified by this PR. `Modify.ResolveApertureDefinition`'s construction
+  match (`BuildingReuseCache.FindConstruction`) is content-only by design — *"Identity is the DEFINITION and
+  never the name"* — so the second family's pane construction is the FIRST family's shared object, under the
+  first family's base name, while the second family's frame keeps its own base. The TBD→SAM importer pairs a
+  window's two halves by that base name (`Convert/ToSAM/AdjacencyCluster.cs:311-334`), so the second family's
+  apertures import as separate or incomplete rather than one window. This PR's `Modify.UpdateApertureDefinitions`
+  never renames a construction found via ordinary content reuse (gated on `ResolveApertureDefinition`'s
+  `created_Construction` output — a rename is only ever valid for a construction THIS call created under a
+  fallback name, never for a pre-existing one another aperture already correctly shares), so it neither
+  introduces this gap nor makes it worse: the first family's own pairing, which was already correct, stays
+  correct. Fixing the underlying gap needs either a different TBD→SAM pairing strategy or a change to Stage
+  2's cross-family construction-sharing rule — both out of scope for bringing the gbXML route to parity with
+  the direct route.
