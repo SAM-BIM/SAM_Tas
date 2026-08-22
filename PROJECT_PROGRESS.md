@@ -1,9 +1,11 @@
 ﻿# Project Progress
 
 ## Branch
-`feature/tas-aperture-definition-reuse-gbxml` (off `sow/2026-Q3` at `fff9984`, i.e. after PR #33 merged
-Stage 3). Ready for PR; not merged.
+`feature/tas-aperture-hardening` (off `sow/2026-Q3` at `e9b5a3d0`, i.e. after PR #34 merged the gbXML
+route). Ready for PR; not merged.
 
+The reusable-aperture programme itself is complete on both routes:
+`feature/tas-aperture-definition-reuse-gbxml` was PR #34, merged 2026-08-23.
 Stage 3 was `feature/tas-aperture-instance-identity` (PR #33, merged 2026-08-22).
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
 
@@ -11,6 +13,57 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-23 - **Two aperture hardening fixes, both pre-existing defects deliberately kept out of PR #34.**
+Full detail in `SAM_Tas/SAM.Analytical.Tas/APERTURE_HARDENING.md`; the two limitations they close are
+reworded where they were recorded, in `APERTURE_DEFINITION_REUSE_GBXML.md`.
+
+**1. A stated `ApertureParameter.FeatureShade` never reached the TBD pane.** Two causes, neither of them
+the name decode (a licensed probe showed all 14 pane elements decoded their aperture GUID and found the
+aperture). First, an `AdjacencyCluster` can hold one aperture BOTH on its panel and as a cluster object,
+real models carry both - all 14 in `ModelA.sam` do, straight off disk - and
+`AdjacencyCluster.GetAperture(guid)` answers from `GetObject<Aperture>` FIRST, so
+`Modify.UpdateBuildingElements` read colour, opening controls and the shade off a stale copy the user's
+edit never reached. New `AperturePanelIndex` (`Classes/` + `Query/`) answers from the panel walk only, and
+is now shared with `Modify.UpdateApertureDefinitions`, which had built its own local dictionary for exactly
+this hazard. Second, **licensed TAS silently drops the FIRST `AssignFeatureShade`** onto a building
+`T3DDocument.ExportNew` has only just written; re-assigning the SAME object lands it. `Modify.SetFeatureShades`
+now establishes the assignment by RE-READING the element and repeats up to three times, and reports honestly
+when it never took. `UpdateBuildingElements` gained a `feature shade stated / written` summary note.
+
+**2. The importer paired a window's pane and frame by construction NAME.** Stage 2 shares by value, so two
+`ApertureConstruction`s with identical panes and different frames export as one shared pane construction plus
+two frames; bucketing surfaces by the base name left after stripping `-pane`/`-frame` put the second family's
+pane in the FIRST family's bucket and its frame in a bucket of its own. **The rule is now: physical grouping
+is geometric (`Query.GroupAperturePolygons` over ALL of a zone's aperture surfaces at once), which half a
+surface is comes from its element's `BEType`, and family identity is the PAIR of construction identities the
+two halves carry (`Query.ApertureConstructionPairKey`, GUID first and name only as a fallback). The name is
+chosen afterwards (`Query.ApertureConstructionName`) and labels the family; it never decides it.**
+
+**Licensed A/B (2026-08-23, EDSL Tas, `ModelA.sam`, one-DLL swap against a `e9b5a3d0` worktree build):**
+
+| | baseline | this branch |
+|---|---:|---:|
+| shaded gbXML run: feature shades on pane elements | 0 | **1** |
+| shaded gbXML run: aperture building elements | 3 | 4 (the extra one is the shaded pane's own) |
+| two-family round trip: physical apertures imported | **21** | **14** |
+| two-family round trip: families | A x14, B x7 (B's panes lost) | **A x7, B x7** |
+| two-family round trip: pane+frame stamps | both=7, paneOnly=7, frameOnly=7 | **both=14** |
+
+The inverse case (shared FRAME, two panes) reconstructs the same way. `ModelA.sam` unmodified is unchanged
+on both routes: 28 -> 3 aperture building elements, 2 aperture constructions, 14 apertures imported under one
+`Windows: SIM_EXT_GLZ` with `both=14` stamps, and **a second full workflow run reproduces every count with
+nothing added and no duplicated shade**. Tests: **457/457 in Debug and Release** (18 new in
+`ApertureHardeningTests.cs`).
+
+**Residual, all pre-existing and out of scope:** `Convert.ToTBD(analyticalModel, ...)` writes no aperture
+`FeatureShade` at all (`Modify.Update`'s shade block has been commented out for years, and
+`UpdateBuildingElements` is the only writer anywhere); the import never reads a shade back off a TBD element;
+`Query.UpdateT3D` still resolves its aperture through `AdjacencyCluster.GetAperture`, the same stale-copy
+defect, and changing it needs its own licensed T3D validation.
+
+---
+
+## Previously
 2026-08-22 - **The standard gbXML workflow now gets the same reusable aperture definitions the direct
 `SAMAnalytical.TBD` route has.** Stage 2 scoped itself to the direct `Modify.Update` export and declared the
 gbXML/T3D route out of scope; that gap is now closed. Full detail, invariants, the A/B table and the

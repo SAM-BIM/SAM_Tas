@@ -121,10 +121,12 @@ counts without an installed TAS and cannot drift from what the resolver does.
    library definition with no window using it right now, and the export has always kept those; those are
    reported rather than removed.
 
-7. **A freed plain construction name is reclaimed** (`Query.SupersededConstructionRenames`). This is not
-   cosmetic: the aperture import pairs a window's two halves by the base name left after stripping
-   `-pane`/`-frame` (`Convert.ToSAM_AdjacencyCluster`), so a qualified frame beside a plain pane makes the
-   import produce **one aperture per surface instead of one per window**. Renaming is safe only here — the
+7. **A freed plain construction name is reclaimed** (`Query.SupersededConstructionRenames`). Since
+   `APERTURE_HARDENING.md` this is a NAMING concern rather than a structural one: the import pairs a
+   window's halves geometrically and identifies its family by the construction PAIR, so a qualified frame
+   beside a plain pane no longer breaks the round trip. What it would still do is leave the reconstructed
+   `ApertureConstruction` named after whichever half's base name was free, rather than the model's own.
+   Renaming is safe only here — the
    construction is one this pass created moments earlier, elements reference it by COM identity rather than
    by name, and the document has not been saved. Two guards: the plain name must actually have been removed,
    and exactly one construction must have wanted it.
@@ -332,30 +334,20 @@ Stage 3's previously accepted scenarios were **not** re-run: this change touches
 - **The doubled `Windows: Windows: ` element prefix is pre-existing** and identical on both routes: on this
   model the SAM `ApertureConstruction` is itself named `Windows: SIM_EXT_GLZ`, and the element naming adds
   its own prefix. Out of scope here.
-- **Two `ApertureConstruction`s sharing identical pane layers but different frame layers do not round-trip
-  as one pane-plus-frame aperture for the SECOND family** — a pre-existing Stage 2 property, confirmed
-  identical on the direct route and unmodified by this PR. `Modify.ResolveApertureDefinition`'s construction
-  match (`BuildingReuseCache.FindConstruction`) is content-only by design — *"Identity is the DEFINITION and
-  never the name"* — so the second family's pane construction is the FIRST family's shared object, under the
-  first family's base name, while the second family's frame keeps its own base. The TBD→SAM importer pairs a
-  window's two halves by that base name (`Convert/ToSAM/AdjacencyCluster.cs:311-334`), so the second family's
-  apertures import as separate or incomplete rather than one window. This PR's `Modify.UpdateApertureDefinitions`
-  never renames a construction found via ordinary content reuse (gated on `ResolveApertureDefinition`'s
-  `created_Construction` output — a rename is only ever valid for a construction THIS call created under a
-  fallback name, never for a pre-existing one another aperture already correctly shares), so it neither
-  introduces this gap nor makes it worse: the first family's own pairing, which was already correct, stays
-  correct. Fixing the underlying gap needs either a different TBD→SAM pairing strategy or a change to Stage
-  2's cross-family construction-sharing rule — both out of scope for bringing the gbXML route to parity with
-  the direct route.
-- **`FeatureShade` does not reach the gbXML pane building element at all — pre-existing, out of scope.**
-  A licensed probe (`WorkflowCalculator.Calculate()`'s own gbXML branch, one real aperture stating a
-  `FeatureShade` and a frame) checkpointed right after `Modify.UpdateBuildingElements` and before this PR's
-  `UpdateApertureDefinitions` runs at all: the shaded pane building element already reads
-  `featureShadeCount=0`. So the loss happens inside or before `UpdateBuildingElements`, not in anything this
-  PR adds — this PR's only change to that file is extracting its existing private surface-index helper into
-  `Query.ZoneSurfaceIndex()`, and `WorkflowCalculator`'s call order
-  (`UpdateBuildingElements` → `UpdateIds` → `UpdateApertureDefinitions`) is unchanged here too. Filed as a
-  separate follow-up: investigate/fix gbXML `FeatureShade` propagation — a SAM aperture stating
-  `ApertureParameter.FeatureShade` reaches `Modify.UpdateBuildingElements`, but the resulting TBD pane
-  `buildingElement` has zero feature shades; compare direct TBD vs gbXML workflow and add licensed
-  regression coverage. Keep this separate from the cross-family pane/frame pairing gap above.
+- **Two `ApertureConstruction`s sharing identical pane layers but different frame layers now round-trip
+  correctly** - see `APERTURE_HARDENING.md`. `Modify.ResolveApertureDefinition`'s construction match is
+  still content-only by design (*"Identity is the DEFINITION and never the name"*), so the second family's
+  pane construction is still the FIRST family's shared object under the first family's base name. What
+  changed is the IMPORTER: it no longer pairs a window's halves by that base name. Physical grouping is
+  geometric and family identity is the PAIR of construction identities the two halves carry
+  (`Query.ApertureConstructionPairKey`), so `(P, F1)` and `(P, F2)` reconstruct as two families however they
+  are named. Licensed: 14 windows in two such families imported as 21 apertures with the second family's
+  pane content lost; they now import as 14, seven per family, with both halves stamped on every one.
+
+- **`FeatureShade` now reaches the gbXML pane building element** - see `APERTURE_HARDENING.md`. Two
+  pre-existing causes, neither introduced by this PR: `Modify.UpdateBuildingElements` resolved the aperture
+  through `AdjacencyCluster.GetAperture(guid)`, which answers with a STALE cluster-object copy on a model
+  whose apertures are held both on their panel and as cluster objects (every one in the licensed fixture);
+  and licensed TAS silently drops the FIRST `AssignFeatureShade` onto a building it has only just written
+  with `ExportNew`. This PR's rule that a shade-stating pane is left on its own dedicated element, and its
+  frame free to reuse the shared frame definition, is unchanged and is what the shade now lands on.
