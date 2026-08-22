@@ -1,12 +1,14 @@
-# Reusable TBD aperture constructions and building elements (Stage 2)
+﻿# Reusable TBD aperture constructions and building elements (Stage 2)
 
 Stage 2 of the frozen three-stage aperture-definition plan. Stage 1 — reusable
 `TBD.ApertureType`s and schedules — is `APERTURE_TYPE_REUSE.md` and is **unchanged** here except for the
 cache extension this stage needs.
 
-**Scope: the direct `Modify.Update` export only.** The gbXML/T3D route, `UpdateBuildingElements`,
-`UpdateIds`, the import grouping, Stage 1 aperture-type and schedule semantics and the legacy aperture
-workflows are all untouched — their CODE is unchanged. One of them has a KNOWN, ALREADY-ACCEPTED behavioural
+**Scope: the direct `Modify.Update` export only.** (The gbXML/T3D route has since been brought to the same
+behaviour — see `APERTURE_DEFINITION_REUSE_GBXML.md`, which reuses this stage's resolver rather than
+duplicating it. Everything below still describes Stage 2 itself.) The gbXML/T3D route,
+`UpdateBuildingElements`, `UpdateIds`, the import grouping, Stage 1 aperture-type and schedule semantics and
+the legacy aperture workflows are all untouched — their CODE is unchanged. One of them has a KNOWN, ALREADY-ACCEPTED behavioural
 consequence when pointed at a Stage-2 TBD, spelled out where it belongs below rather than left implicit in
 "untouched": see "Known limitation: `UpdateBuildingElements` on a Stage-2 TBD".
 
@@ -178,7 +180,7 @@ unsafe sharing.
 | `Query/ConstructionName.cs` | Construction name derivation, sanitisation, decomposition. |
 | `Query/BuildingElementName.cs` | Element name derivation and decomposition; the `Windows: `/`Doors: ` prefixes. |
 | `Classes/BuildingReuseCache.cs` | **Extended**: constructions and aperture building elements alongside Stage 1's schedules and aperture types. Purely additive. |
-| `Modify/Update.cs` | The aperture block of the direct export, rewritten to resolve definitions instead of names. |
+| `Modify/Update.cs` | The aperture block of the direct export, rewritten to resolve definitions instead of names. Its resolve-or-create half now lives in `Modify/ResolveApertureDefinition.cs`, shared with the gbXML route. |
 
 **Deferred seed classification.** The cache constructor reads only the NAMES of the building's constructions
 and elements — a name is what occupies the namespace, and it is one property read. The content read that
@@ -333,7 +335,10 @@ Physical-instance identity hardening (`ZoneSurfaceReference` resolution on updat
 `UpdateBuildingElements` name-decode replacement, the import grouping fixes, refusal reporting on
 `Modify.Update`, and the gbXML/T3D route — all Stage 3 or later, all unchanged here.
 
-Every one of those bar the gbXML/T3D route is now done; see `APERTURE_INSTANCE_IDENTITY.md`. Stage 2's own
-invariants are untouched by it — `Modify.Update` still resolves definitions by exactly the rules above, and
+Every one of those is now done: the first four in `APERTURE_INSTANCE_IDENTITY.md`, and the gbXML/T3D route
+in `APERTURE_DEFINITION_REUSE_GBXML.md` — where `Modify.UpdateApertureDefinitions` rebinds each physical
+surface onto the definition its aperture states, through the very resolver described here (extracted from
+`Modify.Update` as `Modify.ResolveApertureDefinition` so the two routes cannot drift). Stage 2's own
+invariants are untouched by any of it — `Modify.Update` still resolves definitions by exactly the rules above, and
 the only change Stage 3 makes to this file's subject is that identity stamp 9 ("Stage 3 owns hardening
 update/round-trip identity") is now discharged.

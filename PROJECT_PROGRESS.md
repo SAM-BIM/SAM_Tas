@@ -1,14 +1,63 @@
-# Project Progress
+﻿# Project Progress
 
 ## Branch
-`feature/tas-aperture-instance-identity` (off `sow/2026-Q3` at `0f66b11`, i.e. after PR #32 merged S3-C1 and
-S3-C2). PR #33 final review fixes and their focused licensed acceptance are complete on this branch.
+`feature/tas-aperture-definition-reuse-gbxml` (off `sow/2026-Q3` at `fff9984`, i.e. after PR #33 merged
+Stage 3). Ready for PR; not merged.
 
+Stage 3 was `feature/tas-aperture-instance-identity` (PR #33, merged 2026-08-22).
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
+
 Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-22 - **The standard gbXML workflow now gets the same reusable aperture definitions the direct
+`SAMAnalytical.TBD` route has.** Stage 2 scoped itself to the direct `Modify.Update` export and declared the
+gbXML/T3D route out of scope; that gap is now closed. Full detail, invariants, the A/B table and the
+deliberate limitations live in `SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE_GBXML.md`.
+
+**Root cause.** On this route SAM_Tas does not write the TBD - TAS's `T3DDocument.ExportNew` does, from a T3D
+in which every aperture is its own `window`, because the gbXML opening name has to carry the aperture GUID for
+`Query.UpdateT3D` to decode it back. TAS therefore writes one aperture building element per aperture per part,
+named after that aperture, and nothing afterwards collapsed them (`UpdateBuildingElements` only ever SPLITS).
+The T3D cannot be canonicalised first: `Interop.TAS3D` exposes no surface or opening object at all.
+
+**Fix.** One gbXML-gated step, `Modify.UpdateApertureDefinitions`, placed AFTER `Modify.UpdateIds` so it reads
+the physical stamps that step has just written instead of re-deriving them. It adds no new rules: definition
+resolution is `Modify.ResolveApertureDefinition`, extracted verbatim from `Modify.Update` so both routes share
+one resolver; physical resolution is Stage 3's `Query.AperturePhysicalIndex`/`ApertureRebindKeys`, unchanged.
+Afterwards orphaned elements are swept (`markDelete` + `DeleteMarkedBuildingElements`; TBD has no
+`RemoveBuildingElement`) and instance-named or superseded aperture constructions removed. Nothing named after
+a physical aperture may be ADOPTED as a shared definition
+(`BuildingReuseCache.RefuseSeededDefinitions` + `Query.NamesContainingApertureGuid`).
+
+**Licensed A/B (2026-08-22, EDSL Tas, `ModelA.sam`, builds differing in `SAM.Analytical.Tas.dll` only):**
+aperture building elements **28 -> 3**, with 14/14 pane/frame `zoneSurface`s unchanged, 2 aperture
+constructions, 2 aperture types, and the 14 apertures resolving to **2 distinct pane bindings and 1 frame
+binding**. The resulting definitions are identical to the direct route's name for name and surface count for
+surface count. A repeated run adds nothing.
+
+**Three defects the licensed run caught that no COM-free test could:** the re-stamp always refused
+(`AdjacencyCluster.GetAperture(guid, out panel)` returns early when the aperture is also a cluster object and
+leaves `panel` null); `DeleteMarkedBuildingElements` returns a STATUS (-1 on success), not a count; and
+leaving one construction under its signature-qualified name broke the import's pane/frame pairing, so it
+reported 28 apertures for 14 windows. All three are fixed, the last by reclaiming the plain name once the
+sweep frees it.
+
+**Known, out-of-scope:** `Modify.UpdateConstruction` sets `material.width` only for a TRANSPARENT material, so
+the frame construction `Modify.UpdateConstructions` writes earlier in the workflow differs from the Stage 2
+definition in that one field. The pass works around it rather than changing a writer used by every route.
+
+**Validation:** COM-free suite **438/438** Debug and Release (419 pre-existing unchanged, 19 new); Debug and
+Release solution builds **0 errors**; SPDX headers present on every new file; `git diff --check` clean.
+
+**Immediate next step:** open the PR for `feature/tas-aperture-definition-reuse-gbxml`. Do NOT start
+InternalCondition/profile work or opaque BuildingElement optimisation.
+
+---
+
+## Previous session
+
 2026-08-22 - **PR #33 final review pass and focused licensed acceptance complete.** PR #32 (S3-C1 + S3-C2)
 is merged;
 `feature/tas-aperture-instance-identity` closes six further identity gaps it left, adds the handover doc
@@ -66,6 +115,11 @@ construction count is specific to the P2 acceptance rather than obscured by that
 **Immediate next step:** merge PR #33 once GitHub checks and re-review are green. Do not broaden into Stage 4.
 
 ## Current status
+**The gbXML route is done and awaiting PR** - see the "Last updated" section above and
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE_GBXML.md`. Both front ends inherit it: Grasshopper's
+`SAMAnalytical.WorkflowgbXML` and SAM_UI's simulate-cases and multitasker flows all construct the same
+`WorkflowCalculator`, so no change was needed in `SAM`, `SAM_UI` or `SAM_gbXML`.
+
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
 same opening control. Full detail, the S1-C0 probe result and the licensed-TAS acceptance table live in
 `SAM_Tas/SAM.Analytical.Tas/APERTURE_TYPE_REUSE.md`.

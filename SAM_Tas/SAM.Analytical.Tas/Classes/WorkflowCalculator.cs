@@ -177,7 +177,8 @@ namespace SAM.Analytical.Tas
             int count = 6;
             if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
             {
-                count = count + 9;
+                //Nine gbXML-only steps, plus "Reusing Aperture Definitions".
+                count = count + 10;
             }
 
             if (WorkflowSettings.UpdateZones)
@@ -347,6 +348,23 @@ namespace SAM.Analytical.Tas
                 adjacencyCluster = result.AdjacencyCluster;
                 Step("Updating Ids");
                 Modify.UpdateIds(adjacencyCluster, tBDDocument.Building);
+
+                if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
+                {
+                    // On this route TAS's own T3D -> TBD conversion created one aperture building element and
+                    // one construction PER APERTURE PER PART, named after the aperture, because the gbXML
+                    // opening name has to carry the aperture GUID for Query.UpdateT3D to decode. This step
+                    // rebinds each physical surface onto the shared DEFINITION its aperture states - the same
+                    // resolver the direct SAMAnalytical.TBD export runs - and sweeps up what TAS left over.
+                    //
+                    // It runs AFTER Updating Ids on purpose: that step has just stamped every aperture's
+                    // physical surfaces and its current building element, which is exactly what the rebind
+                    // reads instead of re-deriving either from geometry. The direct route needs none of this,
+                    // so the step is gated on the gbXML route that does.
+                    Step("Reusing Aperture Definitions");
+                    Modify.UpdateApertureDefinitions(tBDDocument.Building, adjacencyCluster, result.MaterialLibrary, out List<string> notes_ApertureDefinitions);
+                    notes.AddRange(notes_ApertureDefinitions);
+                }
 
                 Step("Updating Thermal Parameters");
                 Modify.UpdateThermalParameters(adjacencyCluster, tBDDocument.Building);
