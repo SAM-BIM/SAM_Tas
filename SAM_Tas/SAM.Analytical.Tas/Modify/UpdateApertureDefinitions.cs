@@ -156,6 +156,7 @@ namespace SAM.Analytical.Tas
             int count_NoStamp = 0;
             int count_RefusedRebind = 0;
             int count_RefusedResolve = 0;
+            int count_ShadeStated = 0;
 
             foreach (Aperture aperture in apertures)
             {
@@ -182,6 +183,20 @@ namespace SAM.Analytical.Tas
                         //This aperture states no such part in the TBD at all, or UpdateIds could not match
                         //it. Either way there is no binding to move and nothing to create.
                         count_NoStamp++;
+                        continue;
+                    }
+
+                    //A pane stating a feature shade is left exactly where it is. Modify.UpdateBuildingElements
+                    //runs earlier in this same workflow and already gave such a pane its OWN dedicated,
+                    //non-shareable element (its Stage 3 seed gate refuses a shade-carrying element as
+                    //reusable) - but BuildingElementDefinition carries no shade field, so this pass's
+                    //definition equality cannot see one. Rebinding the pane's surfaces onto a shared
+                    //definition here would silently drop its shade, and the sweep below would then delete the
+                    //now-surface-less shaded element outright. Skipping the part entirely - no rebind, no
+                    //resolve - leaves its surface in place, which is what keeps it out of the sweep too.
+                    if (aperturePart == AperturePart.Pane && aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade_Stated) && featureShade_Stated != null)
+                    {
+                        count_ShadeStated++;
                         continue;
                     }
 
@@ -402,6 +417,11 @@ namespace SAM.Analytical.Tas
             if (count_NoStamp != 0)
             {
                 notes_Summary.Add(string.Format("Aperture definitions: {0} aperture part(s) carry no building element stamp - they state no such part in the TBD, or Updating Ids did not match them - and were left alone.", count_NoStamp));
+            }
+
+            if (count_ShadeStated != 0)
+            {
+                notes_Summary.Add(string.Format("Aperture definitions: {0} pane(s) state a feature shade and were left on their own dedicated element rather than considered for a shared definition.", count_ShadeStated));
             }
 
             if (count_RefusedRebind != 0)
