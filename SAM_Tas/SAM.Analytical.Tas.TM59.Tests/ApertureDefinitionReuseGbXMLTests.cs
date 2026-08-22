@@ -518,7 +518,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
             //After the sweep the surviving elements carry only the shared pair.
             List<string> names_Referenced = [name_Shared_Pane, name_Shared_Frame];
 
-            List<string> names_Orphan = TasQuery.OrphanApertureConstructionNames(names_Construction, names_Referenced, new List<Guid> { apertureGuid }, out List<string> names_Kept);
+            List<string> names_Orphan = TasQuery.OrphanApertureConstructionNames(names_Construction, names_Referenced, new List<Guid> { apertureGuid }, null, out List<string> names_Kept);
 
             Assert.That(names_Orphan, Is.EqualTo(new List<string> { name_Instance_Pane, name_Instance_Frame }), "The construction sweep removed the wrong set.");
             Assert.That(names_Kept, Is.EqualTo(new List<string> { name_Library }), "An unreferenced library aperture construction was not kept and reported.");
@@ -540,9 +540,58 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Guid apertureGuid = Guid.NewGuid();
             string name_Instance = GlazingName + " " + apertureGuid + " -pane";
 
-            List<string> names_Orphan = TasQuery.OrphanApertureConstructionNames([name_Instance], [name_Instance], new List<Guid> { apertureGuid }, out List<string> names_Kept);
+            List<string> names_Orphan = TasQuery.OrphanApertureConstructionNames([name_Instance], [name_Instance], new List<Guid> { apertureGuid }, null, out List<string> names_Kept);
 
             Assert.That(names_Orphan, Is.Empty, "A construction a surviving element still carries was removed.");
+            Assert.That(names_Kept, Is.Empty);
+        }
+
+        /// <summary>
+        /// <b>A SUPERSEDED plain name is removed once nothing references it.</b> On the real gbXML route
+        /// <c>Modify.UpdateConstructions</c> writes <c>SIM_EXT_GLZ -frame</c> before this pass runs, and its
+        /// content differs from the Stage 2 definition in one field - <c>Modify.UpdateConstruction</c> sets
+        /// <c>material.width</c> only for a TRANSPARENT material, so an opaque frame layer keeps the library
+        /// default there while <c>construction.materialWidth</c> carries the real thickness, and a
+        /// <c>ConstructionLayerDefinition</c> compares BOTH. The resolver therefore cannot adopt it and takes
+        /// the signature-qualified name instead; without this gate the squatter would linger, referenced by
+        /// nothing, and the gbXML route would report one more aperture construction than the direct route for
+        /// the same model.
+        /// </summary>
+        [Test]
+        public void ConstructionSweep_ASupersededPreferredName_IsRemovedOnceUnreferenced()
+        {
+            string name_Preferred = GlazingName + " -frame";
+            string name_Qualified = GlazingName + "_CEAB27C2 -frame";
+            string name_Library = "SIM_INT_GLZ -frame";
+
+            List<string> names_Construction = [name_Preferred, name_Qualified, name_Library];
+
+            //The pass bound every frame surface to the qualified construction, so only that one is referenced.
+            List<string> names_Orphan = TasQuery.OrphanApertureConstructionNames(names_Construction, [name_Qualified], new List<Guid>(), [name_Preferred], out List<string> names_Kept);
+
+            Assert.That(names_Orphan, Is.EqualTo(new List<string> { name_Preferred }), "The superseded preferred name was not removed.");
+            Assert.That(names_Kept, Is.EqualTo(new List<string> { name_Library }), "An unrelated library construction was swept with it.");
+        }
+
+        /// <summary>
+        /// A superseded name that something still REFERENCES is never removed - the sweep runs after the
+        /// element sweep so that "referenced" means what it says. Two aperture constructions can sanitise to
+        /// the same base, and if the plain name is genuinely in use it stays.
+        /// </summary>
+        [Test]
+        public void ConstructionSweep_ASupersededNameStillReferenced_IsKept()
+        {
+            string name_Preferred = GlazingName + " -frame";
+            string name_Qualified = GlazingName + "_CEAB27C2 -frame";
+
+            List<string> names_Orphan = TasQuery.OrphanApertureConstructionNames(
+                [name_Preferred, name_Qualified],
+                [name_Preferred, name_Qualified],
+                new List<Guid>(),
+                [name_Preferred],
+                out List<string> names_Kept);
+
+            Assert.That(names_Orphan, Is.Empty, "A superseded name another definition still uses was removed.");
             Assert.That(names_Kept, Is.Empty);
         }
 

@@ -117,6 +117,22 @@ namespace SAM.Analytical.Tas
 
             AperturePhysicalIndex aperturePhysicalIndex = Query.AperturePhysicalIndex(apertures);
 
+            //Which panel owns each aperture, built once. NOT read from
+            //AdjacencyCluster.GetAperture(guid, out panel): that overload returns EARLY when the aperture is
+            //also held as a cluster object in its own right, and leaves its out panel null - which on the
+            //gbXML route is every aperture, so every re-stamp would refuse.
+            Dictionary<System.Guid, Panel> panelsByApertureGuid = new Dictionary<System.Guid, Panel>();
+            foreach (Panel panel_Temp in adjacencyCluster.GetPanels() ?? new List<Panel>())
+            {
+                foreach (Aperture aperture_Temp in panel_Temp?.Apertures ?? new List<Aperture>())
+                {
+                    if (aperture_Temp != null)
+                    {
+                        panelsByApertureGuid[aperture_Temp.Guid] = panel_Temp;
+                    }
+                }
+            }
+
             List<KeyValuePair<ZoneSurfaceKey, string>> ambiguities = aperturePhysicalIndex.Ambiguities();
             foreach (KeyValuePair<ZoneSurfaceKey, string> ambiguity in ambiguities)
             {
@@ -126,6 +142,11 @@ namespace SAM.Analytical.Tas
             //Every element this pass resolved an aperture onto. The sweep below never removes one of these,
             //even if a refusal has momentarily left it carrying no surface.
             HashSet<string> canonicalGuids = new HashSet<string>();
+
+            //Preferred construction names the pass could NOT use, because content it may not adopt already
+            //held them. See Query.OrphanApertureConstructionNames for what squats them on this route and why
+            //superseding one is safe.
+            HashSet<string> names_Superseded = new HashSet<string>();
 
             int count_Parts = 0;
             int count_Rebound = 0;
@@ -189,7 +210,7 @@ namespace SAM.Analytical.Tas
                         materialLibrary,
                         constructionsByName,
                         buildingElementsByName,
-                        out TBD.Construction _,
+                        out TBD.Construction construction_Target,
                         out buildingElement buildingElement_Target,
                         out ConstructionDefinition _,
                         out BuildingElementDefinition _,
@@ -203,6 +224,15 @@ namespace SAM.Analytical.Tas
                     }
 
                     canonicalGuids.Add(buildingElement_Target.GUID);
+
+                    //The name this construction WANTED. Resolving under any other name means the preferred
+                    //one is held by content the resolver may not adopt - and once every surface is bound to
+                    //this one, that squatter is referenced by nothing.
+                    string name_Preferred = string.Format("{0} {1}", Query.ConstructionNameBase(aperture.ApertureConstruction?.Name), aperturePart.Sufix());
+                    if (construction_Target != null && !string.Equals(construction_Target.name, name_Preferred, StringComparison.Ordinal))
+                    {
+                        names_Superseded.Add(name_Preferred);
+                    }
 
                     if (string.Equals(buildingElement_Target.GUID, buildingElementGuid_From, StringComparison.Ordinal))
                     {
@@ -223,20 +253,10 @@ namespace SAM.Analytical.Tas
 
                     //The definition binding follows the surfaces. The physical ZoneSurfaceReference stamps are
                     //NOT touched - they name an instance, and this pass moves no instance anywhere.
-                    Aperture aperture_ToRestamp = adjacencyCluster.GetAperture(aperture.Guid, out Panel panel_ToRestamp);
-                    if (aperture_ToRestamp == null || panel_ToRestamp == null)
+                    if (!RestampApertureBinding(adjacencyCluster, panelsByApertureGuid, aperture.Guid, aperturePart, buildingElement_Target.GUID))
                     {
-                        notes.Add(NotePrefix_Issue + string.Format("Aperture definitions: SAM aperture '{0}' ({1}) had its {2} surfaces rebound but could not be found in its panel to re-stamp, so its BuildingElementGuid still names the element TAS created for it.",
+                        notes.Add(NotePrefix_Issue + string.Format("Aperture definitions: SAM aperture '{0}' ({1}) had its {2} surfaces rebound but could not be found to re-stamp, so its BuildingElementGuid still names the element TAS created for it.",
                             aperture.Name, aperture.Guid, aperturePart));
-                    }
-                    else
-                    {
-                        ApertureParameter apertureParameter = aperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
-
-                        aperture_ToRestamp.SetValue(apertureParameter, buildingElement_Target.GUID);
-                        panel_ToRestamp.RemoveAperture(aperture_ToRestamp.Guid);
-                        panel_ToRestamp.AddAperture(aperture_ToRestamp);
-                        adjacencyCluster.AddObject(panel_ToRestamp);
                     }
 
                     count_Rebound++;
@@ -288,6 +308,7 @@ namespace SAM.Analytical.Tas
             List<string> guids_ToDelete = Query.UnusedApertureBuildingElementGuids(apertureBuildingElementUsages, canonicalGuids);
 
             int count_Deleted = 0;
+            int count_Survived = 0;
             if (guids_ToDelete.Count != 0)
             {
                 HashSet<string> guids_ToDelete_Set = new HashSet<string>(guids_ToDelete);
@@ -299,7 +320,20 @@ namespace SAM.Analytical.Tas
                     }
                 }
 
-                count_Deleted = building.DeleteMarkedBuildingElements();
+                //DeleteMarkedBuildingElements returns a STATUS, not a count - licensed TAS returns -1 after
+                //successfully sweeping 28 elements - so what actually happened is established by re-reading
+                //the building and seeing which of the marked GUIDs are gone.
+                building.DeleteMarkedBuildingElements();
+
+                foreach (buildingElement buildingElement_Temp in building.BuildingElements() ?? new List<buildingElement>())
+                {
+                    if (buildingElement_Temp != null && buildingElement_Temp.GUID != null && guids_ToDelete_Set.Contains(buildingElement_Temp.GUID))
+                    {
+                        count_Survived++;
+                    }
+                }
+
+                count_Deleted = guids_ToDelete.Count - count_Survived;
             }
 
             //Constructions last, because which ones are still referenced can only be read once the elements
@@ -316,7 +350,7 @@ namespace SAM.Analytical.Tas
 
             List<string> names_Construction = (building.Constructions() ?? new List<TBD.Construction>()).ConvertAll(x => x?.name);
 
-            List<string> names_Orphan = Query.OrphanApertureConstructionNames(names_Construction, names_Referenced, apertureGuids, out List<string> names_UnreferencedKept);
+            List<string> names_Orphan = Query.OrphanApertureConstructionNames(names_Construction, names_Referenced, apertureGuids, names_Superseded, out List<string> names_UnreferencedKept);
 
             List<string> names_Removed = names_Orphan.Count == 0 ? new List<string>() : (RemoveConstructions(building, names_Orphan) ?? new List<string>());
 
@@ -358,14 +392,67 @@ namespace SAM.Analytical.Tas
                     names_UnreferencedKept.Count, string.Join(", ", names_UnreferencedKept)));
             }
 
-            if (guids_ToDelete.Count != count_Deleted)
+            if (count_Survived != 0)
             {
-                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture definitions: {0} orphaned aperture building element(s) were marked for deletion but TAS reported {1} deleted; the difference is still in the TBD.", guids_ToDelete.Count, count_Deleted));
+                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture definitions: {0} of {1} orphaned aperture building element(s) were marked for deletion but are still in the TBD afterwards.", count_Survived, guids_ToDelete.Count));
+            }
+
+            if (names_Superseded.Count != 0)
+            {
+                notes_Summary.Add(string.Format("Aperture definitions: {0} preferred construction name(s) were already held by content this pass may not adopt, so the shared construction took its signature-qualified name instead and the superseded one was removed once nothing referenced it: {1}.",
+                    names_Superseded.Count, string.Join(", ", names_Superseded)));
             }
 
             notes.InsertRange(0, notes_Summary);
 
             return true;
+        }
+
+        /// <summary>
+        /// Re-stamps one aperture part's <c>Pane/FrameBuildingElementGuid</c> to the definition its surfaces
+        /// now point at.
+        /// <para>
+        /// <b>Both shapes an aperture can be held in are updated</b>, because a cluster can hold it either
+        /// way and a stale copy is a stamp that names a deleted element. It lives on its PANEL (which is what
+        /// <c>panel.Apertures</c>, <c>Query.AperturePhysicalIndex</c> and the membership map all read), and it
+        /// may ALSO be a cluster object in its own right.
+        /// </para>
+        /// <para>
+        /// This is deliberately not <c>AdjacencyCluster.GetAperture(guid, out panel)</c>: that overload
+        /// returns as soon as the aperture is found as a cluster OBJECT and leaves its out panel null, so on
+        /// a model whose apertures are stored that way - every one on this route - the panel copy would never
+        /// be written and every re-stamp would refuse.
+        /// </para>
+        /// </summary>
+        /// <returns>True when at least one copy was re-stamped.</returns>
+        private static bool RestampApertureBinding(AdjacencyCluster adjacencyCluster, Dictionary<System.Guid, Panel> panelsByApertureGuid, System.Guid apertureGuid, AperturePart aperturePart, string buildingElementGuid)
+        {
+            ApertureParameter apertureParameter = aperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
+
+            bool result = false;
+
+            if (panelsByApertureGuid != null && panelsByApertureGuid.TryGetValue(apertureGuid, out Panel panel) && panel != null)
+            {
+                Aperture aperture = panel.GetAperture(apertureGuid);
+                if (aperture != null)
+                {
+                    aperture.SetValue(apertureParameter, buildingElementGuid);
+                    panel.RemoveAperture(apertureGuid);
+                    panel.AddAperture(aperture);
+                    adjacencyCluster.AddObject(panel);
+                    result = true;
+                }
+            }
+
+            Aperture aperture_Object = adjacencyCluster.GetObject<Aperture>(apertureGuid);
+            if (aperture_Object != null)
+            {
+                aperture_Object.SetValue(apertureParameter, buildingElementGuid);
+                adjacencyCluster.AddObject(aperture_Object);
+                result = true;
+            }
+
+            return result;
         }
 
         /// <summary>
