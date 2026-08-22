@@ -596,6 +596,75 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         // =================================================================================================
+        // Reclaiming a freed plain name - what keeps the import pairing a window's two halves
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>A qualified construction reclaims the plain name once the sweep frees it.</b> This is not
+        /// cosmetic: the aperture import pairs a window's two halves by the base name left after stripping
+        /// <c>-pane</c>/<c>-frame</c>, so <c>SIM_EXT_GLZ -pane</c> beside <c>SIM_EXT_GLZ_CEAB27C2 -frame</c>
+        /// stops being one two-sided window and comes back as one aperture per SURFACE. Licensed TAS showed
+        /// exactly that - the import reported 28 apertures for 14 windows - which is what this reclaim fixes.
+        /// </summary>
+        [Test]
+        public void Reclaim_AFreedPlainName_IsTakenByTheQualifiedConstruction()
+        {
+            string name_Preferred = GlazingName + " -frame";
+            string name_Qualified = GlazingName + "_CEAB27C2 -frame";
+
+            List<KeyValuePair<string, string>> renames = TasQuery.SupersededConstructionRenames(
+                [new KeyValuePair<string, string>(name_Preferred, name_Qualified)],
+                [name_Preferred]);
+
+            Assert.That(renames, Has.Count.EqualTo(1));
+            Assert.That(renames[0].Key, Is.EqualTo(name_Qualified), "The rename should be FROM the qualified name.");
+            Assert.That(renames[0].Value, Is.EqualTo(name_Preferred), "The rename should be TO the plain name.");
+
+            //And after it, both halves share a base again - which is what the import pairs on.
+            Assert.That(TasQuery.TryDecomposeConstructionName(GlazingName + " -pane", out string base_Pane, out AperturePart part_Pane), Is.True);
+            Assert.That(TasQuery.TryDecomposeConstructionName(renames[0].Value, out string base_Frame, out AperturePart part_Frame), Is.True);
+            Assert.That(base_Frame, Is.EqualTo(base_Pane), "Pane and frame no longer share a base name, so the import would not pair them.");
+            Assert.That(part_Pane, Is.EqualTo(AperturePart.Pane));
+            Assert.That(part_Frame, Is.EqualTo(AperturePart.Frame));
+        }
+
+        /// <summary>
+        /// A plain name the sweep did NOT remove is never renamed onto - that would put two constructions
+        /// under one name, or steal a name something still uses.
+        /// </summary>
+        [Test]
+        public void Reclaim_APlainNameStillInUse_IsNeverTaken()
+        {
+            string name_Preferred = GlazingName + " -frame";
+            string name_Qualified = GlazingName + "_CEAB27C2 -frame";
+
+            //Nothing removed.
+            Assert.That(TasQuery.SupersededConstructionRenames([new KeyValuePair<string, string>(name_Preferred, name_Qualified)], new List<string>()), Is.Empty);
+
+            //Something else removed.
+            Assert.That(TasQuery.SupersededConstructionRenames([new KeyValuePair<string, string>(name_Preferred, name_Qualified)], ["SIM_INT_GLZ -frame"]), Is.Empty);
+        }
+
+        /// <summary>
+        /// A freed name TWO definitions both wanted goes to neither. Handing it to whichever was enumerated
+        /// first would be arbitrary, and would leave the other still qualified anyway.
+        /// </summary>
+        [Test]
+        public void Reclaim_AContestedFreedName_IsGivenToNeither()
+        {
+            string name_Preferred = GlazingName + " -frame";
+
+            List<KeyValuePair<string, string>> renames = TasQuery.SupersededConstructionRenames(
+                [
+                    new KeyValuePair<string, string>(name_Preferred, GlazingName + "_AAAAAAAA -frame"),
+                    new KeyValuePair<string, string>(name_Preferred, GlazingName + "_BBBBBBBB -frame")
+                ],
+                [name_Preferred]);
+
+            Assert.That(renames, Is.Empty, "A contested freed name was handed to one of the claimants.");
+        }
+
+        // =================================================================================================
         // Part selection - the two routes must agree on which parts exist
         // =================================================================================================
 

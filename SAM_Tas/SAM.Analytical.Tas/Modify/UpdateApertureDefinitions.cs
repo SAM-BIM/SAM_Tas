@@ -143,10 +143,12 @@ namespace SAM.Analytical.Tas
             //even if a refusal has momentarily left it carrying no surface.
             HashSet<string> canonicalGuids = new HashSet<string>();
 
-            //Preferred construction names the pass could NOT use, because content it may not adopt already
-            //held them. See Query.OrphanApertureConstructionNames for what squats them on this route and why
-            //superseding one is safe.
-            HashSet<string> names_Superseded = new HashSet<string>();
+            //Preferred construction name -> the name the construction actually took, for every construction
+            //that could NOT have its preferred name because content the resolver may not adopt already held
+            //it. See Query.OrphanApertureConstructionNames for what squats them on this route, and
+            //Query.SupersededConstructionRenames for why the plain name is then reclaimed rather than left
+            //qualified - the import pairs a window's two halves by that base name.
+            List<KeyValuePair<string, string>> names_SupersededBy = new List<KeyValuePair<string, string>>();
 
             int count_Parts = 0;
             int count_Rebound = 0;
@@ -231,7 +233,10 @@ namespace SAM.Analytical.Tas
                     string name_Preferred = string.Format("{0} {1}", Query.ConstructionNameBase(aperture.ApertureConstruction?.Name), aperturePart.Sufix());
                     if (construction_Target != null && !string.Equals(construction_Target.name, name_Preferred, StringComparison.Ordinal))
                     {
-                        names_Superseded.Add(name_Preferred);
+                        if (!names_SupersededBy.Exists(x => x.Key == name_Preferred && x.Value == construction_Target.name))
+                        {
+                            names_SupersededBy.Add(new KeyValuePair<string, string>(name_Preferred, construction_Target.name));
+                        }
                     }
 
                     if (string.Equals(buildingElement_Target.GUID, buildingElementGuid_From, StringComparison.Ordinal))
@@ -350,9 +355,37 @@ namespace SAM.Analytical.Tas
 
             List<string> names_Construction = (building.Constructions() ?? new List<TBD.Construction>()).ConvertAll(x => x?.name);
 
-            List<string> names_Orphan = Query.OrphanApertureConstructionNames(names_Construction, names_Referenced, apertureGuids, names_Superseded, out List<string> names_UnreferencedKept);
+            List<string> names_Orphan = Query.OrphanApertureConstructionNames(names_Construction, names_Referenced, apertureGuids, names_SupersededBy.ConvertAll(x => x.Key), out List<string> names_UnreferencedKept);
 
             List<string> names_Removed = names_Orphan.Count == 0 ? new List<string>() : (RemoveConstructions(building, names_Orphan) ?? new List<string>());
+
+            // -----------------------------------------------------------------------------------------------
+            // RECLAIM the plain names the sweep has just freed. A construction that had to take a
+            // signature-qualified name leaves the two halves of one window with DIFFERENT base names, and the
+            // aperture import pairs them by exactly that base - so a qualified frame beside a plain pane comes
+            // back as two one-sided constructions and one aperture per surface instead of one per window.
+            // Renaming is safe here and nowhere else: the construction is one this pass created moments ago,
+            // elements reference it by COM identity rather than by name, and the document has not been saved.
+            // -----------------------------------------------------------------------------------------------
+            List<KeyValuePair<string, string>> renames = Query.SupersededConstructionRenames(names_SupersededBy, names_Removed);
+            int count_Renamed = 0;
+            if (renames.Count != 0)
+            {
+                foreach (TBD.Construction construction_Temp in building.Constructions() ?? new List<TBD.Construction>())
+                {
+                    if (construction_Temp?.name == null)
+                    {
+                        continue;
+                    }
+
+                    int index = renames.FindIndex(x => x.Key == construction_Temp.name);
+                    if (index != -1)
+                    {
+                        construction_Temp.name = renames[index].Value;
+                        count_Renamed++;
+                    }
+                }
+            }
 
             // -----------------------------------------------------------------------------------------------
             // The summary, at the front, so a reader sees what the pass achieved before the individual lines.
@@ -397,10 +430,15 @@ namespace SAM.Analytical.Tas
                 notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture definitions: {0} of {1} orphaned aperture building element(s) were marked for deletion but are still in the TBD afterwards.", count_Survived, guids_ToDelete.Count));
             }
 
-            if (names_Superseded.Count != 0)
+            if (names_SupersededBy.Count != 0)
             {
-                notes_Summary.Add(string.Format("Aperture definitions: {0} preferred construction name(s) were already held by content this pass may not adopt, so the shared construction took its signature-qualified name instead and the superseded one was removed once nothing referenced it: {1}.",
-                    names_Superseded.Count, string.Join(", ", names_Superseded)));
+                notes_Summary.Add(string.Format("Aperture definitions: {0} preferred construction name(s) were already held by content this pass may not adopt; the shared construction took its signature-qualified name, the superseded one was removed once nothing referenced it, and {1} plain name(s) were then reclaimed so the import still pairs each window's two halves: {2}.",
+                    names_SupersededBy.Count, count_Renamed, string.Join(", ", names_SupersededBy.ConvertAll(x => x.Key))));
+            }
+
+            if (count_Renamed != renames.Count)
+            {
+                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture definitions: {0} of {1} freed construction name(s) could not be reclaimed, so a window's pane and frame constructions carry different base names and the aperture import will not pair them.", renames.Count - count_Renamed, renames.Count));
             }
 
             notes.InsertRange(0, notes_Summary);
