@@ -2,15 +2,15 @@
 
 ## Branch
 `feature/tas-aperture-instance-identity` (off `sow/2026-Q3` at `0f66b11`, i.e. after PR #32 merged S3-C1 and
-S3-C2). PR #33 final review fixes are implemented and validated on this branch; the smallest licensed
-multi-face split/merge-back rerun remains.
+S3-C2). PR #33 final review fixes and their focused licensed acceptance are complete on this branch.
 
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
 Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-22 - **PR #33 final review pass implemented.** PR #32 (S3-C1 + S3-C2) is merged;
+2026-08-22 - **PR #33 final review pass and focused licensed acceptance complete.** PR #32 (S3-C1 + S3-C2)
+is merged;
 `feature/tas-aperture-instance-identity` closes six further identity gaps it left, adds the handover doc
 `SAM_Tas/SAM.Analytical.Tas/APERTURE_INSTANCE_IDENTITY.md`, takes the COM-free suite to **419/419**, and has
 been through a full licensed-TAS A/B against the `0f66b11` baseline.
@@ -41,11 +41,29 @@ The two Copilot comments (XML return contract and `workk internla`) are also fix
 **Validation:** focused regressions **4/4**; full COM-free suite Debug **419/419** and Release **419/419**;
 Debug and Release solution builds **0 errors** (only existing MSB3270/MSB3277 and legacy compiler/XML-doc
 warnings). The first post-review SPDX run found that the changed legacy `ApertureParameter.cs` had no required
-header; the final commit adds that header, and `git diff --check` passes. The previous licensed acceptance
-remains valid for the single-face paths it exercised, but did not contain a multi-face split.
+header; the final commit adds that header, and `git diff --check` passes.
 
-**Immediate next step:** run one licensed scenario only: one multi-face pane part diverges/splits with every
-face moving together and then merges every face back, with no orphan definition on a contested refusal.
+**Focused licensed acceptance (2026-08-22, EDSL Tas, exact `ed6d659` Release DLL): PASS, 0 failures.**
+
+- **Multi-face split/merge-back:** aperture `353144a1-3d6a-4daf-b12b-24bf7556bbce`; complete pane set
+  `{A67E0FA9-DC62-44EB-A1E0-9CB988807FC6, 5}` and `{A67E0FA9-DC62-44EB-A1E0-9CB988807FC6, 13}`; representative
+  `_1` is surface 5 and `_2` is empty. Both faces moved from element
+  `{D36F2CA6-79A4-40EC-A531-DED89D40C8AE}` to `{F719D1F4-A112-4AA3-9CE0-72FFDC59F0D9}` on divergence and both
+  returned to the original element on merge. Old/new surface counts were **4/0 before**, **2/2 after split**,
+  and **4/0 after merge**. Unrelated apertures and the original definition were byte-for-value unchanged;
+  merge created no further element and left the split element unused.
+- **Contested refusal/no orphan:** changed aperture `17c8ddfd-3f58-4ebc-89bf-0d9968c43aa6`, contestant
+  `3f882c59-5f42-4cf5-be9a-304a43b33535`, contested key
+  `{D72E02ED-3D5C-48F2-93C0-9DA38CA94695, 5}`. Both the first and repeated update refused before creation;
+  binding `{8B6851B8-8F32-4271-8D23-89C66C4E3D85}` and every physical surface stayed unchanged, split count
+  stayed zero, and counts stayed exactly **4 building elements / 2 aperture elements / 8 constructions /
+  1 aperture type / 0 schedules / 0 feature shades**. Repetition accumulated nothing.
+
+The scratch driver and generated `.tbd` files are deliberately uncommitted. The fixture first settles the
+known one-time legacy construction reconciliation, then measures only the refused rebind, so its unchanged
+construction count is specific to the P2 acceptance rather than obscured by that pre-existing behaviour.
+
+**Immediate next step:** merge PR #33 once GitHub checks and re-review are green. Do not broaden into Stage 4.
 
 ## Current status
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the
