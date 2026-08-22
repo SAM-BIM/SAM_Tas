@@ -13,8 +13,10 @@ windows changes one of them.
 
 **Physical aperture identity is `{ ZoneGuid, SurfaceNumber }`.**
 
-Held as `ZoneSurfaceKey` (`Classes/ZoneSurfaceKey.cs`), stamped on the SAM side as
-`Pane`/`FrameZoneSurfaceReference_1`/`_2`.
+Held as `ZoneSurfaceKey` (`Classes/ZoneSurfaceKey.cs`). The SAM-side
+`Pane`/`FrameZoneSurfaceReference_1`/`_2` stamps remain one representative identity per side; the parallel
+`Pane`/`FrameZoneSurfaceReferences` collections preserve every physical key when one side is split into
+several TAS faces.
 
 Neither half is sufficient, which is why it is a type and not a convention. **TAS numbers surfaces per
 zone**, so zone A's surface 5 and zone B's surface 5 are two different surfaces that happen to share a
@@ -57,10 +59,11 @@ colour, opening-control assignments and feature shade, all read once before anyt
 - **A member that still matches**: zero writes. Not even a rewrite to the same value — every other member
   would see it. This is the overwhelmingly common outcome of a repeated update, and what makes a repeated
   update a no-op.
-- **A member that has diverged**: **split**. Its required `BuildingElementDefinition` resolves an existing
+- **A member that has diverged**: **split**. Its complete physical rebind set is validated first; only then
+  does its required `BuildingElementDefinition` resolve an existing
   equivalent element from the Stage 2 reuse cache, or creates one. Only **that member's own** physical
-  surfaces — resolved from its own `ZoneSurfaceReference` stamps — are rebound to it. The element it left is
-  never written to; if every member leaves, it is simply left in place, unused.
+  surfaces — resolved from its own complete `ZoneSurfaceReference` collection — are rebound to it. The
+  element it left is never written to; if every member leaves, it is simply left in place, unused.
 - **Re-merging** is the same mechanism with nothing added: a member that becomes equivalent again finds the
   common element in the cache (it is still in the building) and rebinds to it. No second equivalent
   definition is created, and the common element is not rewritten.
@@ -70,17 +73,20 @@ shared (Stage 2's seed gate refuses one), so such a member always gets its own f
 through `Query.ShadedBuildingElementName` so repeated shade splits do not collide, and is not registered for
 reuse.
 
-**Rebinding is atomic and doubly guarded** (`RebindMemberSurfaces`). The complete intended surface set is
-resolved and validated before any one surface moves, because a two-sided member that moved one side and
-failed on the other would be split across two elements with its stamp calling the new one authoritative. Two
-independent guards must both hold:
+**Rebinding is atomic and doubly guarded** (`Query.ApertureRebindKeys` + `RebindMemberSurfaces`). The complete
+intended surface set is resolved and validated before any replacement element is created/reserved/written and
+before any one surface moves. Otherwise a refused validation could leave an orphan definition, while a
+multi-face or two-sided member that moved one face and failed on another would be split across two elements
+with its stamp calling the new one authoritative. Two independent guards must both hold:
 
 - **the stale-stamp guard**, on the TBD side: the surface must currently point at the element the aperture
   claims it does;
 - **the contested-surface guard**, on the SAM side: `AperturePhysicalIndex` must resolve that surface back to
   *this* aperture and *this* part.
 
-Either failing rebinds **none** of the member's surfaces and leaves its stamp untouched.
+Either failing rebinds **none** of the member's surfaces, creates no replacement definition and leaves its
+stamp untouched. A representative-only legacy stamp cannot prove that another same-side face was not lost;
+it therefore refuses until export, import or `UpdateIds` has restamped the complete set.
 
 ### 2. `AperturePhysicalIndex` — resolve exactly one, or refuse
 
@@ -100,7 +106,9 @@ API was widened to carry them.
 
 One mutator, `Modify.SetApertureZoneSurfaceReferences`, used by **all three** write paths — the direct
 export, the TBD import and `UpdateIds`. It **clears both slots and refills them** from
-`Query.ApertureZoneSurfaceSides`, which orders by zone GUID (ordinal).
+`Query.ApertureZoneSurfaceSides`, which orders by zone GUID (ordinal). At the same time it writes the complete
+canonical physical set to `Pane`/`FrameZoneSurfaceReferences`; this does not change `_1`/`_2` side semantics,
+but gives rebind operations every face rather than only each side's representative.
 
 This replaces fill-the-first-empty-slot, which had three failure modes:
 
@@ -239,11 +247,14 @@ sharing expectations intact).
   refusal;
 - **the mutator**: two-sided stamping identical whichever order it is given; repeated writes change nothing;
   fewer surfaces than last time clears the stale slot; a refusal leaves no stamp standing; pane and frame do
-  not disturb each other; the caller's GUID spelling is preserved;
+  not disturb each other; the caller's GUID spelling is preserved; multiple same-side faces survive a SAM
+  JSON round trip behind the single representative slot;
 - **the import's second side**: joins the first with both sides surviving; identical whichever zone was
   walked first; the same surface twice stays one side; a third zone refuses;
 - **two-sided round trip**: three successive re-writes keep each side on its own surface with no inversion
   and no ambiguity; two internal apertures between the same zone pair do not cross-bind;
+- **complete-set rebind**: a multi-face pane splits every physical surface and merges every surface back;
+  contested ownership and representative-only legacy stamps refuse before replacement creation or movement;
 - **`ZoneSurfaceReferencesMatch`**: zone-aware, spelling-tolerant, and falling back to the number when
   either side states no zone.
 

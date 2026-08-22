@@ -2,17 +2,17 @@
 
 ## Branch
 `feature/tas-aperture-instance-identity` (off `sow/2026-Q3` at `0f66b11`, i.e. after PR #32 merged S3-C1 and
-S3-C2). Stage 3's remaining code work, its handover doc and its COM-free suite; the licensed gate is still
-outstanding.
+S3-C2). PR #33 final review fixes are implemented and validated on this branch; the smallest licensed
+multi-face split/merge-back rerun remains.
 
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
 Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-22 - **Stage 3 COMPLETE, licensed gate PASSED.** PR #32 (S3-C1 + S3-C2) is merged;
+2026-08-22 - **PR #33 final review pass implemented.** PR #32 (S3-C1 + S3-C2) is merged;
 `feature/tas-aperture-instance-identity` closes six further identity gaps it left, adds the handover doc
-`SAM_Tas/SAM.Analytical.Tas/APERTURE_INSTANCE_IDENTITY.md`, takes the COM-free suite to **415/415**, and has
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_INSTANCE_IDENTITY.md`, takes the COM-free suite to **419/419**, and has
 been through a full licensed-TAS A/B against the `0f66b11` baseline.
 
 Physical aperture identity is now `{ ZoneGuid, SurfaceNumber }` and nothing else, held as one value type
@@ -31,8 +31,21 @@ reports 13-14 spuriously two-sided and 0 after import. The exported TBD is **ide
 facts** between the two builds, and a TAS run of both agrees on **173,376 result values with 0 differing,
 max absolute and relative difference 0**. Full table in `APERTURE_INSTANCE_IDENTITY.md`.
 
-**Immediate next step:** one focused independent diff review, then the PR. Two legs were NOT run and are not
-claimed - see "Unresolved" in the S3-C3 section.
+The final PR review found both Codex behavioural comments valid. Multi-face aperture parts now preserve a
+separate complete canonical surface set while `_1`/`_2` remain representative sides; a split/merge rebinds
+that entire set or refuses. Complete-set validation now precedes replacement lookup/creation, cache
+reservation, controls, schedules, shade and split counting, so an invalid/contested stamp creates no orphan
+and moves nothing. Representative-only legacy stamps refuse until restamped rather than risk a partial move.
+The two Copilot comments (XML return contract and `workk internla`) are also fixed.
+
+**Validation:** focused regressions **4/4**; full COM-free suite Debug **419/419** and Release **419/419**;
+Debug and Release solution builds **0 errors** (only existing MSB3270/MSB3277 and legacy compiler/XML-doc
+warnings). The first post-review SPDX run found that the changed legacy `ApertureParameter.cs` had no required
+header; the final commit adds that header, and `git diff --check` passes. The previous licensed acceptance
+remains valid for the single-face paths it exercised, but did not contain a multi-face split.
+
+**Immediate next step:** run one licensed scenario only: one multi-face pane part diverges/splits with every
+face moving together and then merges every face back, with no orphan definition on a contested refusal.
 
 ## Current status
 **Stage 1 is merged.** The export shares one `TBD.ApertureType` across every building element stating the

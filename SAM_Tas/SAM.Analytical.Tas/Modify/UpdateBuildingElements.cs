@@ -156,6 +156,11 @@ namespace SAM.Analytical.Tas
             // touches only that member's surfaces and never another aperture sharing the same element.
             Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> surfaceIndex = BuildSurfaceIndex(building);
 
+            //A COM-free mirror of the current bindings, used to validate a complete rebind plan before a
+            //replacement element is looked up, reserved, created, or written. It is advanced after each
+            //successful rebind so a later member in this same pass sees the current state.
+            Dictionary<ZoneSurfaceKey, string> surfaceBindings = surfaceIndex.ToDictionary(x => x.Key, x => x.Value?.buildingElement?.GUID);
+
             // The PHYSICAL INDEX, over the SAM side: which aperture, part and side each physical surface
             // belongs to - and, crucially, which physical surfaces MORE THAN ONE aperture claims. The
             // membership map above is keyed by building-element GUID, which many apertures share by design,
@@ -304,6 +309,34 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
+                            //Validate the COMPLETE physical set before any replacement definition can be
+                            //created/reserved or receive colour, construction, controls or shade. _1/_2 remain
+                            //representative side stamps; AperturePhysicalIdentity.AllKeys carries every face.
+                            List<ZoneSurfaceKey> rebindKeys = Query.ApertureRebindKeys(
+                                member.Aperture.AperturePhysicalIdentity(),
+                                member.AperturePart,
+                                aperturePhysicalIndex,
+                                surfaceBindings,
+                                buildingElement.GUID,
+                                out string refusal_Rebind);
+
+                            if (rebindKeys == null)
+                            {
+                                notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) could not be rebound; no replacement definition was created and none of its surfaces moved - {2}",
+                                    member.Aperture.Name, member.Aperture.Guid, refusal_Rebind));
+                                continue;
+                            }
+
+                            Aperture aperture_ToRestamp = analyticalModel.AdjacencyCluster.GetAperture(member.Aperture.Guid, out Panel panel_ToRestamp);
+                            if (aperture_ToRestamp == null || panel_ToRestamp == null)
+                            {
+                                notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) could not be found in its panel before rebinding; no replacement definition was created and none of its surfaces moved.",
+                                    member.Aperture.Name, member.Aperture.Guid));
+                                continue;
+                            }
+
+                            List<TBD.IZoneSurface> zoneSurfaces_ToRebind = rebindKeys.ConvertAll(x => surfaceIndex[x]);
+
                             //The element's own construction, read once and reused for every divergent
                             //member of this element - construction identity on this route comes from the
                             //by-name match above, not from anything an individual aperture states.
@@ -370,8 +403,6 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
-                            count_MembersSplit++;
-
                             //A NEWLY CREATED element's own feature shade follows its one founding member.
                             //(The shade-stated case above never takes the cache, so a found element - which
                             //already has whatever members share it - is never written to here: exactly the
@@ -381,7 +412,17 @@ namespace SAM.Analytical.Tas
                                 SetFeatureShades(building, buildingElement_Target, featureShade_Required);
                             }
 
-                            RebindMemberSurfaces(analyticalModel.AdjacencyCluster, surfaceIndex, aperturePhysicalIndex, member, buildingElement, buildingElement_Target, notes);
+                            RebindMemberSurfaces(
+                                analyticalModel.AdjacencyCluster,
+                                surfaceBindings,
+                                member,
+                                buildingElement_Target,
+                                rebindKeys,
+                                zoneSurfaces_ToRebind,
+                                aperture_ToRestamp,
+                                panel_ToRestamp);
+
+                            count_MembersSplit++;
                         }
 
                         //Construction is assigned to every element every pass, exactly as before - it is not
@@ -525,9 +566,8 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
-        /// Rebinds ONLY <paramref name="member"/>'s own physical pane/frame <c>zoneSurface</c>s - resolved
-        /// from its <c>Pane/FrameZoneSurfaceReference_1/2</c> stamps via <paramref name="surfaceIndex"/> -
-        /// from <paramref name="buildingElement_From"/> to <paramref name="buildingElement_To"/>, then
+        /// Rebinds ONLY <paramref name="member"/>'s prevalidated complete physical pane/frame surface set to
+        /// <paramref name="buildingElement_To"/>, then
         /// re-stamps the member's own <c>Pane/FrameBuildingElementGuid</c> to the new binding.
         /// <para>
         /// <b>The complete intended surface set is resolved and validated before anything is rebound.</b>
@@ -539,85 +579,28 @@ namespace SAM.Analytical.Tas
         /// member claims (a stale stamp), is refused rather than guessed at.
         /// </para>
         /// </summary>
-        private static void RebindMemberSurfaces(AdjacencyCluster adjacencyCluster, Dictionary<ZoneSurfaceKey, TBD.IZoneSurface> surfaceIndex, AperturePhysicalIndex aperturePhysicalIndex, ApertureMember member, buildingElement buildingElement_From, buildingElement buildingElement_To, List<string> notes)
+        private static void RebindMemberSurfaces(
+            AdjacencyCluster adjacencyCluster,
+            Dictionary<ZoneSurfaceKey, string> surfaceBindings,
+            ApertureMember member,
+            buildingElement buildingElement_To,
+            List<ZoneSurfaceKey> rebindKeys,
+            List<TBD.IZoneSurface> zoneSurfaces_ToRebind,
+            Aperture aperture_ToRestamp,
+            Panel panel_ToRestamp)
         {
-            ApertureParameter parameter_1 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_1 : ApertureParameter.PaneZoneSurfaceReference_1;
-            ApertureParameter parameter_2 = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_2;
-
-            //Phase 1: resolve and validate EVERY intended surface first.
-            List<TBD.IZoneSurface> zoneSurfaces_ToRebind = new List<TBD.IZoneSurface>(2);
-
-            foreach (ApertureParameter parameter in new[] { parameter_1, parameter_2 })
+            for (int index = 0; index < zoneSurfaces_ToRebind.Count; index++)
             {
-                if (!member.Aperture.TryGetValue(parameter, out Core.Tas.ZoneSurfaceReference zoneSurfaceReference) || zoneSurfaceReference == null)
-                {
-                    continue;
-                }
-
-                ZoneSurfaceKey zoneSurfaceKey = Query.ZoneSurfaceKey(zoneSurfaceReference);
-                if (zoneSurfaceKey == null)
-                {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface that does not locate one (zone '{2}', surface {3}); none of its surfaces were rebound.",
-                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceReference.ZoneGuid, zoneSurfaceReference.SurfaceNumber));
-                    return;
-                }
-
-                //CONTESTED-SURFACE GUARD, on the SAM side. The stale-stamp guard below asks whether the TBD
-                //surface still points where this aperture thinks it does; this asks the other question - whether
-                //any OTHER aperture also claims it. Both have to hold. A surface two apertures stamp identifies
-                //neither of them, and moving it would take one window's glazing on the strength of another
-                //window's change.
-                if (!aperturePhysicalIndex.TryResolve(zoneSurfaceKey, out System.Guid apertureGuid_Owner, out AperturePart aperturePart_Owner, out int _, out string refusal_Owner)
-                    || apertureGuid_Owner != member.Aperture.Guid
-                    || aperturePart_Owner != member.AperturePart)
-                {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) claims physical surface {2} as its {3}, but that surface does not resolve back to it{4}; none of its surfaces were rebound.",
-                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceKey, member.AperturePart, refusal_Owner == null ? string.Empty : " - " + refusal_Owner));
-                    return;
-                }
-
-                if (!surfaceIndex.TryGetValue(zoneSurfaceKey, out TBD.IZoneSurface zoneSurface) || zoneSurface == null)
-                {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) states a physical surface ({2}) that could not be found in the TBD; none of its surfaces were rebound.",
-                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceKey));
-                    return;
-                }
-
-                //Stale-stamp guard: only rebind a surface that currently points at the element the aperture
-                //claims. A surface pointing somewhere else was reassigned by something outside this stamp's
-                //knowledge, and rebinding it would risk taking a surface that is no longer this aperture's.
-                string buildingElementGuid_Current = zoneSurface.buildingElement?.GUID;
-                if (!string.IsNullOrWhiteSpace(buildingElementGuid_Current) && buildingElementGuid_Current != buildingElement_From.GUID)
-                {
-                    notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1})'s surface ({2}) is currently bound to a different element than the aperture's own stamp claims; none of its surfaces were rebound rather than guessed at.",
-                        member.Aperture.Name, member.Aperture.Guid, zoneSurfaceKey));
-                    return;
-                }
-
-                zoneSurfaces_ToRebind.Add(zoneSurface);
-            }
-
-            if (zoneSurfaces_ToRebind.Count == 0)
-            {
-                return;
-            }
-
-            //Phase 2: every intended surface validated - rebind them together, then advance the stamp.
-            foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces_ToRebind)
-            {
-                zoneSurface.buildingElement = buildingElement_To;
+                zoneSurfaces_ToRebind[index].buildingElement = buildingElement_To;
+                surfaceBindings[rebindKeys[index]] = buildingElement_To.GUID;
             }
 
             ApertureParameter guidParameter = member.AperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
 
-            Aperture aperture_Temp = adjacencyCluster.GetAperture(member.Aperture.Guid, out Panel panel_Temp);
-            if (aperture_Temp != null && panel_Temp != null)
-            {
-                aperture_Temp.SetValue(guidParameter, buildingElement_To.GUID);
-                panel_Temp.RemoveAperture(aperture_Temp.Guid);
-                panel_Temp.AddAperture(aperture_Temp);
-                adjacencyCluster.AddObject(panel_Temp);
-            }
+            aperture_ToRestamp.SetValue(guidParameter, buildingElement_To.GUID);
+            panel_ToRestamp.RemoveAperture(aperture_ToRestamp.Guid);
+            panel_ToRestamp.AddAperture(aperture_ToRestamp);
+            adjacencyCluster.AddObject(panel_ToRestamp);
         }
 
         /// <summary>

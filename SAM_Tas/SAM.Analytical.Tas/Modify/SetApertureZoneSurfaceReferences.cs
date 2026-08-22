@@ -37,7 +37,7 @@ namespace SAM.Analytical.Tas
         /// correct record of a part with no surfaces.
         /// </param>
         /// <param name="refusal">Why nothing was written, or null on success. Both slots are left cleared on a refusal.</param>
-        /// <returns>False only when the surfaces span more than the two zones an aperture can separate.</returns>
+        /// <returns>False when <paramref name="aperture"/> is null or the surfaces span more than the two zones an aperture can separate.</returns>
         public static bool SetApertureZoneSurfaceReferences(this Aperture aperture, AperturePart aperturePart, IEnumerable<Core.Tas.ZoneSurfaceReference> zoneSurfaceReferences, out string refusal)
         {
             refusal = null;
@@ -71,6 +71,19 @@ namespace SAM.Analytical.Tas
             if (zoneSurfaceKeys == null)
             {
                 return false;
+            }
+
+            //The side slots deliberately retain one representative per zone. Rebinding is different: every
+            //physical face must move together, so preserve the complete set separately, in the same stable
+            //zone/surface order. This is not another identity scheme - every entry is still exactly the
+            //{ZoneGuid, SurfaceNumber} physical key used everywhere else.
+            List<ZoneSurfaceKey> allKeys = referencesByKey.Keys.ToList();
+            allKeys.Sort(Query.CompareZoneSurfaceKeys);
+            if (allKeys.Count != 0)
+            {
+                aperture.SetValue(
+                    Query.ApertureZoneSurfaceReferencesParameter(aperturePart),
+                    new Core.SAMCollection<Core.Tas.ZoneSurfaceReference>(allKeys.ConvertAll(x => referencesByKey[x])));
             }
 
             for (int side = 1; side <= zoneSurfaceKeys.Count; side++)
@@ -113,13 +126,31 @@ namespace SAM.Analytical.Tas
 
     public static partial class Query
     {
-        /// <summary>Whatever one aperture part currently states, both slots, in slot order. Never null.</summary>
+        /// <summary>
+        /// Every physical surface one aperture part currently states. New stamps read the complete canonical
+        /// collection; older stamps fall back to the representative <c>_1</c>/<c>_2</c> slots. Never null.
+        /// </summary>
         public static List<Core.Tas.ZoneSurfaceReference> ApertureZoneSurfaceReferences(this Aperture aperture, AperturePart aperturePart)
         {
             List<Core.Tas.ZoneSurfaceReference> result = new List<Core.Tas.ZoneSurfaceReference>();
 
             if (aperture == null)
             {
+                return result;
+            }
+
+            if (aperture.TryGetValue(ApertureZoneSurfaceReferencesParameter(aperturePart), out Core.SAMCollection<Core.Tas.ZoneSurfaceReference> collection)
+                && collection != null
+                && collection.Count != 0)
+            {
+                foreach (Core.Tas.ZoneSurfaceReference zoneSurfaceReference in collection)
+                {
+                    if (zoneSurfaceReference != null)
+                    {
+                        result.Add(new Core.Tas.ZoneSurfaceReference(zoneSurfaceReference));
+                    }
+                }
+
                 return result;
             }
 

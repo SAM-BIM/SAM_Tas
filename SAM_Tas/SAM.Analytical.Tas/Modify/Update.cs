@@ -1253,7 +1253,7 @@ namespace SAM.Analytical.Tas
                     }
                     record.ZoneSurface.orientation = orientation;
 
-                    record.ZoneSurface.reversed = 1;  // only second panel window does not workk internla
+                    record.ZoneSurface.reversed = 1;  // only second panel window does not work internally
                 }
             }
 

@@ -510,7 +510,13 @@ namespace SAM.Analytical.Tas
                                 //Through the one mutator, so this path orders slots by the same rule the
                                 //export and UpdateIds use. The aperture is brand new here, so this is its _1;
                                 //the adjacent zone's pass adds the other side above.
-                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Frame, new ZoneSurfaceReference[] { new ZoneSurfaceReference(zoneSurface_Frame.number, zone.GUID) }, out string _);
+                                List<TBD.IZoneSurface> zoneSurfaces_Frame = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Frame);
+                                if (zoneSurfaces_Frame.Count == 0)
+                                {
+                                    zoneSurfaces_Frame.Add(zoneSurface_Frame);
+                                }
+
+                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Frame, zoneSurfaces_Frame.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
 
                                 TBD.buildingElement buildingElement = zoneSurface_Frame.buildingElement;
                                 if (buildingElement != null)
@@ -521,7 +527,13 @@ namespace SAM.Analytical.Tas
 
                             if (zoneSurface_Pane != null)
                             {
-                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Pane, new ZoneSurfaceReference[] { new ZoneSurfaceReference(zoneSurface_Pane.number, zone.GUID) }, out string _);
+                                List<TBD.IZoneSurface> zoneSurfaces_Pane = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Pane);
+                                if (zoneSurfaces_Pane.Count == 0)
+                                {
+                                    zoneSurfaces_Pane.Add(zoneSurface_Pane);
+                                }
+
+                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Pane, zoneSurfaces_Pane.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
 
                                 TBD.buildingElement buildingElement = zoneSurface_Pane.buildingElement;
                                 if (buildingElement != null)
@@ -537,6 +549,31 @@ namespace SAM.Analytical.Tas
                                         aperture.SetValue(Analytical.ApertureParameter.OpeningProperties, openingProperties);
                                     }
                                 }
+                            }
+
+                            AperturePart SurfacePart(TBD.IZoneSurface zoneSurface)
+                            {
+                                AperturePart result = Query.AperturePart_BuildingElementType(zoneSurface?.buildingElement);
+                                if (result != AperturePart.Undefined)
+                                {
+                                    return result;
+                                }
+
+                                string constructionName = zoneSurface?.buildingElement?.GetConstruction()?.name;
+                                if (!string.IsNullOrWhiteSpace(constructionName))
+                                {
+                                    if (constructionName.EndsWith("-pane"))
+                                    {
+                                        return AperturePart.Pane;
+                                    }
+
+                                    if (constructionName.EndsWith("-frame"))
+                                    {
+                                        return AperturePart.Frame;
+                                    }
+                                }
+
+                                return AperturePart.Undefined;
                             }
                         }
 

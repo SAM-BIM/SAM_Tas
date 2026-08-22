@@ -130,6 +130,16 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// The collection parameter that preserves every physical surface of one part. The <c>_1</c>/<c>_2</c>
+        /// parameters remain the representative side identities; this collection is used only where an
+        /// operation, notably a definition rebind, must act on every face belonging to those sides.
+        /// </summary>
+        public static ApertureParameter ApertureZoneSurfaceReferencesParameter(AperturePart aperturePart)
+        {
+            return aperturePart == Analytical.AperturePart.Frame ? ApertureParameter.FrameZoneSurfaceReferences : ApertureParameter.PaneZoneSurfaceReferences;
+        }
+
+        /// <summary>
         /// Clear every physical stamp on an aperture part, both slots.
         /// <para>
         /// A write path must clear before it fills. The stamps are the model's record of where an aperture WAS,
@@ -147,6 +157,7 @@ namespace SAM.Analytical.Tas
 
             aperture.RemoveValue(ApertureZoneSurfaceReferenceParameter(aperturePart, 1));
             aperture.RemoveValue(ApertureZoneSurfaceReferenceParameter(aperturePart, 2));
+            aperture.RemoveValue(ApertureZoneSurfaceReferencesParameter(aperturePart));
         }
     }
 }

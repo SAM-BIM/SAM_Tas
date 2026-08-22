@@ -512,6 +512,30 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(Read(aperture, AperturePart.Pane, 1).ZoneGuid, Is.EqualTo("{" + ZoneA + "}"));
         }
 
+        [Test]
+        public void Write_SeveralSurfacesOnOneSide_PreservesTheCompleteSetBehindRepresentativeSlots()
+        {
+            Aperture aperture = Stamped(
+                AperturePart.Pane,
+                Reference(ZoneA, 7),
+                Reference(ZoneB, 9),
+                Reference(ZoneA, 5));
+
+            Assert.That(Read(aperture, AperturePart.Pane, 1).SurfaceNumber, Is.EqualTo(5));
+            Assert.That(Read(aperture, AperturePart.Pane, 2).SurfaceNumber, Is.EqualTo(9));
+
+            List<ZoneSurfaceReference> all = TasQuery.ApertureZoneSurfaceReferences(aperture, AperturePart.Pane);
+            Assert.That(all.Select(x => new ZoneSurfaceKey(x.ZoneGuid, x.SurfaceNumber)), Is.EqualTo(new[]
+            {
+                new ZoneSurfaceKey(ZoneA, 5),
+                new ZoneSurfaceKey(ZoneA, 7),
+                new ZoneSurfaceKey(ZoneB, 9)
+            }));
+
+            Aperture roundTrip = new Aperture(aperture.ToJsonObject());
+            Assert.That(TasQuery.ApertureZoneSurfaceReferences(roundTrip, AperturePart.Pane).Count, Is.EqualTo(3), "The complete set must survive the SAM file boundary.");
+        }
+
         // =================================================================================================
         // The import's second side
         // =================================================================================================
@@ -624,6 +648,107 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(guid_B1, Is.EqualTo(aperture_1.Guid), "Both sides of one opening must resolve to the same aperture.");
             Assert.That(guid_A2, Is.EqualTo(aperture_2.Guid));
             Assert.That(guid_B2, Is.EqualTo(aperture_2.Guid));
+        }
+
+        // =================================================================================================
+        // Complete-set split/rebind planning - validation happens before replacement creation
+        // =================================================================================================
+
+        [Test]
+        public void Rebind_MultiFacePane_SplitsEveryPhysicalSurfaceAndMergesBackTogether()
+        {
+            const string originalElement = "BE-ORIGINAL";
+            const string splitElement = "BE-SPLIT";
+
+            Aperture aperture = Stamped(AperturePart.Pane, Reference(ZoneA, 7), Reference(ZoneA, 5));
+            aperture.SetValue(ApertureParameter.PaneBuildingElementGuid, originalElement);
+
+            AperturePhysicalIndex index = TasQuery.AperturePhysicalIndex(new[] { aperture });
+            Dictionary<ZoneSurfaceKey, string> bindings = new Dictionary<ZoneSurfaceKey, string>
+            {
+                [new ZoneSurfaceKey(ZoneA, 5)] = originalElement,
+                [new ZoneSurfaceKey(ZoneA, 7)] = originalElement
+            };
+
+            List<ZoneSurfaceKey> splitPlan = TasQuery.ApertureRebindKeys(aperture.AperturePhysicalIdentity(), AperturePart.Pane, index, bindings, originalElement, out string splitRefusal);
+
+            Assert.That(splitRefusal, Is.Null);
+            Assert.That(splitPlan.Count, Is.EqualTo(2));
+            foreach (ZoneSurfaceKey key in splitPlan)
+            {
+                bindings[key] = splitElement;
+            }
+
+            Assert.That(bindings.Values, Is.All.EqualTo(splitElement), "No physical face may remain on the shared definition after a split.");
+
+            aperture.SetValue(ApertureParameter.PaneBuildingElementGuid, splitElement);
+            List<ZoneSurfaceKey> mergePlan = TasQuery.ApertureRebindKeys(aperture.AperturePhysicalIdentity(), AperturePart.Pane, index, bindings, splitElement, out string mergeRefusal);
+
+            Assert.That(mergeRefusal, Is.Null);
+            Assert.That(mergePlan, Is.EqualTo(splitPlan));
+            foreach (ZoneSurfaceKey key in mergePlan)
+            {
+                bindings[key] = originalElement;
+            }
+
+            Assert.That(bindings.Values, Is.All.EqualTo(originalElement), "Merge-back must reverse the complete split, not only its representative stamp.");
+        }
+
+        [Test]
+        public void Rebind_ContestedSurface_RefusesBeforeAnyReplacementOrSurfaceMutation()
+        {
+            const string originalElement = "BE-ORIGINAL";
+
+            Aperture aperture = Stamped(AperturePart.Pane, Reference(ZoneA, 5), Reference(ZoneA, 7));
+            aperture.SetValue(ApertureParameter.PaneBuildingElementGuid, originalElement);
+
+            Aperture contestant = Stamped(AperturePart.Pane, Reference(ZoneA, 7));
+            contestant.SetValue(ApertureParameter.PaneBuildingElementGuid, originalElement);
+
+            AperturePhysicalIndex index = TasQuery.AperturePhysicalIndex(new[] { aperture, contestant });
+            Dictionary<ZoneSurfaceKey, string> bindings = new Dictionary<ZoneSurfaceKey, string>
+            {
+                [new ZoneSurfaceKey(ZoneA, 5)] = originalElement,
+                [new ZoneSurfaceKey(ZoneA, 7)] = originalElement
+            };
+            Dictionary<ZoneSurfaceKey, string> before = new Dictionary<ZoneSurfaceKey, string>(bindings);
+            int buildingElementCount = 1;
+
+            List<ZoneSurfaceKey> plan = TasQuery.ApertureRebindKeys(aperture.AperturePhysicalIdentity(), AperturePart.Pane, index, bindings, originalElement, out string refusal);
+            if (plan != null)
+            {
+                buildingElementCount++;
+                foreach (ZoneSurfaceKey key in plan)
+                {
+                    bindings[key] = "ORPHAN";
+                }
+            }
+
+            Assert.That(plan, Is.Null);
+            Assert.That(refusal, Does.Contain("claimed by more than one aperture"));
+            Assert.That(bindings, Is.EqualTo(before), "A refused complete-set validation moves zero surfaces.");
+            Assert.That(buildingElementCount, Is.EqualTo(1), "Replacement creation is downstream of validation, so refusal cannot leave an orphan definition.");
+            Assert.That(aperture.TryGetValue(ApertureParameter.PaneBuildingElementGuid, out string bindingStamp), Is.True);
+            Assert.That(bindingStamp, Is.EqualTo(originalElement));
+        }
+
+        [Test]
+        public void Rebind_RepresentativeOnlyLegacyStamp_RefusesRatherThanRiskAPartialMove()
+        {
+            Aperture aperture = Window();
+            aperture.SetValue(ApertureParameter.PaneZoneSurfaceReference_1, Reference(ZoneA, 5));
+
+            AperturePhysicalIndex index = TasQuery.AperturePhysicalIndex(new[] { aperture });
+            Dictionary<ZoneSurfaceKey, string> bindings = new Dictionary<ZoneSurfaceKey, string>
+            {
+                [new ZoneSurfaceKey(ZoneA, 5)] = "BE-ORIGINAL"
+            };
+
+            List<ZoneSurfaceKey> plan = TasQuery.ApertureRebindKeys(aperture.AperturePhysicalIdentity(), AperturePart.Pane, index, bindings, "BE-ORIGINAL", out string refusal);
+
+            Assert.That(plan, Is.Null);
+            Assert.That(refusal, Does.Contain("no preserved complete physical surface set"));
+            Assert.That(bindings[new ZoneSurfaceKey(ZoneA, 5)], Is.EqualTo("BE-ORIGINAL"));
         }
 
         // =================================================================================================

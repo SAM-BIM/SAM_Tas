@@ -22,6 +22,9 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            List<ZoneSurfaceKey> paneKeys_All = ApertureZoneSurfaceReferences(aperture, global::SAM.Analytical.AperturePart.Pane).ConvertAll(ZoneSurfaceKey).FindAll(x => x != null);
+            List<ZoneSurfaceKey> frameKeys_All = ApertureZoneSurfaceReferences(aperture, global::SAM.Analytical.AperturePart.Frame).ConvertAll(ZoneSurfaceKey).FindAll(x => x != null);
+
             return new AperturePhysicalIdentity(
                 aperture.Guid,
                 ApertureZoneSurfaceKey(aperture, ApertureParameter.PaneZoneSurfaceReference_1),
@@ -29,7 +32,11 @@ namespace SAM.Analytical.Tas
                 ApertureZoneSurfaceKey(aperture, ApertureParameter.FrameZoneSurfaceReference_1),
                 ApertureZoneSurfaceKey(aperture, ApertureParameter.FrameZoneSurfaceReference_2),
                 ApertureBuildingElementGuid(aperture, ApertureParameter.PaneBuildingElementGuid),
-                ApertureBuildingElementGuid(aperture, ApertureParameter.FrameBuildingElementGuid));
+                ApertureBuildingElementGuid(aperture, ApertureParameter.FrameBuildingElementGuid),
+                paneKeys_All,
+                frameKeys_All,
+                aperture.HasValue(ApertureZoneSurfaceReferencesParameter(global::SAM.Analytical.AperturePart.Pane)),
+                aperture.HasValue(ApertureZoneSurfaceReferencesParameter(global::SAM.Analytical.AperturePart.Frame)));
         }
 
         /// <summary>
