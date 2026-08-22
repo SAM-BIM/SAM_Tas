@@ -31,7 +31,7 @@ namespace SAM.Analytical.Tas
         /// </para>
         /// <para>
         /// <b>It creates no new rules.</b> Definition resolution is
-        /// <see cref="ResolveApertureDefinition(Building, BuildingReuseCache, Aperture, AperturePart, MaterialLibrary, IDictionary{string, TBD.Construction}, IDictionary{string, buildingElement}, out TBD.Construction, out buildingElement, out ConstructionDefinition, out BuildingElementDefinition, out bool, out string)"/>,
+        /// <see cref="ResolveApertureDefinition(Building, BuildingReuseCache, Aperture, AperturePart, MaterialLibrary, IDictionary{string, TBD.Construction}, IDictionary{string, buildingElement}, out TBD.Construction, out buildingElement, out ConstructionDefinition, out BuildingElementDefinition, out bool, out bool, out string)"/>,
         /// the very code the direct export runs. Physical resolution is Stage 3's
         /// <c>Query.AperturePhysicalIndex</c> and <c>Query.ApertureRebindKeys</c>, unchanged - so a
         /// two-sided aperture moves as one complete set or not at all, and a physical surface claimed by two
@@ -231,6 +231,7 @@ namespace SAM.Analytical.Tas
                         out buildingElement buildingElement_Target,
                         out ConstructionDefinition _,
                         out BuildingElementDefinition _,
+                        out bool created_Construction,
                         out bool _,
                         out string refusal_Resolve) || buildingElement_Target == null)
                     {
@@ -245,8 +246,17 @@ namespace SAM.Analytical.Tas
                     //The name this construction WANTED. Resolving under any other name means the preferred
                     //one is held by content the resolver may not adopt - and once every surface is bound to
                     //this one, that squatter is referenced by nothing.
+                    //
+                    //Gated on created_Construction: a name mismatch is only evidence of a REAL collision when
+                    //this call is the one that FORCED it, by creating a new object because the preferred name
+                    //was already occupied by foreign content. A cache HIT under a different name is ORDINARY
+                    //cross-family content reuse - two distinct SAM ApertureConstructions happening to state
+                    //identical layers for this part, which Stage 2 has always shared regardless of whose
+                    //family created the construction. Treating that as superseded would rename a construction
+                    //another aperture already correctly points at, breaking ITS pane/frame base-name pairing
+                    //to fix a mismatch that was never there.
                     string name_Preferred = string.Format("{0} {1}", Query.ConstructionNameBase(aperture.ApertureConstruction?.Name), aperturePart.Sufix());
-                    if (construction_Target != null && !string.Equals(construction_Target.name, name_Preferred, StringComparison.Ordinal))
+                    if (created_Construction && construction_Target != null && !string.Equals(construction_Target.name, name_Preferred, StringComparison.Ordinal))
                     {
                         if (!names_SupersededBy.Exists(x => x.Key == name_Preferred && x.Value == construction_Target.name))
                         {
@@ -329,7 +339,12 @@ namespace SAM.Analytical.Tas
 
             int count_Deleted = 0;
             int count_Survived = 0;
-            if (guids_ToDelete.Count != 0)
+
+            //Run the sweep whenever there is EITHER a new orphan of this pass's own OR a pre-existing mark
+            //from something else - the note above promises both are swept together, and skipping the call
+            //whenever this pass happens to find no new orphan of its own would leave a foreign mark sitting
+            //in the TBD despite that promise.
+            if (guids_ToDelete.Count != 0 || guids_MarkedAlready.Count != 0)
             {
                 HashSet<string> guids_ToDelete_Set = new HashSet<string>(guids_ToDelete);
                 foreach (buildingElement buildingElement_Temp in buildingElements_Now)
@@ -342,18 +357,23 @@ namespace SAM.Analytical.Tas
 
                 //DeleteMarkedBuildingElements returns a STATUS, not a count - licensed TAS returns -1 after
                 //successfully sweeping 28 elements - so what actually happened is established by re-reading
-                //the building and seeing which of the marked GUIDs are gone.
+                //the building and seeing which of the marked GUIDs are gone. Only THIS pass's own orphans are
+                //verified this way; a foreign pre-existing mark is swept by the same call but is not this
+                //pass's outcome to report a survival count for.
                 building.DeleteMarkedBuildingElements();
 
-                foreach (buildingElement buildingElement_Temp in building.BuildingElements() ?? new List<buildingElement>())
+                if (guids_ToDelete_Set.Count != 0)
                 {
-                    if (buildingElement_Temp != null && buildingElement_Temp.GUID != null && guids_ToDelete_Set.Contains(buildingElement_Temp.GUID))
+                    foreach (buildingElement buildingElement_Temp in building.BuildingElements() ?? new List<buildingElement>())
                     {
-                        count_Survived++;
+                        if (buildingElement_Temp != null && buildingElement_Temp.GUID != null && guids_ToDelete_Set.Contains(buildingElement_Temp.GUID))
+                        {
+                            count_Survived++;
+                        }
                     }
-                }
 
-                count_Deleted = guids_ToDelete.Count - count_Survived;
+                    count_Deleted = guids_ToDelete.Count - count_Survived;
+                }
             }
 
             //Constructions last, because which ones are still referenced can only be read once the elements

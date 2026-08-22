@@ -979,6 +979,7 @@ namespace SAM.Analytical.Tas
                                         out ConstructionDefinition _,
                                         out BuildingElementDefinition _,
                                         out bool _,
+                                        out bool _,
                                         out string _);
 
                                     //Identity stamps are per PHYSICAL aperture and are unchanged. After

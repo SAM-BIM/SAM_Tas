@@ -47,6 +47,7 @@ namespace SAM.Analytical.Tas
         /// <param name="buildingElement">The aperture building element stating it, or null.</param>
         /// <param name="constructionDefinition">The construction definition that was resolved, or null.</param>
         /// <param name="buildingElementDefinition">The building element definition that was resolved, or null.</param>
+        /// <param name="created_Construction">Whether <paramref name="construction"/> was created by this call rather than found by content. A caller comparing the created name against a preferred one - to decide whether a name was genuinely SUPERSEDED by foreign content, as opposed to an ordinary cross-family reuse hit under a different name - must gate on this: a reuse hit can legitimately carry any name, and treating that as superseded would rename a construction another aperture already correctly shares.</param>
         /// <param name="created_BuildingElement">Whether <paramref name="buildingElement"/> was created by this call rather than found.</param>
         /// <param name="refusal">Why no definition could be resolved, or null on success.</param>
         /// <returns>True when both a construction and a building element came back.</returns>
@@ -62,6 +63,7 @@ namespace SAM.Analytical.Tas
             out buildingElement buildingElement,
             out ConstructionDefinition constructionDefinition,
             out BuildingElementDefinition buildingElementDefinition,
+            out bool created_Construction,
             out bool created_BuildingElement,
             out string refusal)
         {
@@ -69,6 +71,7 @@ namespace SAM.Analytical.Tas
             buildingElement = null;
             constructionDefinition = null;
             buildingElementDefinition = null;
+            created_Construction = false;
             created_BuildingElement = false;
             refusal = null;
 
@@ -100,6 +103,7 @@ namespace SAM.Analytical.Tas
                 {
                     construction = building.AddConstruction(null);
                     construction.name = constructionName;
+                    created_Construction = true;
 
                     //Reserved the moment the name exists in the TBD, BEFORE anything else is written: a
                     //creation whose write later fails is never withdrawn, so it must never become reusable -
