@@ -475,6 +475,34 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         /// <summary>
+        /// <b>The sweep is deliberately blind to a foreign element's provenance</b> - it does not distinguish
+        /// "TAS created this for the current aperture GUID" from "something else authored this" purely by its
+        /// three gates (aperture type, zero surfaces, not canonical). That is only safe because
+        /// <c>T3DDocument.ExportNew</c> - measured, not assumed, see
+        /// <c>APERTURE_DEFINITION_REUSE_GBXML.md</c>, "Licensed verification: ExportNew always replaces
+        /// building elements" - never leaves ANY pre-existing building element in the file for this pass to
+        /// find, under <c>RemoveExistingTBD</c> true OR its default false: a sentinel aperture element
+        /// injected into an existing <c>.tbd</c> did not survive a second gbXML/T3D conversion under either
+        /// setting. So a hypothetically "foreign" surface-less aperture element - same shape as
+        /// <see cref="Sweep_RemovesOnlySurfacelessNonCanonicalApertureElements"/>'s orphans - is swept exactly
+        /// like a TAS-created one, and this pins that as the deliberate, licensed-verified contract rather
+        /// than an accidental one: no name or origin field distinguishes them, because in production nothing
+        /// but a TAS-created orphan is ever there to distinguish.
+        /// </summary>
+        [Test]
+        public void Sweep_HasNoNameOrProvenanceGuard_BecauseExportNewLeavesNothingForeignToProtect()
+        {
+            ApertureBuildingElementUsage usage_TasOrphan = Usage("tas-orphan", AperturePart.Pane, 0);
+            ApertureBuildingElementUsage usage_HypotheticalForeign = new ApertureBuildingElementUsage("foreign-guid", "SOME_OTHER_TOOL_NAMED_THIS", TasQuery.BEType(AperturePart.Frame), 0);
+
+            List<string> guids = TasQuery.UnusedApertureBuildingElementGuids([usage_TasOrphan, usage_HypotheticalForeign], new List<string>());
+
+            Assert.That(guids, Is.EquivalentTo(new List<string> { "tas-orphan", "foreign-guid" }),
+                "The sweep gained a name/provenance guard - if that is intentional, the licensed verification " +
+                "in APERTURE_DEFINITION_REUSE_GBXML.md needs revisiting, since it justified the ABSENCE of one.");
+        }
+
+        /// <summary>
         /// A panel element is never swept, whatever its surface count - the sweep is about apertures only.
         /// </summary>
         [Test]

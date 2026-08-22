@@ -131,6 +131,64 @@ counts without an installed TAS and cannot drift from what the resolver does.
 
 ---
 
+## Licensed verification: ExportNew always replaces building elements
+
+The orphan sweep (`Query.UnusedApertureBuildingElementGuids`) marks any surface-less pane/frame element that
+is not one of this pass's canonical targets — with no name-based exemption. That is only safe if
+`T3DDocument.ExportNew` never leaves a **foreign, pre-existing** aperture element in the building for the
+sweep to find: one a user or some other tool authored directly in the `.tbd`, unrelated to the current T3D,
+sitting there with zero surfaces because nothing in the current model happens to use it right now.
+
+`WorkflowCalculator` only deletes the `.tbd` file itself when `WorkflowSettings.RemoveExistingTBD` is `true`;
+the default (see `SAM_UI`'s `Query.DefaultWorkflowSettings`) is `false`, so a routine re-run of the workflow
+calls `ExportNew` against whatever `.tbd` is already on disk rather than a freshly emptied one. Whether
+`ExportNew` **replaces** that file's building elements or **merges** the T3D into them was not something the
+original design traced — it stated the "no foreign element to protect" conclusion without having measured it
+against `RemoveExistingTBD=false` specifically. A PR review ([Codex,
+2026-08-22](https://github.com/SAM-BIM/SAM_Tas/pull/34#discussion_r3837021889)) correctly flagged this gap.
+
+**The question, put narrowly:** with `RemoveExistingTBD=false` and a `.tbd` already on disk, does
+`T3DDocument.ExportNew` replace the file's building elements from scratch, or can it preserve one that the
+current T3D does not represent at all?
+
+**The probe.** A temporary diagnostic harness (not part of production code) replicated
+`WorkflowCalculator.Calculate`'s own gbXML-branch sequence call-for-call — the same production methods in the
+same order, stopping right after the `Convert.ToTBD` call that invokes `ExportNew`, which is exactly where
+`UpdateApertureDefinitions` runs next in production:
+
+1. Built a realistic `.tbd` via one ordinary gbXML/T3D conversion of the licensed fixture (`ModelA.sam`, 2
+   spaces, 14 apertures) — 33 building elements, matching the "before" baseline elsewhere in this document.
+2. Injected a sentinel: a `GLAZING` `buildingElement` named `SENTINEL_PREEXISTING_MARKER_DO_NOT_DELETE`, zero
+   surfaces, not part of the T3D at all. Saved and closed.
+3. Re-ran the identical gbXML-branch sequence against the **same** `.tbd` path a second time, once with
+   `RemoveExistingTBD=false` and once with `=true`, each ending at the same `Convert.ToTBD` call.
+4. Re-opened the resulting `.tbd`, before any SAM_Tas aperture step, and searched for the sentinel by GUID and
+   by name, and diffed the full building-element GUID set against the pre-`ExportNew` snapshot.
+
+**Result — identical under both settings:**
+
+| | `RemoveExistingTBD=false` | `RemoveExistingTBD=true` |
+|---|---|---|
+| Building elements before injection | 33 | 33 |
+| Building elements after sentinel added | 34 | 34 |
+| Building elements after the second `ExportNew` | 33 | 33 |
+| Sentinel found by GUID afterwards | **No** | **No** |
+| Sentinel found by name afterwards | **No** | **No** |
+| Pre-existing GUIDs surviving `ExportNew` | 1 of 34 | 1 of 34 |
+
+The one surviving GUID in both runs is TAS's own universal placeholder — `name="Null"`,
+`guid={00000000-0000-0000-0000-000000000000}`, `BEType=0` — present by default in every fresh conversion
+regardless of what the file held before. It is not a preserved user object, and there is no other overlap.
+
+**Outcome: `ExportNew` replaces a `.tbd`'s building elements from scratch, independent of
+`RemoveExistingTBD`.** The Codex finding is **not valid** for the production path: nothing survives from a
+prior state of the file for the sweep to endanger, so `Query.UnusedApertureBuildingElementGuids` needs no
+provenance check beyond the three gates it already has. No production code changed as a result of this
+verification — only the doc comment that previously stated the conclusion without having measured it against
+`RemoveExistingTBD=false`.
+
+---
+
 ## Why `DeleteMarkedBuildingElements`'s return value is ignored
 
 Licensed TAS returns **-1** after successfully sweeping 28 elements. It is a status, not a count. The pass
