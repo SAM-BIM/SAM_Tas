@@ -347,3 +347,15 @@ Stage 3's previously accepted scenarios were **not** re-run: this change touches
   correct. Fixing the underlying gap needs either a different TBD→SAM pairing strategy or a change to Stage
   2's cross-family construction-sharing rule — both out of scope for bringing the gbXML route to parity with
   the direct route.
+- **`FeatureShade` does not reach the gbXML pane building element at all — pre-existing, out of scope.**
+  A licensed probe (`WorkflowCalculator.Calculate()`'s own gbXML branch, one real aperture stating a
+  `FeatureShade` and a frame) checkpointed right after `Modify.UpdateBuildingElements` and before this PR's
+  `UpdateApertureDefinitions` runs at all: the shaded pane building element already reads
+  `featureShadeCount=0`. So the loss happens inside or before `UpdateBuildingElements`, not in anything this
+  PR adds — this PR's only change to that file is extracting its existing private surface-index helper into
+  `Query.ZoneSurfaceIndex()`, and `WorkflowCalculator`'s call order
+  (`UpdateBuildingElements` → `UpdateIds` → `UpdateApertureDefinitions`) is unchanged here too. Filed as a
+  separate follow-up: investigate/fix gbXML `FeatureShade` propagation — a SAM aperture stating
+  `ApertureParameter.FeatureShade` reaches `Modify.UpdateBuildingElements`, but the resulting TBD pane
+  `buildingElement` has zero feature shades; compare direct TBD vs gbXML workflow and add licensed
+  regression coverage. Keep this separate from the cross-family pane/frame pairing gap above.
