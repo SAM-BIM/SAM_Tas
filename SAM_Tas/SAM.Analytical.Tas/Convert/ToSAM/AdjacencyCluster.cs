@@ -351,6 +351,30 @@ namespace SAM.Analytical.Tas
                         Aperture aperture = Analytical.Query.Apertures(adjacencyCluster, polygon3D.InternalPoint3D(), 1, Tolerance.MacroDistance)?.FirstOrDefault();
                         if(aperture != null)
                         {
+                            //THE SECOND SIDE of an aperture between two zones. The import walks each zone in
+                            //turn, so an internal aperture is met twice; the first meeting created it, and
+                            //this is the same opening seen from the other room. It used to be skipped
+                            //outright, which meant side 2 got no ZoneSurfaceReference at all: the aperture
+                            //came back stating one physical surface where the TBD holds two, and an update
+                            //resolving that aperture could only ever find one of them.
+                            //
+                            //Both sides are handed to Modify.AddApertureZoneSurfaceReference, which re-orders
+                            //the pair canonically rather than appending to the first free slot, so which zone
+                            //the import happened to walk first does not decide which side is _1.
+                            AperturePart aperturePart_Side = Query.AperturePart_BuildingElementType(zoneSurface.buildingElement);
+                            if (aperturePart_Side != AperturePart.Undefined)
+                            {
+                                Aperture aperture_Side = adjacencyCluster.GetAperture(aperture.Guid, out Panel panel_Side);
+                                if (aperture_Side != null && panel_Side != null)
+                                {
+                                    aperture_Side.AddApertureZoneSurfaceReference(aperturePart_Side, new ZoneSurfaceReference(zoneSurface.number, zone.GUID), out string _);
+
+                                    panel_Side.RemoveAperture(aperture_Side.Guid);
+                                    panel_Side.AddAperture(aperture_Side);
+                                    adjacencyCluster.AddObject(panel_Side);
+                                }
+                            }
+
                             continue;
                         }
 
@@ -412,68 +436,64 @@ namespace SAM.Analytical.Tas
                         {
                             TBD.IZoneSurface zoneSurface_Pane = null;
                             TBD.IZoneSurface zoneSurface_Frame = null;
+
+                            //BEType FIRST, construction name second. TAS keeps which half a surface is on the
+                            //ELEMENT; a construction name is, after Stage 2, a shared definition label that
+                            //happens to end -pane/-frame by our own convention, and a foreign TBD need not
+                            //follow it at all. Asking the element rather than the name also means a window
+                            //whose two constructions were named unconventionally still comes back as one pane
+                            //and one frame instead of both halves guessed from list position below.
                             foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces_Aperture)
                             {
-                                TBD.Construction construction = zoneSurface?.buildingElement?.GetConstruction();
-                                if (construction == null)
+                                switch (Query.AperturePart_BuildingElementType(zoneSurface?.buildingElement))
                                 {
-                                    continue;
-                                }
+                                    case AperturePart.Pane:
+                                        zoneSurface_Pane = zoneSurface_Pane ?? zoneSurface;
+                                        break;
 
-                                string name = construction.name;
-                                if (string.IsNullOrWhiteSpace(name))
-                                {
-                                    continue;
+                                    case AperturePart.Frame:
+                                        zoneSurface_Frame = zoneSurface_Frame ?? zoneSurface;
+                                        break;
                                 }
-
-                                if (name.EndsWith("-pane"))
-                                {
-                                    zoneSurface_Pane = zoneSurface;
-                                }
-
-                                if (name.EndsWith("-frame"))
-                                {
-                                    zoneSurface_Frame = zoneSurface;
-                                }
-
-                                if (zoneSurface_Frame != null && zoneSurface_Pane != null)
-                                {
-                                    break;
-                                }
-
                             }
 
-                            if (zoneSurfaces_Aperture.Count == 1)
+                            if (zoneSurface_Pane == null || zoneSurface_Frame == null)
                             {
-                                //A single-member group is exactly what its one surface already claims to
-                                //be: a lone pane with no separately written frame ring is NOT also its own
-                                //frame. (This block only sees singletons since GroupAperturePolygons made a
-                                //lone pane a genuine one-member group; the [0] fallbacks in the else below
-                                //predate that and would stamp one physical glazing surface as both pane and
-                                //frame, and frame-first reference matching then classifies the pane as a
-                                //frame.) When the construction name carries no -pane/-frame suffix, take the
-                                //part from the surface's own element type instead of fabricating the
-                                //missing half.
-                                if (zoneSurface_Pane == null && zoneSurface_Frame == null)
+                                //The -pane/-frame naming convention, for a surface whose element type states
+                                //nothing usable. Only ever fills a slot the element types left empty.
+                                foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces_Aperture)
                                 {
-                                    TBD.buildingElement buildingElement_Singleton = zoneSurfaces_Aperture[0]?.buildingElement;
-                                    if (buildingElement_Singleton != null)
+                                    string name = zoneSurface?.buildingElement?.GetConstruction()?.name;
+                                    if (string.IsNullOrWhiteSpace(name))
                                     {
-                                        switch ((TBD.BuildingElementType)buildingElement_Singleton.BEType)
-                                        {
-                                            case TBD.BuildingElementType.GLAZING:
-                                                zoneSurface_Pane = zoneSurfaces_Aperture[0];
-                                                break;
+                                        continue;
+                                    }
 
-                                            case TBD.BuildingElementType.FRAMEELEMENT:
-                                                zoneSurface_Frame = zoneSurfaces_Aperture[0];
-                                                break;
-                                        }
+                                    if (zoneSurface_Pane == null && name.EndsWith("-pane"))
+                                    {
+                                        zoneSurface_Pane = zoneSurface;
+                                    }
+
+                                    if (zoneSurface_Frame == null && name.EndsWith("-frame"))
+                                    {
+                                        zoneSurface_Frame = zoneSurface;
+                                    }
+
+                                    if (zoneSurface_Frame != null && zoneSurface_Pane != null)
+                                    {
+                                        break;
                                     }
                                 }
                             }
-                            else
+
+                            if (zoneSurfaces_Aperture.Count != 1)
                             {
+                                //Last resort, and only for a group that really does hold more than one
+                                //surface: something in it is the pane and something is the frame, and neither
+                                //the element types nor the names would say which. A SINGLETON is deliberately
+                                //excluded - a lone pane with no separately written frame ring is not also its
+                                //own frame, and stamping it as both made frame-first reference matching
+                                //classify the pane as a frame.
                                 if (zoneSurface_Frame == null)
                                 {
                                     zoneSurface_Frame = zoneSurfaces_Aperture[0];
@@ -487,8 +507,16 @@ namespace SAM.Analytical.Tas
 
                             if (zoneSurface_Frame != null)
                             {
-                                ApertureParameter apertureParameter = aperture.HasValue(ApertureParameter.FrameZoneSurfaceReference_1) ? ApertureParameter.FrameZoneSurfaceReference_2 : ApertureParameter.FrameZoneSurfaceReference_1;
-                                aperture.SetValue(apertureParameter, new ZoneSurfaceReference(zoneSurface_Frame.number, zone.GUID));
+                                //Through the one mutator, so this path orders slots by the same rule the
+                                //export and UpdateIds use. The aperture is brand new here, so this is its _1;
+                                //the adjacent zone's pass adds the other side above.
+                                List<TBD.IZoneSurface> zoneSurfaces_Frame = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Frame);
+                                if (zoneSurfaces_Frame.Count == 0)
+                                {
+                                    zoneSurfaces_Frame.Add(zoneSurface_Frame);
+                                }
+
+                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Frame, zoneSurfaces_Frame.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
 
                                 TBD.buildingElement buildingElement = zoneSurface_Frame.buildingElement;
                                 if (buildingElement != null)
@@ -499,8 +527,13 @@ namespace SAM.Analytical.Tas
 
                             if (zoneSurface_Pane != null)
                             {
-                                ApertureParameter apertureParameter = aperture.HasValue(ApertureParameter.PaneZoneSurfaceReference_1) ? ApertureParameter.PaneZoneSurfaceReference_2 : ApertureParameter.PaneZoneSurfaceReference_1;
-                                aperture.SetValue(apertureParameter, new ZoneSurfaceReference(zoneSurface_Pane.number, zone.GUID));
+                                List<TBD.IZoneSurface> zoneSurfaces_Pane = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Pane);
+                                if (zoneSurfaces_Pane.Count == 0)
+                                {
+                                    zoneSurfaces_Pane.Add(zoneSurface_Pane);
+                                }
+
+                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Pane, zoneSurfaces_Pane.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
 
                                 TBD.buildingElement buildingElement = zoneSurface_Pane.buildingElement;
                                 if (buildingElement != null)
@@ -516,6 +549,31 @@ namespace SAM.Analytical.Tas
                                         aperture.SetValue(Analytical.ApertureParameter.OpeningProperties, openingProperties);
                                     }
                                 }
+                            }
+
+                            AperturePart SurfacePart(TBD.IZoneSurface zoneSurface)
+                            {
+                                AperturePart result = Query.AperturePart_BuildingElementType(zoneSurface?.buildingElement);
+                                if (result != AperturePart.Undefined)
+                                {
+                                    return result;
+                                }
+
+                                string constructionName = zoneSurface?.buildingElement?.GetConstruction()?.name;
+                                if (!string.IsNullOrWhiteSpace(constructionName))
+                                {
+                                    if (constructionName.EndsWith("-pane"))
+                                    {
+                                        return AperturePart.Pane;
+                                    }
+
+                                    if (constructionName.EndsWith("-frame"))
+                                    {
+                                        return AperturePart.Frame;
+                                    }
+                                }
+
+                                return AperturePart.Undefined;
                             }
                         }
 

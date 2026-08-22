@@ -282,7 +282,7 @@ do not degrade that mapping — but the shaded-project run confirms it rather th
 
 ---
 
-## Known limitation: `UpdateBuildingElements` on a Stage-2 TBD
+## Known limitation: `UpdateBuildingElements` on a Stage-2 TBD — RESOLVED BY STAGE 3
 
 `Modify.UpdateBuildingElements` is a separate, public, supported follow-up API (also exposed as the
 `Tas.UpdateBuildingElements` Grasshopper component) that re-applies colour, opening-control writes and
@@ -319,8 +319,21 @@ after the direct `Modify.Update` export (rather than a full re-export) will not 
 feature-shade updates on aperture elements from that follow-up call. A full re-export via `Modify.Update`
 itself is unaffected — it writes constructions and elements directly, never through this name-decode path.
 
+**STAGE 3 HAS LANDED, and this paragraph is now history.** `UpdateBuildingElements` resolves the SAM
+aperture(s) an element stands for from the `Pane`/`FrameBuildingElementGuid` stamps and the
+`ZoneSurfaceReference` surface index instead of the element name, so a Stage-2 TBD is resolved fully. Name
+decoding survives only as the legacy fallback for an element no aperture stamps, byte-for-byte unchanged, so
+TAS-authored TBDs behave exactly as they always have. A shared element is still never mutated: a member whose
+SAM aperture has diverged is SPLIT onto its own element and only its own physical surfaces are rebound. Full
+detail in `APERTURE_INSTANCE_IDENTITY.md`.
+
 ## Out of scope for Stage 2
 
 Physical-instance identity hardening (`ZoneSurfaceReference` resolution on update), the
 `UpdateBuildingElements` name-decode replacement, the import grouping fixes, refusal reporting on
 `Modify.Update`, and the gbXML/T3D route — all Stage 3 or later, all unchanged here.
+
+Every one of those bar the gbXML/T3D route is now done; see `APERTURE_INSTANCE_IDENTITY.md`. Stage 2's own
+invariants are untouched by it — `Modify.Update` still resolves definitions by exactly the rules above, and
+the only change Stage 3 makes to this file's subject is that identity stamp 9 ("Stage 3 owns hardening
+update/round-trip identity") is now discharged.
