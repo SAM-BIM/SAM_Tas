@@ -66,16 +66,17 @@ with an orphan wall 1000 m away; it is classified as a shade and cannot move the
 **Validation:** focused Debug **10/10** after the later Codex regression; full TM59 Debug and Release
 **467/467** after that test-only addition; Benchmark Release **16/16**;
 solution Debug and Release build with **0 errors** (only existing MSB3270/MSB3277 and legacy warnings).
-Final licensed two-pass acceptance on the exact production file passes as described above. GitHub build for
-`bb16ec2` passed; the test-only follow-up still needs its normal post-push check.
+Final licensed two-pass acceptance on the exact production file passes as described above. GitHub build and
+SPDX checks for the final code/test commit `94a55e4` both passed. Any subsequent progress-only commit does
+not alter the validated code or tests.
 
 **Unresolved / out of scope:** the same recentring also afflicts any OTHER geometry-matching step on this
 route that lacks the compensation (`CopyResults` matches apertures to solar surfaces by geometry; the
 simulation/results legs were not run here - `Simulate=false`). Not touched; would need its own licensed
 validation.
 
-**Recommended next step:** await PR #36 re-review/checks after the validated follow-up is pushed; do not
-merge automatically.
+**Recommended next step:** await PR #36 re-review; all current validation/checks are green. Do not merge
+automatically.
 
 ---
 
