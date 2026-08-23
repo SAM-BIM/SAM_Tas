@@ -4,6 +4,7 @@
 using NUnit.Framework;
 using SAM.Analytical;
 using SAM.Analytical.Tas;
+using SAM.Geometry.Object.Spatial;
 using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
@@ -209,6 +210,49 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Assert.That(apertureTranslated, Is.Not.Null);
                 Assert.That(apertureTranslated?.ReturnType, Is.EqualTo(typeof(Aperture)));
             });
+        }
+
+        /// <summary>
+        /// <c>AdjacencyCluster.Shade</c> classifies every panel unrelated to a space as a shade. The non-shade
+        /// centroid subset in <c>UpdateIds</c> therefore already excludes unexported orphan panels.
+        /// </summary>
+        [Test]
+        public void TranslationPanelSubset_ExcludesPanelsUnrelatedToSpacesAsShades()
+        {
+            Space space = new Space("Exported zone");
+            Panel panel_Exported = PanelAt(0);
+            Panel panel_Unassigned = PanelAt(1000);
+
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            adjacencyCluster.AddObject(space);
+            adjacencyCluster.AddObject(panel_Exported);
+            adjacencyCluster.AddObject(panel_Unassigned);
+            adjacencyCluster.AddRelation(space, panel_Exported);
+
+            List<Panel> panels = adjacencyCluster.GetPanels().FindAll(x => !adjacencyCluster.Shade(x));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(adjacencyCluster.Shade(panel_Exported), Is.False);
+                Assert.That(adjacencyCluster.Shade(panel_Unassigned), Is.True);
+                Assert.That(panels, Has.Count.EqualTo(1));
+                Assert.That(panels[0].Guid, Is.EqualTo(panel_Exported.Guid));
+                Assert.That(panels.BoundingBox3D().GetCentroid().X, Is.EqualTo(5).Within(Core.Tolerance.Distance));
+                Assert.That(adjacencyCluster.GetPanels().BoundingBox3D().GetCentroid().X, Is.EqualTo(505).Within(Core.Tolerance.Distance));
+            });
+        }
+
+        private static Panel PanelAt(double x)
+        {
+            Polygon3D polygon3D = new Polygon3D(new List<Point3D>
+            {
+                new Point3D(x, 0, 0),
+                new Point3D(x + 10, 0, 0),
+                new Point3D(x + 10, 0, 10),
+                new Point3D(x, 0, 10),
+            });
+
+            return Analytical.Create.Panel(Analytical.Query.DefaultConstruction(PanelType.WallExternal), PanelType.WallExternal, new Face3D(polygon3D));
         }
     }
 }

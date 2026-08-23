@@ -17,7 +17,7 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-23 - **PR #36 revalidated on the user's exact production file and Codex P2 fixed.** Exact input:
+2026-08-23 - **PR #36 revalidated on the user's exact production file and Codex review addressed.** Exact input:
 `C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2027-08-03-HVAC\SAM_zoningAM_v2zonesisDomestic.sam`
 (SHA-256 `CF0C749D8148EC7433482528040B4E32EAC5E5B6A6B91042C6029FF17E19537F`). Route was exactly
 `AnalyticalModel -> SAM.Analytical.gbXML.Convert.ToFile -> WorkflowCalculator`, the engine behind
@@ -52,13 +52,22 @@ forwards each to a separate translation-aware overload. Only `UpdateIds` calls t
 translation. A reflection regression pins the original and translation-aware signatures for both return
 types; the test project explicitly references `Interop.TBD` for that metadata-only check.
 
+**Later Codex P2 (unassigned-panel centroid).** No behavioural change was made because its premise is false
+for `AdjacencyCluster`: `Shade(panel)` returns true exactly when the panel has no related `Space`. Therefore
+the existing `GetPanels().FindAll(x => !Shade(x))` SAM centroid already is the space-related subset, and an
+unassigned panel cannot be a non-shade outlier. This is also what the licensed seam trace measured: all
+non-shade and space-related bboxes were identical on both sides. A COM-free regression now pins the invariant
+with an orphan wall 1000 m away; it is classified as a shade and cannot move the non-shade centroid.
+
 **Files changed in this follow-up:** `SAM_Tas/SAM.Analytical.Tas/Query/Match.cs`,
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/UpdateIdsZoneResolutionTests.cs`,
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/SAM.Analytical.Tas.TM59.Tests.csproj`, this file.
 
-**Validation:** focused Debug 9/9; full TM59 Debug and Release **466/466**; Benchmark Release **16/16**;
+**Validation:** focused Debug **10/10** after the later Codex regression; full TM59 Debug and Release
+**467/467** after that test-only addition; Benchmark Release **16/16**;
 solution Debug and Release build with **0 errors** (only existing MSB3270/MSB3277 and legacy warnings).
-Final licensed two-pass acceptance on the exact production file passes as described above.
+Final licensed two-pass acceptance on the exact production file passes as described above. GitHub build for
+`bb16ec2` passed; the test-only follow-up still needs its normal post-push check.
 
 **Unresolved / out of scope:** the same recentring also afflicts any OTHER geometry-matching step on this
 route that lacks the compensation (`CopyResults` matches apertures to solar surfaces by geometry; the
