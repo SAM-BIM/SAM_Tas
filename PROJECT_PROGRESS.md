@@ -5,7 +5,8 @@
 aperture hardening fixes). **PR #36 (`fix/tas-updateids-gbxml-zone-identity`) has since been merged into
 `sow/2026-Q3` at `03f9757` and is merged into this branch**, so the branch now carries it; the two touch
 disjoint code (PR #36: `UpdateIds`/`Match`/zone identity; this branch: profile definitions).
-Stage 1 complete; **licensed A/B PASSED - see "Last updated". PR not opened.**
+Stage 1 complete; **licensed A/B PASSED - see "Last updated". Final review finding fixed (see
+"Post-review fix" below). PR not opened.**
 
 The reusable-aperture programme is complete and merged on all three routes:
 `feature/tas-aperture-hardening` was PR #35, merged 2026-08-23.
@@ -17,6 +18,47 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-23 (later) - **Post-review fix: the zero-length exclusion path now marks a contested slot key
+ambiguous, as the reusable path already did.**
+
+**The defect.** In `ProfileReuseIndex.Register`, the `!profileDefinition.IsReusable` branch wrote the
+excluded legacy name into `excludedNamesBySlot` first-wins. A slot key is
+`(internal condition name, slot)` and a name is not an identity, so two TBD internal conditions can share
+a name, share a slot, and still hold **different** zero-length (TAS function) profiles. Legacy import
+writes `Duplicate [Daylight]` for one and `Duplicate [Dimmer]` for the other; the first-wins map answered
+`Duplicate [Daylight]` for both. Because that name does exist in the library, the result was a **silent
+misreference**, not a dangling reference - the harder of the two to notice. Low severity: it needs
+duplicate TBD internal-condition names AND differing function profiles on the same slot.
+
+**The fix** (narrow, and mirrors the reusable branch exactly): same key + same excluded name keeps the
+mapping; same key + a different excluded name calls `MarkAmbiguous(key)`; once ambiguous the slot
+fast-path answers nothing, permanently. The library entries themselves are untouched - both are still
+added and deduped by `category::name` - so both conditions fall through
+`Convert.ToSAM.ProfileName`'s chain (slot -> definitional -> legacy) to their own legacy name, which the
+library carries. **The reusable path, dedup, canonical naming and `DefinitionCount` are all unchanged**;
+the only behavioural delta is the same-key/different-excluded-name case, which previously answered wrongly
+and now answers nothing.
+
+**Files changed:** `SAM_Tas/SAM.Analytical.Tas/Classes/ProfileReuseIndex.cs` (the branch, plus the field
+comment that still claimed first-wins); `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs`
+(+2 tests); `SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md` (the ambiguity rule now lists all
+three cases).
+
+**Validation:** `SAM.Analytical.Tas` rebuilt with VS Framework MSBuild (0 errors; the test project
+references `build/SAM.Analytical.Tas.dll`, not a `ProjectReference`, so this rebuild is required for the
+tests to see the change). `SAM.Analytical.Tas.TM59.Tests` **497 passed / 0 failed** (495 previous + 2 new).
+The new `References_SlotThatIsZeroLengthOnBothConditionsUnderDifferentNames_AnswersNothing` was confirmed
+to FAIL against the pre-fix DLL with `Expected: null / But was: "Duplicate [Daylight]"`, so it pins the
+defect rather than merely passing; `References_SlotRegisteredTwiceWithTheSameZeroLengthName_KeepsAnswering`
+pins the agreement half so the fix cannot over-trigger.
+
+**Licensed A/B NOT rerun, deliberately.** The change cannot alter reusable-profile behaviour, and the
+licensed acceptance already records that **neither licensed model exercises zero-length function profiles
+at all** - so an A/B could not observe this path. The earlier A/B result stands unchanged.
+
+---
+
+## This branch's main work: profile definition reuse
 2026-08-23 - **Value-based deduplication of the SAM `Profile` definitions a TBD import creates.**
 Full detail, invariants and the deliberate exclusions live in
 `SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md`.

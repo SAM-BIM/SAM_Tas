@@ -58,8 +58,10 @@ namespace SAM.Analytical.Tas
         private readonly HashSet<string> ambiguousSlots = new HashSet<string>(StringComparer.Ordinal);
 
         //Slot key -> the name a zero-length (function) profile keeps, and the entries the library must still
-        //carry for them. Kept in registration order and first-wins: two entries sharing a category and a name
-        //also share their (empty) values, so they are the same library entry either way.
+        //carry for them. The slot map holds a name only for as long as the key means exactly ONE name; the same
+        //key seen with a different one marks it ambiguous, exactly as the reusable path does. The library
+        //entries are kept in registration order and deduped first-wins, which is safe: two entries sharing a
+        //category and a name also share their (empty) values, so they are the same library entry either way.
         private readonly Dictionary<string, string> excludedNamesBySlot = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly List<Profile> excludedProfiles = new List<Profile>();
         private readonly HashSet<string> excludedKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -132,9 +134,22 @@ namespace SAM.Analytical.Tas
                 {
                     MarkAmbiguous(key);
                 }
-                else if (!ambiguousSlots.Contains(key) && !excludedNamesBySlot.ContainsKey(key))
+                else if (!ambiguousSlots.Contains(key))
                 {
-                    excludedNamesBySlot[key] = excludedName;
+                    if (excludedNamesBySlot.TryGetValue(key, out string existingExcludedName))
+                    {
+                        if (!string.Equals(existingExcludedName, excludedName, StringComparison.Ordinal))
+                        {
+                            //Two TBD internal conditions share a name and disagree on this slot's zero-length
+                            //profile, so the key stands for two different legacy names. Answering EITHER would
+                            //be a wrong reference on the other - a silent misreference, not a dangling one.
+                            MarkAmbiguous(key);
+                        }
+                    }
+                    else
+                    {
+                        excludedNamesBySlot[key] = excludedName;
+                    }
                 }
 
                 //The library entry is added whether or not the slot key can answer: when it cannot, the caller

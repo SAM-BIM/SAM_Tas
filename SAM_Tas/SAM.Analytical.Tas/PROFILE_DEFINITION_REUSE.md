@@ -111,10 +111,20 @@ carried canonical names — dangling references on exactly the conditions least 
 
 Lookup is `(internal condition name, TBD profile slot) → resolved name`, so the conversion pays no
 second COM read. A name is not an identity, though: if one slot key would have to stand for two
-different things — two TBD internal conditions sharing a name and disagreeing on that slot, or a slot
-that is a shared definition on one condition and a zero-length passthrough on another — the key is
-marked **ambiguous and answers nothing at all**. Answering *either* would be a wrong reference on the
-other side; answering nothing sends both callers to the definitional lookup, which is right for both.
+different things, the key is marked **ambiguous and answers nothing at all**. All three ways that
+happens are handled the same:
+
+* two TBD internal conditions sharing a name and disagreeing on that slot's shared definition;
+* a slot that is a shared definition on one condition and a zero-length passthrough on another;
+* a slot that is a zero-length passthrough on both, but under **different** legacy names — e.g. two
+  `"Duplicate"` conditions whose `ticLG` profiles are `Daylight` and `Dimmer`, which legacy import
+  writes as `Duplicate [Daylight]` and `Duplicate [Dimmer]`.
+
+Answering *either* would be a wrong reference on the other side. The third case is the subtle one: the
+name it would answer with names a real library entry, so the result is a **silent misreference** rather
+than a dangling one. Answering nothing instead sends both callers down the fallback chain, which is
+right for both — a shared definition resolves definitionally, and a zero-length one falls through to
+its own legacy name, which the library still carries as its own entry.
 
 `ProfileReuseIndex` and `ProfileDefinition` **touch no COM type**, which is what makes the whole
 reuse and naming decision testable without an installed TAS.

@@ -677,6 +677,42 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void References_SlotThatIsZeroLengthOnBothConditionsUnderDifferentNames_AnswersNothing()
+        {
+            //The reusable path's failure shape, on the exclusion path. One slot key, two TBD internal conditions
+            //sharing a name, two DIFFERENT zero-length profiles. Answering the first legacy name for the second
+            //condition would be a SILENT MISREFERENCE - it names a real library entry, just the wrong one - so
+            //the key must stop answering and let each condition fall back to its own legacy name.
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+
+            Assert.That(Register(profileReuseIndex, "Duplicate", ticLG, Lighting, "Daylight", new double[0]), Is.False);
+            Assert.That(Register(profileReuseIndex, "Duplicate", ticLG, Lighting, "Dimmer", new double[0]), Is.False);
+            profileReuseIndex.Resolve();
+
+            Assert.That(profileReuseIndex.GetProfileName("Duplicate", ticLG), Is.Null, "An ambiguous slot key must answer nothing rather than answer the other condition's profile.");
+
+            //And both legacy names the conversion falls back to still name a library entry, so neither dangles.
+            List<string> names_Excluded = Library(profileReuseIndex).GetProfiles().ConvertAll(x => x.Name);
+            Assert.That(names_Excluded, Is.EquivalentTo(new[] { "Duplicate [Daylight]", "Duplicate [Dimmer]" }));
+        }
+
+        [Test]
+        public void References_SlotRegisteredTwiceWithTheSameZeroLengthName_KeepsAnswering()
+        {
+            //The other half of that rule: reaching one internal condition twice - the building walk visits a
+            //template condition and the zone that owns it - is agreement, not a disagreement, so the fast path
+            //must keep answering and the library must still carry exactly one entry.
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+
+            Register(profileReuseIndex, "Duplicate", ticLG, Lighting, "Daylight", new double[0]);
+            Register(profileReuseIndex, "Duplicate", ticLG, Lighting, "Daylight", new double[0]);
+            profileReuseIndex.Resolve();
+
+            Assert.That(profileReuseIndex.GetProfileName("Duplicate", ticLG), Is.EqualTo("Duplicate [Daylight]"));
+            Assert.That(Library(profileReuseIndex).GetProfiles().Count, Is.EqualTo(1));
+        }
+
+        [Test]
         public void References_AllTBDInternalConditionConversionPathsAcceptTheIndex()
         {
             //Structural, and deliberately so: the whole scheme fails silently if ONE conversion path is left
