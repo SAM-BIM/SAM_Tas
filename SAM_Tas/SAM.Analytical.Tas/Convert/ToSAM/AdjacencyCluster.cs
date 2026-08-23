@@ -109,12 +109,30 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// Backwards-compatible overload - forwards to the <c>ProfileReuseIndex</c> overload with no index, so
+        /// callers compiled against the previous
+        /// <c>ToSAM(TBD.Building, Dictionary&lt;string, Polygon3D&gt;)</c> signature keep working. An added
+        /// optional parameter changes that signature's arity and breaks them at runtime.
+        /// </summary>
+        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
+            return ToSAM(building, polygonCache, null);
+        }
+
+        /// <summary>
         /// AdjacencyCluster build with optional shared polygon3D cache. Pass a non-null
         /// <paramref name="polygonCache"/> to share converted Polygon3D objects with downstream
         /// callers (e.g. <c>Create.SolarModel</c>) — same roomSurface won't be re-marshaled
         /// over COM. Key format: <c>zoneSurface.GUID + "/" + roomSurfaceIndex</c>.
         /// </summary>
-        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        /// <param name="building">The TBD building to import.</param>
+        /// <param name="polygonCache">The shared Polygon3D cache described above, or null.</param>
+        /// <param name="profileReuseIndex">
+        /// The conversion-wide profile reuse index, or null for today's per-zone profile naming. Threaded down
+        /// to every internal-condition conversion so the whole cluster references the same shared
+        /// <c>ProfileLibrary</c> definitions.
+        /// </param>
+        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache, ProfileReuseIndex profileReuseIndex)
         {
             if (building == null)
             {
@@ -140,7 +158,7 @@ namespace SAM.Analytical.Tas
 
             foreach (TBD.zone zone in building.Zones())
             {
-                Space space = zone.ToSAM(out List<InternalCondition> internalConditions);
+                Space space = zone.ToSAM(out List<InternalCondition> internalConditions, profileReuseIndex);
                 if (space == null)
                 {
                     continue;

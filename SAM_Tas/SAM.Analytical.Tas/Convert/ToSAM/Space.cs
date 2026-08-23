@@ -59,7 +59,28 @@ namespace SAM.Analytical.Tas
             return space;
         }
 
+        /// <summary>
+        /// Backwards-compatible overload - forwards to the <c>ProfileReuseIndex</c> overload with no index, so
+        /// callers compiled against the previous <c>ToSAM(TBD.zone, out List&lt;InternalCondition&gt;)</c>
+        /// signature keep working. An added optional parameter changes that signature's arity and breaks them
+        /// at runtime.
+        /// </summary>
         public static Space ToSAM(this TBD.zone zone, out List<InternalCondition> internalConditions)
+        {
+            return ToSAM(zone, out internalConditions, null);
+        }
+
+        /// <summary>
+        /// Import one TBD zone as a SAM <see cref="Space"/>, together with the internal conditions assigned to it.
+        /// </summary>
+        /// <param name="zone">The TBD zone to import.</param>
+        /// <param name="internalConditions">The zone's internal conditions, imported alongside the space.</param>
+        /// <param name="profileReuseIndex">
+        /// The conversion-wide profile reuse index, or null for today's per-zone profile naming. Threaded
+        /// straight through to <see cref="Convert.ToSAM(TBD.InternalCondition, double, ProfileReuseIndex)"/> -
+        /// the zone itself takes no part in profile identity.
+        /// </param>
+        public static Space ToSAM(this TBD.zone zone, out List<InternalCondition> internalConditions, ProfileReuseIndex profileReuseIndex)
         {
             internalConditions = null;
 
@@ -86,7 +107,7 @@ namespace SAM.Analytical.Tas
                 
                 foreach(TBD.InternalCondition internalCondition_TBD in internalConditions_TBD)
                 {
-                    InternalCondition internalCondition = internalCondition_TBD.ToSAM(area);
+                    InternalCondition internalCondition = internalCondition_TBD.ToSAM(area, profileReuseIndex);
                     if(internalCondition == null)
                     {
                         continue;

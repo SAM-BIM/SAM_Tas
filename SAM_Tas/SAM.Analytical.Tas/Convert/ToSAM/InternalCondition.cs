@@ -5,7 +5,37 @@ namespace SAM.Analytical.Tas
 {
     public static partial class Convert
     {
+        /// <summary>
+        /// Backwards-compatible overload - forwards to the <c>ProfileReuseIndex</c> overload with no index, so
+        /// callers compiled against the previous <c>ToSAM(TBD.InternalCondition, double)</c> signature keep
+        /// working. An added optional parameter changes that signature's arity and breaks them at runtime.
+        /// </summary>
         public static InternalCondition ToSAM(this TBD.InternalCondition internalCondition, double area = double.NaN)
+        {
+            return ToSAM(internalCondition, area, null);
+        }
+
+        /// <summary>
+        /// Import one TBD internal condition.
+        /// </summary>
+        /// <param name="internalCondition">The TBD internal condition to import.</param>
+        /// <param name="area">The owning space's floor area, or NaN when the condition owns no space - the per-area gains are then kept raw.</param>
+        /// <param name="profileReuseIndex">
+        /// The conversion-wide reuse index, or null.
+        /// <para>
+        /// With an index, every profile reference this writes is the CANONICAL name of the shared
+        /// <c>ProfileLibrary</c> definition behind the slot, so two zones carrying the same activity reference
+        /// one profile instead of two copies of it. Without one, the legacy
+        /// <c>"{internal condition} [{profile}]"</c> reference is written, exactly as before - which is what
+        /// callers that build no library, or build the legacy one, still need.
+        /// </para>
+        /// <para>
+        /// The index MUST be the same instance the model's <c>ProfileLibrary</c> was built from
+        /// (<see cref="ToSAM_ProfileLibrary(TBD.Building, ProfileReuseIndex)"/>), or these references name
+        /// nothing.
+        /// </para>
+        /// </param>
+        public static InternalCondition ToSAM(this TBD.InternalCondition internalCondition, double area, ProfileReuseIndex profileReuseIndex)
         {
             if (internalCondition == null)
             {
@@ -54,14 +84,14 @@ namespace SAM.Analytical.Tas
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticI);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.InfiltrationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.InfiltrationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticI, ProfileType.Infiltration, profile_TBD));
                     result.SetValue(InternalConditionParameter.InfiltrationAirChangesPerHour, profile_TBD.GetExtremeValue(true));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticLG);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.LightingProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.LightingProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticLG, ProfileType.Lighting, profile_TBD));
                     result.SetValue(InternalConditionParameter.LightingGainPerArea, profile_TBD.GetExtremeValue(true));
                     result.SetValue(InternalConditionParameter.LightingLevel, internalGain.targetIlluminance);
                 }
@@ -86,7 +116,7 @@ namespace SAM.Analytical.Tas
                 if (profile_TBD != null)
                 {
                     latentPerArea = profile_TBD.GetExtremeValue(true);
-                    result.SetValue(InternalConditionParameter.OccupancyProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.OccupancyProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticOLG, ProfileType.Occupancy, profile_TBD));
                 }
 
                 double gainPerArea = (double.IsNaN(sensiblePerArea) ? 0 : sensiblePerArea) + (double.IsNaN(latentPerArea) ? 0 : latentPerArea);
@@ -133,27 +163,31 @@ namespace SAM.Analytical.Tas
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticESG);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.EquipmentSensibleProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.EquipmentSensibleProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticESG, ProfileType.EquipmentSensible, profile_TBD));
                     result.SetValue(InternalConditionParameter.EquipmentSensibleGainPerArea, profile_TBD.GetExtremeValue(true));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticELG);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.EquipmentLatentProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.EquipmentLatentProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticELG, ProfileType.EquipmentLatent, profile_TBD));
                     result.SetValue(InternalConditionParameter.EquipmentLatentGainPerArea, profile_TBD.GetExtremeValue(true));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticCOG);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.PollutantProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.PollutantProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticCOG, ProfileType.Pollutant, profile_TBD));
                     result.SetValue(InternalConditionParameter.PollutantGenerationPerArea, profile_TBD.GetExtremeValue(true));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
                 if (profile_TBD != null)
                 {
+                    //Deliberately NOT routed through the reuse index. ticV has never been emitted into the
+                    //imported ProfileLibrary at all (see Convert.ToSAM_Profiles), so this reference has always
+                    //dangled; routing it through the index would change that pre-existing behaviour rather than
+                    //leave it visible. Fixing it is its own piece of work.
                     result.SetValue(InternalConditionParameter.VentilationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
                     result.SetValue(InternalConditionParameter.SupplyAirFlow, profile_TBD.GetExtremeValue(true));
                 }
@@ -167,25 +201,25 @@ namespace SAM.Analytical.Tas
                 profile_TBD = thermostat.GetProfile((int)TBD.Profiles.ticUL);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.CoolingProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.CoolingProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticUL, ProfileType.Cooling, profile_TBD));
                 }
 
                 profile_TBD = thermostat.GetProfile((int)TBD.Profiles.ticLL);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.HeatingProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.HeatingProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticLL, ProfileType.Heating, profile_TBD));
                 }
 
                 profile_TBD = thermostat.GetProfile((int)TBD.Profiles.ticHLL);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.HumidificationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.HumidificationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticHLL, ProfileType.Humidification, profile_TBD));
                 }
 
                 profile_TBD = thermostat.GetProfile((int)TBD.Profiles.ticHUL);
                 if (profile_TBD != null)
                 {
-                    result.SetValue(InternalConditionParameter.DehumidificationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.DehumidificationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticHUL, ProfileType.Dehumidification, profile_TBD));
                 }
             }
 
@@ -351,6 +385,36 @@ namespace SAM.Analytical.Tas
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The profile reference one TBD internal-condition slot writes.
+        /// <para>
+        /// With no index this is the legacy <c>"{internal condition} [{profile}]"</c> name. With one it is the
+        /// canonical name of the shared library definition, answered from the slot map so no value is re-read
+        /// over COM - and, if that map cannot answer (two TBD internal conditions share a name and disagree on
+        /// this slot), from the definition itself, which always can. Only a slot the index never collected at all
+        /// falls back to the legacy name.
+        /// </para>
+        /// </summary>
+        private static string ProfileName(ProfileReuseIndex profileReuseIndex, string internalConditionName, TBD.Profiles slot, ProfileType profileType, TBD.profile profile_TBD)
+        {
+            string name_Legacy = Query.ProfileName_Legacy(internalConditionName, profile_TBD?.name);
+
+            if (profileReuseIndex == null || profile_TBD == null)
+            {
+                return name_Legacy;
+            }
+
+            string result = profileReuseIndex.GetProfileName(internalConditionName, (int)slot);
+            if (result != null)
+            {
+                return result;
+            }
+
+            result = profileReuseIndex.GetProfileName(Analytical.Query.Text(profileType), Core.Tas.Query.Values(profile_TBD));
+
+            return result ?? name_Legacy;
         }
     }
 }
