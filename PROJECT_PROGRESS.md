@@ -1,10 +1,14 @@
-﻿# Project Progress
+# Project Progress
 
 ## Branch
-`feature/tas-aperture-hardening` (off `sow/2026-Q3` at `e9b5a3d0`, i.e. after PR #34 merged the gbXML
-route). Ready for PR; not merged.
+`fix/tas-updateids-gbxml-zone-identity` (off `sow/2026-Q3` at `2950b27c`, i.e. after PR #35). Narrow
+follow-up branch: PR #34 (gbXML aperture-definition reuse) is merged, and a real licensed
+`WorkflowgbXML` run exposed that on an off-origin model its pass never runs because
+`Modify.UpdateIds` stamps nothing. NOT the profile-reuse branch: that work continues on
+`feature/tas-profile-definition-reuse`, whose licensed A/B is still outstanding.
 
 The reusable-aperture programme itself is complete on both routes:
+`feature/tas-aperture-hardening` was PR #35, merged 2026-08-23.
 `feature/tas-aperture-definition-reuse-gbxml` was PR #34, merged 2026-08-23.
 Stage 3 was `feature/tas-aperture-instance-identity` (PR #33, merged 2026-08-22).
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
@@ -13,6 +17,69 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-23 - **`Modify.UpdateIds` on the gbXML route: TAS recentring compensation + zone-identity ordering.
+The real model `SAM_zoningAM_v2.sam` (9 spaces, 20 apertures, footprint centre (30.5, 8)) reproduced the
+user's exact warning set** - `0 aperture part(s) considered` and `40 aperture part(s) carry no building
+element stamp` - and is now fixed end to end.
+
+**Root cause (proven, not assumed).** The initial hypothesis (ZoneGuid cleared before it is read) is a
+REAL defect but was not the binding one on this model: its stamps are stale (each workflow run
+regenerates TAS zone GUIDs), so every space resolves by name and all 9 zones DID resolve. The matching
+stopped one seam lower: `Query.Match(zoneSurface, panels_Space, zone.GUID, tolerance)` - **0 of 110 zone
+surfaces matched any panel.** A licensed probe proved why: **TAS's own gbXML import recentres the building
+footprint on the origin** (a hand-written box at (100..110, 50..60, 0..3) comes back in the TBD at
+(-5..5, -5..5, 0..3)). The SAM panels stay in model coordinates, so the geometric fallback in `Match`
+compared points from two different coordinate systems. `ModelA.sam` (the PR #34 acceptance fixture) is
+symmetric about the origin, which is why that acceptance never saw it. `Modify.SetApertureTypes` already
+compensates exactly this shift (non-shade panel bounding-box centroid difference after `building.ToSAM()`)
+- that is how it still matched 20/20 apertures while `UpdateIds` matched nothing.
+
+**Fix (smallest correct change).**
+1. `Modify.UpdateIds` computes the same TBD->SAM centroid-difference translation once per pass
+   (`building.ToSAM()`, non-shade panels, null when either side has no panels) and passes it to the two
+   zoneGuid-aware `Query.Match` overloads; those move the room surface's internal point into SAM
+   coordinates before the bbox/point-in-face tests. An already-centred model gets a ~zero translation, so
+   nothing that matched before changes (verified on `ModelA.sam`).
+2. The ZoneGuid ordering defect is fixed the way the task guidance prescribed: the stamp is CAPTURED
+   (`Query.SpaceZoneGuids`) before the clearing loop, resolution reads the captured identity
+   (`Query.ResolvedZone`, GUID authoritative when it still identifies a zone, exact name only as the
+   compatibility fallback, no match a refusal), and the refresh re-writes the current `zone.GUID`. The
+   stale-stamp clearing is untouched - a stamp that resolves to nothing still never survives.
+
+**Files changed:** `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateIds.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Query/Match.cs` (optional `translation` on the two zoneGuid-aware overloads),
+`SAM_Tas/SAM.Analytical.Tas/Query/SpaceZoneGuids.cs` (new),
+`SAM_Tas/SAM.Analytical.Tas/Query/ResolvedZone.cs` (new),
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/UpdateIdsZoneResolutionTests.cs` (new, 8 COM-free tests),
+`SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE_GBXML.md`, this file.
+
+**Validation:** solution builds Debug AND Release with 0 errors (Framework MSBuild). COM-free suite
+**465/465 pass in both configurations** (457 pre-existing + 8 new); Benchmark tests 16/16. `git diff --check`
+clean; SPDX headers present on the new files.
+
+**Licensed acceptance (EDSL Tas, `SAM_zoningAM_v2.sam`, the exact `WorkflowgbXML` scenario):**
+before ? after: `0 considered / 40 carry no stamp` -> **`40 considered; 40 rebound onto a shared
+definition; 40 aperture building elements removed`**; the `40 carry no building element stamp` note is
+GONE. Aperture building elements **40 instance-named ? 3 reusable definitions**: one shared frame
+`Windows: SIM_EXT_GLZ -frame` (20 surfaces) and two distinct panes `Windows: SIM_EXT_GLZ -pane` (15
+surfaces) + `Windows: SIM_EXT_GLZ_AAF00869 -pane` (5 surfaces) - the model genuinely states two pane
+contents, so 3 is the correct expected number rather than a hard-coded fixture value. All 110 physical
+zoneSurfaces unchanged; 20 pane + 20 frame `BuildingElementGuid` and `ZoneSurfaceReference_1` stamps on
+the returned model; TBD re-imports as **20 apertures** (unchanged). A second workflow run into the kept
+TBD reproduces every count identically (40 considered / 40 rebound / 40 removed, same 3 element names,
+no new definitions) - note TAS's ExportNew regenerates zone GUIDs each run, so on this route zones resolve
+by name in practice; the GUID-first ordering is pinned COM-free.
+
+**Unresolved / out of scope:** the same recentring also afflicts any OTHER geometry-matching step on this
+route that lacks the compensation (`CopyResults` matches apertures to solar surfaces by geometry; the
+simulation/results legs were not run here - `Simulate=false`). Not touched; would need its own licensed
+validation.
+
+**Immediate next step:** commit and push this branch; open the PR against `sow/2026-Q3`.
+
+---
+
+## Previously
 2026-08-23 - **Two aperture hardening fixes, both pre-existing defects deliberately kept out of PR #34.**
 Full detail in `SAM_Tas/SAM.Analytical.Tas/APERTURE_HARDENING.md`; the two limitations they close are
 reworded where they were recorded, in `APERTURE_DEFINITION_REUSE_GBXML.md`.

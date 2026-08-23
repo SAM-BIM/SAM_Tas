@@ -190,8 +190,16 @@ namespace SAM.Analytical.Tas
         /// zone, so this is a strict tightening - nothing that matched stops matching except a same-numbered
         /// surface in a different, GUID-stated zone.
         /// </para>
+        /// <para>
+        /// <b><paramref name="translation"/> compensates the gbXML route's coordinate shift.</b> TAS's own
+        /// gbXML import recentres the building footprint on the origin, so on that route a TBD room surface's
+        /// geometry sits at SAM-coordinates-minus-footprint-centre. The stamp comparison above is
+        /// coordinate-free and unaffected; the geometric fallback below moves the surface's internal point by
+        /// this vector before testing it against the (SAM-coordinate) panels. Null means no compensation -
+        /// exactly the previous behaviour.
+        /// </para>
         /// </summary>
-        public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, string zoneGuid, double tolerance = Core.Tolerance.MacroDistance)
+        public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, string zoneGuid, double tolerance = Core.Tolerance.MacroDistance, Vector3D translation = null)
         {
             if (zoneSurface == null || panels == null  || panels.Count == 0)
             {
@@ -246,6 +254,18 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
+                //The point is in TBD coordinates; the panels are in SAM coordinates. On the gbXML route TAS
+                //recentres the building footprint on the origin, so the two differ by a constant translation
+                //which the caller (Modify.UpdateIds) has computed - move the point, never the panels.
+                if (translation != null)
+                {
+                    point3D = point3D.GetMoved(translation) as Point3D;
+                    if (point3D == null)
+                    {
+                        continue;
+                    }
+                }
+
                 foreach(Panel panel in panels)
                 {
                     BoundingBox3D boundingBox3D = panel?.GetBoundingBox();
@@ -288,13 +308,20 @@ namespace SAM.Analytical.Tas
         /// second.
         /// <para>
         /// <b><paramref name="zoneGuid"/> is what makes the stamp comparison an identity.</b> Same reasoning as
-        /// <see cref="Match(TBD.IZoneSurface, List{Panel}, string, double)"/>: a surface number is scoped to
+        /// <see cref="Match(TBD.IZoneSurface, List{Panel}, string, double, Vector3D)"/>: a surface number is scoped to
         /// its zone, so comparing numbers alone can hand a surface in one zone to an aperture in another. That
         /// matters more here than for a panel - after Stage 2 the two apertures involved may share a building
         /// element, a construction and an aperture type, so nothing downstream would look wrong.
         /// </para>
+        /// <para>
+        /// <b><paramref name="translation"/> compensates the gbXML route's coordinate shift</b>, exactly as in
+        /// <see cref="Match(TBD.IZoneSurface, List{Panel}, string, double, Vector3D)"/>: TAS recentres the
+        /// building footprint on the origin at gbXML import, so the surface's internal point is moved by this
+        /// vector before it is tested against the (SAM-coordinate) aperture faces. Null keeps the previous
+        /// behaviour.
+        /// </para>
         /// </summary>
-        public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, string zoneGuid, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance)
+        public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, string zoneGuid, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance, Vector3D translation = null)
         {
             aperturePart = Analytical.AperturePart.Undefined;
 
@@ -368,6 +395,19 @@ namespace SAM.Analytical.Tas
                 if (point3D == null)
                 {
                     continue;
+                }
+
+                //The point is in TBD coordinates; the aperture faces are in SAM coordinates. On the gbXML
+                //route TAS recentres the building footprint on the origin, so the two differ by a constant
+                //translation which the caller (Modify.UpdateIds) has computed - move the point, never the
+                //apertures.
+                if (translation != null)
+                {
+                    point3D = point3D.GetMoved(translation) as Point3D;
+                    if (point3D == null)
+                    {
+                        continue;
+                    }
                 }
 
                 foreach (Aperture aperture in apertures)
