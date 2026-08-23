@@ -59,24 +59,60 @@ unassigned panel cannot be a non-shade outlier. This is also what the licensed s
 non-shade and space-related bboxes were identical on both sides. A COM-free regression now pins the invariant
 with an orphan wall 1000 m away; it is classified as a shade and cannot move the non-shade centroid.
 
+**Newest Codex P2 (SAM-only resolved-space subset) - now fully validated, including the exact licensed
+rerun, and pushed.** A SAM space added after export (or absent because TAS failed to export it) has related
+panels, so those panels are non-shades but have no TBD counterpart. `UpdateIds` now resolves all SAM spaces
+against the TBD zones first, derives BOTH centroids only from panels belonging to those successfully shared
+space/zone pairs, and reuses the same resolution map for stamping. The new COM-free regression has two
+non-shade spaces 1000 m apart and passes only the shared space to the translation subset; the SAM-only panel
+is excluded.
+
+**Exact licensed two-pass rerun with this fix, same production file
+(`SAM_zoningAM_v2zonesisDomestic.sam`, same SHA-256 as above), same route
+(`AnalyticalModel -> SAM.Analytical.gbXML.Convert.ToFile -> WorkflowCalculator`, `Simulate=false`).**
+Built with the .NET Framework MSBuild (Debug then Release, `-t:Restore`/`-t:Build` as separate invocations),
+then a temporary `net8.0-windows`/x64 probe (`.scratch/PR36Probe`, removed after use per the discipline
+below) drove the real route against `build/SAM.Analytical.Tas.dll`/`SAM.Core.Tas.dll` end to end - no
+COM-crossing `List<T>` helper calls (see `[[tas-licensed-harness-troubleshooting]]`), output under the short
+`C:\PR36Out` path, one stray `TBD.exe` from the run stopped afterwards.
+- **Before** (pre-fix baseline, same file, reproduced from the stale pre-PR build as before): **0 aperture
+  part(s) considered, 40 carry no building element stamp**, while still keeping 9 TBD zones, 50 SAM panels,
+  110 TBD zoneSurfaces (20 pane + 20 frame) and 20 physical apertures.
+- **After**, PASS 1: **40 aperture part(s) considered; 40 rebound onto a shared definition, 0 already on
+  one; 40 aperture building elements removed afterwards.** SAM side: 9 spaces, 50 panels, 20 physical
+  apertures, **20/20 pane and 20/20 frame `BuildingElementGuid` stamps, 20/20 pane and 20/20 frame physical
+  zone-surface stamps** (100% both ways, no no-stamp note). TBD side unchanged: 9 zones, 110 zoneSurfaces
+  (20 pane + 20 frame), 8 building elements, reduced to **3** reusable aperture definitions with element-use
+  multiset **{20, 15, 5}**.
+- **Repeat run (PASS 2, same process, TBD re-exported and re-solved)**: byte-identical summary line to PASS
+  1 - same 40/40/0, same 20/20/20/20 stamps, same {20,15,5} multiset, no additional definition created. The
+  fix is deterministic on this file.
+- This exactly reproduces the already-validated fixed state recorded above from `b585e87` (before this
+  newest SAM-only-subset refinement existed) - the newest fix is a generalisation for models with SAM
+  spaces absent from the TBD and does not change behaviour on this file, as expected: TAS all-panel,
+  non-shade and space-related bboxes were already identical for this file, so the new "shared-only" subset
+  and the old "non-shade" subset select the same panels here. Confirms no regression from the newest change.
+
 **Files changed in this follow-up:** `SAM_Tas/SAM.Analytical.Tas/Query/Match.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Modify/UpdateIds.cs` (SAM-only resolved-space subset),
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/UpdateIdsZoneResolutionTests.cs`,
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/SAM.Analytical.Tas.TM59.Tests.csproj`, this file.
 
-**Validation:** focused Debug **10/10** after the later Codex regression; full TM59 Debug and Release
-**467/467** after that test-only addition; Benchmark Release **16/16**;
-solution Debug and Release build with **0 errors** (only existing MSB3270/MSB3277 and legacy warnings).
-Final licensed two-pass acceptance on the exact production file passes as described above. GitHub build and
-SPDX checks for the final code/test commit `94a55e4` both passed. Any subsequent progress-only commit does
-not alter the validated code or tests.
+**Validation:** focused Debug **11/11**, focused Release **11/11**; full TM59 Debug **468/468**, full TM59
+Release **468/468**; solution Debug and Release build with **0 errors** (only the pre-existing
+MSB3270/MSB3277 processor-architecture/System.Memory warnings). Exact licensed two-pass rerun on the
+production file passes as described above, deterministically. The temporary `.scratch/PR36Probe` harness
+was deleted before committing, matching the `APERTURE_TYPE_REUSE.md`-style discipline for scratch harnesses.
 
 **Unresolved / out of scope:** the same recentring also afflicts any OTHER geometry-matching step on this
 route that lacks the compensation (`CopyResults` matches apertures to solar surfaces by geometry; the
 simulation/results legs were not run here - `Simulate=false`). Not touched; would need its own licensed
 validation.
 
-**Recommended next step:** await PR #36 re-review; all current validation/checks are green. Do not merge
-automatically.
+**Recommended next step:** all automated validation and the exact-model licensed acceptance are green;
+reply to Codex comment `3839130533` confirming the SAM-only resolved-space subset fix is implemented and
+licensed-validated, and await fresh CI checks on the pushed commit. Do not merge automatically - that
+remains a human call.
 
 ---
 

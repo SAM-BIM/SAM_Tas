@@ -242,6 +242,42 @@ namespace SAM.Analytical.Tas.TM59.Tests
             });
         }
 
+        /// <summary>
+        /// A panel related to a SAM-only space is not a shade, but it still has no TBD counterpart. The
+        /// translation subset must therefore be driven by resolved/shared spaces, not every non-shade panel.
+        /// </summary>
+        [Test]
+        public void TranslationPanelSubset_ExcludesNonShadePanelsFromUnresolvedSpaces()
+        {
+            Space space_Shared = new Space("Shared zone");
+            Space space_SAMOnly = new Space("Added after export");
+            Panel panel_Shared = PanelAt(0);
+            Panel panel_SAMOnly = PanelAt(1000);
+
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            adjacencyCluster.AddObject(space_Shared);
+            adjacencyCluster.AddObject(space_SAMOnly);
+            adjacencyCluster.AddObject(panel_Shared);
+            adjacencyCluster.AddObject(panel_SAMOnly);
+            adjacencyCluster.AddRelation(space_Shared, panel_Shared);
+            adjacencyCluster.AddRelation(space_SAMOnly, panel_SAMOnly);
+
+            MethodInfo methodInfo = typeof(Tas.Modify).GetMethod("UpdateIdsTranslationPanels", BindingFlags.NonPublic | BindingFlags.Static);
+            List<Panel> panels = methodInfo?.Invoke(null,
+                [adjacencyCluster, new List<Space> { space_Shared }]) as List<Panel>;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(methodInfo, Is.Not.Null);
+                Assert.That(adjacencyCluster.Shade(panel_Shared), Is.False);
+                Assert.That(adjacencyCluster.Shade(panel_SAMOnly), Is.False);
+                Assert.That(panels, Has.Count.EqualTo(1));
+                Assert.That(panels?[0].Guid, Is.EqualTo(panel_Shared.Guid));
+                Assert.That(panels?.BoundingBox3D().GetCentroid().X, Is.EqualTo(5).Within(Core.Tolerance.Distance));
+                Assert.That(adjacencyCluster.GetPanels().BoundingBox3D().GetCentroid().X, Is.EqualTo(505).Within(Core.Tolerance.Distance));
+            });
+        }
+
         private static Panel PanelAt(double x)
         {
             Polygon3D polygon3D = new Polygon3D(new List<Point3D>
