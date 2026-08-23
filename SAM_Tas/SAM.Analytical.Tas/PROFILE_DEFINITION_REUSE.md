@@ -164,3 +164,108 @@ exactly one library entry with the right category and complete values, resolutio
 `InternalCondition.GetProfile` lookup the export uses, the template path, and the ventilation
 baseline), plus the `ModelA-Tas` 42 → 20 regression and its two known name collisions
 (`Infiltration::Constant`, `Heating::HTG_7to19_21`).
+
+## Licensed acceptance (EDSL Tas, 2026-08-23)
+
+Run on a machine with a licensed EDSL Tas install (`TBD.Document` → `C:\PROGRA~1\ENVIRO~1\Tas\TBD.exe`).
+One-DLL swap: two folder copies of the same harness, **67 files, verified hash-identical except
+`SAM.Analytical.Tas.dll`**. The input `.tbd` for each comparison is generated **once, with the baseline
+DLL**, so both sides import byte-identical TAS input.
+
+Two rounds, because PR #36 merged into `sow/2026-Q3` mid-validation:
+
+| round | baseline (A) | feature (B) |
+|---|---|---|
+| 1 | `2950b27c` (after PR #35) | `d5ba1082` |
+| 2 | `03f97570` (after PR #36 — the current merge-base) | `95dabb6b` (PR #36 merged in) |
+
+### Models
+
+Both are real models, not synthetic TAS objects.
+
+* **`ModelA-Tas.sam`** — 2 spaces, 4 internal conditions, 44 collected slots, 42 library entries.
+  Exercises infiltration, lighting, occupancy (latent + sensible), equipment sensible + latent,
+  pollutant, heating, cooling, humidification, dehumidification, and carries both normal and **HDD**
+  internal conditions.
+* **`SAM_zoningAM_v2zonesisDomestic.sam`** — a real TM59 residential project: **9 spaces, 27 internal
+  conditions, 396 slots**, internal conditions genuinely shared across spaces (one bathroom condition on
+  three spaces, one bedroom condition on two, one kitchen condition on two).
+
+### Result
+
+| | ModelA-Tas | TM59 project model |
+|---|---:|---:|
+| SAM `ProfileLibrary` entries, baseline → feature | **42 → 20** | **369 → 30** |
+| spaces / internal conditions (both sides) | 2 / 4 | 9 / 27 |
+| profile slots compared, key sets identical | 44 | 396 |
+| SAM-side fields compared (`RESOLVED`, category, count, complete values) | 176 | 1584 |
+| **SAM-side semantic differences** | **0** | **0** |
+| reference-name differences (expected) | 40 | 360 |
+| **TAS-side simulation-effective fields compared** | **852** | **5754** |
+| **TAS-side simulation-effective differences** | **0** | **0** |
+| hourly TSD values compared | **227 760** (2 zones × 13 series × 8760) | **1 024 920** (9 × 13 × 8760) |
+| **hourly values differing** | **0** | **0** (dumps SHA-256 identical) |
+
+Round 2 reproduced the TM59 numbers exactly: 369 → 30, 1584 SAM fields / 0 differences, 5754
+simulation-effective fields / 0 differences, and the **same** TSD dump hash as round 1.
+
+The TAS-side dump reads the TBD with TAS's own `Get*(index)` accessors, not through the SAM_Tas helpers
+under test, and every numeric field is compared as its **exact IEEE-754 bit pattern**. Fields covered per
+internal condition: `description`, `includeSolarInMRT`, both emitters' `name`/`radiantProportion`/
+`viewCoefficient`, the internal gain's `name`/`description`/three radiant proportions/three view
+coefficients/`personGain`/`freshAirRate`/`targetIlluminance`/`domesticHotWater`, the thermostat's
+`controlRange`/`proportionalControl`, and for each of the **12 profile slots** (8 gain incl. `ticV`,
+4 thermostat) `type`, `factor`, `value`, `setbackValue`, `function`, all 24 `hourlyValues` and the yearly
+series. Zone `floorArea`, `volume` and `ic.count` are identical; the simulation was a full 1–365 day run
+against a real TAS weather year (`cibseweather2005.twd`, Belfast TRY), identical on both sides.
+
+### Expected diagnostic-only differences, confirmed to be the only ones
+
+`profile_TBD.name` (52 / 432), `profile_TBD.description` (44 / 396) and `thermostat.name` (8 / 54).
+`internalCondition_TBD.name` is **identical on every condition** (8 / 54 compared, 0 differing), as are
+`InternalGain.name` and `.description`.
+
+**Zone GUID is the one further difference, and it is not attributable to this change.** A control run —
+the *same* baseline DLL twice — differs in exactly those same 4 lines and nothing else, so TAS minting a
+fresh zone GUID per export is the experiment's noise floor.
+
+### Watched regressions, each measured
+
+1. *A reference to a name the library does not carry* — **0** dangling resolved references on either model.
+2. *`importUnused` templates keeping legacy names* — the template conditions resolve to canonical names;
+   **0** unresolved template slots other than `Ventilation`.
+3. *Same name, different values collapsing* — did not happen. `ModelA-Tas` discriminated
+   `Cell 1 [Constant]` (1 value) from `Cell 1 [Constant]_EC342275` (23 values) and the same for
+   `HTG_7to19_21`; the TM59 model discriminated three such pairs (`HTG_1to24_16`, `No Heating`,
+   `Infiltration`). The discriminator is the signature hash, never a positional counter.
+4. *Different categories with identical values collapsing* — did not happen. On `ModelA-Tas` 11 of the 20
+   definitions share their exact values with another definition and stayed separate by `Category`; the
+   TM59 model keeps `OFF` as **three** definitions (Equipment Sensible, Lighting, Occupancy) and
+   `Constant` as two. Value-only dedup would have collapsed 20 → 9.
+5. *Zero-length / TAS function profiles deduplicated* — **not exercised by either licensed model**: both
+   carry only `ticValueProfile` / `ticHourlyProfile` and no non-empty `function`. Covered by the COM-free
+   zero-length-exclusion tests only; stated here rather than implied.
+6. *The known `VentilationProfileName` defect changing* — unchanged. 4 unresolved references on
+   `ModelA-Tas` and 36 on the TM59 model, **the same set on both sides**, every one of them `Ventilation`.
+7. *`factor`/`function`/`setbackValue` becoming shared across zones* — no: all three are in the 852 / 5754
+   identical simulation-effective fields, still derived per zone by `Modify.UpdateInternalCondition`.
+8. *Internal-condition count or assignment changing* — no: 4 / 27 conditions, identical key sets, and
+   identical per-zone `ic.count`.
+9. *Repeat import producing different canonical names* — no: see below.
+
+### Repeat / idempotence
+
+Importing the same `.tbd` twice with the feature DLL produces a **byte-identical** SAM-side dump on both
+models and in both rounds: 20 / 30 definitions, identical canonical names, no added suffix, all references
+identical, and **zero** nested `X [Y [` names.
+
+A *full round trip* repeated three generations (import → export → import → …) keeps the definition count
+pinned at 20 and never nests a name, but **2 of the 20 names accrete one `_<hash>` suffix per generation**
+(`Cell 1 [Constant]_EC342275` → `…_EC342275_EC342275`). The cause is pre-existing and outside this change:
+the export writes **one profile name onto two differently-valued TAS profiles** — a zone's internal
+condition and its HDD sibling both receive the space condition's profile name while keeping their own
+values — so the next import legitimately sees a same-name/different-value pair and must discriminate it
+(regression 3 above). The baseline does the same thing and is strictly worse on the same measure: it grows
+**24 of 42** names per generation by re-nesting, reaching `Cell 2 [Cell 2 [Cell 2 [No Dehumidification]]]`.
+Name-only, no simulation effect, and a reduction rather than a regression. Fixing the export's
+name/value mismatch is separate work.

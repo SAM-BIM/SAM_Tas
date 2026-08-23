@@ -63,9 +63,35 @@ semantically required, not provenance artefacts. Out of scope and unchanged.
 
 **Validation this session:** `SAM_Tas.sln` builds with 0 errors in Debug AND Release (VS Framework MSBuild;
 only the pre-existing MSB3270/MSB3277 and XML-doc warnings). `SAM.Analytical.Tas.TM59.Tests`
-**484 passed / 0 failed** in both Debug and Release (457 pre-existing, unmodified, + 27 new in
-`ProfileDefinitionReuseTests.cs`); `SAM.Analytical.Tas.Benchmark.Tests` 16/16.
-**No licensed TAS run yet** - see "Issues / blockers".
+**495 passed / 0 failed** in both Debug and Release (457 pre-existing, unmodified, + 27 new in
+`ProfileDefinitionReuseTests.cs`, + 11 arriving with PR #36); `SAM.Analytical.Tas.Benchmark.Tests` 16/16.
+
+**LICENSED A/B: PASSED (2026-08-23, EDSL Tas).** Full evidence in
+`SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md` → "Licensed acceptance". One-DLL swap (67 files,
+all hash-identical but `SAM.Analytical.Tas.dll`), input `.tbd` generated once with the baseline DLL so both
+sides import identical TAS input. Two rounds, because PR #36 merged mid-validation: round 1 baseline
+**`2950b27c`** vs **`d5ba1082`**; round 2 baseline **`03f97570`** (the current merge-base) vs **`95dabb6b`**.
+Two real models — `ModelA-Tas.sam` (2 spaces, 4 ICs, 44 slots, normal + HDD) and the real TM59 residential
+project `SAM_zoningAM_v2zonesisDomestic.sam` (**9 spaces, 27 ICs, 396 slots**, conditions genuinely shared
+across spaces).
+
+| | ModelA-Tas | TM59 project model |
+|---|---:|---:|
+| SAM `ProfileLibrary` entries, baseline → feature | **42 → 20** | **369 → 30** |
+| SAM-side fields compared / semantic differences | 176 / **0** | 1584 / **0** |
+| TAS simulation-effective fields compared / differences | 852 / **0** | 5754 / **0** |
+| hourly TSD values compared / differing | 227 760 / **0** | 1 024 920 / **0** |
+
+Every numeric field compared as its exact IEEE-754 bit pattern, the TBD read back with TAS's own
+`Get*(index)` accessors rather than the helpers under test, and a full 1–365 day simulation run against a
+real TAS weather year. The **only** differences are the three predicted diagnostic ones —
+`profile_TBD.name`, `profile_TBD.description`, `thermostat.name` — plus the zone GUID, which a
+same-DLL-twice control run shows TAS re-mints on every export regardless. `internalCondition_TBD.name`,
+IC counts and per-zone assignment are unchanged. The known dangling `VentilationProfileName` is unchanged
+(4 / 36 unresolved references, the same set on both sides, all `Ventilation`). Repeat import is
+byte-identical. The one coverage gap is stated rather than implied: **zero-length TAS function profiles are
+not exercised by either licensed model** (both carry only value/hourly profiles), so their exclusion from
+dedup rests on the COM-free tests.
 
 ---
 
@@ -1302,7 +1328,12 @@ This session (`feature/tas-profile-definition-reuse`):
   known dangling `VentilationProfileName`). Those counts are reproduced behaviourally by
   `ModelA_FortyTwoProfilesCollapseToTwenty` / `ModelA_TheTwoNameCollisionsAreDiscriminated` from the fixture's
   own slot data, so the test does not depend on a file in a sibling repo.
-- **No licensed TAS run yet.** See "Issues / blockers".
+- **Licensed TAS A/B run and PASSED** (2026-08-23) against baseline **`2950b27c`** (round 1) and
+  **`03f97570`** (round 2, after PR #36 merged) — see "Last updated" for the table and
+  `PROFILE_DEFINITION_REUSE.md` → "Licensed acceptance" for the full evidence. Note the baseline for this
+  feature is `2950b27c` / `03f97570`, **not** `fff9984d`: that SHA belongs to the PR #34 gbXML aperture
+  programme and is 16 commits too old here, so using it would fold the unrelated PR #34/#35 aperture
+  changes into the comparison.
 
 Earlier sessions:
 - `SAM_Tas.sln` rebuilt with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
@@ -1332,14 +1363,23 @@ Earlier sessions:
   `dotnet test` per configuration.
 
 ## Issues / blockers
-- **Licensed TAS A/B outstanding for profile definition reuse - the gate on opening the PR.**
-  Baseline `fff9984d` vs `feature/tas-profile-definition-reuse`, one-DLL swap, on a real model. Compare, for
-  every zone / internal condition / profile slot: internal-condition count, internal-condition names, the
-  profile slot, the TAS profile type, the complete values, `factor`, `function`, `setbackValue`. Record
-  before/after SAM `Profile` counts and the source-profile-name -> resolved-shared-name mapping.
-  **Expected diagnostic-only differences:** `profile_TBD.name`, `profile_TBD.description` (both set from
-  `Profile.Name` in `Modify.Update`) and `thermostat.name` (the four thermostat profile names joined with
-  `" & "`). The required invariant is zero simulation-effective differences - NOT byte-identical TBD output.
+- ~~Licensed TAS A/B outstanding for profile definition reuse~~ — **CLEARED 2026-08-23, PASSED.** The gate
+  ran against baseline **`2950b27c`** (round 1) and **`03f97570`** (round 2, the current merge-base after
+  PR #36), one-DLL swap, on two real models. Compared per zone / internal condition / profile slot:
+  internal-condition count, internal-condition names, the profile slot, the TAS profile type, the complete
+  values, `factor`, `function`, `setbackValue` — **852 and 5754 simulation-effective fields, 0 differences**
+  — plus a full simulation (**227 760 and 1 024 920 hourly values, 0 differing**). SAM `Profile` counts
+  **42 → 20** and **369 → 30**. The predicted diagnostic-only differences (`profile_TBD.name`,
+  `profile_TBD.description`, `thermostat.name`) were the only ones. Detail in
+  `PROFILE_DEFINITION_REUSE.md` → "Licensed acceptance".
+  *The baseline for this feature is `2950b27c` / `03f97570`, NOT `fff9984d`* — that SHA is PR #34's gbXML
+  aperture baseline, 16 commits too old, and would drag the unrelated PR #34/#35 aperture work into the diff.
+- **Open, name-only, pre-existing:** the export writes one profile name onto two differently-valued TAS
+  profiles (a zone's internal condition and its HDD sibling both take the space condition's profile name
+  while keeping their own values). Across repeated full round trips that makes 2 of the 20 shared names
+  accrete one `_<hash>` suffix per generation. The definition count never grows and no simulation value
+  changes; the baseline is worse on the same measure (24 of 42 names re-nest per generation). Fixing the
+  export's name/value mismatch is separate work.
 - Pre-existing and deliberately not fixed here: `ticV` is never emitted into the imported `ProfileLibrary`,
   so `VentilationProfileName` still dangles (pinned as baseline by a test, not silently changed);
   the TBD function-profile import does not preserve complete function semantics, which is why zero-length
@@ -1348,7 +1388,8 @@ Earlier sessions:
   remain deferred - see **Deferred** above.
 
 ## Next step
-- Run the licensed A/B above on the TAS machine, record the result here, then one focused independent
-  review and open ONE PR against `sow/2026-Q3`. Do not merge before the A/B is recorded.
+- The licensed A/B is done and recorded, and PR #36 is merged into this branch. Remaining: one focused
+  independent review, then open ONE PR against `sow/2026-Q3`. Opening and merging the PR remain a human
+  call - neither was done here.
 - Stage 2 (`ConstructionDefinition` + `BuildingElementDefinition`, direct-export path only) follows the
   frozen plan section E on its own branch. Do not start it inside this one.
