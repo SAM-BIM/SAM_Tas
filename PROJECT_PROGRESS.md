@@ -1,10 +1,11 @@
 ﻿# Project Progress
 
 ## Branch
-`feature/tas-aperture-hardening` (off `sow/2026-Q3` at `e9b5a3d0`, i.e. after PR #34 merged the gbXML
-route). Ready for PR; not merged.
+`feature/tas-profile-definition-reuse` (off `sow/2026-Q3` at `2950b27c`, i.e. after PR #35 merged the
+aperture hardening fixes). Stage 1 complete; **licensed A/B outstanding, PR not opened.**
 
-The reusable-aperture programme itself is complete on both routes:
+The reusable-aperture programme is complete and merged on both routes:
+`feature/tas-aperture-hardening` was PR #35, merged 2026-08-23.
 `feature/tas-aperture-definition-reuse-gbxml` was PR #34, merged 2026-08-23.
 Stage 3 was `feature/tas-aperture-instance-identity` (PR #33, merged 2026-08-22).
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
@@ -13,6 +14,59 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-23 - **Value-based deduplication of the SAM `Profile` definitions a TBD import creates.**
+Full detail, invariants and the deliberate exclusions live in
+`SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md`.
+
+**The problem.** A SAM `Profile` is a library-level REUSABLE DEFINITION - a native SAM model already shares
+one `ProfileLibrary` entry across every `InternalCondition` that references it. The TBD import did not:
+`Convert.ToSAM_Profiles` minted one profile per TBD internal-condition slot and named it
+`"{internal condition} [{profile}]"`, so the name stated a PLACE rather than a SHAPE, which is what made
+sharing impossible. `ModelA-Tas.sam`: 44 collected slots, 42 library entries, **20 distinct
+`(Category, flattened Values)` definitions.**
+
+**The rule now.** Reusable-definition equality is the SAM `Category` string (raw, ordinal) plus the complete
+flattened values plus the value count, compared by exact IEEE-754 bit pattern with `-0.0` normalised to
+`0.0` and every NaN canonicalised. No TAS internal-condition name, no space name, no profile Guid, no
+encounter order. Zero-length (TAS function) profiles are **excluded** from dedup - their flattened form is
+an incomplete representation of them - and keep today's per-internal-condition import verbatim.
+
+**Deterministic naming.** Canonical name = the ordinal-smallest normalised source TAS profile name in the
+equality group; on collision within a category, `_<signature hash>`; if even that is claimed,
+`_<signature hash>_<k>`. It never refuses, never drops a profile and never overwrites one. Determinism
+comes from claiming names in `ProfileDefinition.CompareTo` order (category, value count, value bits), not
+in traversal order, so a reversed walk or a repeated import produces identical names. All ordering is
+`StringComparer.Ordinal`.
+
+**One index for the whole conversion.** `Query.ProfileReuseIndex(TBD.Building)` reads every slot once over
+COM and is threaded through the library build, the zone/internal-condition conversion AND
+`Modify.AddUnusedInternalConditions`. That last path was the gap the independent review found: with
+`importUnused: true` it called `internalCondition_TBD.ToSAM()` with no index, which after dedup would have
+left the unowned template conditions pointing at legacy names the library no longer carries.
+
+**Deliberately unchanged** (all pre-existing, all confirmed still present): `ticV` is still not emitted into
+the imported `ProfileLibrary`, so `VentilationProfileName` still dangles - the slot is NOT collected and the
+reference keeps its legacy name, and a test pins that as baseline rather than as a regression of this work.
+TBD `InternalCondition` sharing, opaque `BuildingElement` reuse, construction naming and the function-profile
+import semantics are all untouched.
+
+**Adjacent survey** (asked for alongside the change): no other TAS -> SAM import object is both a SAM
+reusable library definition and cloned/renamed per space out of TAS provenance. Materials are keyed by TBD
+material name building-wide; constructions by TBD construction GUID building-wide; aperture constructions by
+`Query.ApertureConstructionPairKey` building-wide (the previous programme). SAM `InternalCondition` is the
+one adjacent case and is NOT a pure library definition here: `Convert.ToSAM(TBD.InternalCondition, double)`
+bakes the owning zone's floor area into `AreaPerPerson` and the per-person gains, so per-space instances are
+semantically required, not provenance artefacts. Out of scope and unchanged.
+
+**Validation this session:** `SAM_Tas.sln` builds with 0 errors in Debug AND Release (VS Framework MSBuild;
+only the pre-existing MSB3270/MSB3277 and XML-doc warnings). `SAM.Analytical.Tas.TM59.Tests`
+**484 passed / 0 failed** in both Debug and Release (457 pre-existing, unmodified, + 27 new in
+`ProfileDefinitionReuseTests.cs`); `SAM.Analytical.Tas.Benchmark.Tests` 16/16.
+**No licensed TAS run yet** - see "Issues / blockers".
+
+---
+
+## Previously
 2026-08-23 - **Two aperture hardening fixes, both pre-existing defects deliberately kept out of PR #34.**
 Full detail in `SAM_Tas/SAM.Analytical.Tas/APERTURE_HARDENING.md`; the two limitations they close are
 reworded where they were recorded, in `APERTURE_DEFINITION_REUSE_GBXML.md`.
@@ -63,7 +117,7 @@ defect, and changing it needs its own licensed T3D validation.
 
 ---
 
-## Previously
+## Earlier
 2026-08-22 - **The standard gbXML workflow now gets the same reusable aperture definitions the direct
 `SAMAnalytical.TBD` route has.** Stage 2 scoped itself to the direct `Modify.Update` export and declared the
 gbXML/T3D route out of scope; that gap is now closed. Full detail, invariants, the A/B table and the
@@ -1070,7 +1124,28 @@ lines still reach the canvas.
 
 ## Files changed
 
-Stage 1 - reusable aperture types (this session, branch `feature/tas-aperturetype-reuse`):
+Profile definition reuse (this session, branch `feature/tas-profile-definition-reuse`):
+- `SAM_Tas/SAM.Analytical.Tas/Classes/ProfileDefinition.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Classes/ProfileReuseIndex.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ProfileSignature.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ProfileName.cs` (new)
+- `SAM_Tas/SAM.Analytical.Tas/Query/ProfileReuseIndex.cs` (new - the only COM read)
+- `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/ProfileLibrary.cs` (index overload)
+- `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/InternalCondition.cs` (index parameter + reference resolution)
+- `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/Space.cs` (index threaded)
+- `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/AdjacencyCluster.cs` (index threaded)
+- `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/AnalyticalModel.cs` (index built once, threaded to all three consumers)
+- `SAM_Tas/SAM.Analytical.Tas/Modify/AddUnusedInternalConditions.cs` (index parameter - the review's uncovered path)
+- `SAM_Tas/SAM.Analytical.Tas/Modify/AddUnusedConstructions.cs` (cref only)
+- `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateInternalConditionTemplate.cs` (crefs only)
+- `SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md` (new)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` (new, +27)
+- `PROJECT_PROGRESS.md` (this file)
+
+`Convert/ToSAM/Profiles.cs` and `Convert/ToSAM/Profile.cs` are deliberately UNTOUCHED - they are the legacy
+library build that `ToSAM_ProfileLibrary(TBD.Building)` still uses when no index is supplied.
+
+Stage 1 - reusable aperture types (earlier session, branch `feature/tas-aperturetype-reuse`):
 - `SAM_Tas/SAM.Analytical.Tas/Classes/ApertureTypeDefinition.cs` (new)
 - `SAM_Tas/SAM.Analytical.Tas/Classes/BuildingReuseCache.cs` (new)
 - `SAM_Tas/SAM.Analytical.Tas/Enums/ApertureTypeProfileMode.cs` (new)
@@ -1112,6 +1187,21 @@ Previous session:
 - `PROJECT_PROGRESS.md` (this file)
 
 ## Validation
+
+This session (`feature/tas-profile-definition-reuse`):
+- `SAM_Tas.sln` built with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
+  pre-existing MSB3270/MSB3277 and XML-doc warnings; the new files add none.
+- `SAM.Analytical.Tas.TM59.Tests` Debug **484 passed / 0 failed**, Release **484 passed / 0 failed**
+  (457 pre-existing and unmodified, + 27 new). `SAM.Analytical.Tas.Benchmark.Tests` 16/16 Release.
+- `ModelA-Tas.sam` verified independently of the code, straight off the fixture: 42 `SAM.Analytical.Profile`
+  entries, **20 distinct `(Category, flattened Values)`**, name collisions at exactly
+  `Infiltration::Constant` and `Heating::HTG_7to19_21`, and no `Ventilation`-category profile at all (the
+  known dangling `VentilationProfileName`). Those counts are reproduced behaviourally by
+  `ModelA_FortyTwoProfilesCollapseToTwenty` / `ModelA_TheTwoNameCollisionsAreDiscriminated` from the fixture's
+  own slot data, so the test does not depend on a file in a sibling repo.
+- **No licensed TAS run yet.** See "Issues / blockers".
+
+Earlier sessions:
 - `SAM_Tas.sln` rebuilt with the VS Framework MSBuild in **Debug and Release**: 0 errors. Only the
   pre-existing MSB3270 (MSIL vs AMD64 interop) and MSB3277 (System.Memory unification) warnings.
 - `SAM.Analytical.Tas.TM59.Tests` Debug: **233 passed, 0 failed**. Release: **233 passed, 0 failed**
@@ -1139,15 +1229,23 @@ Previous session:
   `dotnet test` per configuration.
 
 ## Issues / blockers
-- **None blocking Stage 1.**
-- Open question for Stage 2, not Stage 1: whether one `buildingElement` shared across many openable
-  windows' surfaces is simulator-equivalent. The frozen plan gates the Stage 2 merge on a manual
-  licensed-TAS TSD A/B result-equality test; the panel path's existing behaviour is precedent, not proof.
-- Carried over from the previous branch: D3 (schedule-removal transition) and D2 (aperture matching)
+- **Licensed TAS A/B outstanding for profile definition reuse - the gate on opening the PR.**
+  Baseline `fff9984d` vs `feature/tas-profile-definition-reuse`, one-DLL swap, on a real model. Compare, for
+  every zone / internal condition / profile slot: internal-condition count, internal-condition names, the
+  profile slot, the TAS profile type, the complete values, `factor`, `function`, `setbackValue`. Record
+  before/after SAM `Profile` counts and the source-profile-name -> resolved-shared-name mapping.
+  **Expected diagnostic-only differences:** `profile_TBD.name`, `profile_TBD.description` (both set from
+  `Profile.Name` in `Modify.Update`) and `thermostat.name` (the four thermostat profile names joined with
+  `" & "`). The required invariant is zero simulation-effective differences - NOT byte-identical TBD output.
+- Pre-existing and deliberately not fixed here: `ticV` is never emitted into the imported `ProfileLibrary`,
+  so `VentilationProfileName` still dangles (pinned as baseline by a test, not silently changed);
+  the TBD function-profile import does not preserve complete function semantics, which is why zero-length
+  profiles are excluded from dedup; TBD `InternalCondition` sharing is unchanged.
+- Carried over from earlier branches: D3 (schedule-removal transition) and D2 (aperture matching)
   remain deferred - see **Deferred** above.
 
 ## Next step
-- PR #30 is open against `sow/2026-Q3`; the two Codex review findings are fixed, committed and pushed,
-  and CI (build + SPDX) runs on the new head. Merge PR #30 once CI is green and the review approves.
+- Run the licensed A/B above on the TAS machine, record the result here, then one focused independent
+  review and open ONE PR against `sow/2026-Q3`. Do not merge before the A/B is recorded.
 - Stage 2 (`ConstructionDefinition` + `BuildingElementDefinition`, direct-export path only) follows the
   frozen plan section E on its own branch. Do not start it inside this one.
