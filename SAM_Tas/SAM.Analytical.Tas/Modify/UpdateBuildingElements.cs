@@ -102,6 +102,8 @@ namespace SAM.Analytical.Tas
             int count_GlazingWithoutConstruction = 0;
             int count_GlazingWithoutAperture = 0;
             int count_MembersSplit = 0;
+            int count_FeatureShadeStated = 0;
+            int count_FeatureShadeWritten = 0;
 
             if (tBDDocument == null || analyticalModel == null)
                 return false;
@@ -169,6 +171,13 @@ namespace SAM.Analytical.Tas
             // other aperture's. AperturePhysicalIndex detects the collision when it is built and refuses that
             // key from then on, which is what RebindMemberSurfaces consults below.
             AperturePhysicalIndex aperturePhysicalIndex = Query.AperturePhysicalIndex(analyticalModel.AdjacencyCluster?.GetApertures());
+
+            // Aperture GUID -> the PANEL-HELD aperture and its panel. Every aperture read below comes from
+            // here rather than AdjacencyCluster.GetAperture: that method answers from GetObject<Aperture>
+            // FIRST, so on a model whose apertures are ALSO cluster objects - every one in the licensed
+            // fixture - it returns a stale copy carrying neither the colour, the opening properties nor the
+            // FeatureShade the user actually set, and its out-panel overload leaves the panel null.
+            AperturePanelIndex aperturePanelIndex = analyticalModel.AdjacencyCluster.AperturePanelIndex();
 
             List<KeyValuePair<ZoneSurfaceKey, string>> ambiguities = aperturePhysicalIndex.Ambiguities();
             foreach (KeyValuePair<ZoneSurfaceKey, string> ambiguity in ambiguities)
@@ -327,8 +336,7 @@ namespace SAM.Analytical.Tas
                                 continue;
                             }
 
-                            Aperture aperture_ToRestamp = analyticalModel.AdjacencyCluster.GetAperture(member.Aperture.Guid, out Panel panel_ToRestamp);
-                            if (aperture_ToRestamp == null || panel_ToRestamp == null)
+                            if (!aperturePanelIndex.TryGetValue(member.Aperture.Guid, out Aperture aperture_ToRestamp, out Panel panel_ToRestamp))
                             {
                                 notes.Add(Modify.NotePrefix_Issue + string.Format("Building elements: SAM aperture '{0}' ({1}) could not be found in its panel before rebinding; no replacement definition was created and none of its surfaces moved.",
                                     member.Aperture.Name, member.Aperture.Guid));
@@ -409,7 +417,12 @@ namespace SAM.Analytical.Tas
                             //mutation this whole path exists to avoid.)
                             if (created && featureShade_Stated)
                             {
+                                count_FeatureShadeStated++;
                                 SetFeatureShades(building, buildingElement_Target, featureShade_Required);
+                                if (buildingElement_Target.GetFeatureShade(1) != null)
+                                {
+                                    count_FeatureShadeWritten++;
+                                }
                             }
 
                             RebindMemberSurfaces(
@@ -440,7 +453,11 @@ namespace SAM.Analytical.Tas
                     Aperture aperture = null;
                     if(Query.UniqueNameDecomposition(buildingElement.name, out string prefix, out string name_Temp, out System.Guid? guid, out int id) && guid != null && guid.HasValue)
                     {
-                        aperture = analyticalModel.AdjacencyCluster.GetAperture(guid.Value);
+                        //The PANEL-HELD aperture. Everything written below - colour, opening controls and the
+                        //feature shade - is read off whatever this returns, so resolving through
+                        //AdjacencyCluster.GetAperture (cluster object first) silently wrote a stale copy's
+                        //state and dropped a stated FeatureShade entirely.
+                        aperture = aperturePanelIndex.GetAperture(guid.Value);
                     }
 
                     if (aperture == null && buildingElementType == TBD.BuildingElementType.GLAZING)
@@ -466,9 +483,19 @@ namespace SAM.Analytical.Tas
                     {
                         WriteOpeningControl(building, buildingElement, aperture, "GUID", buildingReuseCache, notes, ref count_ScheduleRequested, ref count_ScheduleWritten);
 
-                        if (aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade))
+                        if (aperture.TryGetValue(Analytical.ApertureParameter.FeatureShade, out FeatureShade featureShade) && featureShade != null)
                         {
-                            List<TBD.FeatureShade> featureShades = SetFeatureShades(building, buildingElement, featureShade);
+                            count_FeatureShadeStated++;
+                            SetFeatureShades(building, buildingElement, featureShade);
+
+                            //Established by RE-READING the element, not by trusting the writer's return
+                            //value - the same discipline the element sweep uses for
+                            //DeleteMarkedBuildingElements. A shade that did not land is the whole defect
+                            //this counter exists to make visible.
+                            if (buildingElement.GetFeatureShade(1) != null)
+                            {
+                                count_FeatureShadeWritten++;
+                            }
                         }
                     }
                 }
@@ -500,6 +527,16 @@ namespace SAM.Analytical.Tas
             if (ambiguities.Count != 0)
             {
                 notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} physical surface(s) are claimed by more than one SAM aperture; those apertures were not rebound rather than one of them being picked.", ambiguities.Count));
+            }
+
+            if (count_FeatureShadeStated != 0 || count_FeatureShadeWritten != 0)
+            {
+                notes_Summary.Add(string.Format("Building elements: {0} pane(s) stated a feature shade, {1} of those had one written onto their TBD element.", count_FeatureShadeStated, count_FeatureShadeWritten));
+            }
+
+            if (count_FeatureShadeStated != count_FeatureShadeWritten)
+            {
+                notes_Summary.Add(Modify.NotePrefix_Issue + string.Format("Building elements: {0} of {1} stated feature shade(s) were NOT written; those panes carry no shade in the TBD.", count_FeatureShadeStated - count_FeatureShadeWritten, count_FeatureShadeStated));
             }
 
             if (count_MembersSplit != 0)

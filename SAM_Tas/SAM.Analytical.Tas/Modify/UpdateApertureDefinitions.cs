@@ -120,18 +120,9 @@ namespace SAM.Analytical.Tas
             //Which panel owns each aperture, built once. NOT read from
             //AdjacencyCluster.GetAperture(guid, out panel): that overload returns EARLY when the aperture is
             //also held as a cluster object in its own right, and leaves its out panel null - which on the
-            //gbXML route is every aperture, so every re-stamp would refuse.
-            Dictionary<System.Guid, Panel> panelsByApertureGuid = new Dictionary<System.Guid, Panel>();
-            foreach (Panel panel_Temp in adjacencyCluster.GetPanels() ?? new List<Panel>())
-            {
-                foreach (Aperture aperture_Temp in panel_Temp?.Apertures ?? new List<Aperture>())
-                {
-                    if (aperture_Temp != null)
-                    {
-                        panelsByApertureGuid[aperture_Temp.Guid] = panel_Temp;
-                    }
-                }
-            }
+            //gbXML route is every aperture, so every re-stamp would refuse. Shared with
+            //Modify.UpdateBuildingElements, which resolves apertures the same way for the same reason.
+            AperturePanelIndex aperturePanelIndex = adjacencyCluster.AperturePanelIndex();
 
             List<KeyValuePair<ZoneSurfaceKey, string>> ambiguities = aperturePhysicalIndex.Ambiguities();
             foreach (KeyValuePair<ZoneSurfaceKey, string> ambiguity in ambiguities)
@@ -147,7 +138,7 @@ namespace SAM.Analytical.Tas
             //that could NOT have its preferred name because content the resolver may not adopt already held
             //it. See Query.OrphanApertureConstructionNames for what squats them on this route, and
             //Query.SupersededConstructionRenames for why the plain name is then reclaimed rather than left
-            //qualified - the import pairs a window's two halves by that base name.
+            //qualified - that base is what the round-tripped ApertureConstruction is NAMED after.
             List<KeyValuePair<string, string>> names_SupersededBy = new List<KeyValuePair<string, string>>();
 
             int count_Parts = 0;
@@ -283,7 +274,7 @@ namespace SAM.Analytical.Tas
 
                     //The definition binding follows the surfaces. The physical ZoneSurfaceReference stamps are
                     //NOT touched - they name an instance, and this pass moves no instance anywhere.
-                    if (!RestampApertureBinding(adjacencyCluster, panelsByApertureGuid, aperture.Guid, aperturePart, buildingElement_Target.GUID))
+                    if (!RestampApertureBinding(adjacencyCluster, aperturePanelIndex, aperture.Guid, aperturePart, buildingElement_Target.GUID))
                     {
                         notes.Add(NotePrefix_Issue + string.Format("Aperture definitions: SAM aperture '{0}' ({1}) had its {2} surfaces rebound but could not be found to re-stamp, so its BuildingElementGuid still names the element TAS created for it.",
                             aperture.Name, aperture.Guid, aperturePart));
@@ -396,9 +387,11 @@ namespace SAM.Analytical.Tas
 
             // -----------------------------------------------------------------------------------------------
             // RECLAIM the plain names the sweep has just freed. A construction that had to take a
-            // signature-qualified name leaves the two halves of one window with DIFFERENT base names, and the
-            // aperture import pairs them by exactly that base - so a qualified frame beside a plain pane comes
-            // back as two one-sided constructions and one aperture per surface instead of one per window.
+            // signature-qualified name leaves the two halves of one window with DIFFERENT base names. Since
+            // APERTURE_HARDENING.md the import no longer PAIRS by that base - it groups geometrically and
+            // keys the family on the construction PAIR - but the base is still what the reconstructed
+            // ApertureConstruction is NAMED after, so a qualified frame beside a plain pane brings the model's
+            // own construction name back mangled.
             // Renaming is safe here and nowhere else: the construction is one this pass created moments ago,
             // elements reference it by COM identity rather than by name, and the document has not been saved.
             // -----------------------------------------------------------------------------------------------
@@ -478,7 +471,7 @@ namespace SAM.Analytical.Tas
 
             if (count_Renamed != renames.Count)
             {
-                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture definitions: {0} of {1} freed construction name(s) could not be reclaimed, so a window's pane and frame constructions carry different base names and the aperture import will not pair them.", renames.Count - count_Renamed, renames.Count));
+                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture definitions: {0} of {1} freed construction name(s) could not be reclaimed, so a window's pane and frame constructions carry different base names; the import still pairs them, but the reconstructed aperture construction takes whichever base name was free rather than the model's own.", renames.Count - count_Renamed, renames.Count));
             }
 
             notes.InsertRange(0, notes_Summary);
@@ -503,23 +496,19 @@ namespace SAM.Analytical.Tas
         /// </para>
         /// </summary>
         /// <returns>True when at least one copy was re-stamped.</returns>
-        private static bool RestampApertureBinding(AdjacencyCluster adjacencyCluster, Dictionary<System.Guid, Panel> panelsByApertureGuid, System.Guid apertureGuid, AperturePart aperturePart, string buildingElementGuid)
+        private static bool RestampApertureBinding(AdjacencyCluster adjacencyCluster, AperturePanelIndex aperturePanelIndex, System.Guid apertureGuid, AperturePart aperturePart, string buildingElementGuid)
         {
             ApertureParameter apertureParameter = aperturePart == AperturePart.Frame ? ApertureParameter.FrameBuildingElementGuid : ApertureParameter.PaneBuildingElementGuid;
 
             bool result = false;
 
-            if (panelsByApertureGuid != null && panelsByApertureGuid.TryGetValue(apertureGuid, out Panel panel) && panel != null)
+            if (aperturePanelIndex != null && aperturePanelIndex.TryGetValue(apertureGuid, out Aperture aperture, out Panel panel))
             {
-                Aperture aperture = panel.GetAperture(apertureGuid);
-                if (aperture != null)
-                {
-                    aperture.SetValue(apertureParameter, buildingElementGuid);
-                    panel.RemoveAperture(apertureGuid);
-                    panel.AddAperture(aperture);
-                    adjacencyCluster.AddObject(panel);
-                    result = true;
-                }
+                aperture.SetValue(apertureParameter, buildingElementGuid);
+                panel.RemoveAperture(apertureGuid);
+                panel.AddAperture(aperture);
+                adjacencyCluster.AddObject(panel);
+                result = true;
             }
 
             Aperture aperture_Object = adjacencyCluster.GetObject<Aperture>(apertureGuid);

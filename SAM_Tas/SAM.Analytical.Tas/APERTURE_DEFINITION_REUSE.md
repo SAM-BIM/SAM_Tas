@@ -61,11 +61,18 @@ They are now **reusable definitions**, exactly as a `TBD.ApertureType` already w
    conductivity stores NaN, and under `==` such a layer would never equal itself, giving every window its
    own construction.
 
-3. **`AperturePart` is part of construction identity**, and not because TAS stores it — it does not. The
-   aperture import pairs a window's two constructions by **stripping the `-pane`/`-frame` suffix** from
-   their names and reading each side's layers (`Convert.ToSAM_ApertureConstruction`,
-   `Convert.ToSAM_AdjacencyCluster`). A pane and a frame holding identical layers would otherwise collapse
-   into one construction and the round trip would come back with one half of the window missing.
+3. **`AperturePart` is part of construction identity**, and not because TAS stores it — it does not. A pane
+   and a frame holding identical layers would otherwise collapse into ONE `TBD.Construction`, and the round
+   trip would come back with one half of the window missing: the import reads each half's layers off the
+   construction that half's building element carries, so the two halves must be two constructions.
+
+   *(Until `APERTURE_HARDENING.md` this invariant also carried the import's pane/frame PAIRING, which used
+   to strip the `-pane`/`-frame` suffix and match a window's two halves by the remaining base name. It no
+   longer does: the import groups a window's surfaces geometrically and identifies its family by the PAIR of
+   construction identities the halves carry. Keeping pane and frame distinct is still required — the
+   suffixes are still how a reader tells them apart, and how `Convert.ToSAM_ApertureConstruction` decides
+   which layer list a construction is — but the round trip no longer depends on the two names sharing a
+   base.)*
 
 4. **No generated name contains physical aperture identity.** The base is the SAM
    `ApertureConstruction`'s own name — a reusable definition shared by every window built from it:

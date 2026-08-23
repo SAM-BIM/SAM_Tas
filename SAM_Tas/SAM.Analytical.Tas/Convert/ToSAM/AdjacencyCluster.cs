@@ -126,6 +126,11 @@ namespace SAM.Analytical.Tas
             Dictionary<string, Construction> dictionary_Construction = [];
             List<ApertureConstruction> apertureConstructions = [];
 
+            //The reconstructed families, keyed by Query.ApertureConstructionPairKey - the pair of TBD
+            //construction identities a physical aperture's two halves carry. Building-wide, so one family
+            //stays one object however many zones its windows are spread across.
+            Dictionary<string, ApertureConstruction> apertureConstructionsByPairKey = [];
+
             //double groundElevation = 0;
 
             Dictionary<string, Space> dictionary_Space = [];
@@ -292,7 +297,13 @@ namespace SAM.Analytical.Tas
                     }
                 }
 
-                Dictionary<Guid, List<Tuple<Polygon3D, TBD.IZoneSurface>>> dictionary = new Dictionary<Guid, List<Tuple<Polygon3D, TBD.IZoneSurface>>>();
+                // EVERY aperture surface in this zone, in ONE ungrouped list. Which physical aperture a
+                // surface belongs to is decided by GEOMETRY - a frame ring and the pane inset in it - and
+                // never by what their constructions happen to be called. The bucketing this replaces put a
+                // window's two halves in different groups whenever their construction base names differed,
+                // which Stage 2's by-value sharing makes an ordinary outcome: see
+                // Query.ApertureConstructionPairKey.
+                List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples_Aperture = [];
 
                 foreach(TBD.IZoneSurface zoneSurface in zoneSurfaces)
                 {
@@ -302,38 +313,7 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    ApertureType apertureType = Query.ApertureType(buildingElement.BEType);
-                    if (apertureType == ApertureType.Undefined)
-                    {
-                        continue;
-                    }
-
-                    TBD.Construction construction_TBD = buildingElement.GetConstruction();
-                    ApertureConstruction apertureConstruction = construction_TBD.ToSAM_ApertureConstruction(apertureType);
-                    int index = apertureConstructions.FindIndex(x => x.Name == apertureConstruction.Name);
-
-                    if (index == -1)
-                    {
-                        index = apertureConstructions.Count;
-                        apertureConstructions.Add(apertureConstruction);
-                    }
-                    else
-                    {
-                        // A Tas window/door is two building elements sharing a base name: one
-                        // "… -pane", one "… -frame". Each converts to an ApertureConstruction
-                        // carrying only its own layer list. Combine the two sides — keeping
-                        // whichever side already has layers and filling the empty side from the
-                        // just-converted construction — so neither pane nor frame is dropped.
-                        ApertureConstruction apertureConstruction_Existing = apertureConstructions[index];
-
-                        List<ConstructionLayer> paneConstructionLayers = apertureConstruction_Existing.HasPaneConstructionLayers() ? apertureConstruction_Existing.PaneConstructionLayers : apertureConstruction.PaneConstructionLayers;
-                        List<ConstructionLayer> frameConstructionLayers = apertureConstruction_Existing.HasFrameConstructionLayers() ? apertureConstruction_Existing.FrameConstructionLayers : apertureConstruction.FrameConstructionLayers;
-
-                        apertureConstruction = new ApertureConstruction(apertureConstruction_Existing.Guid, apertureConstruction_Existing.Name, apertureConstruction_Existing.ApertureType, paneConstructionLayers, frameConstructionLayers);
-                        apertureConstructions[index] = apertureConstruction;
-                    }
-
-                    if(apertureConstruction == null)
+                    if (Query.ApertureType(buildingElement.BEType) == ApertureType.Undefined)
                     {
                         continue;
                     }
@@ -378,208 +358,196 @@ namespace SAM.Analytical.Tas
                             continue;
                         }
 
-                        if(!dictionary.TryGetValue(apertureConstruction.Guid, out List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples) || tuples == null)
-                        {
-                            tuples = [];
-                            dictionary[apertureConstruction.Guid] = tuples;
-                        }
-
-                        tuples.Add(new Tuple<Polygon3D, TBD.IZoneSurface>(polygon3D, zoneSurface));
+                        tuples_Aperture.Add(new Tuple<Polygon3D, TBD.IZoneSurface>(polygon3D, zoneSurface));
                     }
                 }
 
-                foreach (KeyValuePair<Guid, List<Tuple<Polygon3D, TBD.IZoneSurface>>> keyValuePair in dictionary)
+                // Grouped by the pure, COM-free Query.GroupAperturePolygons rather than in-line: a lone
+                // pane with no coincident frame is a genuine one-member group (not an empty one that
+                // silently drops every stamp below), and the group's seed is captured before anything
+                // is removed, not read back off whatever the shrinking list happens to have at index 0.
+                foreach (List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples_Temp in Query.GroupAperturePolygons(tuples_Aperture, Tolerance.MacroDistance))
                 {
-                    if(keyValuePair.Value == null || keyValuePair.Value.Count == 0)
-                    {
-                        continue;
-                    }
+                    List<TBD.IZoneSurface> zoneSurfaces_Aperture = tuples_Temp.ConvertAll(x => x.Item2);
 
-                    ApertureConstruction apertureConstruction = apertureConstructions.Find(x => x.Guid == keyValuePair.Key);
-                    if(apertureConstruction == null)
-                    {
-                        continue;
-                    }
+                    //BEType FIRST, construction name second. TAS keeps which half a surface is on the
+                    //ELEMENT; a construction name is, after Stage 2, a shared definition label that
+                    //happens to end -pane/-frame by our own convention, and a foreign TBD need not
+                    //follow it at all. Asking the element rather than the name also means a window
+                    //whose two constructions were named unconventionally still comes back as one pane
+                    //and one frame instead of both halves guessed from list position below.
+                    TBD.IZoneSurface zoneSurface_Pane = zoneSurfaces_Aperture.Find(x => SurfacePart(x) == AperturePart.Pane);
+                    TBD.IZoneSurface zoneSurface_Frame = zoneSurfaces_Aperture.Find(x => SurfacePart(x) == AperturePart.Frame);
 
-                    List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples = keyValuePair.Value;
+                    // ---------------------------------------------------------------------------------
+                    // THE FAMILY. Identity is the PAIR of construction identities the two halves carry,
+                    // never their names - so two SAM ApertureConstructions sharing one half by value stay
+                    // two families, and one family stays one however many zones it appears in.
+                    // ---------------------------------------------------------------------------------
+                    TBD.Construction construction_Pane = zoneSurface_Pane?.buildingElement?.GetConstruction();
+                    TBD.Construction construction_Frame = zoneSurface_Frame?.buildingElement?.GetConstruction();
 
-                    // Grouped by the pure, COM-free Query.GroupAperturePolygons rather than in-line: a lone
-                    // pane with no coincident frame is a genuine one-member group (not an empty one that
-                    // silently drops every stamp below), and the group's seed is captured before anything
-                    // is removed, not read back off whatever the shrinking list happens to have at index 0.
-                    foreach (List<Tuple<Polygon3D, TBD.IZoneSurface>> tuples_Temp in Query.GroupAperturePolygons(tuples, Tolerance.MacroDistance))
+                    if (construction_Pane == null && construction_Frame == null)
                     {
-                        Face3D face3D = null;
-                        if (tuples_Temp.Count == 1)
+                        //Neither half states which it is and neither carries a construction. The group's
+                        //own seed becomes the pane, exactly as ToSAM_ApertureConstruction has always
+                        //treated a construction whose name carries no part suffix.
+                        construction_Pane = zoneSurfaces_Aperture.Count == 0 ? null : zoneSurfaces_Aperture[0]?.buildingElement?.GetConstruction();
+                        if (construction_Pane == null)
                         {
-                            face3D = new Face3D(tuples_Temp[0].Item1);
+                            continue;
                         }
-                        else
+                    }
+
+                    //The apertureType comes from the PANE's element where there is one: a door leaf is
+                    //BEType 14 (Door) while its frame is 15 (Window), so reading whichever half came first
+                    //could type a door as a window.
+                    TBD.buildingElement buildingElement_Type = zoneSurface_Pane?.buildingElement ?? zoneSurface_Frame?.buildingElement ?? zoneSurfaces_Aperture.FirstOrDefault()?.buildingElement;
+                    ApertureType apertureType = Query.ApertureType(buildingElement_Type == null ? 0 : buildingElement_Type.BEType);
+                    if (apertureType == ApertureType.Undefined)
+                    {
+                        apertureType = ApertureType.Window;
+                    }
+
+                    string pairKey = Query.ApertureConstructionPairKey(ConstructionKey(construction_Pane), ConstructionKey(construction_Frame));
+                    if (!apertureConstructionsByPairKey.TryGetValue(pairKey, out ApertureConstruction apertureConstruction) || apertureConstruction == null)
+                    {
+                        string name = Query.ApertureConstructionName(
+                            Query.ApertureConstructionNameBase(construction_Pane?.name),
+                            Query.ApertureConstructionNameBase(construction_Frame?.name),
+                            apertureConstructions.ConvertAll(x => x.Name));
+
+                        apertureConstruction = new ApertureConstruction(
+                            Guid.NewGuid(),
+                            name,
+                            apertureType,
+                            construction_Pane == null ? null : construction_Pane.ToSAM_ConstructionLayers(),
+                            construction_Frame == null ? null : construction_Frame.ToSAM_ConstructionLayers());
+
+                        apertureConstructions.Add(apertureConstruction);
+                        apertureConstructionsByPairKey[pairKey] = apertureConstruction;
+                    }
+
+                    Face3D face3D = null;
+                    if (tuples_Temp.Count == 1)
+                    {
+                        face3D = new Face3D(tuples_Temp[0].Item1);
+                    }
+                    else
+                    {
+                        List<Face3D> face3Ds = Geometry.Spatial.Create.Face3Ds(tuples_Temp.ConvertAll(x => x.Item1));
+                        if (face3Ds != null && face3Ds.Count != 0)
                         {
-                            List<Face3D> face3Ds = Geometry.Spatial.Create.Face3Ds(tuples_Temp.ConvertAll(x => x.Item1));
-                            if (face3Ds != null && face3Ds.Count != 0)
+                            if (face3Ds.Count > 1)
                             {
-                                if (face3Ds.Count > 1)
-                                {
-                                    face3Ds.Sort((x, y) => y.ExternalEdge2D.GetArea().CompareTo(x.ExternalEdge2D.GetArea()));
-                                }
-
-                                face3D = face3Ds.FirstOrDefault();
+                                face3Ds.Sort((x, y) => y.ExternalEdge2D.GetArea().CompareTo(x.ExternalEdge2D.GetArea()));
                             }
+
+                            face3D = face3Ds.FirstOrDefault();
                         }
+                    }
 
-                        Aperture aperture = new Aperture(apertureConstruction, face3D);
+                    Aperture aperture_New = new Aperture(apertureConstruction, face3D);
 
-                        //TODO: New code added to include Aperture Guid TO BE CHECKED 2023.01.30
-                        List<TBD.IZoneSurface> zoneSurfaces_Aperture = tuples_Temp.ConvertAll(x => x.Item2);
-                        if (zoneSurfaces_Aperture != null && zoneSurfaces_Aperture.Count != 0)
+                    //TODO: New code added to include Aperture Guid TO BE CHECKED 2023.01.30
+                    if (zoneSurfaces_Aperture.Count != 0)
+                    {
+                        if (zoneSurface_Pane == null || zoneSurface_Frame == null)
                         {
-                            TBD.IZoneSurface zoneSurface_Pane = null;
-                            TBD.IZoneSurface zoneSurface_Frame = null;
-
-                            //BEType FIRST, construction name second. TAS keeps which half a surface is on the
-                            //ELEMENT; a construction name is, after Stage 2, a shared definition label that
-                            //happens to end -pane/-frame by our own convention, and a foreign TBD need not
-                            //follow it at all. Asking the element rather than the name also means a window
-                            //whose two constructions were named unconventionally still comes back as one pane
-                            //and one frame instead of both halves guessed from list position below.
+                            //The -pane/-frame naming convention, for a surface whose element type states
+                            //nothing usable. Only ever fills a slot the element types left empty.
                             foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces_Aperture)
                             {
-                                switch (Query.AperturePart_BuildingElementType(zoneSurface?.buildingElement))
+                                string name = zoneSurface?.buildingElement?.GetConstruction()?.name;
+                                if (string.IsNullOrWhiteSpace(name))
                                 {
-                                    case AperturePart.Pane:
-                                        zoneSurface_Pane = zoneSurface_Pane ?? zoneSurface;
-                                        break;
-
-                                    case AperturePart.Frame:
-                                        zoneSurface_Frame = zoneSurface_Frame ?? zoneSurface;
-                                        break;
-                                }
-                            }
-
-                            if (zoneSurface_Pane == null || zoneSurface_Frame == null)
-                            {
-                                //The -pane/-frame naming convention, for a surface whose element type states
-                                //nothing usable. Only ever fills a slot the element types left empty.
-                                foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces_Aperture)
-                                {
-                                    string name = zoneSurface?.buildingElement?.GetConstruction()?.name;
-                                    if (string.IsNullOrWhiteSpace(name))
-                                    {
-                                        continue;
-                                    }
-
-                                    if (zoneSurface_Pane == null && name.EndsWith("-pane"))
-                                    {
-                                        zoneSurface_Pane = zoneSurface;
-                                    }
-
-                                    if (zoneSurface_Frame == null && name.EndsWith("-frame"))
-                                    {
-                                        zoneSurface_Frame = zoneSurface;
-                                    }
-
-                                    if (zoneSurface_Frame != null && zoneSurface_Pane != null)
-                                    {
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (zoneSurfaces_Aperture.Count != 1)
-                            {
-                                //Last resort, and only for a group that really does hold more than one
-                                //surface: something in it is the pane and something is the frame, and neither
-                                //the element types nor the names would say which. A SINGLETON is deliberately
-                                //excluded - a lone pane with no separately written frame ring is not also its
-                                //own frame, and stamping it as both made frame-first reference matching
-                                //classify the pane as a frame.
-                                if (zoneSurface_Frame == null)
-                                {
-                                    zoneSurface_Frame = zoneSurfaces_Aperture[0];
+                                    continue;
                                 }
 
-                                if (zoneSurface_Pane == null)
+                                if (zoneSurface_Pane == null && name.EndsWith("-pane"))
                                 {
-                                    zoneSurface_Pane = zoneSurfaces_Aperture[0];
-                                }
-                            }
-
-                            if (zoneSurface_Frame != null)
-                            {
-                                //Through the one mutator, so this path orders slots by the same rule the
-                                //export and UpdateIds use. The aperture is brand new here, so this is its _1;
-                                //the adjacent zone's pass adds the other side above.
-                                List<TBD.IZoneSurface> zoneSurfaces_Frame = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Frame);
-                                if (zoneSurfaces_Frame.Count == 0)
-                                {
-                                    zoneSurfaces_Frame.Add(zoneSurface_Frame);
+                                    zoneSurface_Pane = zoneSurface;
                                 }
 
-                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Frame, zoneSurfaces_Frame.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
-
-                                TBD.buildingElement buildingElement = zoneSurface_Frame.buildingElement;
-                                if (buildingElement != null)
+                                if (zoneSurface_Frame == null && name.EndsWith("-frame"))
                                 {
-                                    aperture.SetValue(ApertureParameter.FrameBuildingElementGuid, buildingElement.GUID);
-                                }
-                            }
-
-                            if (zoneSurface_Pane != null)
-                            {
-                                List<TBD.IZoneSurface> zoneSurfaces_Pane = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Pane);
-                                if (zoneSurfaces_Pane.Count == 0)
-                                {
-                                    zoneSurfaces_Pane.Add(zoneSurface_Pane);
+                                    zoneSurface_Frame = zoneSurface;
                                 }
 
-                                aperture.SetApertureZoneSurfaceReferences(AperturePart.Pane, zoneSurfaces_Pane.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
-
-                                TBD.buildingElement buildingElement = zoneSurface_Pane.buildingElement;
-                                if (buildingElement != null)
+                                if (zoneSurface_Frame != null && zoneSurface_Pane != null)
                                 {
-                                    aperture.SetValue(ApertureParameter.PaneBuildingElementGuid, buildingElement.GUID);
-
-                                    // Import the operable aperture types (TBD ApertureType) assigned to
-                                    // the pane building element into SAM OpeningProperties, so they
-                                    // round-trip back out via Modify.SetApertureTypes on export.
-                                    IOpeningProperties openingProperties = Convert.ToSAM_OpeningProperties(buildingElement);
-                                    if (openingProperties != null)
-                                    {
-                                        aperture.SetValue(Analytical.ApertureParameter.OpeningProperties, openingProperties);
-                                    }
+                                    break;
                                 }
-                            }
-
-                            AperturePart SurfacePart(TBD.IZoneSurface zoneSurface)
-                            {
-                                AperturePart result = Query.AperturePart_BuildingElementType(zoneSurface?.buildingElement);
-                                if (result != AperturePart.Undefined)
-                                {
-                                    return result;
-                                }
-
-                                string constructionName = zoneSurface?.buildingElement?.GetConstruction()?.name;
-                                if (!string.IsNullOrWhiteSpace(constructionName))
-                                {
-                                    if (constructionName.EndsWith("-pane"))
-                                    {
-                                        return AperturePart.Pane;
-                                    }
-
-                                    if (constructionName.EndsWith("-frame"))
-                                    {
-                                        return AperturePart.Frame;
-                                    }
-                                }
-
-                                return AperturePart.Undefined;
                             }
                         }
 
-                        adjacencyCluster.AddAperture(aperture, tolerance_Distance: Tolerance.MacroDistance);
+                        if (zoneSurfaces_Aperture.Count != 1)
+                        {
+                            //Last resort, and only for a group that really does hold more than one
+                            //surface: something in it is the pane and something is the frame, and neither
+                            //the element types nor the names would say which. A SINGLETON is deliberately
+                            //excluded - a lone pane with no separately written frame ring is not also its
+                            //own frame, and stamping it as both made frame-first reference matching
+                            //classify the pane as a frame.
+                            if (zoneSurface_Frame == null)
+                            {
+                                zoneSurface_Frame = zoneSurfaces_Aperture[0];
+                            }
 
+                            if (zoneSurface_Pane == null)
+                            {
+                                zoneSurface_Pane = zoneSurfaces_Aperture[0];
+                            }
+                        }
+
+                        if (zoneSurface_Frame != null)
+                        {
+                            //Through the one mutator, so this path orders slots by the same rule the
+                            //export and UpdateIds use. The aperture is brand new here, so this is its _1;
+                            //the adjacent zone's pass adds the other side above.
+                            List<TBD.IZoneSurface> zoneSurfaces_Frame = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Frame);
+                            if (zoneSurfaces_Frame.Count == 0)
+                            {
+                                zoneSurfaces_Frame.Add(zoneSurface_Frame);
+                            }
+
+                            aperture_New.SetApertureZoneSurfaceReferences(AperturePart.Frame, zoneSurfaces_Frame.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
+
+                            TBD.buildingElement buildingElement = zoneSurface_Frame.buildingElement;
+                            if (buildingElement != null)
+                            {
+                                aperture_New.SetValue(ApertureParameter.FrameBuildingElementGuid, buildingElement.GUID);
+                            }
+                        }
+
+                        if (zoneSurface_Pane != null)
+                        {
+                            List<TBD.IZoneSurface> zoneSurfaces_Pane = zoneSurfaces_Aperture.FindAll(x => SurfacePart(x) == AperturePart.Pane);
+                            if (zoneSurfaces_Pane.Count == 0)
+                            {
+                                zoneSurfaces_Pane.Add(zoneSurface_Pane);
+                            }
+
+                            aperture_New.SetApertureZoneSurfaceReferences(AperturePart.Pane, zoneSurfaces_Pane.ConvertAll(x => new ZoneSurfaceReference(x.number, zone.GUID)), out string _);
+
+                            TBD.buildingElement buildingElement = zoneSurface_Pane.buildingElement;
+                            if (buildingElement != null)
+                            {
+                                aperture_New.SetValue(ApertureParameter.PaneBuildingElementGuid, buildingElement.GUID);
+
+                                // Import the operable aperture types (TBD ApertureType) assigned to
+                                // the pane building element into SAM OpeningProperties, so they
+                                // round-trip back out via Modify.SetApertureTypes on export.
+                                IOpeningProperties openingProperties = Convert.ToSAM_OpeningProperties(buildingElement);
+                                if (openingProperties != null)
+                                {
+                                    aperture_New.SetValue(Analytical.ApertureParameter.OpeningProperties, openingProperties);
+                                }
+                            }
+                        }
                     }
+
+                    adjacencyCluster.AddAperture(aperture_New, tolerance_Distance: Tolerance.MacroDistance);
                 }
 
                 if (internalConditions != null)
@@ -645,5 +613,50 @@ namespace SAM.Analytical.Tas
             }
             return polygon3D;
         }
+
+        /// <summary>
+        /// Which half of an aperture a physical surface is: the ELEMENT's own <c>BEType</c> first, the
+        /// <c>-pane</c>/<c>-frame</c> construction-naming convention only where that says nothing.
+        /// </summary>
+        private static AperturePart SurfacePart(TBD.IZoneSurface zoneSurface)
+        {
+            AperturePart result = Query.AperturePart_BuildingElementType(zoneSurface?.buildingElement);
+            if (result != AperturePart.Undefined)
+            {
+                return result;
+            }
+
+            string constructionName = zoneSurface?.buildingElement?.GetConstruction()?.name;
+            if (!string.IsNullOrWhiteSpace(constructionName))
+            {
+                if (constructionName.EndsWith("-pane"))
+                {
+                    return AperturePart.Pane;
+                }
+
+                if (constructionName.EndsWith("-frame"))
+                {
+                    return AperturePart.Frame;
+                }
+            }
+
+            return AperturePart.Undefined;
+        }
+
+        /// <summary>
+        /// A TBD construction's identity for <see cref="Query.ApertureConstructionPairKey(string, string)"/>:
+        /// its GUID, or its name when it carries none.
+        /// </summary>
+        private static string ConstructionKey(TBD.Construction construction)
+        {
+            if (construction == null)
+            {
+                return null;
+            }
+
+            string guid = construction.GUID;
+            return string.IsNullOrWhiteSpace(guid) ? construction.name : guid;
+        }
+
     }
 }

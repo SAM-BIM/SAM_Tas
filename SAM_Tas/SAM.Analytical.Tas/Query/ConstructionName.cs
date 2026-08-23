@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Collections.Generic;
@@ -40,12 +40,12 @@ namespace SAM.Analytical.Tas
         /// </para>
         /// <para>
         /// <b>The shape matches what the TCD route already writes</b> (<c>Convert.ToTCD_Constructions</c>:
-        /// <c>apertureConstruction.Name + " -pane"</c>), and it is the shape the import reads back: the
-        /// aperture import strips the <c>-pane</c>/<c>-frame</c> suffix and pairs a window's two
-        /// constructions by the remaining base name. So the suffix must stay TERMINAL - which is why a
-        /// collision discriminator is appended to the BASE, <c>Glazing_1F3A0C21 -pane</c>, and never to the
-        /// tail. A name ending <c>-pane_1F3A0C21</c> would not be recognised as a pane at all, and the round
-        /// trip would lose that half of the window.
+        /// <c>apertureConstruction.Name + " -pane"</c>), and it is the shape the import reads back: it strips
+        /// the <c>-pane</c>/<c>-frame</c> suffix to recover the base the reconstructed
+        /// <c>ApertureConstruction</c> is named after, and <c>Convert.ToSAM_ApertureConstruction</c> reads the
+        /// suffix to decide which layer list a construction is. So the suffix must stay TERMINAL - which is
+        /// why a collision discriminator is appended to the BASE, <c>Glazing_1F3A0C21 -pane</c>, and never to
+        /// the tail. A name ending <c>-pane_1F3A0C21</c> would not be recognised as a pane at all.
         /// </para>
         /// <para>
         /// <b>This is only ever reached after a DEFINITION search has failed.</b> Definitions establish
