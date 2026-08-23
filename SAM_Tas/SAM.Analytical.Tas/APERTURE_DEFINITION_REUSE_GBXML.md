@@ -351,3 +351,47 @@ Stage 3's previously accepted scenarios were **not** re-run: this change touches
   and licensed TAS silently drops the FIRST `AssignFeatureShade` onto a building it has only just written
   with `ExportNew`. This PR's rule that a shade-stating pane is left on its own dedicated element, and its
   frame free to reuse the shared frame definition, is unchanged and is what the shade now lands on.
+
+## Why off-origin models lost every stamp: `Modify.UpdateIds` (fixed on `fix/tas-updateids-gbxml-zone-identity`)
+
+The licensed `ModelA.sam` acceptance above masked one seam: **TAS's own gbXML import recentres the building
+footprint on the origin.** Licensed-observed with a hand-written gbXML box at (100..110, 50..60, 0..3): the
+TBD surfaces come back at (−5..5, −5..5, 0..3) - exactly minus the footprint centre. `ModelA.sam` is
+symmetric about the origin, so its run never moved and every geometric match landed. A real off-origin model
+(`SAM_zoningAM_v2`, footprint centre (30.5, 8)) therefore lost the mapping at the FIRST geometric seam:
+`Query.Match(zoneSurface, panels)` compared TBD-space internal points against SAM-space panels, so all 110
+surfaces matched no panel, `UpdateIds` stamped nothing, and every one of its 40 aperture parts reached
+`UpdateApertureDefinitions` with no building-element stamp - which correctly refused them all.
+
+**Two defects were fixed in `UpdateIds`, one proven on the licensed model and one found while tracing it:**
+
+1. **The recentring compensation.** `UpdateIds` now computes the same translation
+   `Modify.SetApertureTypes` already applies - the difference of the two sides' non-shade panel
+   bounding-box centroids (TBD → SAM, via `building.ToSAM()`) - and passes it to the two
+   zoneGuid-aware `Query.Match` overloads, which move the surface's internal point into SAM coordinates
+   before the bounding-box / point-in-face tests. Null when either side has no panels: the match is then
+   exactly what it was before, so an already-centred model (`ModelA`) is byte-for-byte unchanged.
+2. **The zone-identity ordering.** Stage 3 added the stale-stamp clearing that clears
+   `SpaceParameter.ZoneGuid` from every space - BEFORE the loop that read that parameter to resolve the
+   TBD zone, so the GUID path could never fire and resolution always degraded to the exact-name fallback.
+   The clearing is kept (a stale stamp must never survive a failed resolution); the identity is now
+   captured first (`Query.SpaceZoneGuids`) and the resolution (`Query.ResolvedZone`) reads the captured
+   value: GUID authoritative when it still identifies a zone, exact name only as the compatibility
+   fallback, no match a refusal - never an arbitrary zone.
+
+**Licensed on the real model (EDSL Tas):** the 40 instance-named aperture elements collapse to **3
+reusable building elements** - one shared frame (20 surfaces) and two distinct pane definitions (15 + 5
+surfaces; the model genuinely states two pane contents), with all 110 physical zoneSurfaces unchanged and
+20/20 pane/frame stamps written. A second workflow run reproduces every count, creates nothing new, and the
+TBD re-imports as 20 apertures. See `PROJECT_PROGRESS.md`.
+
+Revalidated on the production file `SAM_zoningAM_v2zonesisDomestic.sam`: its all-panel, non-shade and
+space-related subsets give the same bbox on each side (TBD `[-30.5,-8,0]-[30.5,8,4]`, SAM
+`[0,0,0]-[61,16,4]`), so zoning metadata introduces no different translation. Instrumented seams were
+9/9 spaces to zones, 110/110 surfaces to panels, 40/40 aperture surfaces to apertures, 20 pane + 20 frame
+identifications and 40 building-element stamps. The first and repeated workflows both produced the same
+3 definitions and preserved all 110 surfaces and 20 apertures.
+
+The zone-aware panel and aperture `Match` methods also retain their original public CLR signatures for
+binary compatibility. Those overloads forward to separate translation-aware overloads; only `UpdateIds`
+passes the translation vector. A reflection regression pins all four signatures.

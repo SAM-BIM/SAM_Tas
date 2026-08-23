@@ -1,6 +1,8 @@
 ﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
+using SAM.Geometry.Object.Spatial;
+using SAM.Geometry.Spatial;
 using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas
@@ -22,6 +24,14 @@ namespace SAM.Analytical.Tas
             List<Space> spaces = adjacencyCluster.GetSpaces();
             if(spaces != null && spaces.Count != 0)
             {
+                //Capture every space's existing zone identity BEFORE clearing it. The clearing stays: a stamp
+                //that resolves to no zone must never survive (TAS need not have kept the same zone GUIDs, so a
+                //stale stamp points somewhere real and wrong). But the refresh below must read the identity
+                //captured here - not the just-cleared parameter - so a space whose stamp is still valid, and
+                //whose name no longer equals the TAS zone name, still finds its zone. GUID first, exact name
+                //only as the compatibility fallback: see Query.ResolvedZone.
+                Dictionary<System.Guid, string> zoneGuids_Spaces = Query.SpaceZoneGuids(spaces);
+
                 foreach(Space space in spaces)
                 {
                     space.RemoveValue(SpaceParameter.ZoneGuid);
@@ -67,8 +77,10 @@ namespace SAM.Analytical.Tas
                 List<TBD.zone> zones = building.Zones();
                 if (zones != null && zones.Count != 0)
                 {
-                    // Index zones by GUID and by name once; the original `space.Match(zones)` did two linear
-                    // scans (.ToList().Find()) per space, giving O(spaces * zones) — 67 s on a 625-zone model.
+                    //Index and resolve before deriving the translation: only space/zone pairs present on
+                    //BOTH sides may contribute to either bounding box. A SAM space added after the TBD was
+                    //exported is non-shade, but its panels have no TAS counterpart and would skew an
+                    //all-non-shade SAM centroid.
                     Dictionary<string, TBD.zone> zonesByGuid = new Dictionary<string, TBD.zone>(zones.Count);
                     Dictionary<string, TBD.zone> zonesByName = new Dictionary<string, TBD.zone>(zones.Count);
                     foreach (TBD.zone z in zones)
@@ -80,14 +92,52 @@ namespace SAM.Analytical.Tas
                             zonesByName[z.name] = z;
                     }
 
+                    Dictionary<System.Guid, TBD.zone> zonesBySpaceGuid = new Dictionary<System.Guid, TBD.zone>(spaces.Count);
+                    foreach (Space space in spaces)
+                    {
+                        zoneGuids_Spaces.TryGetValue(space.Guid, out string spaceZoneGuid);
+                        TBD.zone zone = Query.ResolvedZone(spaceZoneGuid, space?.Name, zonesByGuid, zonesByName);
+                        if (zone != null)
+                        {
+                            zonesBySpaceGuid[space.Guid] = zone;
+                        }
+                    }
+
+                    //On the gbXML route TAS's own gbXML import/ExportNew recentres the building footprint on
+                    //the origin, so a TBD surface's geometry sits at SAM-coordinates-minus-footprint-centre
+                    //and no geometric match below could ever land. Compensate once per pass with the
+                    //difference of the two sides' SHARED-zone panel bounding-box centroids - the same
+                    //compensation Modify.SetApertureTypes applies for the same reason. Null when either side
+                    //has no panels: the match below is then exactly what it was before this compensation.
+                    Vector3D translation = null;
+                    AdjacencyCluster adjacencyCluster_TBD = building.ToSAM();
+                    if (adjacencyCluster_TBD != null)
+                    {
+                        List<Space> spaces_SAM_Shared = spaces.FindAll(x => x != null && zonesBySpaceGuid.ContainsKey(x.Guid));
+                        HashSet<string> zoneGuids_Shared = new HashSet<string>();
+                        foreach (TBD.zone zone in zonesBySpaceGuid.Values)
+                        {
+                            if (!string.IsNullOrWhiteSpace(zone?.GUID))
+                            {
+                                zoneGuids_Shared.Add(zone.GUID);
+                            }
+                        }
+                        List<Space> spaces_TBD_Shared = adjacencyCluster_TBD.GetSpaces()?.FindAll(x =>
+                            x != null && x.TryGetValue(SpaceParameter.ZoneGuid, out string zoneGuid) && zoneGuids_Shared.Contains(zoneGuid));
+
+                        BoundingBox3D boundingBox3D_TBD = UpdateIdsTranslationPanels(adjacencyCluster_TBD, spaces_TBD_Shared).BoundingBox3D();
+                        BoundingBox3D boundingBox3D_SAM = UpdateIdsTranslationPanels(adjacencyCluster, spaces_SAM_Shared).BoundingBox3D();
+                        if (boundingBox3D_TBD != null && boundingBox3D_SAM != null)
+                        {
+                            translation = new Vector3D(boundingBox3D_TBD.GetCentroid(), boundingBox3D_SAM.GetCentroid());
+                        }
+                    }
+
                     foreach(Space space in spaces)
                     {
-                        TBD.zone zone = null;
-                        if (space.TryGetValue(SpaceParameter.ZoneGuid, out string spaceZoneGuid) && !string.IsNullOrWhiteSpace(spaceZoneGuid))
-                            zonesByGuid.TryGetValue(spaceZoneGuid, out zone);
-                        if (zone == null && !string.IsNullOrWhiteSpace(space?.Name))
-                            zonesByName.TryGetValue(space.Name, out zone);
-                        if(zone == null)
+                        //The captured pre-clearing stamp is authoritative when it still identifies a zone;
+                        //the exact name is the compatibility fallback; no match is a refusal, never a guess.
+                        if (!zonesBySpaceGuid.TryGetValue(space.Guid, out TBD.zone zone) || zone == null)
                         {
                             continue;
                         }
@@ -109,7 +159,7 @@ namespace SAM.Analytical.Tas
 
                         foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces)
                         {
-                            Panel panel = zoneSurface.Match(panels_Space, zone.GUID, tolerance);
+                            Panel panel = zoneSurface.Match(panels_Space, zone.GUID, tolerance, translation);
                             if(panel == null)
                             {
                                 continue;
@@ -123,7 +173,7 @@ namespace SAM.Analytical.Tas
                             List<Aperture> apertures = panel.Apertures;
                             if (apertures != null && apertures.Count != 0)
                             {
-                                Aperture aperture = zoneSurface.Match(apertures, zone.GUID, out AperturePart aperturePart, tolerance);
+                                Aperture aperture = zoneSurface.Match(apertures, zone.GUID, out AperturePart aperturePart, tolerance, translation);
                                 if (aperture != null)
                                 {
                                     //The physical stamp is COLLECTED here and written after the pass, so both
@@ -198,6 +248,16 @@ namespace SAM.Analytical.Tas
             }
 
             return true;
+        }
+
+        private static List<Panel> UpdateIdsTranslationPanels(AdjacencyCluster adjacencyCluster, List<Space> spaces)
+        {
+            if (adjacencyCluster == null || spaces == null || spaces.Count == 0)
+            {
+                return null;
+            }
+
+            return adjacencyCluster.GetPanels(Core.LogicalOperator.Or, spaces.ToArray());
         }
 
         /// <summary>

@@ -1,10 +1,14 @@
-﻿# Project Progress
+# Project Progress
 
 ## Branch
-`feature/tas-aperture-hardening` (off `sow/2026-Q3` at `e9b5a3d0`, i.e. after PR #34 merged the gbXML
-route). Ready for PR; not merged.
+`fix/tas-updateids-gbxml-zone-identity` (off `sow/2026-Q3` at `2950b27c`, i.e. after PR #35). Narrow
+follow-up branch: PR #34 (gbXML aperture-definition reuse) is merged, and a real licensed
+`WorkflowgbXML` run exposed that on an off-origin model its pass never runs because
+`Modify.UpdateIds` stamps nothing. NOT the profile-reuse branch: that work continues on
+`feature/tas-profile-definition-reuse`, whose licensed A/B is still outstanding.
 
 The reusable-aperture programme itself is complete on both routes:
+`feature/tas-aperture-hardening` was PR #35, merged 2026-08-23.
 `feature/tas-aperture-definition-reuse-gbxml` was PR #34, merged 2026-08-23.
 Stage 3 was `feature/tas-aperture-instance-identity` (PR #33, merged 2026-08-22).
 Stage 3's S3-C1/S3-C2 were `sow/2026-Q3-instance-identity` (PR #32, merged 2026-08-21).
@@ -13,6 +17,106 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-23 - **PR #36 revalidated on the user's exact production file and Codex review addressed.** Exact input:
+`C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2027-08-03-HVAC\SAM_zoningAM_v2zonesisDomestic.sam`
+(SHA-256 `CF0C749D8148EC7433482528040B4E32EAC5E5B6A6B91042C6029FF17E19537F`). Route was exactly
+`AnalyticalModel -> SAM.Analytical.gbXML.Convert.ToFile -> WorkflowCalculator`, the engine behind
+`SAMAnalytical.WorkflowgbXML`, with `Simulate=false` as in the warning-producing run.
+
+**Exact seam diagnostic, before any new behavioural edit.** The checkout's stale pre-PR build output
+reproduced `0 considered / 40 carry no building element stamp` twice, while retaining 9 TBD zones, 110
+zoneSurfaces (20 pane + 20 frame) and 20 SAM apertures. After rebuilding the actual PR head `b585e87`,
+temporary `UpdateIds` instrumentation reported: **9/9 spaces -> zones; 110/110 TBD zoneSurfaces -> SAM
+panels; 40/40 aperture zoneSurfaces -> SAM apertures; 20 pane + 20 frame identifications; 40/40
+BuildingElementGuid writes; 20 unique aperture collectors.** The instrumentation was then removed.
+
+The exact model does NOT expose a second translation algorithm. TAS all-panel, non-shade and
+space-related bboxes are identical at `[-30.5,-8,0]-[30.5,8,4]`; the corresponding SAM subsets are all
+`[0,0,0]-[61,16,4]`. Every subset therefore proves the same TBD->SAM translation `(30.5,8,0)`. There are
+no shades/non-building outliers, no differing SAM/TBD subset and no extra TAS transform. The production
+file's domestic-zone metadata does not alter the relevant 9-space/50-panel/20-aperture geometry. Thus the
+previous `SAM_zoningAM_v2.sam` passed for the same geometric reason; the apparent difference here was the
+DLL actually loaded, not the SAM file. No further translation code was added.
+
+**Behavioural fix already in PR #36.** `UpdateIds` computes that TBD->SAM centroid translation once and
+passes it only to translation-aware panel/aperture matches. ZoneGuid is captured before clearing and
+resolved GUID-first with exact-name fallback. The exact model now reports **40 considered / 40 rebound / 0
+already shared; 40 aperture building elements removed** and no no-stamp note. The 40 per-instance aperture
+elements become 3 reusable definitions: frame x20 surfaces, pane x15 and pane x5. Both first and repeated
+runs preserve 9 zones, 110 zoneSurfaces, 20 pane surfaces, 20 frame surfaces and 20 physical apertures;
+the returned model has 20 pane + 20 frame BuildingElementGuid stamps and 20 + 20 physical-surface stamps.
+Repeat run produces the identical summary and element-use multiset `{20,15,5}` with no added definition.
+
+**Codex P2.** `Query.Match` now keeps the original public panel and aperture CLR signatures exactly and
+forwards each to a separate translation-aware overload. Only `UpdateIds` calls the overloads with a
+translation. A reflection regression pins the original and translation-aware signatures for both return
+types; the test project explicitly references `Interop.TBD` for that metadata-only check.
+
+**Later Codex P2 (unassigned-panel centroid).** No behavioural change was made because its premise is false
+for `AdjacencyCluster`: `Shade(panel)` returns true exactly when the panel has no related `Space`. Therefore
+the existing `GetPanels().FindAll(x => !Shade(x))` SAM centroid already is the space-related subset, and an
+unassigned panel cannot be a non-shade outlier. This is also what the licensed seam trace measured: all
+non-shade and space-related bboxes were identical on both sides. A COM-free regression now pins the invariant
+with an orphan wall 1000 m away; it is classified as a shade and cannot move the non-shade centroid.
+
+**Newest Codex P2 (SAM-only resolved-space subset) - now fully validated, including the exact licensed
+rerun, and pushed.** A SAM space added after export (or absent because TAS failed to export it) has related
+panels, so those panels are non-shades but have no TBD counterpart. `UpdateIds` now resolves all SAM spaces
+against the TBD zones first, derives BOTH centroids only from panels belonging to those successfully shared
+space/zone pairs, and reuses the same resolution map for stamping. The new COM-free regression has two
+non-shade spaces 1000 m apart and passes only the shared space to the translation subset; the SAM-only panel
+is excluded.
+
+**Exact licensed two-pass rerun with this fix, same production file
+(`SAM_zoningAM_v2zonesisDomestic.sam`, same SHA-256 as above), same route
+(`AnalyticalModel -> SAM.Analytical.gbXML.Convert.ToFile -> WorkflowCalculator`, `Simulate=false`).**
+Built with the .NET Framework MSBuild (Debug then Release, `-t:Restore`/`-t:Build` as separate invocations),
+then a temporary `net8.0-windows`/x64 probe (`.scratch/PR36Probe`, removed after use per the discipline
+below) drove the real route against `build/SAM.Analytical.Tas.dll`/`SAM.Core.Tas.dll` end to end - no
+COM-crossing `List<T>` helper calls (see `[[tas-licensed-harness-troubleshooting]]`), output under the short
+`C:\PR36Out` path, one stray `TBD.exe` from the run stopped afterwards.
+- **Before** (pre-fix baseline, same file, reproduced from the stale pre-PR build as before): **0 aperture
+  part(s) considered, 40 carry no building element stamp**, while still keeping 9 TBD zones, 50 SAM panels,
+  110 TBD zoneSurfaces (20 pane + 20 frame) and 20 physical apertures.
+- **After**, PASS 1: **40 aperture part(s) considered; 40 rebound onto a shared definition, 0 already on
+  one; 40 aperture building elements removed afterwards.** SAM side: 9 spaces, 50 panels, 20 physical
+  apertures, **20/20 pane and 20/20 frame `BuildingElementGuid` stamps, 20/20 pane and 20/20 frame physical
+  zone-surface stamps** (100% both ways, no no-stamp note). TBD side unchanged: 9 zones, 110 zoneSurfaces
+  (20 pane + 20 frame), 8 building elements, reduced to **3** reusable aperture definitions with element-use
+  multiset **{20, 15, 5}**.
+- **Repeat run (PASS 2, same process, TBD re-exported and re-solved)**: byte-identical summary line to PASS
+  1 - same 40/40/0, same 20/20/20/20 stamps, same {20,15,5} multiset, no additional definition created. The
+  fix is deterministic on this file.
+- This exactly reproduces the already-validated fixed state recorded above from `b585e87` (before this
+  newest SAM-only-subset refinement existed) - the newest fix is a generalisation for models with SAM
+  spaces absent from the TBD and does not change behaviour on this file, as expected: TAS all-panel,
+  non-shade and space-related bboxes were already identical for this file, so the new "shared-only" subset
+  and the old "non-shade" subset select the same panels here. Confirms no regression from the newest change.
+
+**Files changed in this follow-up:** `SAM_Tas/SAM.Analytical.Tas/Query/Match.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Modify/UpdateIds.cs` (SAM-only resolved-space subset),
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/UpdateIdsZoneResolutionTests.cs`,
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/SAM.Analytical.Tas.TM59.Tests.csproj`, this file.
+
+**Validation:** focused Debug **11/11**, focused Release **11/11**; full TM59 Debug **468/468**, full TM59
+Release **468/468**; solution Debug and Release build with **0 errors** (only the pre-existing
+MSB3270/MSB3277 processor-architecture/System.Memory warnings). Exact licensed two-pass rerun on the
+production file passes as described above, deterministically. The temporary `.scratch/PR36Probe` harness
+was deleted before committing, matching the `APERTURE_TYPE_REUSE.md`-style discipline for scratch harnesses.
+
+**Unresolved / out of scope:** the same recentring also afflicts any OTHER geometry-matching step on this
+route that lacks the compensation (`CopyResults` matches apertures to solar surfaces by geometry; the
+simulation/results legs were not run here - `Simulate=false`). Not touched; would need its own licensed
+validation.
+
+**Recommended next step:** all automated validation and the exact-model licensed acceptance are green;
+reply to Codex comment `3839130533` confirming the SAM-only resolved-space subset fix is implemented and
+licensed-validated, and await fresh CI checks on the pushed commit. Do not merge automatically - that
+remains a human call.
+
+---
+
+## Previously
 2026-08-23 - **Two aperture hardening fixes, both pre-existing defects deliberately kept out of PR #34.**
 Full detail in `SAM_Tas/SAM.Analytical.Tas/APERTURE_HARDENING.md`; the two limitations they close are
 reworded where they were recorded, in `APERTURE_DEFINITION_REUSE_GBXML.md`.
