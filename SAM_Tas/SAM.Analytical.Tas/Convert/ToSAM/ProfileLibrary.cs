@@ -48,8 +48,17 @@ namespace SAM.Analytical.Tas
                 return ToSAM_ProfileLibrary(building);
             }
 
+            List<Profile> profiles = profileReuseIndex.Profiles;
+            if (profiles.Count == 0)
+            {
+                //Nothing to share, so answer exactly as the legacy build does rather than inventing an empty
+                //library where it returns null - a building with no internal conditions at all had no
+                //ProfileLibrary before this change and must not gain one because of it.
+                return ToSAM_ProfileLibrary(building);
+            }
+
             ProfileLibrary result = new ProfileLibrary(building.name);
-            profileReuseIndex.Profiles.ForEach(x => result.Add(x));
+            profiles.ForEach(x => result.Add(x));
 
             return result;
         }
