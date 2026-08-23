@@ -166,13 +166,14 @@ output.
 
 ## Tests
 
-`SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` — 27 COM-free tests: equality
+`SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` — 29 COM-free tests: equality
 (category, values, bit stability, signed zero, NaN determinism, value count, zero-length exclusion),
 naming (canonical base, ordinal-smallest source name, first and extended discriminators, reversed
 order, repeated build, ordinal not culture-aware), reference integrity (every slot resolves to
 exactly one library entry with the right category and complete values, resolution through the same
-`InternalCondition.GetProfile` lookup the export uses, the template path, and the ventilation
-baseline), plus the `ModelA-Tas` 42 → 20 regression and its two known name collisions
+`InternalCondition.GetProfile` lookup the export uses, the template path, the ventilation baseline,
+and the excluded zero-length path's own ambiguity handling), plus the `ModelA-Tas` 42 → 20 regression
+and its two known name collisions
 (`Infiltration::Constant`, `Heating::HTG_7to19_21`).
 
 ## Licensed acceptance (EDSL Tas, 2026-08-23)

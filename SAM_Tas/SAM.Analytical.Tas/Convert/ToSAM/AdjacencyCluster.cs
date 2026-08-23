@@ -109,6 +109,17 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// Backwards-compatible overload - forwards to the <c>ProfileReuseIndex</c> overload with no index, so
+        /// callers compiled against the previous
+        /// <c>ToSAM(TBD.Building, Dictionary&lt;string, Polygon3D&gt;)</c> signature keep working. An added
+        /// optional parameter changes that signature's arity and breaks them at runtime.
+        /// </summary>
+        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache)
+        {
+            return ToSAM(building, polygonCache, null);
+        }
+
+        /// <summary>
         /// AdjacencyCluster build with optional shared polygon3D cache. Pass a non-null
         /// <paramref name="polygonCache"/> to share converted Polygon3D objects with downstream
         /// callers (e.g. <c>Create.SolarModel</c>) — same roomSurface won't be re-marshaled
@@ -121,7 +132,7 @@ namespace SAM.Analytical.Tas
         /// to every internal-condition conversion so the whole cluster references the same shared
         /// <c>ProfileLibrary</c> definitions.
         /// </param>
-        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache, ProfileReuseIndex profileReuseIndex = null)
+        public static AdjacencyCluster ToSAM(this TBD.Building building, Dictionary<string, Polygon3D> polygonCache, ProfileReuseIndex profileReuseIndex)
         {
             if (building == null)
             {

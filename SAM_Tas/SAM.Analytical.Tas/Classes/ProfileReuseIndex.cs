@@ -90,11 +90,13 @@ namespace SAM.Analytical.Tas
             get
             {
                 List<Profile> result = new List<Profile>();
-                if (resolvedProfiles != null)
+
+                if (!Resolved)
                 {
-                    result.AddRange(resolvedProfiles);
+                    return result;
                 }
 
+                result.AddRange(resolvedProfiles);
                 result.AddRange(excludedProfiles);
 
                 return result;

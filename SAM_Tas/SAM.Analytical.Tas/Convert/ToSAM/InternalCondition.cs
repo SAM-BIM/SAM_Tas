@@ -6,6 +6,16 @@ namespace SAM.Analytical.Tas
     public static partial class Convert
     {
         /// <summary>
+        /// Backwards-compatible overload - forwards to the <c>ProfileReuseIndex</c> overload with no index, so
+        /// callers compiled against the previous <c>ToSAM(TBD.InternalCondition, double)</c> signature keep
+        /// working. An added optional parameter changes that signature's arity and breaks them at runtime.
+        /// </summary>
+        public static InternalCondition ToSAM(this TBD.InternalCondition internalCondition, double area = double.NaN)
+        {
+            return ToSAM(internalCondition, area, null);
+        }
+
+        /// <summary>
         /// Import one TBD internal condition.
         /// </summary>
         /// <param name="internalCondition">The TBD internal condition to import.</param>
@@ -25,7 +35,7 @@ namespace SAM.Analytical.Tas
         /// nothing.
         /// </para>
         /// </param>
-        public static InternalCondition ToSAM(this TBD.InternalCondition internalCondition, double area = double.NaN, ProfileReuseIndex profileReuseIndex = null)
+        public static InternalCondition ToSAM(this TBD.InternalCondition internalCondition, double area, ProfileReuseIndex profileReuseIndex)
         {
             if (internalCondition == null)
             {

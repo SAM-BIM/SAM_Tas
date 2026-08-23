@@ -11,10 +11,18 @@ namespace SAM.Analytical.Tas
         /// Read every TBD internal-condition profile slot in <paramref name="building"/> once, and resolve the
         /// shared SAM profile definitions and names the import will use.
         /// <para>
-        /// This is the ONLY place the values are read over COM. The resulting
+        /// This is the ONLY place the values are read over COM to BUILD the index. The resulting
         /// <see cref="Analytical.Tas.ProfileReuseIndex"/> then answers both the <c>ProfileLibrary</c> build and
-        /// every <c>InternalCondition</c> conversion, so no path pays a second read and no path can disagree with
-        /// the library about what a profile reference names.
+        /// every <c>InternalCondition</c> conversion from that one read, and no path can disagree with the
+        /// library about what a profile reference names.
+        /// </para>
+        /// <para>
+        /// One exception pays a second COM read: an ambiguous slot cannot answer from
+        /// <see cref="Analytical.Tas.ProfileReuseIndex.GetProfileName(string, int)"/>, so the conversion falls
+        /// back to <see cref="Analytical.Tas.ProfileReuseIndex.GetProfileName(string, System.Collections.Generic.IEnumerable{double})"/>,
+        /// which re-marshals the same <c>TBD.profile</c>'s values the conversion already holds a handle to. That
+        /// path is correct - it is keyed on the definition itself and always answers - just not free of a
+        /// second read.
         /// </para>
         /// <para>
         /// <b>The slot set is exactly the one the legacy <c>Convert.ToSAM_Profiles</c> emitted</b> - the seven

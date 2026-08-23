@@ -6,7 +6,8 @@ aperture hardening fixes). **PR #36 (`fix/tas-updateids-gbxml-zone-identity`) ha
 `sow/2026-Q3` at `03f9757` and is merged into this branch**, so the branch now carries it; the two touch
 disjoint code (PR #36: `UpdateIds`/`Match`/zone identity; this branch: profile definitions).
 Stage 1 complete; **licensed A/B PASSED - see "Last updated". Final review finding fixed (see
-"Post-review fix" below). PR not opened.**
+"Post-review fix" below). PR #37 OPEN against `sow/2026-Q3`, Copilot review comments addressed (see
+"Post-review fix (2)" below). Not yet merged.**
 
 The reusable-aperture programme is complete and merged on all three routes:
 `feature/tas-aperture-hardening` was PR #35, merged 2026-08-23.
@@ -18,6 +19,65 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-23 (later still) - **Post-review fix (2): addressed the GitHub Copilot automated review on
+[PR #37](https://github.com/SAM-BIM/SAM_Tas/pull/37).** Codex's review hit its usage limit and left no
+comments; nothing from it to address. Six real findings, no behavioural or reusable-profile-dedup change:
+
+**Binary compatibility (4 findings, all the same shape).** `InternalCondition.cs`, `Space.cs`,
+`AdjacencyCluster.cs` and `AddUnusedInternalConditions.cs` each added the new `ProfileReuseIndex`
+parameter as an *optional* parameter on the EXISTING public method, rather than as a genuinely new
+overload. An optional parameter is a compile-time convenience only - it still changes the method's
+CLR metadata arity, so a caller compiled against the previous signature (e.g. `ToSAM(TBD.InternalCondition, double)`)
+throws `MissingMethodException` at runtime against the new DLL, and old-arity method-group conversions
+stop compiling. This project already has an established, deliberate fix for exactly this shape -
+`AnalyticalModel.ToSAM(string, bool)` forwards to `ToSAM(string, bool, bool)` - and Copilot correctly
+spotted that this branch's four new call sites did not follow it. Fixed as a mechanical split: each
+method's previous exact signature is now a separate forwarding overload (calling the new one with
+`null`), and the indexed body moved to a new overload with the extra parameter non-optional. No
+internal call site needed to change - they all already pass every parameter explicitly. Confirmed via
+`git show <merge-base>:<file>` that all four really did have a narrower public signature before this
+branch, so none of these was a pre-existing false positive.
+
+**`ProfileReuseIndex.Profiles` returned excluded profiles before `Resolve()`.** The property's own doc
+says "Empty until `Resolve` has run"; the getter unconditionally appended `excludedProfiles` regardless
+of resolution state. The one production caller (`ProfileLibrary.cs`) already guards on `.Resolved`
+first, so this was latent rather than a live bug, but it violated its own contract for any future or
+test caller that trusted the doc. Fixed: the getter now returns empty before `Resolve`, matching the
+doc, with no change to post-`Resolve` behaviour (verified no test reads `.Profiles` before calling
+`Resolve()`).
+
+**Stale "no second COM read" doc claim** in `Query/ProfileReuseIndex.cs`. The doc said the slot lookup
+never re-reads TAS, but `Convert.ToSAM.ProfileName`'s ambiguous-slot fallback calls
+`Core.Tas.Query.Values(profile_TBD)` again - confirmed by reading that fallback path. Fixed:
+doc now states the guarantee applies to building the index, and separately documents the one
+fallback exception and why it is still correct, not just cheap.
+
+**Stale test count** in `PROFILE_DEFINITION_REUSE.md` ("27 COM-free tests"): the zero-length
+ambiguity fix added two more, actual count is 29 (`grep -c '\[Test\]'` confirms). Fixed.
+
+**Stale branch-status prose** in this file (this section and "Next step" above): both still said
+"PR not opened" / "then open ONE PR", which stopped being true the moment PR #37 was opened. Fixed to
+name the open PR and the actual remaining step (review, then merge).
+
+**Files changed:** `InternalCondition.cs`, `Space.cs`, `AdjacencyCluster.cs`,
+`AddUnusedInternalConditions.cs` (binary-compat overload split), `Classes/ProfileReuseIndex.cs`
+(`Profiles` getter), `Query/ProfileReuseIndex.cs` (doc), `PROFILE_DEFINITION_REUSE.md` (stale count),
+`PROJECT_PROGRESS.md` (this entry and the branch-status lines above).
+
+**Validation:** `SAM.Analytical.Tas` rebuilt with VS Framework MSBuild (0 errors).
+`SAM.Analytical.Tas.TM59.Tests` **497 passed / 0 failed**, unchanged - none of these six findings
+touch a code path any existing or new test exercises differently; the binary-compat split is
+metadata-only (same runtime behaviour, same call graph, since every internal call site already passed
+every parameter explicitly) and was checked by full rebuild + full test re-run rather than by
+reasoning alone. `SAM.Analytical.Tas.Benchmark.Tests` **16/16**.
+
+**Licensed A/B NOT rerun, deliberately - same reasoning as the first post-review fix**: none of these
+six findings touch reusable-profile dedup, canonical naming, or any TAS-simulation-effective behaviour;
+four are pure API-surface/binary-compatibility fixes, one is a defensive contract fix on a path no
+production caller reaches, and two are documentation-only.
+
+---
+
 2026-08-23 (later) - **Post-review fix: the zero-length exclusion path now marks a contested slot key
 ambiguous, as the reusable path already did.**
 
@@ -1430,8 +1490,9 @@ Earlier sessions:
   remain deferred - see **Deferred** above.
 
 ## Next step
-- The licensed A/B is done and recorded, and PR #36 is merged into this branch. Remaining: one focused
-  independent review, then open ONE PR against `sow/2026-Q3`. Opening and merging the PR remain a human
-  call - neither was done here.
+- The licensed A/B is done and recorded, PR #36 is merged into this branch, and
+  [PR #37](https://github.com/SAM-BIM/SAM_Tas/pull/37) is open against `sow/2026-Q3` with the Copilot
+  automated review addressed (see "Post-review fix (2)" below). Remaining: human review of PR #37, then
+  merge. Merging remains a human call - it was not done here.
 - Stage 2 (`ConstructionDefinition` + `BuildingElementDefinition`, direct-export path only) follows the
   frozen plan section E on its own branch. Do not start it inside this one.

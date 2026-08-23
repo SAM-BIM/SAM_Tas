@@ -8,6 +8,17 @@ namespace SAM.Analytical.Tas
     public static partial class Modify
     {
         /// <summary>
+        /// Backwards-compatible overload - forwards to the <c>ProfileReuseIndex</c> overload with no index, so
+        /// callers compiled against the previous <c>AddUnusedInternalConditions(AdjacencyCluster, TBD.Building)</c>
+        /// signature keep working. An added optional parameter changes that signature's arity and breaks them
+        /// at runtime.
+        /// </summary>
+        public static List<InternalCondition> AddUnusedInternalConditions(this AdjacencyCluster adjacencyCluster, TBD.Building building)
+        {
+            return AddUnusedInternalConditions(adjacencyCluster, building, null);
+        }
+
+        /// <summary>
         /// Imports the TBD building's <b>full</b> internal-condition list — including conditions not
         /// assigned to any zone — into <paramref name="adjacencyCluster"/> as standalone template
         /// objects.
@@ -41,7 +52,7 @@ namespace SAM.Analytical.Tas
         /// </para>
         /// </param>
         /// <returns>The internal-condition templates added, or null on invalid input.</returns>
-        public static List<InternalCondition> AddUnusedInternalConditions(this AdjacencyCluster adjacencyCluster, TBD.Building building, ProfileReuseIndex profileReuseIndex = null)
+        public static List<InternalCondition> AddUnusedInternalConditions(this AdjacencyCluster adjacencyCluster, TBD.Building building, ProfileReuseIndex profileReuseIndex)
         {
             if (adjacencyCluster == null || building == null)
             {
