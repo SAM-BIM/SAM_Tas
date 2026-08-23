@@ -4,7 +4,10 @@
 using NUnit.Framework;
 using SAM.Analytical;
 using SAM.Analytical.Tas;
+using SAM.Geometry.Spatial;
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace SAM.Analytical.Tas.TM59.Tests
 {
@@ -172,6 +175,40 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Dictionary<System.Guid, string> captured = Tas.Query.SpaceZoneGuids([space_Unstamped, space_Blank, null]);
 
             Assert.That(captured, Is.Empty);
+        }
+
+        /// <summary>
+        /// Optional parameters are supplied by the C# compiler and do not preserve a CLR signature. Keep the
+        /// original zone-aware Match methods alongside the translation-aware overloads so an already-compiled
+        /// plugin can replace only SAM.Analytical.Tas.dll without receiving MissingMethodException.
+        /// </summary>
+        [Test]
+        public void MatchBinaryCompatibility_KeepsTheOriginalAndTranslationAwareOverloads()
+        {
+            Type queryType = typeof(Tas.Query);
+            BindingFlags flags = BindingFlags.Public | BindingFlags.Static;
+
+            MethodInfo panelOriginal = queryType.GetMethod("Match", flags, null,
+                [typeof(TBD.IZoneSurface), typeof(List<Panel>), typeof(string), typeof(double)], null);
+            MethodInfo panelTranslated = queryType.GetMethod("Match", flags, null,
+                [typeof(TBD.IZoneSurface), typeof(List<Panel>), typeof(string), typeof(double), typeof(Vector3D)], null);
+
+            MethodInfo apertureOriginal = queryType.GetMethod("Match", flags, null,
+                [typeof(TBD.IZoneSurface), typeof(List<Aperture>), typeof(string), typeof(AperturePart).MakeByRefType(), typeof(double)], null);
+            MethodInfo apertureTranslated = queryType.GetMethod("Match", flags, null,
+                [typeof(TBD.IZoneSurface), typeof(List<Aperture>), typeof(string), typeof(AperturePart).MakeByRefType(), typeof(double), typeof(Vector3D)], null);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(panelOriginal, Is.Not.Null);
+                Assert.That(panelOriginal?.ReturnType, Is.EqualTo(typeof(Panel)));
+                Assert.That(panelTranslated, Is.Not.Null);
+                Assert.That(panelTranslated?.ReturnType, Is.EqualTo(typeof(Panel)));
+                Assert.That(apertureOriginal, Is.Not.Null);
+                Assert.That(apertureOriginal?.ReturnType, Is.EqualTo(typeof(Aperture)));
+                Assert.That(apertureTranslated, Is.Not.Null);
+                Assert.That(apertureTranslated?.ReturnType, Is.EqualTo(typeof(Aperture)));
+            });
         }
     }
 }

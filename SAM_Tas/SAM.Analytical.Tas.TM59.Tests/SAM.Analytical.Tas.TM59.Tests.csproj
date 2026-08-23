@@ -52,6 +52,11 @@
     <Reference Include="SAM.Core.Tas">
       <HintPath>..\..\build\SAM.Core.Tas.dll</HintPath>
     </Reference>
+    <!-- MatchBinaryCompatibility_ keeps the pre-PR CLR signatures callable by already-compiled clients. -->
+    <Reference Include="Interop.TBD">
+      <HintPath>..\..\build\Interop.TBD.dll</HintPath>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+    </Reference>
     <!-- For the step 9 boundary tests: the TPD-full preparation (ResultantTemperaturePreparation) and the
          legacy approximate TPD preparation (ApproximateResultantTemperatureMap). Both types are deliberately
          free of TAS COM types, so exercising them never forces the CLR to load Interop.TBD / Interop.TPD -

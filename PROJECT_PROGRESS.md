@@ -17,65 +17,56 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-23 - **`Modify.UpdateIds` on the gbXML route: TAS recentring compensation + zone-identity ordering.
-The real model `SAM_zoningAM_v2.sam` (9 spaces, 20 apertures, footprint centre (30.5, 8)) reproduced the
-user's exact warning set** - `0 aperture part(s) considered` and `40 aperture part(s) carry no building
-element stamp` - and is now fixed end to end.
+2026-08-23 - **PR #36 revalidated on the user's exact production file and Codex P2 fixed.** Exact input:
+`C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2027-08-03-HVAC\SAM_zoningAM_v2zonesisDomestic.sam`
+(SHA-256 `CF0C749D8148EC7433482528040B4E32EAC5E5B6A6B91042C6029FF17E19537F`). Route was exactly
+`AnalyticalModel -> SAM.Analytical.gbXML.Convert.ToFile -> WorkflowCalculator`, the engine behind
+`SAMAnalytical.WorkflowgbXML`, with `Simulate=false` as in the warning-producing run.
 
-**Root cause (proven, not assumed).** The initial hypothesis (ZoneGuid cleared before it is read) is a
-REAL defect but was not the binding one on this model: its stamps are stale (each workflow run
-regenerates TAS zone GUIDs), so every space resolves by name and all 9 zones DID resolve. The matching
-stopped one seam lower: `Query.Match(zoneSurface, panels_Space, zone.GUID, tolerance)` - **0 of 110 zone
-surfaces matched any panel.** A licensed probe proved why: **TAS's own gbXML import recentres the building
-footprint on the origin** (a hand-written box at (100..110, 50..60, 0..3) comes back in the TBD at
-(-5..5, -5..5, 0..3)). The SAM panels stay in model coordinates, so the geometric fallback in `Match`
-compared points from two different coordinate systems. `ModelA.sam` (the PR #34 acceptance fixture) is
-symmetric about the origin, which is why that acceptance never saw it. `Modify.SetApertureTypes` already
-compensates exactly this shift (non-shade panel bounding-box centroid difference after `building.ToSAM()`)
-- that is how it still matched 20/20 apertures while `UpdateIds` matched nothing.
+**Exact seam diagnostic, before any new behavioural edit.** The checkout's stale pre-PR build output
+reproduced `0 considered / 40 carry no building element stamp` twice, while retaining 9 TBD zones, 110
+zoneSurfaces (20 pane + 20 frame) and 20 SAM apertures. After rebuilding the actual PR head `b585e87`,
+temporary `UpdateIds` instrumentation reported: **9/9 spaces -> zones; 110/110 TBD zoneSurfaces -> SAM
+panels; 40/40 aperture zoneSurfaces -> SAM apertures; 20 pane + 20 frame identifications; 40/40
+BuildingElementGuid writes; 20 unique aperture collectors.** The instrumentation was then removed.
 
-**Fix (smallest correct change).**
-1. `Modify.UpdateIds` computes the same TBD->SAM centroid-difference translation once per pass
-   (`building.ToSAM()`, non-shade panels, null when either side has no panels) and passes it to the two
-   zoneGuid-aware `Query.Match` overloads; those move the room surface's internal point into SAM
-   coordinates before the bbox/point-in-face tests. An already-centred model gets a ~zero translation, so
-   nothing that matched before changes (verified on `ModelA.sam`).
-2. The ZoneGuid ordering defect is fixed the way the task guidance prescribed: the stamp is CAPTURED
-   (`Query.SpaceZoneGuids`) before the clearing loop, resolution reads the captured identity
-   (`Query.ResolvedZone`, GUID authoritative when it still identifies a zone, exact name only as the
-   compatibility fallback, no match a refusal), and the refresh re-writes the current `zone.GUID`. The
-   stale-stamp clearing is untouched - a stamp that resolves to nothing still never survives.
+The exact model does NOT expose a second translation algorithm. TAS all-panel, non-shade and
+space-related bboxes are identical at `[-30.5,-8,0]-[30.5,8,4]`; the corresponding SAM subsets are all
+`[0,0,0]-[61,16,4]`. Every subset therefore proves the same TBD->SAM translation `(30.5,8,0)`. There are
+no shades/non-building outliers, no differing SAM/TBD subset and no extra TAS transform. The production
+file's domestic-zone metadata does not alter the relevant 9-space/50-panel/20-aperture geometry. Thus the
+previous `SAM_zoningAM_v2.sam` passed for the same geometric reason; the apparent difference here was the
+DLL actually loaded, not the SAM file. No further translation code was added.
 
-**Files changed:** `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateIds.cs`,
-`SAM_Tas/SAM.Analytical.Tas/Query/Match.cs` (optional `translation` on the two zoneGuid-aware overloads),
-`SAM_Tas/SAM.Analytical.Tas/Query/SpaceZoneGuids.cs` (new),
-`SAM_Tas/SAM.Analytical.Tas/Query/ResolvedZone.cs` (new),
-`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/UpdateIdsZoneResolutionTests.cs` (new, 8 COM-free tests),
-`SAM_Tas/SAM.Analytical.Tas/APERTURE_DEFINITION_REUSE_GBXML.md`, this file.
+**Behavioural fix already in PR #36.** `UpdateIds` computes that TBD->SAM centroid translation once and
+passes it only to translation-aware panel/aperture matches. ZoneGuid is captured before clearing and
+resolved GUID-first with exact-name fallback. The exact model now reports **40 considered / 40 rebound / 0
+already shared; 40 aperture building elements removed** and no no-stamp note. The 40 per-instance aperture
+elements become 3 reusable definitions: frame x20 surfaces, pane x15 and pane x5. Both first and repeated
+runs preserve 9 zones, 110 zoneSurfaces, 20 pane surfaces, 20 frame surfaces and 20 physical apertures;
+the returned model has 20 pane + 20 frame BuildingElementGuid stamps and 20 + 20 physical-surface stamps.
+Repeat run produces the identical summary and element-use multiset `{20,15,5}` with no added definition.
 
-**Validation:** solution builds Debug AND Release with 0 errors (Framework MSBuild). COM-free suite
-**465/465 pass in both configurations** (457 pre-existing + 8 new); Benchmark tests 16/16. `git diff --check`
-clean; SPDX headers present on the new files.
+**Codex P2.** `Query.Match` now keeps the original public panel and aperture CLR signatures exactly and
+forwards each to a separate translation-aware overload. Only `UpdateIds` calls the overloads with a
+translation. A reflection regression pins the original and translation-aware signatures for both return
+types; the test project explicitly references `Interop.TBD` for that metadata-only check.
 
-**Licensed acceptance (EDSL Tas, `SAM_zoningAM_v2.sam`, the exact `WorkflowgbXML` scenario):**
-before ? after: `0 considered / 40 carry no stamp` -> **`40 considered; 40 rebound onto a shared
-definition; 40 aperture building elements removed`**; the `40 carry no building element stamp` note is
-GONE. Aperture building elements **40 instance-named ? 3 reusable definitions**: one shared frame
-`Windows: SIM_EXT_GLZ -frame` (20 surfaces) and two distinct panes `Windows: SIM_EXT_GLZ -pane` (15
-surfaces) + `Windows: SIM_EXT_GLZ_AAF00869 -pane` (5 surfaces) - the model genuinely states two pane
-contents, so 3 is the correct expected number rather than a hard-coded fixture value. All 110 physical
-zoneSurfaces unchanged; 20 pane + 20 frame `BuildingElementGuid` and `ZoneSurfaceReference_1` stamps on
-the returned model; TBD re-imports as **20 apertures** (unchanged). A second workflow run into the kept
-TBD reproduces every count identically (40 considered / 40 rebound / 40 removed, same 3 element names,
-no new definitions) - note TAS's ExportNew regenerates zone GUIDs each run, so on this route zones resolve
-by name in practice; the GUID-first ordering is pinned COM-free.
+**Files changed in this follow-up:** `SAM_Tas/SAM.Analytical.Tas/Query/Match.cs`,
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/UpdateIdsZoneResolutionTests.cs`,
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/SAM.Analytical.Tas.TM59.Tests.csproj`, this file.
+
+**Validation:** focused Debug 9/9; full TM59 Debug and Release **466/466**; Benchmark Release **16/16**;
+solution Debug and Release build with **0 errors** (only existing MSB3270/MSB3277 and legacy warnings).
+Final licensed two-pass acceptance on the exact production file passes as described above.
 
 **Unresolved / out of scope:** the same recentring also afflicts any OTHER geometry-matching step on this
 route that lacks the compensation (`CopyResults` matches apertures to solar surfaces by geometry; the
 simulation/results legs were not run here - `Simulate=false`). Not touched; would need its own licensed
 validation.
 
-**Immediate next step:** commit and push this branch; open the PR against `sow/2026-Q3`.
+**Recommended next step:** await PR #36 re-review/checks after the validated follow-up is pushed; do not
+merge automatically.
 
 ---
 

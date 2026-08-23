@@ -178,6 +178,15 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// The binary-compatible zone-aware panel match. Existing compiled callers bind to this exact CLR
+        /// signature; translation-aware workflow code uses the overload that also accepts a vector.
+        /// </summary>
+        public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, string zoneGuid, double tolerance = Core.Tolerance.MacroDistance)
+        {
+            return Match(zoneSurface, panels, zoneGuid, tolerance, null);
+        }
+
+        /// <summary>
         /// The panel one zone surface belongs to, resolved from the stamps first and from geometry second.
         /// <para>
         /// <b><paramref name="zoneGuid"/> is the half of physical identity a surface number does not carry.</b>
@@ -199,7 +208,7 @@ namespace SAM.Analytical.Tas
         /// exactly the previous behaviour.
         /// </para>
         /// </summary>
-        public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, string zoneGuid, double tolerance = Core.Tolerance.MacroDistance, Vector3D translation = null)
+        public static Panel Match(this TBD.IZoneSurface zoneSurface, List<Panel> panels, string zoneGuid, double tolerance, Vector3D translation)
         {
             if (zoneSurface == null || panels == null  || panels.Count == 0)
             {
@@ -304,6 +313,15 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// The binary-compatible zone-aware aperture match. Existing compiled callers bind to this exact CLR
+        /// signature; translation-aware workflow code uses the overload that also accepts a vector.
+        /// </summary>
+        public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, string zoneGuid, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance)
+        {
+            return Match(zoneSurface, apertures, zoneGuid, out aperturePart, tolerance, null);
+        }
+
+        /// <summary>
         /// The aperture, and which half of it, one zone surface belongs to - from the stamps first, geometry
         /// second.
         /// <para>
@@ -321,7 +339,7 @@ namespace SAM.Analytical.Tas
         /// behaviour.
         /// </para>
         /// </summary>
-        public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, string zoneGuid, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance, Vector3D translation = null)
+        public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, string zoneGuid, out AperturePart aperturePart, double tolerance, Vector3D translation)
         {
             aperturePart = Analytical.AperturePart.Undefined;
 

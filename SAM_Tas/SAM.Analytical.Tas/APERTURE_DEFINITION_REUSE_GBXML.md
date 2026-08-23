@@ -384,3 +384,14 @@ reusable building elements** - one shared frame (20 surfaces) and two distinct p
 surfaces; the model genuinely states two pane contents), with all 110 physical zoneSurfaces unchanged and
 20/20 pane/frame stamps written. A second workflow run reproduces every count, creates nothing new, and the
 TBD re-imports as 20 apertures. See `PROJECT_PROGRESS.md`.
+
+Revalidated on the production file `SAM_zoningAM_v2zonesisDomestic.sam`: its all-panel, non-shade and
+space-related subsets give the same bbox on each side (TBD `[-30.5,-8,0]-[30.5,8,4]`, SAM
+`[0,0,0]-[61,16,4]`), so zoning metadata introduces no different translation. Instrumented seams were
+9/9 spaces to zones, 110/110 surfaces to panels, 40/40 aperture surfaces to apertures, 20 pane + 20 frame
+identifications and 40 building-element stamps. The first and repeated workflows both produced the same
+3 definitions and preserved all 110 surfaces and 20 apertures.
+
+The zone-aware panel and aperture `Match` methods also retain their original public CLR signatures for
+binary compatibility. Those overloads forward to separate translation-aware overloads; only `UpdateIds`
+passes the translation vector. A reflection regression pins all four signatures.
