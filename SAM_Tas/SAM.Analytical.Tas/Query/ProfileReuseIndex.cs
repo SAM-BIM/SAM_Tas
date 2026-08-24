@@ -25,11 +25,11 @@ namespace SAM.Analytical.Tas
         /// second read.
         /// </para>
         /// <para>
-        /// <b>The slot set is exactly the one the legacy <c>Convert.ToSAM_Profiles</c> emitted</b> - the seven
-        /// internal-gain slots and the four thermostat slots. In particular <c>ticV</c> (ventilation) is still
-        /// NOT collected: the import writes an <c>InternalConditionParameter.VentilationProfileName</c> but has
-        /// never emitted the profile behind it, and that pre-existing dangling reference is deliberately left
-        /// exactly as it is rather than quietly changed by this work.
+        /// <b>The slot set is exactly the one the legacy <c>Convert.ToSAM_Profiles</c> emits</b> - the eight
+        /// internal-gain slots and the four thermostat slots, <c>ticV</c> (ventilation) included. Collecting
+        /// ticV is what makes the imported <c>InternalConditionParameter.VentilationProfileName</c> resolve:
+        /// the import has always written that reference but never emitted the profile behind it, so it dangled
+        /// until the slot joined the reusable set.
         /// </para>
         /// </summary>
         /// <returns>A resolved index, or null when there is nothing to read.</returns>
@@ -60,6 +60,7 @@ namespace SAM.Analytical.Tas
         internal static readonly KeyValuePair<TBD.Profiles, ProfileType>[] ProfileSlots_InternalGain =
         {
             new KeyValuePair<TBD.Profiles, ProfileType>(TBD.Profiles.ticI, ProfileType.Infiltration),
+            new KeyValuePair<TBD.Profiles, ProfileType>(TBD.Profiles.ticV, ProfileType.Ventilation),
             new KeyValuePair<TBD.Profiles, ProfileType>(TBD.Profiles.ticLG, ProfileType.Lighting),
             new KeyValuePair<TBD.Profiles, ProfileType>(TBD.Profiles.ticOLG, ProfileType.Occupancy),
             new KeyValuePair<TBD.Profiles, ProfileType>(TBD.Profiles.ticOSG, ProfileType.Occupancy),

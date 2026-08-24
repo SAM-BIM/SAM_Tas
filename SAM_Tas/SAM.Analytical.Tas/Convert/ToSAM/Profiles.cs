@@ -59,6 +59,12 @@ namespace SAM.Analytical.Tas
                 {
                     result.Add(profile);
                 }
+
+                profile = ToSAM(internalGain, TBD.Profiles.ticV, ProfileType.Ventilation, internalCondition.name);
+                if (profile != null)
+                {
+                    result.Add(profile);
+                }
             }
 
             TBD.Thermostat thermostat = internalCondition.GetThermostat();

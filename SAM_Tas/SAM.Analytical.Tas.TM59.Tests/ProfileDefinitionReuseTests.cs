@@ -37,8 +37,8 @@ namespace SAM.Analytical.Tas.TM59.Tests
     public class ProfileDefinitionReuseTests
     {
         // TBD.Profiles slot numbers. Named here rather than referenced, so this project keeps needing no
-        // Interop.TBD reference; the values are pinned against the interop metadata by
-        // Slots_ProductionSlotTable_MatchesTheseNumbers.
+        // Interop.TBD reference; the production slot tables built over them are pinned by
+        // References_VentilationSlotIsCollected_SoItsReferenceResolves via ProductionSlotNames.
         private const int ticUL = 1;
         private const int ticLL = 2;
         private const int ticHUL = 5;
@@ -62,6 +62,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
         private const string Heating = "Heating";
         private const string Humidification = "Humidification";
         private const string Dehumidification = "Dehumidification";
+        private const string Ventilation = "Ventilation";
 
         // =================================================================================================
         // Builders
@@ -451,6 +452,51 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void Naming_HDDFlattenedProfilesWithTheirOwnNames_ReachAStableFixedPoint()
+        {
+            //The export flattens a space condition's infiltration and heating profiles onto the HDD sizing
+            //condition as single-value ticValueProfiles, and names that flattened content after itself
+            //("<name> - HDD"), never after the full schedule it was derived from. The next import therefore
+            //sees two names for two definitions instead of one name for two - which is what used to accrete
+            //one "_<hash>" discriminator per SAM -> TAS -> SAM generation.
+            List<Slot> slots_Generation1 = new List<Slot>
+            {
+                new Slot("Cell 1", ticI, Infiltration, "Constant", Flat(1.0, 24)),
+                new Slot("Cell 1", ticLL, Heating, "HTG_7to19_21", Values(16, 7, 21, 12, 16, 5)),
+                new Slot("Cell 1 - HDD", ticI, Infiltration, "Constant - HDD", new[] { 0.20000000298023224 }),
+                new Slot("Cell 1 - HDD", ticLL, Heating, "HTG_7to19_21 - HDD", new[] { 21.0 }),
+            };
+
+            ProfileReuseIndex generation1 = Index(slots_Generation1);
+
+            //Both definitions exist per category, and neither needed the signature discriminator.
+            Assert.That(generation1.DefinitionCount, Is.EqualTo(4));
+            Assert.That(generation1.GetProfileName("Cell 1", ticI), Is.EqualTo("Constant"));
+            Assert.That(generation1.GetProfileName("Cell 1 - HDD", ticI), Is.EqualTo("Constant - HDD"));
+            Assert.That(generation1.GetProfileName("Cell 1", ticLL), Is.EqualTo("HTG_7to19_21"));
+            Assert.That(generation1.GetProfileName("Cell 1 - HDD", ticLL), Is.EqualTo("HTG_7to19_21 - HDD"));
+
+            //The next export writes each slot's resolved name - the HDD sibling is derived from the space's
+            //own condition and adds its " - HDD" - so generation 2 reads back exactly these names...
+            List<Slot> slots_Generation2 = new List<Slot>
+            {
+                new Slot("Cell 1", ticI, Infiltration, generation1.GetProfileName("Cell 1", ticI), Flat(1.0, 24)),
+                new Slot("Cell 1", ticLL, Heating, generation1.GetProfileName("Cell 1", ticLL), Values(16, 7, 21, 12, 16, 5)),
+                new Slot("Cell 1 - HDD", ticI, Infiltration, generation1.GetProfileName("Cell 1", ticI) + " - HDD", new[] { 0.20000000298023224 }),
+                new Slot("Cell 1 - HDD", ticLL, Heating, generation1.GetProfileName("Cell 1", ticLL) + " - HDD", new[] { 21.0 }),
+            };
+
+            ProfileReuseIndex generation2 = Index(slots_Generation2);
+
+            //...and resolves them to the identical names: the fixed point. No discriminator ever appears.
+            Assert.That(generation2.DefinitionCount, Is.EqualTo(generation1.DefinitionCount));
+            Assert.That(generation2.GetProfileName("Cell 1", ticI), Is.EqualTo(generation1.GetProfileName("Cell 1", ticI)));
+            Assert.That(generation2.GetProfileName("Cell 1 - HDD", ticI), Is.EqualTo(generation1.GetProfileName("Cell 1 - HDD", ticI)));
+            Assert.That(generation2.GetProfileName("Cell 1", ticLL), Is.EqualTo(generation1.GetProfileName("Cell 1", ticLL)));
+            Assert.That(generation2.GetProfileName("Cell 1 - HDD", ticLL), Is.EqualTo(generation1.GetProfileName("Cell 1 - HDD", ticLL)));
+        }
+
+        [Test]
         public void Naming_FirstDiscriminator_IsTheSignatureHash()
         {
             ProfileDefinition profileDefinition = Definition(Heating, Flat(21.0, 24));
@@ -725,23 +771,38 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
-        public void References_VentilationSlotIsNotCollected_SoItsKnownDanglingReferenceIsUnchanged()
+        public void References_VentilationSlotIsCollected_SoItsReferenceResolves()
         {
-            //A pre-existing defect this work deliberately does NOT fix: the import writes
-            //InternalConditionParameter.VentilationProfileName but has never emitted the ticV profile behind it.
-            //Pinning it here is what tells a future reader that a dangling ventilation reference is the baseline
-            //and not a regression this change introduced.
+            //The import has always written InternalConditionParameter.VentilationProfileName but never emitted
+            //the ticV profile behind it, so the reference dangled. ticV is now collected like every other
+            //internal-gain slot, and the reference resolves.
             IEnumerable<string> slots = ProductionSlotNames("ProfileSlots_InternalGain").Concat(ProductionSlotNames("ProfileSlots_Thermostat")).ToList();
 
-            Assert.That(slots, Has.No.Member("ticV"));
-            Assert.That(slots, Is.EquivalentTo(new[] { "ticI", "ticLG", "ticOLG", "ticOSG", "ticESG", "ticELG", "ticCOG", "ticUL", "ticLL", "ticHLL", "ticHUL" }));
+            Assert.That(slots, Has.Member("ticV"));
+            Assert.That(slots, Is.EquivalentTo(new[] { "ticI", "ticV", "ticLG", "ticOLG", "ticOSG", "ticESG", "ticELG", "ticCOG", "ticUL", "ticLL", "ticHLL", "ticHUL" }));
 
-            //So an index built over a building never answers for a ventilation profile, and the conversion keeps
-            //the legacy name it has always written.
-            ProfileReuseIndex profileReuseIndex = Index(Slots_ModelA());
-            Assert.That(profileReuseIndex.GetProfileName("Ventilation", Flat(1.0, 24)), Is.Null);
-            Assert.That(profileReuseIndex.GetProfileName("Cell 1", ticV), Is.Null);
-            Assert.That(Library(profileReuseIndex).GetProfiles().FindAll(x => x.ProfileType == ProfileType.Ventilation), Is.Empty);
+            //Two internal conditions carrying the same ventilation schedule share ONE definition, exactly as
+            //every other slot does. (Representative shape - not read from a real model.)
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+            Register(profileReuseIndex, "Cell 1", ticV, Ventilation, "Min Fresh Air", Flat(1.0, 24));
+            Register(profileReuseIndex, "Cell 2", ticV, Ventilation, "Min Fresh Air", Flat(1.0, 24));
+            profileReuseIndex.Resolve();
+
+            Assert.That(profileReuseIndex.DefinitionCount, Is.EqualTo(1));
+
+            string name = profileReuseIndex.GetProfileName("Cell 1", ticV);
+            Assert.That(name, Is.EqualTo("Min Fresh Air"));
+            Assert.That(profileReuseIndex.GetProfileName("Cell 2", ticV), Is.EqualTo(name));
+
+            //And the name resolves through the very lookup the export uses
+            //(InternalCondition.GetProfile(profileType, profileLibrary)).
+            ProfileLibrary profileLibrary = Library(profileReuseIndex);
+            InternalCondition internalCondition = new InternalCondition("Cell 1");
+            internalCondition.SetProfileName(ProfileType.Ventilation, name);
+
+            Profile profile = internalCondition.GetProfile(ProfileType.Ventilation, profileLibrary, false);
+            Assert.That(profile, Is.Not.Null, "The ventilation reference must resolve as a Ventilation profile.");
+            Assert.That(profile.GetValues(), Is.EqualTo(Flat(1.0, 24)));
         }
 
         // =================================================================================================

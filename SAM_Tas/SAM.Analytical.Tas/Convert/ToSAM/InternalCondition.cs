@@ -184,11 +184,7 @@ namespace SAM.Analytical.Tas
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
                 if (profile_TBD != null)
                 {
-                    //Deliberately NOT routed through the reuse index. ticV has never been emitted into the
-                    //imported ProfileLibrary at all (see Convert.ToSAM_Profiles), so this reference has always
-                    //dangled; routing it through the index would change that pre-existing behaviour rather than
-                    //leave it visible. Fixing it is its own piece of work.
-                    result.SetValue(InternalConditionParameter.VentilationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
+                    result.SetValue(InternalConditionParameter.VentilationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticV, ProfileType.Ventilation, profile_TBD));
                     result.SetValue(InternalConditionParameter.SupplyAirFlow, profile_TBD.GetExtremeValue(true));
                 }
             }
