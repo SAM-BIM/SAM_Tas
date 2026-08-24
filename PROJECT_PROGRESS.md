@@ -56,8 +56,8 @@ guard that would have caught the magnitude failure before TAS was run),
 file.
 
 **Validation:** `SAM_Tas.sln` builds 0 errors Debug AND Release (Framework MSBuild; pre-existing
-MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **520/520 Debug and Release**
-(497 inherited, +1 net, +17 ventilation-magnitude, +5 zero-length/reservation guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
+MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **521/521 Debug and Release**
+(497 inherited, +1 net, +17 ventilation-magnitude, +6 zero-length/reservation/slot-key guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
 to be rebuilt first (`SAM_gbXML` Core+Analytical, all four `SAM_SolarCalculator` projects, three
 `SAM_Systems` projects, `SAM_Validation/SAM.Analytical.Benchmark`) - build outputs only, no source changes
 in those repos.
@@ -129,6 +129,18 @@ it. (c) The legacy `Convert.ToSAM_Profiles` mirror repeated the twelve slots by 
 `foreach` over the shared slot tables behind the shared `Query.IsCollectableSlot` gate, so they cannot drift
 and one assertion pins both. All three verified licensed as behaviour-neutral on the real models (0
 differences across 792/5346 non-ticV fields, ModelA re-simulated at 0/227,760, library 21/31, 0 unresolved).
+**6. Second review pass (Codex).** The `Reserve` fix in item 5(b) closes a coincidental STRING collision
+between two different internal conditions, but Codex found it does not close a slot-KEY collision: two TBD
+internal conditions can share the exact same name (a duplicate space name, a generic template) while
+disagreeing on `ticV`, and `Reserve` never touches `definitionsBySlot`/`excludedNamesBySlot`. `Register`
+gained an `bool suppressLibraryEntry` parameter so a skipped `ticV` still goes through the same ambiguity
+tracking every other excluded slot already uses - only the final library-emission step is skipped. Verified
+by first reverting to the Reserve-only behaviour and confirming a new test (`IC name = "Duplicate"`, one
+`ticV` zero-length, one ordinary) genuinely failed - `GetProfileName("Duplicate", ticV)` answered the
+ordinary profile's name instead of null - then restoring the fix and confirming it passes. 521/521 tests
+Debug and Release; no full licensed A/B rerun (the cheap 2.0 ACH oracle and both real models' import
+integrity were re-checked and are unchanged).
+
 A fourth finding - a source declaring both an ACH schedule and a TAS-inert `freshAirRate` round-tripping to
 their additive sum - is answered in the handover doc rather than changed: it is the established export design
 and narrowing it would drop ventilation for native SAM models.

@@ -116,8 +116,18 @@ namespace SAM.Analytical.Tas
         /// <param name="values">The complete flattened values read out of TAS.</param>
         /// <param name="sourceName">The source TAS profile's own name - a candidate for the canonical name, and nothing else.</param>
         /// <param name="excludedName">The name a zero-length (function) profile must keep, i.e. today's <c>"{internal condition} [{profile}]"</c>.</param>
-        /// <returns>True when the slot was collected as a REUSABLE definition, false when it was excluded or rejected.</returns>
-        public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName)
+        /// <param name="suppressLibraryEntry">
+        /// True for a slot that must not become a resolvable library entry at all (today: a zero-length
+        /// <c>ticV</c>, whose function semantics are deferred). The slot key still participates fully in
+        /// ambiguity tracking below - two TBD internal conditions sharing a name, one with this slot excluded
+        /// and the other registering it as a genuine reusable definition, still correctly mark the shared key
+        /// ambiguous so NEITHER answers it - only the final library emission is skipped. Callers should also
+        /// <see cref="Reserve"/> <paramref name="excludedName"/> to close the separate case where an unrelated
+        /// definition's own canonical name happens to equal the string this suppressed slot would have
+        /// answered.
+        /// </param>
+        /// <returns>True when the slot was collected as a REUSABLE definition, false when it was excluded, suppressed or rejected.</returns>
+        public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName, bool suppressLibraryEntry = false)
         {
             if (Resolved)
             {
@@ -159,8 +169,11 @@ namespace SAM.Analytical.Tas
                 }
 
                 //The library entry is added whether or not the slot key can answer: when it cannot, the caller
-                //falls back to the legacy name, which is exactly what this entry is called.
-                if (excludedKeys.Add(string.Format(CultureInfo.InvariantCulture, "{0}::{1}", profileDefinition.Category, excludedName)))
+                //falls back to the legacy name, which is exactly what this entry is called. UNLESS the caller
+                //has asked this slot to stay unresolvable altogether (a zero-length ticV) - then no entry is
+                //emitted, but everything above (the ambiguity tracking) has already run exactly as it would
+                //for any other excluded slot.
+                if (!suppressLibraryEntry && excludedKeys.Add(string.Format(CultureInfo.InvariantCulture, "{0}::{1}", profileDefinition.Category, excludedName)))
                 {
                     excludedProfiles.Add(new Profile(excludedName, profileDefinition.Category, profileDefinition.Values));
                 }

@@ -252,11 +252,26 @@ a definition the library does not carry. Both now `foreach` over the same
 behaviour-neutral under licence: 0 differences across every field on both real models and the authored
 sources, and byte-identical SAM-side import dumps.
 
-Pinned COM-free by six tests in `ProfileDefinitionReuseTests.cs`
+**A second collision, from Codex's follow-up review.** Reserving the name closes a coincidental STRING
+collision between two DIFFERENT internal conditions, but not a slot-KEY collision: two TBD internal
+conditions can share the exact same NAME (a duplicate space name, a generic template) while disagreeing on
+`ticV` — one a genuine schedule, the other a zero-length function profile. Both then register under the
+identical `SlotKey(internalConditionName, ticV)`, and `Reserve` never touches that dictionary, so the
+skipped condition's own slot-key lookup could still answer with the ordinary condition's canonical name.
+`Register` therefore gained an `bool suppressLibraryEntry` parameter: a skipped `ticV` still calls the
+SAME `Register` every other excluded slot uses — running the SAME ambiguity tracking that already
+protects "two conditions share a name and disagree on this slot" — and only the final library-emission
+step is skipped. Verified by first reverting to the Reserve-only behaviour and confirming the new test
+fails exactly as predicted (`GetProfileName("Duplicate", ticV)` answered the ordinary profile's name
+instead of null), then restoring the fix and confirming it passes.
+
+Pinned COM-free by seven tests in `ProfileDefinitionReuseTests.cs`
 (`ZeroLength_Ventilation_IsNotCollectable_…`, `ZeroLength_Ventilation_NotCollected_LeavesTheReferenceDanglingExactlyAsBefore`,
 `ZeroLength_ProfileCountIsZero_WhichIsWhyResolvingItWouldCorruptTheFunctionProfile`,
 `ZeroLength_NonVentilationSlots_KeepTheirPR37ExclusionBehaviour`,
-`ZeroLength_Ventilation_ReservesItsLegacyName_SoNoCanonicalDefinitionCanClaimIt`, `Reserve_AfterResolve_IsRefused`). Neither licensed model contains a
+`ZeroLength_Ventilation_ReservesItsLegacyName_SoNoCanonicalDefinitionCanClaimIt`,
+`ZeroLength_Ventilation_SlotKeyCollision_WithOrdinaryTicVOnSameNamedCondition_StaysDangling`,
+`Reserve_AfterResolve_IsRefused`). Neither licensed model contains a
 function profile, so the licensed A/B was **not** rerun for this guard; a focused licensed check confirmed
 normal `ticV` is byte-identical to the accepted build (792 non-ticV and 56 ticV fields, 0 differences on
 both authored variants) and the 2.0 ACH → 2.0 ACH oracle still holds.
@@ -322,8 +337,9 @@ to drive the whole SAM airflow calculation, and the export's conversion is one l
 
 - `SAM_Tas.sln` builds with **0 errors** in Debug and Release (Framework MSBuild; only the pre-existing
   MSB3270/MSB3277 warnings).
-- `SAM.Analytical.Tas.TM59.Tests`: **520/520** in Debug and Release (498 + 17 ventilation-magnitude
-  + 5 zero-length/reservation guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug and Release.
+- `SAM.Analytical.Tas.TM59.Tests`: **521/521** in Debug and Release (498 + 17 ventilation-magnitude
+  + 6 zero-length/reservation/slot-key guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug
+  and Release.
 - **Licensed TAS A/B: run, and it changed the PR.** One-DLL-swap isolation (67 files, exactly 1
   differing) over three builds — baseline `610696e`, first attempt `e2e88ca`, corrected head — each
   identified by reflecting its own production slot table, with the corrected build reproducing

@@ -925,6 +925,61 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void ZeroLength_Ventilation_SlotKeyCollision_WithOrdinaryTicVOnSameNamedCondition_StaysDangling()
+        {
+            //Codex's follow-up P2 on this same guard. Two TBD internal conditions CAN share a name - a
+            //duplicate space name, a generic template - and still differ on ticV: one a genuine schedule, the
+            //other a zero-length TAS function profile. Both then compete for the SAME slot key
+            //(internalConditionName, ticV). Reserve() alone (the test above) protects only a coincidental
+            //STRING collision between UNRELATED conditions; it does nothing here, because Reserve never
+            //touches definitionsBySlot/excludedNamesBySlot. The production skip path therefore still calls
+            //Register (not just Reserve), with suppressLibraryEntry - so the shared key's ambiguity tracking,
+            //the SAME mechanism that already protects every other excluded slot, runs regardless of order.
+            const string name = "Duplicate";
+
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+
+            //First registration on "Duplicate": a zero-length (function) ticV, exactly as the production
+            //skip path registers it - library entry suppressed, name reserved.
+            string name_Skipped = Legacy(name, "Fresh Air Function");
+            profileReuseIndex.Register(name, ticV, Ventilation, new double[0], "Fresh Air Function", name_Skipped, suppressLibraryEntry: true);
+            profileReuseIndex.Reserve(Ventilation, name_Skipped);
+
+            //Second registration on the SAME name, SAME slot: an ordinary ticV schedule.
+            Register(profileReuseIndex, name, ticV, Ventilation, "Min Fresh Air", Flat(1.0, 24));
+
+            profileReuseIndex.Resolve();
+
+            //The shared slot key must answer NOTHING - not the function profile's legacy name, and not the
+            //ordinary profile's canonical name either. Both conditions fall back to their own lookups instead.
+            Assert.That(profileReuseIndex.GetProfileName(name, ticV), Is.Null,
+                "A slot key shared by a genuine definition and a skipped function profile must answer nothing.");
+
+            //The function condition's own reference: the slot-key lookup answers null, so it falls back to
+            //its legacy name, which the library does not carry - the safe dangling behaviour.
+            ProfileLibrary profileLibrary = Library(profileReuseIndex);
+            InternalCondition internalCondition_Function = new InternalCondition(name);
+            internalCondition_Function.SetProfileName(ProfileType.Ventilation, name_Skipped);
+
+            Assert.That(internalCondition_Function.GetProfile(ProfileType.Ventilation, profileLibrary, false), Is.Null,
+                "The function condition's reference must stay dangling, NOT resolve to the ordinary condition's profile.");
+
+            //The ordinary condition is unaffected: its slot-key lookup also answers null (ambiguous), but the
+            //value-based fallback GetProfileName(category, values) - keyed on the definition itself, not the
+            //shared slot - still finds its own registered definition.
+            string name_Ordinary = profileReuseIndex.GetProfileName(Ventilation, Flat(1.0, 24));
+            Assert.That(name_Ordinary, Is.Not.Null);
+            Assert.That(name_Ordinary, Is.Not.EqualTo(name_Skipped));
+
+            InternalCondition internalCondition_Ordinary = new InternalCondition(name);
+            internalCondition_Ordinary.SetProfileName(ProfileType.Ventilation, name_Ordinary);
+
+            Profile profile_Ordinary = internalCondition_Ordinary.GetProfile(ProfileType.Ventilation, profileLibrary, false);
+            Assert.That(profile_Ordinary, Is.Not.Null);
+            Assert.That(profile_Ordinary.GetValues(), Is.EqualTo(Flat(1.0, 24)));
+        }
+
+        [Test]
         public void Reserve_AfterResolve_IsRefused()
         {
             ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();

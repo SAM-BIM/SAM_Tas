@@ -167,25 +167,33 @@ namespace SAM.Analytical.Tas
             List<double> values = Core.Tas.Query.Values(profile_TBD);
             string category = Analytical.Query.Text(profileType);
             string name_Legacy = ProfileName_Legacy(internalConditionName, profile_TBD.name);
+            bool collectable = IsCollectableSlot((int)slot, values);
 
-            if (!IsCollectableSlot((int)slot, values))
+            if (!collectable)
             {
-                //Skipped, not excluded: nothing is collected and no library entry is emitted, so the
-                //conversion falls back to the legacy name and the reference dangles - the safe deferred
-                //behaviour. RESERVE that name so Resolve cannot later hand the identical string to a
-                //canonical definition in the same category, which would silently turn the intended
-                //dangling reference into a live one pointing at an unrelated value profile.
+                //Not collected: no library entry is emitted for this slot, so the conversion falls back to
+                //the legacy name and the reference dangles - the safe deferred behaviour. RESERVE that name
+                //so Resolve cannot later hand the identical string to an UNRELATED condition's canonical
+                //definition (two different internal conditions, no slot-key overlap, a coincidental string
+                //collision - Register's own ambiguity tracking below cannot see this, because it never
+                //shares a key with the skipped slot).
                 profileReuseIndex.Reserve(category, name_Legacy);
-                return;
             }
 
+            //Still registered even when not collectable, with the library entry suppressed: two TBD internal
+            //conditions can share a name (a duplicate space name, a generic template name) with one carrying
+            //this slot as a genuine reusable definition and the other as a zero-length function profile. Both
+            //then compete for the SAME slot key, and only Register's ambiguity tracking - shared with every
+            //other excluded slot - can mark that key unanswerable so the function condition's reference does
+            //not resolve to the ordinary condition's profile.
             profileReuseIndex.Register(
                 internalConditionName,
                 (int)slot,
                 category,
                 values,
                 profile_TBD.name,
-                name_Legacy);
+                name_Legacy,
+                suppressLibraryEntry: !collectable);
         }
     }
 }
