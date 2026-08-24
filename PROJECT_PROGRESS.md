@@ -62,10 +62,11 @@ zero-count re-export writing 24 NaNs, the inverted `double.IsNaN` guards on
 path never writing function strings). Neither PR #37 licensed model exercises a function profile; SAM has
 no home for a function string outside Lighting/Ventilation. Separate task.
 
-**Recommended next step:** licensed TAS A/B against the PR #37 baseline (`610696e9`~built-before state),
-same one-DLL-swap discipline as PR #37: `ModelA-Tas.sam` + the TM59 model; expect unresolved references
-4/36 → 0, zero name growth across three full round-trip generations, all non-ticV simulation-effective
-fields identical, and ticV fields equal to the source TBD. Then open the PR against `sow/2026-Q3`.
+**Recommended next step:** [PR #38](https://github.com/SAM-BIM/SAM_Tas/pull/38) is OPEN against
+`sow/2026-Q3`. Run the licensed TAS A/B against the PR #37 merge (`610696e9`), same one-DLL-swap
+discipline as PR #37: `ModelA-Tas.sam` + the TM59 model; expect unresolved references 4/36 → 0, zero name
+growth across three full round-trip generations, all non-ticV simulation-effective fields identical, and
+ticV fields equal to the source TBD. Do not merge before that gate; merging remains a human call.
 
 ---
 
