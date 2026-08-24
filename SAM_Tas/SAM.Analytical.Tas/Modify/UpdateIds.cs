@@ -61,8 +61,12 @@ namespace SAM.Analytical.Tas
                                     continue;
                                 }
 
-                                aperture_Panel.RemoveApertureZoneSurfaceReferences(AperturePart.Pane);
-                                aperture_Panel.RemoveApertureZoneSurfaceReferences(AperturePart.Frame);
+                                //Stamps AND definition bindings, through the one mutator that owns the pairing:
+                                //see Modify.RemoveApertureTasIdentity. The binding used to survive this pass
+                                //because it was refreshed only where the match below succeeded, so a part this
+                                //pass could not re-match carried the PREVIOUS TBD's binding forward as though
+                                //it were current state.
+                                aperture_Panel.RemoveApertureTasIdentity();
 
                                 panel.RemoveAperture(aperture_Panel.Guid);
                                 panel.AddAperture(aperture_Panel);

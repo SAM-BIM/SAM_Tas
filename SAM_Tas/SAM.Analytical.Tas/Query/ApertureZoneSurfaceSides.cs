@@ -159,5 +159,33 @@ namespace SAM.Analytical.Tas
             aperture.RemoveValue(ApertureZoneSurfaceReferenceParameter(aperturePart, 2));
             aperture.RemoveValue(ApertureZoneSurfaceReferencesParameter(aperturePart));
         }
+
+        /// <summary>
+        /// Clear one aperture part's reusable-definition binding.
+        /// <para>
+        /// The same rule <see cref="RemoveApertureZoneSurfaceReferences(Aperture, AperturePart)"/> states for the
+        /// physical stamps, applied to the binding they travel with. A <c>Pane</c>/<c>FrameBuildingElementGuid</c>
+        /// only ever means "this part was bound to definition X <b>in the TBD it was last stamped against</b>".
+        /// Carried into a DIFFERENT TBD it is not merely redundant: TAS mints its own aperture elements on every
+        /// gbXML/T3D conversion, so the stale GUID names an element that either does not exist or exists and
+        /// belongs to something else - and the surface it claims is really bound to the new element.
+        /// </para>
+        /// <para>
+        /// <b>Deliberately NOT called from <see cref="Modify.SetApertureZoneSurfaceReferences"/>.</b> That mutator
+        /// owns the physical stamps alone; the binding is written by whichever pass resolved it. Only a pass that
+        /// is about to re-resolve the binding against a new TBD - <see cref="Modify.UpdateIds"/> - may clear it,
+        /// and it clears BOTH so a part it cannot re-match reports honestly as unstamped rather than presenting
+        /// the previous TBD's binding as current state.
+        /// </para>
+        /// </summary>
+        public static void RemoveApertureBuildingElementGuid(this Aperture aperture, AperturePart aperturePart)
+        {
+            if (aperture == null)
+            {
+                return;
+            }
+
+            aperture.RemoveValue(ApertureBuildingElementGuidParameter(aperturePart));
+        }
     }
 }

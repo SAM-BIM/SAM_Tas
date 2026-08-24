@@ -1,7 +1,11 @@
 # Project Progress
 
 ## Branch
-`feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
+`fix/tas-fromtbd-gbxml-aperture-roundtrip` (off `sow/2026-Q3` at `372518a6`, i.e. with **PR #38 merged**).
+Aperture identity across a FULL gbXML round trip - `TBD -> FromTBD -> new SAM -> gbXML -> a NEW TBD`. See
+`SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
+
+Previously: `feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
 the profile definition reuse this work hardens). PR #36 (`UpdateIds` zone identity) and PR #37 (profile
 definition reuse) are both merged; see the "Previously" sections below for their state at merge time.
 
@@ -15,7 +19,22 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-24 (profile round-trip hardening - LICENSED, and corrected) - **The two leftovers PR #37 pinned as
+2026-08-24 (aperture identity across a full gbXML round trip - LICENSED). **`Modify.UpdateIds` cleared every
+aperture's physical stamps unconditionally but never cleared `Pane`/`FrameBuildingElementGuid` - which in
+fact was never cleared anywhere.** A part the refresh could not re-match therefore carried the PREVIOUS TBD's
+definition binding forward as apparent current state, so `Modify.UpdateApertureDefinitions` counted it as
+bound and `Query.ApertureRebindKeys` refused it - the mechanism behind both reported refusal classes and a
+`40 considered / 0 rebound` outcome. Fixed by one new mutator, `Modify.RemoveApertureTasIdentity`, which
+clears stamps and bindings together, called from the one unconditional clearing pass in `UpdateIds`. **No
+refusal was relaxed.** Licensed: A0 -> TBD1 -> FromTBD -> A1 -> TBD2 -> FromTBD -> A2 -> TBD3 on the 9-zone /
+20-aperture Flat1 fixture - all three TBDs hold 40 aperture parts on **3** aperture building elements (one
+shared frame, two panes), `40 rebound` with zero refusals in every generation, and every simulation-effective
+aperture field identical across generations. **Caveat: the originally reported symptom did not reproduce at
+base `372518a6`** - the chain already reached the fixed point there; the fix is proven by a mutation check
+instead (disabling the binding clear fails three of the new tests, one with the exact reported message).
+Detail and limitations in `SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
+
+Previously: 2026-08-24 (profile round-trip hardening - LICENSED, and corrected) - **The two leftovers PR #37 pinned as
 baseline are fixed, and the licensed run caught a third defect the fix itself activated: the imported
 ventilation rate was inflated by 3600/volume.** Full detail in
 `SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md`.
