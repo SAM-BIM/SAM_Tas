@@ -360,7 +360,16 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            aperturePart = AperturePart(buildingElement.BEType);
+            //Which HALF of an opening this surface is, read the way the import reads it - see
+            //Query.AperturePart_BuildingElementType. NOT Query.AperturePart(int), which answers Frame for
+            //BEType 14: that is TAS's DOOR type, and a door leaf is an opening's glazed half, not its frame.
+            //With the wrong reading a door-typed surface was collected as a FRAME, so the aperture ended the
+            //pass with two surfaces in its frame set - the real frame and the pane - bound to whichever of
+            //the two elements was written last, and with no pane stamp at all. Modify.UpdateApertureDefinitions
+            //then skipped the pane for want of a binding and Query.ApertureRebindKeys refused the frame,
+            //because the set it claimed was not all on one element. TAS types an opening's pane DOOR rather
+            //than GLAZING for a whole model at a time, so this is never one stray window: it is every window.
+            aperturePart = AperturePart_BuildingElementType(buildingElement);
             if (aperturePart == Analytical.AperturePart.Undefined)
             {
                 return null;
