@@ -24,6 +24,33 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-24 (found, not yet investigated: a ~29% cooling-load drop between generation 1 and 2).
+
+While validating the ventilation fix above, ran heating/cooling design loads (`Modify.UpdateDesignLoads`, the
+same call `WorkflowCalculator` makes after sizing) across a 3-generation chain built with BOTH this session's
+fixes applied (`RA0.tbd` -> `LC1` -> `LC2` -> `LC3`, `Convert.ToSAM` -> `TogbXML` -> `WorkflowCalculator`,
+sizing on, `_importUnused_`/`_importSurfaceShades_` both false):
+
+| generation | heating (W) | cooling (W) |
+|---|---|---|
+| RA0 (seed) | 11,037 | 115,192 |
+| LC1 | 11,289 (+2.3%) | 115,168 (~same) |
+| **LC2** | 11,726 (+3.9%) | **81,883 (-28.9%)** |
+| LC3 | 11,726 (same) | 81,883 (same) |
+
+`ticV.factor`/`freshAirRate` are RULED OUT as the cause - confirmed identical (2.44/1.72 Studio/Bedroom,
+8.0 l/s/p) across all three generations via direct COM dump. Cooling drops sharply exactly once, between
+generation 1 and 2, then reaches a fixed point (LC2 == LC3 exactly) - the same signature as both bugs fixed
+this session (stable gen0->gen1, a jump at gen1->gen2, then stable). A ~29% cooling swing with no ventilation
+change points at solar gain: glazing g-value/SHGC, shading, or aperture-type control are the leading
+suspects, not yet narrowed down.
+
+**Not yet investigated further - logged per explicit instruction to stop here.** Whoever picks this up next
+should reproduce with the `P39` harness pattern used for the other two fixes (`Convert.ToSAM` ->
+`TogbXML` -> `WorkflowCalculator.Calculate`, `Modify.UpdateDesignLoads` to read back loads), then diff the
+SAM-side `ApertureConstruction`/glazing parameters and any shading/blind state between generation 1 and 2 to
+find what actually changes at that seam.
+
 2026-08-24 (ventilation ticV factor grew on every round trip - LICENSED).
 
 **Reported from a real Grasshopper run of `A0-A1-A2.ghx`:** the ventilation profile VALUES were identical
