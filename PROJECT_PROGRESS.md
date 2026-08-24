@@ -64,6 +64,17 @@ Debug and Release (+18 new cases in `ApertureDoorTypedPartTests.cs`), `SAM.Analy
 **16/16** both; two mutation checks bite (reverting the door reading fails 3, reverting the sweep test fails
 2). Detail in `SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
 
+**Review fix, before merge.** Copilot's PR review caught a second instance of the same shape of bug in
+`Modify.UpdateIds`'s clearing loop: an `AdjacencyCluster` can hold one aperture as both a panel-held object
+and a standalone cluster object, real models carry both, and `GetAperture(guid)`/`GetObject<Aperture>(guid)`
+return the standalone one - not the panel one that gets restamped. The clearing loop cleared only the
+panel-held copy, so a part the refresh could not re-match left its **standalone** copy still carrying the
+previous TBD's binding - reachable through `GetAperture`/`GetObject<Aperture>` even though the panel copy now
+correctly read unstamped. `UpdateApertureDefinitions`'s own successful restamp (`RestampApertureBinding`)
+already updates both shapes for this exact reason; the clearing pass now does too. Re-verified licensed with
+`_importSurfaceShades_` on (the mode that creates the standalone copies): still `40 considered / 40 rebound`,
+zero refusals, both generations. Full test suite re-run clean (554/554 + 16/16, both configs).
+
 Previously: 2026-08-24 (aperture identity across a full gbXML round trip - LICENSED). **`Modify.UpdateIds` cleared every
 aperture's physical stamps unconditionally but never cleared `Pane`/`FrameBuildingElementGuid` - which in
 fact was never cleared anywhere.** A part the refresh could not re-match therefore carried the PREVIOUS TBD's

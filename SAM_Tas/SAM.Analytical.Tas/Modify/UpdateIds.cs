@@ -70,6 +70,22 @@ namespace SAM.Analytical.Tas
 
                                 panel.RemoveAperture(aperture_Panel.Guid);
                                 panel.AddAperture(aperture_Panel);
+
+                                //BOTH shapes an aperture can be held in, cleared together - see
+                                //AperturePanelIndex's own note and Modify.UpdateApertureDefinitions'
+                                //RestampApertureBinding, which re-stamps both shapes on a SUCCESSFUL match for
+                                //exactly this reason. Leaving the standalone cluster object uncleared here
+                                //meant that whenever the match below could not re-resolve this aperture, its
+                                //panel copy read UNSTAMPED (the honest, current state) while
+                                //AdjacencyCluster.GetAperture(guid)/GetObject<Aperture> kept handing back the
+                                //stale copy still carrying the previous TBD's binding - the very state this
+                                //whole pass exists to eliminate.
+                                Aperture aperture_Object = adjacencyCluster.GetObject<Aperture>(aperture_Panel.Guid);
+                                if (aperture_Object != null)
+                                {
+                                    aperture_Object.RemoveApertureTasIdentity();
+                                    adjacencyCluster.AddObject(aperture_Object);
+                                }
                             }
                         }
 

@@ -75,6 +75,18 @@ namespace SAM.Analytical.Tas.TM59.Tests
             }));
         }
 
+        /// <summary>A wall large enough to hold <see cref="Window"/>'s aperture, for building a Panel.</summary>
+        private static Face3D Wall()
+        {
+            return new Face3D(new Polygon3D(new List<Point3D>
+            {
+                new Point3D(-5, 0, -5),
+                new Point3D(5, 0, -5),
+                new Point3D(5, 0, 5),
+                new Point3D(-5, 0, 5)
+            }));
+        }
+
         private static ZoneSurfaceReference Reference(string zoneGuid, int surfaceNumber)
         {
             return new ZoneSurfaceReference(surfaceNumber, zoneGuid);
@@ -395,6 +407,98 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(identity.Key(AperturePart.Pane, 1), Is.EqualTo(new ZoneSurfaceKey(ZoneA, 11)), "Side order is by zone GUID, not arrival order.");
             Assert.That(identity.Key(AperturePart.Pane, 2), Is.EqualTo(new ZoneSurfaceKey(ZoneB, 3)));
             Assert.That(identity.SurfaceSetComplete(AperturePart.Pane), Is.True);
+        }
+
+        // =================================================================================================
+        // 7 - the clearing pass reaches BOTH shapes an aperture can be held in
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>Caught in review, before merge.</b> An <see cref="AdjacencyCluster"/> can hold one aperture on
+        /// its panel AND, independently, as a cluster object in its own right - real models carry both (every
+        /// aperture on the gbXML route with <c>_importSurfaceShades_</c> on).
+        /// <see cref="AdjacencyCluster.GetAperture(System.Guid)"/> and
+        /// <see cref="AdjacencyCluster.GetObject{T}(System.Guid)"/> answer with the standalone copy, not the
+        /// panel-held one that a refresh restamps (<see cref="AperturePanelIndex"/>).
+        /// <see cref="Modify.UpdateApertureDefinitions(TBD.Building, AdjacencyCluster, Core.MaterialLibrary, out List{string})"/>'s
+        /// own successful restamp already writes both shapes for exactly this reason - its private
+        /// <c>RestampApertureBinding</c> updates the panel copy via <c>AperturePanelIndex</c> and then the
+        /// standalone one via <c>GetObject&lt;Aperture&gt;</c>. <c>Modify.UpdateIds</c>'s clearing loop is
+        /// COM-driven and cannot run here, but the shape of the fix - clear both, the same way the restamp
+        /// writes both - is COM-free, and is pinned directly below.
+        /// </summary>
+        [Test]
+        public void ClearingBothShapes_LeavesNoStaleBindingReachableThroughGetObject()
+        {
+            //Fixture: one aperture held BOTH ways, exactly as UpdateIds meets it on the gbXML route with
+            //_importSurfaceShades_ on. The standalone copy is a snapshot of the imported (bound) state.
+            Aperture aperture_Panel = Imported();
+            Panel panel = Analytical.Create.Panel(Analytical.Query.DefaultConstruction(PanelType.WallExternal), PanelType.WallExternal, Wall());
+            Assume.That(panel.AddAperture(aperture_Panel), Is.True, "fixture: the window must sit in the wall");
+
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            adjacencyCluster.AddObject(panel);
+            adjacencyCluster.AddObject(new Aperture(aperture_Panel));
+
+            //THE FIX, spelt out the way UpdateIds now applies it: clear the panel-held copy, then look up and
+            //clear the standalone copy by the SAME GUID, and write both back.
+            Aperture aperture_PanelHeld = panel.GetAperture(aperture_Panel.Guid);
+            aperture_PanelHeld.RemoveApertureTasIdentity();
+            panel.RemoveAperture(aperture_PanelHeld.Guid);
+            panel.AddAperture(aperture_PanelHeld);
+            adjacencyCluster.AddObject(panel);
+
+            Aperture aperture_Standalone = adjacencyCluster.GetObject<Aperture>(aperture_Panel.Guid);
+            Assert.That(aperture_Standalone, Is.Not.Null, "fixture: the standalone copy must exist for this test to mean anything");
+            aperture_Standalone.RemoveApertureTasIdentity();
+            adjacencyCluster.AddObject(aperture_Standalone);
+
+            //Read the way anything downstream that calls GetAperture/GetObject<Aperture> would - and the way
+            //the panel walk (AperturePanelIndex, AperturePhysicalIndex) would.
+            Aperture read_ViaGetAperture = adjacencyCluster.GetAperture(aperture_Panel.Guid);
+            Aperture read_ViaPanel = adjacencyCluster.AperturePanelIndex().GetAperture(aperture_Panel.Guid);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(read_ViaGetAperture.AperturePhysicalIdentity().HasStamps, Is.False,
+                    "GetAperture answers with the standalone copy - it must read unstamped too, not just the panel copy.");
+                Assert.That(read_ViaPanel.AperturePhysicalIdentity().HasStamps, Is.False);
+            });
+        }
+
+        /// <summary>
+        /// The bug this guards against, demonstrated: clearing ONLY the panel-held copy (the gap before the
+        /// review fix) leaves <c>GetAperture</c>/<c>GetObject&lt;Aperture&gt;</c> still answering with the
+        /// previous TBD's binding, even though the panel copy - the one a refresh actually restamps - is
+        /// correctly unstamped.
+        /// </summary>
+        [Test]
+        public void ClearingOnlyThePanelCopy_LeavesGetApertureAnsweringWithTheStaleBinding()
+        {
+            Aperture aperture_Panel = Imported();
+            Panel panel = Analytical.Create.Panel(Analytical.Query.DefaultConstruction(PanelType.WallExternal), PanelType.WallExternal, Wall());
+            Assume.That(panel.AddAperture(aperture_Panel), Is.True);
+
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            adjacencyCluster.AddObject(panel);
+            adjacencyCluster.AddObject(new Aperture(aperture_Panel));
+
+            //Only the panel-held copy cleared - the pre-review-fix behaviour.
+            Aperture aperture_PanelHeld = panel.GetAperture(aperture_Panel.Guid);
+            aperture_PanelHeld.RemoveApertureTasIdentity();
+            panel.RemoveAperture(aperture_PanelHeld.Guid);
+            panel.AddAperture(aperture_PanelHeld);
+            adjacencyCluster.AddObject(panel);
+
+            Aperture read_ViaGetAperture = adjacencyCluster.GetAperture(aperture_Panel.Guid);
+            Aperture read_ViaPanel = adjacencyCluster.AperturePanelIndex().GetAperture(aperture_Panel.Guid);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(read_ViaPanel.AperturePhysicalIdentity().HasStamps, Is.False, "the panel copy is correctly unstamped");
+                Assert.That(read_ViaGetAperture.AperturePhysicalIdentity().HasStamps, Is.True,
+                    "the uncleared standalone copy is what GetAperture hands back, and it is stale - this is the defect the review fix closes");
+            });
         }
     }
 }

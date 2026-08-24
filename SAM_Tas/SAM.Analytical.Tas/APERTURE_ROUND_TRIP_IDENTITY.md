@@ -261,6 +261,23 @@ Nothing is loosened. Physical identity is still `{ZoneGuid, SurfaceNumber}`; a `
 only a definition binding; the sweep's other two gates (holds no surface, is not canonical) are untouched, so
 an element standing for a real opening is still never a candidate. `Query.ApertureRebindKeys` is unchanged.
 
+### The clearing pass had the same two-shapes gap the fix above closes
+
+Caught in review, before merge. An `AdjacencyCluster` can hold the same aperture in **two shapes**: on its
+panel (what `panel.Apertures`, `Query.AperturePhysicalIndex` and the export's own membership map all read)
+and, independently, as a cluster **object** in its own right — real models carry both, `_importSurfaceShades_`
+being one route that does. `AdjacencyCluster.GetAperture(guid)`/`GetObject<Aperture>(guid)` return the
+standalone copy, not the panel one (see `AperturePanelIndex.cs`). `Modify.UpdateApertureDefinitions`'s own
+successful restamp already writes **both** shapes for exactly this reason
+(`RestampApertureBinding`) — but `UpdateIds`'s clearing loop only cleared the panel-held copy.
+
+So a part the refresh could not re-match ended the pass **unstamped on its panel** (the honest, current
+state) while its standalone copy still carried the previous TBD's binding — the exact stale state this whole
+document exists to eliminate, now reachable through `GetAperture`/`GetObject<Aperture>` instead of through
+the panel. Fixed by clearing the standalone copy alongside the panel one, in the same loop, through the same
+`RemoveApertureTasIdentity` mutator. Re-verified licensed with `_importSurfaceShades_` on (the mode that
+creates the standalone copies): still `40 considered / 40 rebound`, zero refusals, in both generations.
+
 ### Why the earlier library harness passed
 
 It called `Convert.ToSAM(path, importUnused: false, …)` — the flag left at its default. The failing Grasshopper run had
