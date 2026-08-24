@@ -126,8 +126,23 @@ namespace SAM.Analytical.Tas
         /// definition's own canonical name happens to equal the string this suppressed slot would have
         /// answered.
         /// </param>
+        /// <returns>True when the slot was collected as a REUSABLE definition, false when it was excluded or rejected.</returns>
+        /// <remarks>
+        /// Binary-compatible overload, kept exactly as it was before <c>suppressLibraryEntry</c> existed. An
+        /// optional parameter is a COMPILE-time convenience only - it does not preserve the original CLR method,
+        /// so a caller already compiled against this six-argument signature (a Grasshopper/Revit plugin
+        /// referencing this DLL as a binary, not recompiled on every SAM_Tas release) would throw
+        /// <see cref="MissingMethodException"/> the moment it loaded a build that replaced this overload with a
+        /// seven-argument one, default value or not (Codex flagged this on PR #38). Forwards to the real
+        /// implementation with the library-suppression option off, i.e. identical to this method's previous body.
+        /// </remarks>
+        public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName)
+        {
+            return Register(internalConditionName, slot, category, values, sourceName, excludedName, suppressLibraryEntry: false);
+        }
+
         /// <returns>True when the slot was collected as a REUSABLE definition, false when it was excluded, suppressed or rejected.</returns>
-        public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName, bool suppressLibraryEntry = false)
+        public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName, bool suppressLibraryEntry)
         {
             if (Resolved)
             {

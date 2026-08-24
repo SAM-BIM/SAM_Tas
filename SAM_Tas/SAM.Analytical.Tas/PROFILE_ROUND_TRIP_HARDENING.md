@@ -258,10 +258,7 @@ conditions can share the exact same NAME (a duplicate space name, a generic temp
 `ticV` — one a genuine schedule, the other a zero-length function profile. Both then register under the
 identical `SlotKey(internalConditionName, ticV)`, and `Reserve` never touches that dictionary, so the
 skipped condition's own slot-key lookup could still answer with the ordinary condition's canonical name.
-`Register` therefore gained an `bool suppressLibraryEntry` parameter: a skipped `ticV` still calls the
-SAME `Register` every other excluded slot uses — running the SAME ambiguity tracking that already
-protects "two conditions share a name and disagree on this slot" — and only the final library-emission
-step is skipped. Verified by first reverting to the Reserve-only behaviour and confirming the new test
+`Register` gained an overload that adds `bool suppressLibraryEntry`, kept as a SEPARATE seven-argument method rather than an optional parameter on the existing one - Codex caught that an optional-parameter default is compile-time only, so it would not have preserved the original six-argument CLR method a pre-compiled plugin (Grasshopper/Revit, referencing this DLL as a binary) had already linked against, and that plugin would throw `MissingMethodException` the moment it loaded an upgraded SAM_Tas build. The six-argument overload now forwards to the seven-argument one with the suppression off, identical to its previous body. A skipped `ticV` still calls the SAME logic every other excluded slot uses - running the SAME ambiguity tracking - and only the final library-emission step is skipped. Verified by first reverting to the Reserve-only behaviour and confirming the new test
 fails exactly as predicted (`GetProfileName("Duplicate", ticV)` answered the ordinary profile's name
 instead of null), then restoring the fix and confirming it passes.
 
