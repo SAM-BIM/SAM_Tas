@@ -106,10 +106,80 @@ the export uses (pinned COM-free by
   intended behavioural difference vs the pre-fix baseline — so the licensed acceptance compares the
   round-tripped TBD's `ticV` fields against the **source** TBD, not only baseline-vs-feature. (The same
   ticV field set — type/factor/value/setback/hourly/yearly — is already in the 852/5754-field dump.)
-- Magnitude semantics are unchanged from every other slot: the export factor is recomputed per zone
+- Magnitude semantics follow every other slot: the export factor is recomputed per zone
   (`CalculatedSupplyAirFlow / volume * 3600`), exactly as native SAM models are already exported today.
-- Native SAM models are unaffected (their ventilation references already resolved); the TIC import path
-  is unchanged (it has no reuse index, like all its other slots).
+  **This only round-trips if the import stores the ticV peak on the ACH basis** — see "The magnitude
+  defect this PR first shipped" below, which is why the import writes
+  `InternalConditionParameter.SupplyAirChangesPerHour` and not `SupplyAirFlow`.
+- Native SAM models are unaffected (their ventilation references already resolved). The TIC import path
+  keeps its legacy per-condition reference name (it has no reuse index, like all its other slots), but it
+  shared the unit mis-mapping and took the same one-line correction — see below.
+
+## The magnitude defect this PR first shipped
+
+The first licensed acceptance run of this branch **failed**, and it is recorded here rather than tidied
+away, because the reason it failed is the reason the ventilation fix has two halves instead of one.
+
+**What the first attempt got right.** Collecting `ticV` took the unresolved ventilation references from
+4 (ModelA) / 36 (TM59) to **0**, deduped all 4 / 36 slots onto a single reusable definition (library
+20 → 21 and 30 → 31), and restored the imported profile's **type and shape** exactly. Non-ticV
+simulation-effective fields were untouched (792 and 5346 fields, 0 differences) and both real models
+simulated identically to baseline (227,760 and 1,024,920 values, 0 differences).
+
+**What it got wrong.** Neither licensed model carries a non-zero `ticV` (both are
+`factor 1.0, value 0.0` — ventilation off), so their round trip is simulation-inert and the defect was
+invisible on them. Authoring a source `ticV` of **2.0 ACH** (hourly, 0.25/1.0/0.5) exposed it:
+
+| | type | factor | effective peak |
+| --- | --- | --- | --- |
+| source | `ticHourlyProfile` | 2.0 | **2.0 ACH** |
+| pre-fix baseline round trip | `ticValueProfile` | 1.0 | 0 — schedule lost |
+| **first-attempt** round trip | `ticHourlyProfile` ✓ | 40.8 | **40.8 ACH — 20.4×** |
+| corrected round trip | `ticHourlyProfile` ✓ | 2.0 | **2.0 ACH** ✓ |
+
+**Root cause.** `profile.GetExtremeValue(true)` on a `ticV` slot is a peak **air change rate**. The import
+stored it in `InternalConditionParameter.SupplyAirFlow`, declared `[m3/s]`. `CalculatedSupplyAirFlow` then
+read 2.0 as 2.0 m³/s, and the export's own `/ volume * 3600` scaled it by 3600/volume — 18× on a 200 m³
+zone. The arithmetic closes exactly: `(0.008 × 6.667 + 2.0) / 200 × 3600 = 40.8`, where the 0.008 × 6.667
+term is the per-person basis that alone yields the 4.8 seen when `ticV` is zero.
+
+This was **dormant** while the ventilation reference dangled — the export could not resolve the profile,
+so it never wrote the factor at all. Collecting `ticV` is precisely what made it live. Judging the change
+only against the pre-fix baseline could never have caught it: baseline was 0 ACH, the first attempt was
+40.8 ACH, and both are wrong against the source.
+
+**The correction.** Two sites, both unit-only:
+
+- `Convert/ToSAM/InternalCondition.cs` — the ticV peak now goes to
+  `InternalConditionParameter.SupplyAirChangesPerHour`, declared `[ACH]`. The export's
+  `/ volume * 3600` is the exact inverse of that basis's `rate × volume / 3600`, so the rate returns
+  unchanged **whatever the zone volume**. Applied to both overloads (TBD and TIC), which shared the
+  mis-mapping.
+- `Modify/UpdateInternalConditionTemplate.cs` — a template has no space, so whichever parameter it reads
+  becomes the factor verbatim. It now prefers `SupplyAirChangesPerHour`, falling back to `SupplyAirFlow`
+  so a SAM-authored template carrying only the legacy m³/s parameter keeps the factor it has always been
+  given. Without the preference an imported template would have silently written a **zero** ventilation
+  factor once the import stopped writing `SupplyAirFlow`.
+
+`CalculatedSupplyAirFlow` itself is untouched: the rate is routed to the basis that already inverts
+correctly rather than compensated for downstream.
+
+**Licensed result of the correction.** With the ACH basis as the only specified basis, the round trip is
+source-exact: factor 2.0 → 2.0, shape preserved, and the simulation matches the source to within the
+pre-existing geometry/solar round-trip noise (max 909.7 W, on `solarGain`, the same value and hour the
+zero-ventilation models already show). `infVentGain` agrees to **0.003 %**; peak hourly heating error
+fell from **69,950 W to 326 W**. Both real models remain **0 differences** against baseline (227,760 and
+1,024,920 values), and TM59 factor agreement with the source improved from 18/54 to 26/54.
+
+**Known remaining deviation, and why it is not this fix.** TAS's `internalGain.freshAirRate` is inert in
+a TBD simulation — measured directly: 40 l/s/p vs 0 l/s/p over an otherwise identical model gives
+**0 differences in 227,760 values**. SAM nevertheless imports it as `SupplyAirFlowPerPerson`, a real
+design basis, and `CalculatedSupplyAirFlow` is purely **additive** over all four bases. So a source
+carrying both 2.0 ACH and a (dormant) 8–40 l/s/p rate round-trips to 2.0 ACH *plus* that rate — 6.8 ACH
+on ModelA's 40 l/s/p, ~1 ACH extra on a typical 8 l/s/p model. That is the established export design,
+active for native SAM models long before this PR, and narrowing it to the ACH basis would silently drop
+ventilation for every SAM model that expresses it in m³/s. Whether importing a TAS field that TAS ignores
+should feed a live SAM basis is a separate question, deliberately not answered here.
 
 ## Out of scope (unchanged from PR #37, recorded so they are not rediscovered)
 
@@ -126,11 +196,9 @@ the export uses (pinned COM-free by
   `UpdateInternalCondition`'s `VentilationFunctionSetback`/`VentilationFunctionFactor` writes are guarded
   by `double.IsNaN(…)` instead of `!double.IsNaN(…)` and therefore never fire; and the template path
   (`UpdateInternalConditionTemplate`) never writes `LightingControlFunction`/`VentilationFunction` at all.
-- The `InternalConditionParameter.SupplyAirFlow` unit muddle (the import stores the ticV peak **ACH**
-  from `GetExtremeValue(true)` into a parameter documented as m³/s, and `CalculatedSupplyAirFlow` sums it
-  as m³/s). Pre-existing for imported models, identical in kind to how every slot's magnitude is
-  recomputed per zone on export, and changing it would alter simulation-effective values for models that
-  set the parameter natively — outside this PR's invariant.
+- ~~The `InternalConditionParameter.SupplyAirFlow` unit muddle.~~ **This was wrong, and licensed
+  validation disproved it.** Calling it out of scope assumed it stayed dormant; collecting ticV is
+  precisely what woke it. It is now fixed — see the next section.
 - TBD `InternalCondition` sharing, construction naming, and the occupancy ticOSG/ticOLG single-reference
   fold (SAM models one Occupancy profile reference; both TBD slots' definitions are in the library, but
   the condition references ticOLG's — a SAM representation limit, unchanged).
@@ -149,14 +217,43 @@ the export uses (pinned COM-free by
   (`ModelA_TheTwoNameCollisionsAreDiscriminated`,
   `Naming_SameNameDifferentDefinitions_DiscriminatesDeterministically`).
 
+`SAM.Analytical.Tas.TM59.Tests/VentilationAirflowMagnitudeTests.cs` (11 tests) — the COM-free guard that
+would have caught the magnitude failure before TAS was run. A Space plus an InternalCondition is enough
+to drive the whole SAM airflow calculation, and the export's conversion is one line of arithmetic:
+
+- `Units_SupplyAirFlowIsVolumeFlow_AndSupplyAirChangesPerHourIsARate` — pins the declared `[m3/s]` /
+  `[ACH]` units the whole correction rests on.
+- `ImportedTicVPeak_StoredAsAirChangesPerHour_ExportsBackAsTheSameRate` and
+  `ImportedTicVPeak_OnTheAirChangesBasis_IsVolumeIndependent` — 2.0 ACH returns as 2.0 for volumes of
+  50 / 200 / 1234.5 m³.
+- `ImportedTicVPeak_StoredAsSupplyAirFlow_IsInflatedByTheVolumeRatio` and
+  `TheTwoStorageChoices_DisagreeByTheVolumeRatio_NotByRounding` — reproduce the defect exactly (36 ACH on
+  a 200 m³ zone) and assert that `SupplyAirFlow = 2.0` is **not** equivalent to
+  `SupplyAirChangesPerHour = 2.0`.
+- `CalculatedSupplyAirFlow_SumsEveryBasis_ItDoesNotSelectOne` — pins the additive combination rule (no
+  precedence, no `max()`), so the residual per-person term can never be misattributed to the unit bug
+  again; `..._WithNoBasisSpecified_IsNaN_SoTheExportFallsBackToFactorOne` pins the untouched case.
+- `TemplateCondition_HasNoVolume_SoItsTicVFactorIsTheAirChangesValueItself` and
+  `TemplateCondition_CarryingOnlyTheLegacyFlowParameter_StillUsesIt` — pin both halves of the template
+  path's parameter preference, including that native SAM-authored template ventilation is not dropped.
+
 ## Validation
 
 - `SAM_Tas.sln` builds with **0 errors** in Debug and Release (Framework MSBuild; only the pre-existing
   MSB3270/MSB3277 warnings).
-- `SAM.Analytical.Tas.TM59.Tests`: **498/498** in Debug and Release (497 inherited, +1 net: one
-  replaced ventilation pin, one new fixed-point test).
-- **Licensed TAS A/B: required before merge, not yet run.** Scenarios: `ModelA-Tas.sam` and the TM59
-  project model from PR #37 — expect unresolved references 4/36 → 0, definition counts 20 → 20 + the
-  distinct ventilation definitions, **zero** name growth across three full round-trip generations, all
-  non-ticV simulation-effective fields identical to the PR #37 baseline, and ticV fields now equal to the
-  **source** TBD.
+- `SAM.Analytical.Tas.TM59.Tests`: **509/509** in Debug and Release (498 + 11 new ventilation-magnitude
+  tests). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug and Release.
+- **Licensed TAS A/B: run, and it changed the PR.** One-DLL-swap isolation (67 files, exactly 1
+  differing) over three builds — baseline `610696e`, first attempt `e2e88ca`, corrected head — each
+  identified by reflecting its own production slot table, with the corrected build reproducing
+  byte-identically under `-t:Rebuild`.
+  - Unresolved ventilation references **4 → 0** (ModelA) and **36 → 0** (TM59); library **20 → 21** and
+    **30 → 31**; every ticV slot deduped onto one definition; counts stable across generations.
+  - HDD name fixed point: baseline accretes one `_<hash>` **per generation** without converging
+    (24 differing lines/generation on ModelA, 156 on TM59); the fix reaches generation 2 == generation 3
+    == generation 4, byte-identical, with zero nested growth.
+  - Non-ticV simulation-effective fields: **0 differences** in 792 (ModelA) and 5346 (TM59). Zone-GUID
+    churn is noise — a same-DLL control differed in nothing else.
+  - Both real models: **0 differences** against baseline in 227,760 and 1,024,920 simulated values,
+    before and after the correction.
+  - Authored 2.0 ACH source oracle: see "The magnitude defect this PR first shipped" above.

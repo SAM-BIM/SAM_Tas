@@ -185,7 +185,15 @@ namespace SAM.Analytical.Tas
                 if (profile_TBD != null)
                 {
                     result.SetValue(InternalConditionParameter.VentilationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticV, ProfileType.Ventilation, profile_TBD));
-                    result.SetValue(InternalConditionParameter.SupplyAirFlow, profile_TBD.GetExtremeValue(true));
+
+                    //ticV is an AIR CHANGE RATE: GetExtremeValue(true) is the peak factor*value, in ACH.
+                    //SupplyAirFlow is [m3/s], so storing an ACH there made Query.CalculatedSupplyAirFlow
+                    //read it as m3/s and the export's own "/ volume * 3600" inflate it by 3600/volume - a
+                    //licensed round trip turned a 2.0 ACH source profile into 40.8 ACH on a 200 m3 zone.
+                    //SupplyAirChangesPerHour is the [ACH] basis and the export conversion is its exact
+                    //inverse, so the rate now returns unchanged. Harmless while the ventilation reference
+                    //dangled; live the moment ticV became a collected, resolvable profile.
+                    result.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, profile_TBD.GetExtremeValue(true));
                 }
             }
 
@@ -345,7 +353,9 @@ namespace SAM.Analytical.Tas
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.VentilationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.SupplyAirFlow, profile_TIC.GetExtremeValue(true));
+
+                    //Same unit rule as the TBD overload above: a ticV extreme is ACH, not m3/s.
+                    result.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, profile_TIC.GetExtremeValue(true));
                 }
 
             }

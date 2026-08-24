@@ -128,7 +128,18 @@ namespace SAM.Analytical.Tas
                 UpdateProfile(internalGain, (int)TBD.Profiles.ticESG, internalCondition, ProfileType.EquipmentSensible, profileLibrary, InternalConditionParameter.EquipmentSensibleGainPerArea);
                 UpdateProfile(internalGain, (int)TBD.Profiles.ticELG, internalCondition, ProfileType.EquipmentLatent, profileLibrary, InternalConditionParameter.EquipmentLatentGainPerArea);
                 UpdateProfile(internalGain, (int)TBD.Profiles.ticCOG, internalCondition, ProfileType.Pollutant, profileLibrary, InternalConditionParameter.PollutantGenerationPerArea);
-                UpdateProfile(internalGain, (int)TBD.Profiles.ticV, internalCondition, ProfileType.Ventilation, profileLibrary, InternalConditionParameter.SupplyAirFlow);
+                // ticV is an ACH rate, and a template has no space, so there is no volume to convert
+                // through: whatever parameter is read here becomes the factor verbatim. Prefer the ACH
+                // basis - that is what the TBD import now writes, and it is the only one dimensionally
+                // meaningful without a volume. Fall back to SupplyAirFlow so a SAM-authored template that
+                // only carries the legacy m3/s parameter keeps the factor it has always been given.
+                InternalConditionParameter internalConditionParameter_Ventilation = InternalConditionParameter.SupplyAirFlow;
+                if (internalCondition.TryGetValue(InternalConditionParameter.SupplyAirChangesPerHour, out double airChangesPerHour) && !double.IsNaN(airChangesPerHour))
+                {
+                    internalConditionParameter_Ventilation = InternalConditionParameter.SupplyAirChangesPerHour;
+                }
+
+                UpdateProfile(internalGain, (int)TBD.Profiles.ticV, internalCondition, ProfileType.Ventilation, profileLibrary, internalConditionParameter_Ventilation);
             }
 
             TBD.Thermostat thermostat = internalCondition_TBD.GetThermostat();

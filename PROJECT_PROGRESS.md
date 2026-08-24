@@ -15,9 +15,10 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-23 (profile round-trip hardening) - **The two leftovers PR #37 deliberately pinned as baseline are
-fixed: repeated profile-name growth across generations, and the dangling `VentilationProfileName`.**
-Full detail in `SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md`.
+2026-08-24 (profile round-trip hardening - LICENSED, and corrected) - **The two leftovers PR #37 pinned as
+baseline are fixed, and the licensed run caught a third defect the fix itself activated: the imported
+ventilation rate was inflated by 3600/volume.** Full detail in
+`SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md`.
 
 **1. HDD naming (export-side).** `Modify/UpdateInternalCondition_HDD` stamped `profile.Name` onto the
 flattened single-value `ticValueProfile`s it writes for the HDD sizing condition's `ticI` and `ticLL`
@@ -40,17 +41,20 @@ defaults, so licensed acceptance compares ticV fields against the SOURCE TBD, no
 `SAM_Tas/SAM.Analytical.Tas/Query/ProfileReuseIndex.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/Profiles.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/InternalCondition.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Modify/UpdateInternalConditionTemplate.cs`,
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` (+1 net: the baseline-pin
 `References_VentilationSlotIsNotCollected_…` became
 `References_VentilationSlotIsCollected_SoItsReferenceResolves`; new
 `Naming_HDDFlattenedProfilesWithTheirOwnNames_ReachAStableFixedPoint`),
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/VentilationAirflowMagnitudeTests.cs` (new, 11 tests - the COM-free
+guard that would have caught the magnitude failure before TAS was run),
 `SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md` (new handover doc),
 `SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md` (two statements reworded where recorded), this
 file.
 
 **Validation:** `SAM_Tas.sln` builds 0 errors Debug AND Release (Framework MSBuild; pre-existing
-MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **498/498 Debug and 498/498 Release**
-(497 inherited, +1 net). NOTE: the sibling dependency outputs were stale/missing on this machine and had
+MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **509/509 Debug and Release**
+(497 inherited, +1 net, +11 ventilation-magnitude). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
 to be rebuilt first (`SAM_gbXML` Core+Analytical, all four `SAM_SolarCalculator` projects, three
 `SAM_Systems` projects, `SAM_Validation/SAM.Analytical.Benchmark`) - build outputs only, no source changes
 in those repos.
@@ -62,11 +66,42 @@ zero-count re-export writing 24 NaNs, the inverted `double.IsNaN` guards on
 path never writing function strings). Neither PR #37 licensed model exercises a function profile; SAM has
 no home for a function string outside Lighting/Ventilation. Separate task.
 
+**3. Ventilation MAGNITUDE (the licensed correction).** The first licensed run of this branch failed.
+Collecting `ticV` woke a dormant unit defect: `profile.GetExtremeValue(true)` on a `ticV` slot is a peak
+**air change rate**, but the import stored it in `InternalConditionParameter.SupplyAirFlow`, declared
+`[m3/s]`. `Query.CalculatedSupplyAirFlow` read it as m³/s and the export's `/ volume * 3600` inflated it
+by 3600/volume. Neither licensed model could show this (both carry `ticV = factor 1.0, value 0.0`, so
+their round trip is simulation-inert); an authored **2.0 ACH** source profile made it a
+**40.8 ACH** round trip - a peak hourly heating error of 69,950 W against the source, 19.3× worse than the
+baseline that dropped ventilation altogether. It was harmless for as long as the reference dangled,
+because the export could not resolve the profile and never wrote the factor.
+
+The correction is unit-only, at two sites: the import writes
+`InternalConditionParameter.SupplyAirChangesPerHour` (`[ACH]`, whose `rate × volume / 3600` the export's
+conversion exactly inverts) in **both** `Convert/ToSAM/InternalCondition.cs` overloads (TBD and TIC shared
+the mis-mapping); and `Modify/UpdateInternalConditionTemplate.cs` prefers that parameter for its `ticV`
+factor, falling back to `SupplyAirFlow` so SAM-authored templates keep the factor they have always been
+given. `CalculatedSupplyAirFlow` itself is untouched - the rate is routed to the basis that already
+inverts correctly instead of being compensated for downstream. Corrected result: **2.0 ACH → 2.0 ACH**,
+`infVentGain` within 0.003 %, peak heating error 69,950 W → **326 W**.
+
+**Licensed acceptance (2026-08-24).** One-DLL-swap isolation (67 files, exactly 1 differing) across three
+builds - baseline `610696e9`, first attempt `e2e88ca4`, corrected head - each proving its own identity by
+reflecting its production slot table, the corrected build reproducing byte-identically under `-t:Rebuild`.
+Unresolved ventilation references **4 → 0** (ModelA) and **36 → 0** (TM59); library **20 → 21** and
+**30 → 31** with every ticV slot deduped onto one definition and counts stable across generations; HDD
+names reach a fixed point (generation 2 == 3 == 4 byte-identical, where the baseline accretes one
+`_<hash>` per generation and never converges); non-ticV simulation-effective fields **0 differences** in
+792 and 5346; both real models **0 differences** against baseline in 227,760 and 1,024,920 simulated
+values, before and after the correction. Zone-GUID churn confirmed as noise by a same-DLL control.
+Also measured directly: TAS's `internalGain.freshAirRate` is **inert** in a TBD simulation (40 vs
+0 l/s/p → 0 differences in 227,760 values), which is why a source carrying both an ACH schedule and a
+dormant per-person rate still round-trips to their additive sum - established export design, recorded but
+not changed.
+
 **Recommended next step:** [PR #38](https://github.com/SAM-BIM/SAM_Tas/pull/38) is OPEN against
-`sow/2026-Q3`. Run the licensed TAS A/B against the PR #37 merge (`610696e9`), same one-DLL-swap
-discipline as PR #37: `ModelA-Tas.sam` + the TM59 model; expect unresolved references 4/36 → 0, zero name
-growth across three full round-trip generations, all non-ticV simulation-effective fields identical, and
-ticV fields equal to the source TBD. Do not merge before that gate; merging remains a human call.
+`sow/2026-Q3` with the licensed gate **run and passed** after the magnitude correction. Remaining: human
+review, then merge. Merging remains a human call - it was not done here.
 
 ---
 
@@ -1548,8 +1583,9 @@ Earlier sessions:
   accrete one `_<hash>` suffix per generation. The definition count never grows and no simulation value
   changes; the baseline is worse on the same measure (24 of 42 names re-nest per generation). Fixing the
   export's name/value mismatch is separate work.
-- Pre-existing and deliberately not fixed here: `ticV` is never emitted into the imported `ProfileLibrary`,
-  so `VentilationProfileName` still dangles (pinned as baseline by a test, not silently changed);
+- Pre-existing and deliberately not fixed *in PR #37*: `ticV` was never emitted into the imported
+  `ProfileLibrary`, so `VentilationProfileName` dangled (pinned as baseline by a test, not silently
+  changed). **PR #38 fixes this** - see "Last updated" above;
   the TBD function-profile import does not preserve complete function semantics, which is why zero-length
   profiles are excluded from dedup; TBD `InternalCondition` sharing is unchanged.
 - Carried over from earlier branches: D3 (schedule-removal transition) and D2 (aperture matching)
