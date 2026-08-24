@@ -1,8 +1,13 @@
 # Project Progress
 
 ## Branch
-`fix/tas-fromtbd-gbxml-aperture-roundtrip` (off `sow/2026-Q3` at `372518a6`, i.e. with **PR #38 merged**).
-Aperture identity across a FULL gbXML round trip - `TBD -> FromTBD -> new SAM -> gbXML -> a NEW TBD`. See
+`fix/tas-ventilation-ticv-factor-growth` (off `sow/2026-Q3` at `d10bfac`, i.e. with **PR #39 merged**).
+The ventilation `ticV` factor grew without bound across repeated TBD round trips. See
+`SAM.Analytical.Tas/VENTILATION_TICV_ROUND_TRIP.md`.
+
+Previously: `fix/tas-fromtbd-gbxml-aperture-roundtrip` (off `sow/2026-Q3` at `372518a6`, i.e. with **PR #38
+merged**) - PR #39, merged 2026-08-24. Aperture identity across a FULL gbXML round trip -
+`TBD -> FromTBD -> new SAM -> gbXML -> a NEW TBD`. See
 `SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
 
 Previously: `feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
@@ -19,7 +24,47 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-24 (aperture round trip, second pass - the REAL Grasshopper failure, reproduced and fixed - LICENSED).
+2026-08-24 (ventilation ticV factor grew on every round trip - LICENSED).
+
+**Reported from a real Grasshopper run of `A0-A1-A2.ghx`:** the ventilation profile VALUES were identical
+across generations but the FACTOR kept climbing - a bedroom `1.72 -> 2.44 -> 3.16` ACH, a studio
+`2.44 -> 3.88 -> 5.32`. Unbounded.
+
+**Root cause: one rate written to two TAS fields, then summed back in.**
+`Query.CalculatedSupplyAirFlow` sums four bases. `Modify.UpdateInternalCondition` writes
+`SupplyAirFlowPerPerson` to `internalGain.freshAirRate` - TAS's own per-person outside-air field - and then
+wrote the whole summed total, including that same per-person rate, into `ticV.factor`. Stated twice on every
+export. The growth then came from the import: it writes the factor it reads back into the single
+`SupplyAirChangesPerHour` basis, so the figure the export produced last time became an ingredient of the
+figure it produced this time, re-adding the per-person term once per generation. Zones with no
+`AreaPerPerson` (corridor, bathroom, ensuites) have a NaN per-person term, were never inflated, and sat at a
+stable 1.00 ACH throughout - the fingerprint that isolated it.
+
+**Fix.** `Query.VentilationAirChangesPerHour(Space)` - the ACH that belongs in `ticV.factor`: the volumetric
+supply air TAS has no other field for, and only that. It takes `CalculatedSupplyAirFlow`'s total and
+subtracts the per-person summand (subtraction, not re-derivation, so a basis added to that query later is
+inherited rather than dropped), then converts over the volume. `SupplyAirFlow` and `SupplyAirFlowPerArea`
+stay in the factor - they have no native TAS field, so dropping them would lose the ventilation outright.
+`Modify.UpdateInternalConditionTemplate` already read the ACH basis verbatim and never compounded; the space
+path was the odd one out.
+
+**Licensed** on `A0.tbd` as the reported run produced it, through `Convert.ToSAM` -> `TogbXML` ->
+`WorkflowCalculator.Calculate`, two generations: Studio `2.44 -> 2.44 -> 2.44`, Bedroom/Kitchen
+`1.72 -> 1.72 -> 1.72`, Corridor `1.00` throughout (was `3.88 -> 5.32` / `2.44 -> 3.16`). `freshAirRate`
+holds at 8.0 l/s/p in every generation. PR #39's aperture results unaffected: 40 considered / 40 rebound,
+zero refusals, 3 aperture building elements, both generations. Tests:
+`SAM.Analytical.Tas.TM59.Tests` **561/561** Debug and Release (+5 in `VentilationAirflowMagnitudeTests`),
+`SAM.Analytical.Tas.Benchmark.Tests` **16/16** both; mutation check bites (removing the exclusion fails 2).
+
+**One behavioural implication, flagged not buried:** for a round-tripped model this is unambiguously a fix.
+For a SAM-authored model exported for the FIRST time, occupant fresh air now reaches TAS only through
+`freshAirRate`, where before it was also added into `ticV.factor`. If TAS simulates `freshAirRate`, the old
+behaviour was double-ventilating and this corrects it; if TAS treats it as sizing metadata only, this
+reduces generation-1 ventilation for occupied zones. The round-trip growth is fixed either way - that
+question is TAS semantics, worth confirming against a TAS reference. Detail in
+`SAM.Analytical.Tas/VENTILATION_TICV_ROUND_TRIP.md`.
+
+Previously: 2026-08-24 (aperture round trip, second pass - the REAL Grasshopper failure, reproduced and fixed - LICENSED).
 
 **The previous entry's caveat was wrong and is retracted.** It said the reported symptom "did not reproduce"
 and pointed at a Grasshopper install running older DLLs. The DLL was current - measured, not assumed: the

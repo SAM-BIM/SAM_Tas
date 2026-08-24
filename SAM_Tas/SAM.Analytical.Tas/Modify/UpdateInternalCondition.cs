@@ -274,14 +274,13 @@ namespace SAM.Analytical.Tas
             profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
             if (profile_TBD != null)
             {
-                double value_Temp = Analytical.Query.CalculatedSupplyAirFlow(space);
-                if (!double.IsNaN(value_Temp))
-                {
-                    if (space.TryGetValue(Analytical.SpaceParameter.Volume, out double volume) && !double.IsNaN(volume) && volume > 0)
-                    {
-                        value_Temp = value_Temp / volume * 3600;
-                    }
-                }
+                //The volumetric supply air TAS has no other field for, in ACH - and ONLY that. The
+                //per-person basis is excluded because internalGain.freshAirRate above has already carried it,
+                //from the very same SupplyAirFlowPerPerson parameter; summing it in here as well stated the
+                //occupants' fresh air twice, and - because the import writes this factor back into the single
+                //SupplyAirChangesPerHour basis - added the same constant again on every round trip
+                //(a licensed bedroom grew 1.72 -> 2.44 -> 3.16 ACH). See Query.VentilationAirChangesPerHour.
+                double value_Temp = Query.VentilationAirChangesPerHour(space);
 
                 if (double.IsNaN(value_Temp))
                 {
