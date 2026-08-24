@@ -43,6 +43,8 @@ defaults, so licensed acceptance compares ticV fields against the SOURCE TBD, no
 `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/InternalCondition.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateInternalConditionTemplate.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Query/ProfileName.cs` (shared `ProfileName_HDD` naming rule),
+`SAM_Tas/SAM.Analytical.Tas/Query/ProfileReuseIndex.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Classes/ProfileReuseIndex.cs` (`Reserve`),
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` (+1 net: the baseline-pin
 `References_VentilationSlotIsNotCollected_…` became
 `References_VentilationSlotIsCollected_SoItsReferenceResolves`; new
@@ -54,8 +56,8 @@ guard that would have caught the magnitude failure before TAS was run),
 file.
 
 **Validation:** `SAM_Tas.sln` builds 0 errors Debug AND Release (Framework MSBuild; pre-existing
-MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **513/513 Debug and Release**
-(497 inherited, +1 net, +11 ventilation-magnitude, +4 zero-length ticV guard). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
+MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **520/520 Debug and Release**
+(497 inherited, +1 net, +17 ventilation-magnitude, +5 zero-length/reservation guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
 to be rebuilt first (`SAM_gbXML` Core+Analytical, all four `SAM_SolarCalculator` projects, three
 `SAM_Systems` projects, `SAM_Validation/SAM.Analytical.Benchmark`) - build outputs only, no source changes
 in those repos.
@@ -113,8 +115,26 @@ PR #37's treatment, and no function support is attempted. Four COM-free tests pi
 unaffected - confirmed licensed as byte-identical to the accepted build (792 non-ticV + 56 ticV fields,
 0 differences) with the 2.0 ACH oracle intact, so the full A/B was not rerun.
 
+**5. Review round (Codex + Copilot).** Three further findings, all addressed. (a) The magnitude fix stored
+`GetExtremeValue(true)` = `factor * max(values)`; because `Modify.Update` re-applies the raw values on top of
+whatever basis it is given, that scaled the schedule twice (`factor * max^2`) - invisible for a profile
+normalised to a peak of 1, which is what the first authored oracle used. The import now stores
+`profile_TBD.factor`; a non-normalised source (factor 2.0, peak 0.5 = 1.0 ACH) round-tripped as 0.5 ACH
+before and **1.0 ACH exactly** after, with the normalised 2.0 ACH oracle unchanged and TM59 source-factor
+agreement improving 26/54 -> 44/54. (b) Skipping a zero-length `ticV` left its legacy name unclaimed, so
+`Resolve` could hand that same string to an unrelated canonical definition and turn the intended dangling
+reference into a live one; the skip path now calls the new `ProfileReuseIndex.Reserve(category, name)` -
+a claim with no definition, no library entry and no answerable slot - and `Resolve` seeds its claim set from
+it. (c) The legacy `Convert.ToSAM_Profiles` mirror repeated the twelve slots by hand; both collectors now
+`foreach` over the shared slot tables behind the shared `Query.IsCollectableSlot` gate, so they cannot drift
+and one assertion pins both. All three verified licensed as behaviour-neutral on the real models (0
+differences across 792/5346 non-ticV fields, ModelA re-simulated at 0/227,760, library 21/31, 0 unresolved).
+A fourth finding - a source declaring both an ACH schedule and a TAS-inert `freshAirRate` round-tripping to
+their additive sum - is answered in the handover doc rather than changed: it is the established export design
+and narrowing it would drop ventilation for native SAM models.
+
 **Recommended next step:** [PR #38](https://github.com/SAM-BIM/SAM_Tas/pull/38) is OPEN against
-`sow/2026-Q3` with the licensed gate **run and passed** after the magnitude correction. Remaining: human
+`sow/2026-Q3` with the licensed gate **run and passed** after the magnitude correction and the review round. Remaining: human
 review, then merge. Merging remains a human call - it was not done here.
 
 ---

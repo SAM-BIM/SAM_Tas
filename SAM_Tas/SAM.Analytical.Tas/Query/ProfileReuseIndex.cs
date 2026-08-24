@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Collections.Generic;
@@ -165,18 +165,27 @@ namespace SAM.Analytical.Tas
             }
 
             List<double> values = Core.Tas.Query.Values(profile_TBD);
+            string category = Analytical.Query.Text(profileType);
+            string name_Legacy = ProfileName_Legacy(internalConditionName, profile_TBD.name);
+
             if (!IsCollectableSlot((int)slot, values))
             {
+                //Skipped, not excluded: nothing is collected and no library entry is emitted, so the
+                //conversion falls back to the legacy name and the reference dangles - the safe deferred
+                //behaviour. RESERVE that name so Resolve cannot later hand the identical string to a
+                //canonical definition in the same category, which would silently turn the intended
+                //dangling reference into a live one pointing at an unrelated value profile.
+                profileReuseIndex.Reserve(category, name_Legacy);
                 return;
             }
 
             profileReuseIndex.Register(
                 internalConditionName,
                 (int)slot,
-                Analytical.Query.Text(profileType),
+                category,
                 values,
                 profile_TBD.name,
-                ProfileName_Legacy(internalConditionName, profile_TBD.name));
+                name_Legacy);
         }
     }
 }

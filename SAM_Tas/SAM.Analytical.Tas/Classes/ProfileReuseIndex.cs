@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System;
@@ -65,6 +65,10 @@ namespace SAM.Analytical.Tas
         private readonly Dictionary<string, string> excludedNamesBySlot = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly List<Profile> excludedProfiles = new List<Profile>();
         private readonly HashSet<string> excludedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        //Category -> names that must not be handed to a canonical definition, for slots that were skipped
+        //entirely rather than excluded. See Reserve.
+        private readonly Dictionary<string, HashSet<string>> reservedNamesByCategory = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         private Dictionary<ProfileDefinition, Profile> profiles;
         private List<Profile> resolvedProfiles;
@@ -194,6 +198,43 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// Claim a name in a category WITHOUT collecting anything under it - no definition, no library entry,
+        /// and no slot able to answer it.
+        /// <para>
+        /// For slots the caller skips entirely rather than excludes: a zero-length (TAS function) <c>ticV</c>,
+        /// whose reference is deliberately left dangling until function semantics exist. The dangling reference
+        /// still HAS a name - the legacy <c>"{internal condition} [{profile}]"</c> the conversion falls back to -
+        /// and if a canonical name were later assigned that exact string in the same category, the reference
+        /// would stop dangling and start resolving to an unrelated value profile, which the export would then
+        /// write over the function profile. Reserving the name keeps
+        /// <see cref="Query.ProfileName(ICollection{string}, ProfileDefinition, string)"/> away from it, so the
+        /// reference resolves to nothing, exactly as intended. Realistic rather than theoretical: a
+        /// round-tripped model's TAS profile names ARE <c>"{condition} [{profile}]"</c> strings, because that is
+        /// what the export writes back.
+        /// </para>
+        /// </summary>
+        public void Reserve(string category, string name)
+        {
+            if (Resolved)
+            {
+                throw new InvalidOperationException("A ProfileReuseIndex cannot be reserved into after it has been resolved.");
+            }
+
+            if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            if (!reservedNamesByCategory.TryGetValue(category, out HashSet<string> names))
+            {
+                names = new HashSet<string>(StringComparer.Ordinal);
+                reservedNamesByCategory[category] = names;
+            }
+
+            names.Add(name);
+        }
+
+        /// <summary>
         /// Assign every collected definition its canonical SAM library name and build the shared
         /// <see cref="Profile"/>s. Idempotent; further <see cref="Register"/> calls are refused afterwards.
         /// </summary>
@@ -213,6 +254,15 @@ namespace SAM.Analytical.Tas
             foreach (Profile profile in excludedProfiles)
             {
                 Claimed(claimedByCategory, profile.Category).Add(profile.Name);
+            }
+
+            //So are the names reserved for skipped slots, for the same reason - see Reserve.
+            foreach (KeyValuePair<string, HashSet<string>> keyValuePair in reservedNamesByCategory)
+            {
+                foreach (string name in keyValuePair.Value)
+                {
+                    Claimed(claimedByCategory, keyValuePair.Key).Add(name);
+                }
             }
 
             List<ProfileDefinition> profileDefinitions = new List<ProfileDefinition>(sourceNames.Keys);

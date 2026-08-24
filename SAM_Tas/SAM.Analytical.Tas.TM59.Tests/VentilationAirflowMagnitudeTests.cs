@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using NUnit.Framework;
@@ -161,6 +161,70 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(TicVFactor(space_Flow) / TicVFactor(space_ACH), Is.EqualTo(3600.0 / Volume).Within(1e-9),
                 "18x on a 200 m3 zone - the licensed run measured this as 2.0 ACH becoming 40.8 with the "
                 + "per-person basis included.");
+        }
+
+        // =================================================================================================
+        // The stored basis is the source FACTOR, not the schedule peak
+        // =================================================================================================
+
+        // What Modify.Update writes back out of a space: factor = the ACH basis, values = the imported
+        // profile's own values, verbatim. So the ventilation the simulation sees is basis * max(values).
+        private static double ExportedPeak(Space space, double[] profileValues)
+        {
+            double max = profileValues[0];
+            foreach (double value in profileValues)
+            {
+                if (value > max)
+                {
+                    max = value;
+                }
+            }
+
+            return TicVFactor(space) * max;
+        }
+
+        [TestCase(2.0, 1.0)]     // the usual TAS convention: values normalised to a peak of 1
+        [TestCase(2.0, 0.5)]     // NOT normalised - this is the case that exposed the double scaling
+        [TestCase(0.35, 0.8)]
+        [TestCase(1.0, 0.25)]
+        public void ImportedFactor_RoundTripsThePeak_ForAnyProfileNormalisation(double factor_Source, double peak_Source)
+        {
+            //Codex P2. GetExtremeValue(true) is factor * max(values), and Modify.Update re-applies the same
+            //values on top of whatever basis it is given - so storing the PEAK scales the schedule twice
+            //(factor * max^2) and only looks right when max == 1. Storing the FACTOR is exact for any shape.
+            double[] values = new double[24];
+            for (int i = 0; i < values.Length; i++)
+            {
+                values[i] = i < 8 ? peak_Source * 0.25 : peak_Source;
+            }
+
+            double peak_Effective = factor_Source * peak_Source;
+
+            //What the corrected import stores: the source factor.
+            Space space = Space_WithCondition(x => x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, factor_Source));
+            Assert.That(ExportedPeak(space, values), Is.EqualTo(peak_Effective).Within(1e-9),
+                "The exported ventilation peak must equal the source's factor * max(values).");
+
+            //What storing the extreme would have done instead.
+            Space space_Peak = Space_WithCondition(x => x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, peak_Effective));
+            Assert.That(ExportedPeak(space_Peak, values), Is.EqualTo(peak_Effective * peak_Source).Within(1e-9),
+                "Storing the extreme re-applies max(values) a second time.");
+        }
+
+        [Test]
+        public void StoringTheExtreme_IsIndistinguishableFromTheFactor_OnlyWhenTheProfileIsNormalised()
+        {
+            //Why the first authored licensed oracle passed while this defect was live: its 0.25/1.0/0.5 shape
+            //peaks at exactly 1.0, where factor and extreme coincide. Pinned so the blind spot is on record.
+            double[] normalised = new double[] { 0.25, 1.0, 0.5 };
+            double[] notNormalised = new double[] { 0.125, 0.5, 0.25 };
+
+            Space space = Space_WithCondition(x => x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, 2.0));
+
+            Assert.That(ExportedPeak(space, normalised), Is.EqualTo(2.0).Within(1e-9));
+            Assert.That(ExportedPeak(space, notNormalised), Is.EqualTo(1.0).Within(1e-9),
+                "A profile peaking at 0.5 carries half the factor as its ventilation rate - which is exactly "
+                + "the source's own factor * max, so the round trip is still faithful.");
         }
 
         // =================================================================================================

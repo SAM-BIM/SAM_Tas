@@ -88,7 +88,8 @@ dropped from the round trip. (PR #37's A/B could not see this: both sides droppe
 ### Fix
 
 - `Query.ProfileReuseIndex.ProfileSlots_InternalGain` gains `(ticV, ProfileType.Ventilation)`;
-- `Convert.ToSAM_Profiles` (the legacy no-index collector the slot table mirrors) gains the same slot;
+- `Convert.ToSAM_Profiles` (the legacy no-index collector) is driven by that same table, so the two
+  collectors cannot disagree about which slots exist;
 - `Convert.ToSAM(TBD.InternalCondition, …)` routes `VentilationProfileName` through the same
   `ProfileName(…)` helper as every other slot — canonical shared name with an index, legacy
   `"{IC} [{profile}]"` without one.
@@ -111,9 +112,10 @@ the export uses (pinned COM-free by
   ticV field set — type/factor/value/setback/hourly/yearly — is already in the 852/5754-field dump.)
 - Magnitude semantics follow every other slot: the export factor is recomputed per zone
   (`CalculatedSupplyAirFlow / volume * 3600`), exactly as native SAM models are already exported today.
-  **This only round-trips if the import stores the ticV peak on the ACH basis** — see "The magnitude
-  defect this PR first shipped" below, which is why the import writes
-  `InternalConditionParameter.SupplyAirChangesPerHour` and not `SupplyAirFlow`.
+  **This only round-trips if the import stores the source ticV FACTOR on the ACH basis** — see "The
+  magnitude defect this PR first shipped" below, which is why the import writes
+  `profile_TBD.factor` into `InternalConditionParameter.SupplyAirChangesPerHour`, and neither
+  `GetExtremeValue(true)` nor `SupplyAirFlow`.
 - Native SAM models are unaffected (their ventilation references already resolved). The TIC import path
   keeps its legacy per-condition reference name (it has no reuse index, like all its other slots), but it
   shared the unit mis-mapping and took the same one-line correction — see below.
@@ -151,7 +153,8 @@ so it never wrote the factor at all. Collecting `ticV` is precisely what made it
 only against the pre-fix baseline could never have caught it: baseline was 0 ACH, the first attempt was
 40.8 ACH, and both are wrong against the source.
 
-**The correction.** Two sites, both unit-only:
+**The correction.** Two sites for the unit half, plus a second, independent magnitude defect that review
+found on the same line:
 
 - `Convert/ToSAM/InternalCondition.cs` — the ticV peak now goes to
   `InternalConditionParameter.SupplyAirChangesPerHour`, declared `[ACH]`. The export's
@@ -167,6 +170,19 @@ only against the pre-fix baseline could never have caught it: baseline was 0 ACH
 `CalculatedSupplyAirFlow` itself is untouched: the rate is routed to the basis that already inverts
 correctly rather than compensated for downstream.
 
+**The second defect: the factor, not the peak.** Codex raised this after the unit fix, and it was real. The
+first correction stored `GetExtremeValue(true)` — `factor * max(values)` — on the ACH basis. But the imported
+`Profile` keeps the **raw** values, and `Modify.Update` writes the basis back as `profile_TBD.factor` and
+re-applies those same values, so the schedule is scaled **twice**: `factor * max^2`. It is invisible whenever
+the profile is normalised to a peak of 1 — the usual TAS convention, and exactly what the first authored
+oracle used, which is why that oracle passed while this was live. A source with `factor 2.0` and a peak value
+of `0.5` (1.0 ACH) round-tripped as **0.5 ACH**, measured under licence. The import therefore stores
+`profile_TBD.factor` itself. Licensed result: that same non-normalised source now round-trips
+**1.0 ACH → 1.0 ACH exactly**, and the normalised 2.0 ACH oracle is unchanged. On the real models nothing
+moves in simulation (`ticV` values are zero, so `factor × values` is zero either way — ModelA re-simulated at
+**0 differences in 227,760 values**), while TM59's ticV factor agreement with the source improves from
+26/54 to **44/54**.
+
 **Licensed result of the correction.** With the ACH basis as the only specified basis, the round trip is
 source-exact: factor 2.0 → 2.0, shape preserved, and the simulation matches the source to within the
 pre-existing geometry/solar round-trip noise (max 909.7 W, on `solarGain`, the same value and hour the
@@ -174,7 +190,8 @@ zero-ventilation models already show). `infVentGain` agrees to **0.003 %**; peak
 fell from **69,950 W to 326 W**. Both real models remain **0 differences** against baseline (227,760 and
 1,024,920 values), and TM59 factor agreement with the source improved from 18/54 to 26/54.
 
-**Known remaining deviation, and why it is not this fix.** TAS's `internalGain.freshAirRate` is inert in
+**Known remaining deviation, and why it is not this fix** (raised again as a P1 in review, and answered
+here rather than changed).** TAS's `internalGain.freshAirRate` is inert in
 a TBD simulation — measured directly: 40 l/s/p vs 0 l/s/p over an otherwise identical model gives
 **0 differences in 227,760 values**. SAM nevertheless imports it as `SupplyAirFlowPerPerson`, a real
 design basis, and `CalculatedSupplyAirFlow` is purely **additive** over all four bases. So a source
@@ -208,6 +225,18 @@ slot, no library entry exists under one, `Convert.ToSAM`'s `ProfileName` helper 
 name, that name resolves to nothing, and the export never reaches `Modify.Update`. The TAS function profile
 survives untouched.
 
+**Reserving the name it leaves dangling.** Skipping the slot is not sufficient on its own, as review
+pointed out. The dangling reference still *has* a name — the legacy `"{internal condition} [{profile}]"` the
+conversion falls back to — and `Resolve` assigns canonical names from the source TAS names. If some ordinary
+`ticV` definition's source name were that identical string, it could be handed that name, and the reference
+intended to dangle would start resolving to an unrelated value profile, which the export would then write
+over the function profile. That is realistic rather than theoretical: a round-tripped model's TAS profile
+names **are** `"{condition} [{profile}]"` strings, because that is what `Modify.Update` writes back. So the
+skip path calls `ProfileReuseIndex.Reserve(category, name)` — a claim with no definition, no library entry and
+no slot able to answer it — and `Resolve` seeds its claim set from those reservations alongside the excluded
+names, before any canonical name is assigned. Same claim-first discipline PR #37 already used for the
+excluded names.
+
 Deliberately **`ticV`-scoped**: the other eleven slots keep PR #37's exclusion behaviour exactly, because
 their references already resolved and already round-tripped that way — changing them is function-profile
 work, not this fix. `Modify.Update`'s dead `Count == -1` guard is likewise left alone; the guard here stops
@@ -215,10 +244,19 @@ a zero-length profile ever reaching it through the newly-collected slot, which i
 regression. **This closes the P2 without attempting function support**: function semantics remain deferred,
 and nothing here brings a function profile into the value export path — it keeps one out.
 
-Pinned COM-free by four tests in `ProfileDefinitionReuseTests.cs`
+**One table, both collectors.** Review also noted that the legacy `Convert.ToSAM_Profiles` mirror repeated
+the twelve slots by hand, so a slot could be emitted by one collector and not the other — a reference naming
+a definition the library does not carry. Both now `foreach` over the same
+`Query.ProfileSlots_InternalGain` / `ProfileSlots_Thermostat` tables and share the same
+`Query.IsCollectableSlot` gate, so they cannot drift and the single slot-table assertion pins both. Verified
+behaviour-neutral under licence: 0 differences across every field on both real models and the authored
+sources, and byte-identical SAM-side import dumps.
+
+Pinned COM-free by six tests in `ProfileDefinitionReuseTests.cs`
 (`ZeroLength_Ventilation_IsNotCollectable_…`, `ZeroLength_Ventilation_NotCollected_LeavesTheReferenceDanglingExactlyAsBefore`,
 `ZeroLength_ProfileCountIsZero_WhichIsWhyResolvingItWouldCorruptTheFunctionProfile`,
-`ZeroLength_NonVentilationSlots_KeepTheirPR37ExclusionBehaviour`). Neither licensed model contains a
+`ZeroLength_NonVentilationSlots_KeepTheirPR37ExclusionBehaviour`,
+`ZeroLength_Ventilation_ReservesItsLegacyName_SoNoCanonicalDefinitionCanClaimIt`, `Reserve_AfterResolve_IsRefused`). Neither licensed model contains a
 function profile, so the licensed A/B was **not** rerun for this guard; a focused licensed check confirmed
 normal `ticV` is byte-identical to the accepted build (792 non-ticV and 56 ticV fields, 0 differences on
 both authored variants) and the 2.0 ACH → 2.0 ACH oracle still holds.
@@ -284,8 +322,8 @@ to drive the whole SAM airflow calculation, and the export's conversion is one l
 
 - `SAM_Tas.sln` builds with **0 errors** in Debug and Release (Framework MSBuild; only the pre-existing
   MSB3270/MSB3277 warnings).
-- `SAM.Analytical.Tas.TM59.Tests`: **513/513** in Debug and Release (498 + 11 ventilation-magnitude
-  + 4 zero-length ticV guard). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug and Release.
+- `SAM.Analytical.Tas.TM59.Tests`: **520/520** in Debug and Release (498 + 17 ventilation-magnitude
+  + 5 zero-length/reservation guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug and Release.
 - **Licensed TAS A/B: run, and it changed the PR.** One-DLL-swap isolation (67 files, exactly 1
   differing) over three builds — baseline `610696e`, first attempt `e2e88ca`, corrected head — each
   identified by reflecting its own production slot table, with the corrected build reproducing

@@ -778,6 +778,13 @@ namespace SAM.Analytical.Tas.TM59.Tests
             //The import has always written InternalConditionParameter.VentilationProfileName but never emitted
             //the ticV profile behind it, so the reference dangled. ticV is now collected like every other
             //internal-gain slot, and the reference resolves.
+            //
+            //These tables now drive BOTH collectors - Query.ProfileReuseIndex's registration walk and the
+            //legacy Convert.ToSAM_Profiles mirror both foreach over them, gated by the same
+            //Query.IsCollectableSlot - so this assertion pins the emitted set on both sides at once. That
+            //closes the gap Copilot raised: while the mirror repeated the twelve slots by hand, a slot could
+            //be emitted by one collector and not the other, which is a reference naming a definition the
+            //library does not carry.
             IEnumerable<string> slots = ProductionSlotNames("ProfileSlots_InternalGain").Concat(ProductionSlotNames("ProfileSlots_Thermostat")).ToList();
 
             Assert.That(slots, Has.Member("ticV"));
@@ -874,6 +881,56 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(profile.Count, Is.EqualTo(0), "A zero-length profile reports Count 0, not -1.");
             Assert.That(profile.Count, Is.Not.EqualTo(-1), "So Modify.Update's Count == -1 guard does not catch it.");
             Assert.That(profile.Count, Is.LessThanOrEqualTo(24), "And it falls into the ticHourlyProfile branch.");
+        }
+
+        [Test]
+        public void ZeroLength_Ventilation_ReservesItsLegacyName_SoNoCanonicalDefinitionCanClaimIt()
+        {
+            //Codex P2. Skipping the slot is not enough on its own: the dangling reference still HAS a name,
+            //and if a canonical name were later assigned that same string in the same category the reference
+            //would stop dangling and start resolving to an unrelated value profile - which the export would
+            //then write over the function profile. Not theoretical: a round-tripped model's TAS profile names
+            //ARE "{condition} [{profile}]" strings, because that is exactly what Modify.Update writes back.
+            string name_Skipped = Legacy("Cell 1", "Fresh Air Function");
+
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+
+            //The production skip path reserves the name it leaves dangling...
+            profileReuseIndex.Reserve(Ventilation, name_Skipped);
+
+            //...and here is the adversary: an ordinary ticV definition whose own TAS source name is that very
+            //string, which without the reservation would be handed it as its canonical name.
+            Register(profileReuseIndex, "Cell 2", ticV, Ventilation, name_Skipped, Flat(1.0, 24));
+            profileReuseIndex.Resolve();
+
+            Assert.That(profileReuseIndex.DefinitionCount, Is.EqualTo(1));
+
+            string name_Resolved = profileReuseIndex.GetProfileName("Cell 2", ticV);
+            Assert.That(name_Resolved, Is.Not.Null);
+            Assert.That(name_Resolved, Is.Not.EqualTo(name_Skipped),
+                "A canonical name must never be the reserved name of a skipped function profile.");
+
+            //So the skipped condition's reference still resolves to nothing.
+            ProfileLibrary profileLibrary = Library(profileReuseIndex);
+            InternalCondition internalCondition = new InternalCondition("Cell 1");
+            internalCondition.SetProfileName(ProfileType.Ventilation, name_Skipped);
+
+            Assert.That(internalCondition.GetProfile(ProfileType.Ventilation, profileLibrary, false), Is.Null,
+                "The skipped function profile's reference must stay dangling.");
+
+            //While the ordinary definition is unaffected and still resolves for its own condition.
+            InternalCondition internalCondition_Ordinary = new InternalCondition("Cell 2");
+            internalCondition_Ordinary.SetProfileName(ProfileType.Ventilation, name_Resolved);
+            Assert.That(internalCondition_Ordinary.GetProfile(ProfileType.Ventilation, profileLibrary, false), Is.Not.Null);
+        }
+
+        [Test]
+        public void Reserve_AfterResolve_IsRefused()
+        {
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+            profileReuseIndex.Resolve();
+
+            Assert.Throws<InvalidOperationException>(() => profileReuseIndex.Reserve(Ventilation, "Cell 1 [X]"));
         }
 
         [Test]
