@@ -184,12 +184,25 @@ namespace SAM.Analytical.Tas
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
                 if (profile_TBD != null)
                 {
-                    //Deliberately NOT routed through the reuse index. ticV has never been emitted into the
-                    //imported ProfileLibrary at all (see Convert.ToSAM_Profiles), so this reference has always
-                    //dangled; routing it through the index would change that pre-existing behaviour rather than
-                    //leave it visible. Fixing it is its own piece of work.
-                    result.SetValue(InternalConditionParameter.VentilationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TBD.name));
-                    result.SetValue(InternalConditionParameter.SupplyAirFlow, profile_TBD.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.VentilationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticV, ProfileType.Ventilation, profile_TBD));
+
+                    //ticV is an AIR CHANGE RATE, and it is the profile's FACTOR that carries it - the values
+                    //are the schedule the factor scales. Two things follow, both learned the hard way:
+                    //
+                    //1. It belongs on the [ACH] basis, not SupplyAirFlow [m3/s]. Storing an ACH in the m3/s
+                    //   parameter made Query.CalculatedSupplyAirFlow read it as m3/s and the export's own
+                    //   "/ volume * 3600" inflate it by 3600/volume - a licensed round trip turned a 2.0 ACH
+                    //   source profile into 40.8 ACH on a 200 m3 zone.
+                    //2. It must be the factor itself, NOT GetExtremeValue(true) (= factor * max(values)). The
+                    //   imported Profile keeps the RAW values, and Modify.Update writes the basis back as
+                    //   profile_TBD.factor and re-applies those same values - so storing the peak scales the
+                    //   schedule twice, by factor * max^2. Invisible whenever the profile is normalised to a
+                    //   peak of 1 (the usual TAS convention, and what the first authored oracle used), but a
+                    //   factor of 2 with a peak value of 0.5 round-trips 1.0 ACH as 0.5 ACH.
+                    //
+                    //Both were harmless while the ventilation reference dangled; both went live the moment
+                    //ticV became a collected, resolvable profile.
+                    result.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, profile_TBD.factor);
                 }
             }
 
@@ -349,7 +362,10 @@ namespace SAM.Analytical.Tas
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.VentilationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.SupplyAirFlow, profile_TIC.GetExtremeValue(true));
+
+                    //Same rule as the TBD overload above: the ticV FACTOR is the ACH rate, and it is not a
+                    //volume flow.
+                    result.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, profile_TIC.factor);
                 }
 
             }

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System;
@@ -66,6 +66,10 @@ namespace SAM.Analytical.Tas
         private readonly List<Profile> excludedProfiles = new List<Profile>();
         private readonly HashSet<string> excludedKeys = new HashSet<string>(StringComparer.Ordinal);
 
+        //Category -> names that must not be handed to a canonical definition, for slots that were skipped
+        //entirely rather than excluded. See Reserve.
+        private readonly Dictionary<string, HashSet<string>> reservedNamesByCategory = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
         private Dictionary<ProfileDefinition, Profile> profiles;
         private List<Profile> resolvedProfiles;
 
@@ -112,8 +116,33 @@ namespace SAM.Analytical.Tas
         /// <param name="values">The complete flattened values read out of TAS.</param>
         /// <param name="sourceName">The source TAS profile's own name - a candidate for the canonical name, and nothing else.</param>
         /// <param name="excludedName">The name a zero-length (function) profile must keep, i.e. today's <c>"{internal condition} [{profile}]"</c>.</param>
+        /// <param name="suppressLibraryEntry">
+        /// True for a slot that must not become a resolvable library entry at all (today: a zero-length
+        /// <c>ticV</c>, whose function semantics are deferred). The slot key still participates fully in
+        /// ambiguity tracking below - two TBD internal conditions sharing a name, one with this slot excluded
+        /// and the other registering it as a genuine reusable definition, still correctly mark the shared key
+        /// ambiguous so NEITHER answers it - only the final library emission is skipped. Callers should also
+        /// <see cref="Reserve"/> <paramref name="excludedName"/> to close the separate case where an unrelated
+        /// definition's own canonical name happens to equal the string this suppressed slot would have
+        /// answered.
+        /// </param>
         /// <returns>True when the slot was collected as a REUSABLE definition, false when it was excluded or rejected.</returns>
+        /// <remarks>
+        /// Binary-compatible overload, kept exactly as it was before <c>suppressLibraryEntry</c> existed. An
+        /// optional parameter is a COMPILE-time convenience only - it does not preserve the original CLR method,
+        /// so a caller already compiled against this six-argument signature (a Grasshopper/Revit plugin
+        /// referencing this DLL as a binary, not recompiled on every SAM_Tas release) would throw
+        /// <see cref="MissingMethodException"/> the moment it loaded a build that replaced this overload with a
+        /// seven-argument one, default value or not (Codex flagged this on PR #38). Forwards to the real
+        /// implementation with the library-suppression option off, i.e. identical to this method's previous body.
+        /// </remarks>
         public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName)
+        {
+            return Register(internalConditionName, slot, category, values, sourceName, excludedName, suppressLibraryEntry: false);
+        }
+
+        /// <returns>True when the slot was collected as a REUSABLE definition, false when it was excluded, suppressed or rejected.</returns>
+        public bool Register(string internalConditionName, int slot, string category, IEnumerable<double> values, string sourceName, string excludedName, bool suppressLibraryEntry)
         {
             if (Resolved)
             {
@@ -155,8 +184,11 @@ namespace SAM.Analytical.Tas
                 }
 
                 //The library entry is added whether or not the slot key can answer: when it cannot, the caller
-                //falls back to the legacy name, which is exactly what this entry is called.
-                if (excludedKeys.Add(string.Format(CultureInfo.InvariantCulture, "{0}::{1}", profileDefinition.Category, excludedName)))
+                //falls back to the legacy name, which is exactly what this entry is called. UNLESS the caller
+                //has asked this slot to stay unresolvable altogether (a zero-length ticV) - then no entry is
+                //emitted, but everything above (the ambiguity tracking) has already run exactly as it would
+                //for any other excluded slot.
+                if (!suppressLibraryEntry && excludedKeys.Add(string.Format(CultureInfo.InvariantCulture, "{0}::{1}", profileDefinition.Category, excludedName)))
                 {
                     excludedProfiles.Add(new Profile(excludedName, profileDefinition.Category, profileDefinition.Values));
                 }
@@ -194,6 +226,43 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// Claim a name in a category WITHOUT collecting anything under it - no definition, no library entry,
+        /// and no slot able to answer it.
+        /// <para>
+        /// For slots the caller skips entirely rather than excludes: a zero-length (TAS function) <c>ticV</c>,
+        /// whose reference is deliberately left dangling until function semantics exist. The dangling reference
+        /// still HAS a name - the legacy <c>"{internal condition} [{profile}]"</c> the conversion falls back to -
+        /// and if a canonical name were later assigned that exact string in the same category, the reference
+        /// would stop dangling and start resolving to an unrelated value profile, which the export would then
+        /// write over the function profile. Reserving the name keeps
+        /// <see cref="Query.ProfileName(ICollection{string}, ProfileDefinition, string)"/> away from it, so the
+        /// reference resolves to nothing, exactly as intended. Realistic rather than theoretical: a
+        /// round-tripped model's TAS profile names ARE <c>"{condition} [{profile}]"</c> strings, because that is
+        /// what the export writes back.
+        /// </para>
+        /// </summary>
+        public void Reserve(string category, string name)
+        {
+            if (Resolved)
+            {
+                throw new InvalidOperationException("A ProfileReuseIndex cannot be reserved into after it has been resolved.");
+            }
+
+            if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            if (!reservedNamesByCategory.TryGetValue(category, out HashSet<string> names))
+            {
+                names = new HashSet<string>(StringComparer.Ordinal);
+                reservedNamesByCategory[category] = names;
+            }
+
+            names.Add(name);
+        }
+
+        /// <summary>
         /// Assign every collected definition its canonical SAM library name and build the shared
         /// <see cref="Profile"/>s. Idempotent; further <see cref="Register"/> calls are refused afterwards.
         /// </summary>
@@ -213,6 +282,15 @@ namespace SAM.Analytical.Tas
             foreach (Profile profile in excludedProfiles)
             {
                 Claimed(claimedByCategory, profile.Category).Add(profile.Name);
+            }
+
+            //So are the names reserved for skipped slots, for the same reason - see Reserve.
+            foreach (KeyValuePair<string, HashSet<string>> keyValuePair in reservedNamesByCategory)
+            {
+                foreach (string name in keyValuePair.Value)
+                {
+                    Claimed(claimedByCategory, keyValuePair.Key).Add(name);
+                }
             }
 
             List<ProfileDefinition> profileDefinitions = new List<ProfileDefinition>(sourceNames.Keys);

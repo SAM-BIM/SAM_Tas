@@ -140,11 +140,12 @@ Every new parameter is optional and defaults to `null`, which reproduces today's
 
 ## Deliberately unchanged
 
-* **`ticV` / `VentilationProfileName`.** The import writes the reference but has never emitted the
-  ventilation profile behind it. The slot is therefore *not* collected, and the reference keeps its
-  legacy name — the pre-existing dangling reference stays exactly as it was, visible rather than
-  quietly altered. `References_VentilationSlotIsNotCollected_…` pins that as baseline so a future
-  reader does not mistake it for a regression of this work.
+* **`ticV` / `VentilationProfileName`** — *this limitation is now closed.* At the time of this PR the
+  import wrote the reference but had never emitted the ventilation profile behind it, so the slot was
+  not collected and the reference kept its legacy name, pinned as baseline by
+  `References_VentilationSlotIsNotCollected_…`. The follow-up profile round-trip hardening work
+  (`PROFILE_ROUND_TRIP_HARDENING.md`) collects `ticV` like every other gain slot, and
+  `References_VentilationSlotIsCollected_SoItsReferenceResolves` pins the fixed behaviour.
 * **TBD `InternalCondition` sharing**, opaque `BuildingElement` reuse, `Construction` naming, and
   the function-profile import semantics.
 * **Native SAM library semantics.** After this change, editing one shared `ProfileLibrary`
@@ -278,5 +279,9 @@ condition and its HDD sibling both receive the space condition's profile name wh
 values — so the next import legitimately sees a same-name/different-value pair and must discriminate it
 (regression 3 above). The baseline does the same thing and is strictly worse on the same measure: it grows
 **24 of 42** names per generation by re-nesting, reaching `Cell 2 [Cell 2 [Cell 2 [No Dehumidification]]]`.
-Name-only, no simulation effect, and a reduction rather than a regression. Fixing the export's
-name/value mismatch is separate work.
+Name-only, no simulation effect, and a reduction rather than a regression.
+
+*This residual is now fixed* by the follow-up profile round-trip hardening work
+(`PROFILE_ROUND_TRIP_HARDENING.md`): the HDD writer names its flattened single-value profiles after
+themselves (`"<name> - HDD"`), so no generation manufactures the same-name/different-values pair and the
+names are a fixed point.

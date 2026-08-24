@@ -1,13 +1,9 @@
 # Project Progress
 
 ## Branch
-`feature/tas-profile-definition-reuse` (off `sow/2026-Q3` at `2950b27c`, i.e. after PR #35 merged the
-aperture hardening fixes). **PR #36 (`fix/tas-updateids-gbxml-zone-identity`) has since been merged into
-`sow/2026-Q3` at `03f9757` and is merged into this branch**, so the branch now carries it; the two touch
-disjoint code (PR #36: `UpdateIds`/`Match`/zone identity; this branch: profile definitions).
-Stage 1 complete; **licensed A/B PASSED - see "Last updated". Final review finding fixed (see
-"Post-review fix" below). PR #37 OPEN against `sow/2026-Q3`, Copilot review comments addressed (see
-"Post-review fix (2)" below). Not yet merged.**
+`feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
+the profile definition reuse this work hardens). PR #36 (`UpdateIds` zone identity) and PR #37 (profile
+definition reuse) are both merged; see the "Previously" sections below for their state at merge time.
 
 The reusable-aperture programme is complete and merged on all three routes:
 `feature/tas-aperture-hardening` was PR #35, merged 2026-08-23.
@@ -19,6 +15,157 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-24 (profile round-trip hardening - LICENSED, and corrected) - **The two leftovers PR #37 pinned as
+baseline are fixed, and the licensed run caught a third defect the fix itself activated: the imported
+ventilation rate was inflated by 3600/volume.** Full detail in
+`SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md`.
+
+**1. HDD naming (export-side).** `Modify/UpdateInternalCondition_HDD` stamped `profile.Name` onto the
+flattened single-value `ticValueProfile`s it writes for the HDD sizing condition's `ticI` and `ticLL`
+slots - one name carrying two differently-valued definitions, which the next import legitimately
+discriminated, accreting one `_<hash>` suffix per SAM → TAS → SAM generation on exactly those two
+categories (the licensed "2 of 20 names grow" residual). The flattened profiles are now named after
+themselves: `profile.Name + " - HDD"` (the HDD condition's own naming convention). Import unchanged - its
+discrimination stays as the safety net for genuinely same-named TAS-authored input.
+
+**2. Ventilation ticV (import-side).** An unfinished WIP from `13c4284c` (2023): the import wrote
+`VentilationProfileName` but `ticV` was never in the library emitter's slot set, so the reference always
+dangled and the export silently kept TAS defaults for imported models' ventilation. `ticV` is now
+collected like every other internal-gain slot (`Query.ProfileReuseIndex.ProfileSlots_InternalGain` +
+the legacy `Convert.ToSAM_Profiles` mirror), and the reference is routed through the same index helper
+(`Convert.ToSAM(TBD.InternalCondition, …)`). This is the one intended simulation-effective change vs the
+pre-fix baseline: an imported model's ventilation schedule now round-trips instead of dropping to TAS
+defaults, so licensed acceptance compares ticV fields against the SOURCE TBD, not only baseline-vs-feature.
+
+**Files changed:** `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateInternalCondition_HDD.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Query/ProfileReuseIndex.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/Profiles.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/InternalCondition.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Modify/UpdateInternalConditionTemplate.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Query/ProfileName.cs` (shared `ProfileName_HDD` naming rule),
+`SAM_Tas/SAM.Analytical.Tas/Query/ProfileReuseIndex.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Classes/ProfileReuseIndex.cs` (`Reserve`),
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` (+1 net: the baseline-pin
+`References_VentilationSlotIsNotCollected_…` became
+`References_VentilationSlotIsCollected_SoItsReferenceResolves`; new
+`Naming_HDDFlattenedProfilesWithTheirOwnNames_ReachAStableFixedPoint`),
+`SAM_Tas/SAM.Analytical.Tas.TM59.Tests/VentilationAirflowMagnitudeTests.cs` (new, 11 tests - the COM-free
+guard that would have caught the magnitude failure before TAS was run),
+`SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md` (new handover doc),
+`SAM_Tas/SAM.Analytical.Tas/PROFILE_DEFINITION_REUSE.md` (two statements reworded where recorded), this
+file.
+
+**Validation:** `SAM_Tas.sln` builds 0 errors Debug AND Release (Framework MSBuild; pre-existing
+MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **521/521 Debug and Release**
+(497 inherited, +1 net, +17 ventilation-magnitude, +6 zero-length/reservation/slot-key guards). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
+to be rebuilt first (`SAM_gbXML` Core+Analytical, all four `SAM_SolarCalculator` projects, three
+`SAM_Systems` projects, `SAM_Validation/SAM.Analytical.Benchmark`) - build outputs only, no source changes
+in those repos.
+
+**Deferred (documented in the handover doc, not forgotten):** function-profile semantics end to end
+(import of `profile.function`, `Core.Tas.Query.Values` reading the hourly/yearly function *variants*, the
+zero-count re-export writing 24 NaNs, the inverted `double.IsNaN` guards on
+`VentilationFunctionSetback`/`VentilationFunctionFactor` in `UpdateInternalCondition`, and the template
+path never writing function strings). Neither PR #37 licensed model exercises a function profile; SAM has
+no home for a function string outside Lighting/Ventilation. Separate task.
+
+**3. Ventilation MAGNITUDE (the licensed correction).** The first licensed run of this branch failed.
+Collecting `ticV` woke a dormant unit defect: `profile.GetExtremeValue(true)` on a `ticV` slot is a peak
+**air change rate**, but the import stored it in `InternalConditionParameter.SupplyAirFlow`, declared
+`[m3/s]`. `Query.CalculatedSupplyAirFlow` read it as m³/s and the export's `/ volume * 3600` inflated it
+by 3600/volume. Neither licensed model could show this (both carry `ticV = factor 1.0, value 0.0`, so
+their round trip is simulation-inert); an authored **2.0 ACH** source profile made it a
+**40.8 ACH** round trip - a peak hourly heating error of 69,950 W against the source, 19.3× worse than the
+baseline that dropped ventilation altogether. It was harmless for as long as the reference dangled,
+because the export could not resolve the profile and never wrote the factor.
+
+The correction is unit-only, at two sites: the import writes
+`InternalConditionParameter.SupplyAirChangesPerHour` (`[ACH]`, whose `rate × volume / 3600` the export's
+conversion exactly inverts) in **both** `Convert/ToSAM/InternalCondition.cs` overloads (TBD and TIC shared
+the mis-mapping); and `Modify/UpdateInternalConditionTemplate.cs` prefers that parameter for its `ticV`
+factor, falling back to `SupplyAirFlow` so SAM-authored templates keep the factor they have always been
+given. `CalculatedSupplyAirFlow` itself is untouched - the rate is routed to the basis that already
+inverts correctly instead of being compensated for downstream. Corrected result: **2.0 ACH → 2.0 ACH**,
+`infVentGain` within 0.003 %, peak heating error 69,950 W → **326 W**.
+
+**Licensed acceptance (2026-08-24).** One-DLL-swap isolation (67 files, exactly 1 differing) across three
+builds - baseline `610696e9`, first attempt `e2e88ca4`, corrected head - each proving its own identity by
+reflecting its production slot table, the corrected build reproducing byte-identically under `-t:Rebuild`.
+Unresolved ventilation references **4 → 0** (ModelA) and **36 → 0** (TM59); library **20 → 21** and
+**30 → 31** with every ticV slot deduped onto one definition and counts stable across generations; HDD
+names reach a fixed point (generation 2 == 3 == 4 byte-identical, where the baseline accretes one
+`_<hash>` per generation and never converges); non-ticV simulation-effective fields **0 differences** in
+792 and 5346; both real models **0 differences** against baseline in 227,760 and 1,024,920 simulated
+values, before and after the correction. Zone-GUID churn confirmed as noise by a same-DLL control.
+Also measured directly: TAS's `internalGain.freshAirRate` is **inert** in a TBD simulation (40 vs
+0 l/s/p → 0 differences in 227,760 values), which is why a source carrying both an ACH schedule and a
+dormant per-person rate still round-trips to their additive sum - established export design, recorded but
+not changed.
+
+**4. Zero-length ticV guard (Codex P2).** Collecting `ticV` also gave zero-length TAS **function**
+profiles a resolvable library entry for the first time: `Core.Tas.Query.Values` has no case for
+`ticFunctionProfile`, so it flattens to zero values, PR #37's exclusion branch still emits a legacy-named
+library entry, and `VentilationProfileName` then resolved to it - after which `Modify.Update`'s dead
+`Count == -1` guard let a `Count == 0` profile fall into the `Count <= 24` branch and overwrite the function
+profile with 24 hourly values. New `Query.IsCollectableSlot(int, IEnumerable<double>)` (true for every slot
+except `ticV`, and for `ticV` only when its values are non-empty) is consulted by both collectors, so a
+zero-length `ticV` is registered nowhere, its reference falls back to the legacy name and dangles exactly as
+it did before PR #38 - the safe deferred behaviour. Deliberately `ticV`-scoped; the other eleven slots keep
+PR #37's treatment, and no function support is attempted. Four COM-free tests pin it. Normal `ticV` is
+unaffected - confirmed licensed as byte-identical to the accepted build (792 non-ticV + 56 ticV fields,
+0 differences) with the 2.0 ACH oracle intact, so the full A/B was not rerun.
+
+**5. Review round (Codex + Copilot).** Three further findings, all addressed. (a) The magnitude fix stored
+`GetExtremeValue(true)` = `factor * max(values)`; because `Modify.Update` re-applies the raw values on top of
+whatever basis it is given, that scaled the schedule twice (`factor * max^2`) - invisible for a profile
+normalised to a peak of 1, which is what the first authored oracle used. The import now stores
+`profile_TBD.factor`; a non-normalised source (factor 2.0, peak 0.5 = 1.0 ACH) round-tripped as 0.5 ACH
+before and **1.0 ACH exactly** after, with the normalised 2.0 ACH oracle unchanged and TM59 source-factor
+agreement improving 26/54 -> 44/54. (b) Skipping a zero-length `ticV` left its legacy name unclaimed, so
+`Resolve` could hand that same string to an unrelated canonical definition and turn the intended dangling
+reference into a live one; the skip path now calls the new `ProfileReuseIndex.Reserve(category, name)` -
+a claim with no definition, no library entry and no answerable slot - and `Resolve` seeds its claim set from
+it. (c) The legacy `Convert.ToSAM_Profiles` mirror repeated the twelve slots by hand; both collectors now
+`foreach` over the shared slot tables behind the shared `Query.IsCollectableSlot` gate, so they cannot drift
+and one assertion pins both. All three verified licensed as behaviour-neutral on the real models (0
+differences across 792/5346 non-ticV fields, ModelA re-simulated at 0/227,760, library 21/31, 0 unresolved).
+**6. Second review pass (Codex).** The `Reserve` fix in item 5(b) closes a coincidental STRING collision
+between two different internal conditions, but Codex found it does not close a slot-KEY collision: two TBD
+internal conditions can share the exact same name (a duplicate space name, a generic template) while
+disagreeing on `ticV`, and `Reserve` never touches `definitionsBySlot`/`excludedNamesBySlot`. `Register`
+gained an `bool suppressLibraryEntry` parameter so a skipped `ticV` still goes through the same ambiguity
+tracking every other excluded slot already uses - only the final library-emission step is skipped. Verified
+by first reverting to the Reserve-only behaviour and confirming a new test (`IC name = "Duplicate"`, one
+`ticV` zero-length, one ordinary) genuinely failed - `GetProfileName("Duplicate", ticV)` answered the
+ordinary profile's name instead of null - then restoring the fix and confirming it passes. 521/521 tests
+Debug and Release; no full licensed A/B rerun (the cheap 2.0 ACH oracle and both real models' import
+integrity were re-checked and are unchanged).
+
+A fourth finding - a source declaring both an ACH schedule and a TAS-inert `freshAirRate` round-tripping to
+their additive sum - is answered in the handover doc rather than changed: it is the established export design
+and narrowing it would drop ventilation for native SAM models.
+
+**Recommended next step:** [PR #38](https://github.com/SAM-BIM/SAM_Tas/pull/38) is OPEN against
+`sow/2026-Q3` with the licensed gate **run and passed** after the magnitude correction and the review round. Remaining: human
+review, then merge. Merging remains a human call - it was not done here.
+
+---
+
+## Previously
+2026-08-23 - **PR #37 (profile definition reuse) merged at `610696e9`.** The section below is its state
+at merge time; its two pinned leftovers (name growth, dangling ventilation reference) are what the
+current branch fixes.
+
+## Previously (PR #37, at merge time)
+Branch `feature/tas-profile-definition-reuse` (off `sow/2026-Q3` at `2950b27c`, i.e. after PR #35 merged the
+aperture hardening fixes). **PR #36 (`fix/tas-updateids-gbxml-zone-identity`) has since been merged into
+`sow/2026-Q3` at `03f9757` and is merged into this branch**, so the branch now carries it; the two touch
+disjoint code (PR #36: `UpdateIds`/`Match`/zone identity; this branch: profile definitions).
+Stage 1 complete; **licensed A/B PASSED - see "Last updated". Final review finding fixed (see
+"Post-review fix" below). PR #37 OPEN against `sow/2026-Q3`, Copilot review comments addressed (see
+"Post-review fix (2)" below). Not yet merged.**
+
+### PR #37 last entry
 2026-08-23 (later still) - **Post-review fix (2): addressed the GitHub Copilot automated review on
 [PR #37](https://github.com/SAM-BIM/SAM_Tas/pull/37).** Codex's review hit its usage limit and left no
 comments; nothing from it to address. Six real findings, no behavioural or reusable-profile-dedup change:
@@ -1482,8 +1629,9 @@ Earlier sessions:
   accrete one `_<hash>` suffix per generation. The definition count never grows and no simulation value
   changes; the baseline is worse on the same measure (24 of 42 names re-nest per generation). Fixing the
   export's name/value mismatch is separate work.
-- Pre-existing and deliberately not fixed here: `ticV` is never emitted into the imported `ProfileLibrary`,
-  so `VentilationProfileName` still dangles (pinned as baseline by a test, not silently changed);
+- Pre-existing and deliberately not fixed *in PR #37*: `ticV` was never emitted into the imported
+  `ProfileLibrary`, so `VentilationProfileName` dangled (pinned as baseline by a test, not silently
+  changed). **PR #38 fixes this** - see "Last updated" above;
   the TBD function-profile import does not preserve complete function semantics, which is why zero-length
   profiles are excluded from dedup; TBD `InternalCondition` sharing is unchanged.
 - Carried over from earlier branches: D3 (schedule-removal transition) and D2 (aperture matching)
