@@ -1,7 +1,11 @@
 # Project Progress
 
 ## Branch
-`feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
+`fix/tas-fromtbd-gbxml-aperture-roundtrip` (off `sow/2026-Q3` at `372518a6`, i.e. with **PR #38 merged**).
+Aperture identity across a FULL gbXML round trip - `TBD -> FromTBD -> new SAM -> gbXML -> a NEW TBD`. See
+`SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
+
+Previously: `feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
 the profile definition reuse this work hardens). PR #36 (`UpdateIds` zone identity) and PR #37 (profile
 definition reuse) are both merged; see the "Previously" sections below for their state at merge time.
 
@@ -15,7 +19,80 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-24 (profile round-trip hardening - LICENSED, and corrected) - **The two leftovers PR #37 pinned as
+2026-08-24 (aperture round trip, second pass - the REAL Grasshopper failure, reproduced and fixed - LICENSED).
+
+**The previous entry's caveat was wrong and is retracted.** It said the reported symptom "did not reproduce"
+and pointed at a Grasshopper install running older DLLs. The DLL was current - measured, not assumed: the
+deployed `SAM.Analytical.Tas.dll` was byte-identical (SHA-256 `D70C6D7F…`) to the repository build and
+contained the `RemoveApertureTasIdentity` change. The symptom reproduces on every run. The earlier harness
+missed it because it left **one `SAMAnalytical.FromTBD` input at its default**: `_importUnused_`.
+
+**The chain.** With `_importUnused_` on, `Convert.ToSAM` also reconstructs aperture constructions no element
+references. The previous generation's TBD holds exactly one such leftover, and it comes back as an
+`ApertureConstruction` with frame layers and **no pane layers**; `TogbXML` writes it as a second
+`<WindowType>` with a `<Frame>` and no `<Glaze>`. An A/B on the two exported gbXMLs - identical but for that
+one element and an unused opaque `<Construction>` - shows it flips TAS's own gbXML import from `GLAZING`
+(`BEType` 12) panes to **`DOORELEMENT` (`BEType` 14)** panes, for every opening in the model at once.
+
+**The defect.** Three places read that element and two disagreed with the import. `Convert.ToSAM` uses
+`Query.AperturePart_BuildingElementType` and calls a door leaf a PANE; `Query.Match` - how `Modify.UpdateIds`
+decides which half of an aperture a surface is - used `Query.AperturePart(int)` and called it a FRAME; and
+the sweep's `ApertureBuildingElementUsage.IsAperture` did not recognise it as an aperture element at all.
+So `UpdateIds` collected BOTH of a window's surfaces into its frame set and none into its pane set, and bound
+the frame to the pane's element. `UpdateApertureDefinitions` then skipped every pane for want of a binding
+and `Query.ApertureRebindKeys` refused every frame - correctly, about state that only existed because of the
+misreading. `40 considered / 0 rebound`, and TBD2 kept **40 per-aperture GUID-named building elements**
+instead of 3. That is the reported symptom, element-for-element against the user's own `Flat1-rerun.tbd`.
+
+**The fix.** One reading in one place: `Query.AperturePart_BEType(int)` is added beside
+`Query.AperturePart_BuildingElementType` (which now delegates to it) as the single definition of which half
+of an opening a TBD element is - `GLAZING`, `ROOFLIGHT`, `DOORELEMENT` are panes, `FRAMEELEMENT` is a frame,
+everything else refuses. `Query.Match` reads it instead of `Query.AperturePart(int)`, and
+`ApertureBuildingElementUsage.IsAperture` asks it too so the sweep recognises exactly what the reader does -
+without which the emptied door elements survived the rebind. `Query.AperturePart(int)` stays as the
+*write*-side helper, unchanged and now documented as such. **No refusal was relaxed**; physical identity is
+still `{ZoneGuid, SurfaceNumber}`, a `BuildingElementGuid` is still only a definition binding, and the
+sweep's holds-no-surface and not-canonical gates are untouched.
+
+**Licensed acceptance** on `Flat1.tbd` *as the failing Grasshopper run produced it*, through
+`Convert.ToSAM` -> `TogbXML` -> `WorkflowCalculator.Calculate` with the component's own settings, all four
+`_importUnused_` x `_importSurfaceShades_` combinations, two generations each: every generation
+`40 considered / 40 rebound`, zero refusals, `zones=9 surfaces=110 surfaces_pane=20 surfaces_frame=20
+elements=8 apertureElements=3`, TBD2 structurally identical to TBD3. Before the fix the two `_importUnused_`
+rows gave `20 considered / 0 rebound` and 45 elements. Tests: `SAM.Analytical.Tas.TM59.Tests` **554/554**
+Debug and Release (+18 new cases in `ApertureDoorTypedPartTests.cs`), `SAM.Analytical.Tas.Benchmark.Tests`
+**16/16** both; two mutation checks bite (reverting the door reading fails 3, reverting the sweep test fails
+2). Detail in `SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
+
+**Review fix, before merge.** Copilot's PR review caught a second instance of the same shape of bug in
+`Modify.UpdateIds`'s clearing loop: an `AdjacencyCluster` can hold one aperture as both a panel-held object
+and a standalone cluster object, real models carry both, and `GetAperture(guid)`/`GetObject<Aperture>(guid)`
+return the standalone one - not the panel one that gets restamped. The clearing loop cleared only the
+panel-held copy, so a part the refresh could not re-match left its **standalone** copy still carrying the
+previous TBD's binding - reachable through `GetAperture`/`GetObject<Aperture>` even though the panel copy now
+correctly read unstamped. `UpdateApertureDefinitions`'s own successful restamp (`RestampApertureBinding`)
+already updates both shapes for this exact reason; the clearing pass now does too. Re-verified licensed with
+`_importSurfaceShades_` on (the mode that creates the standalone copies): still `40 considered / 40 rebound`,
+zero refusals, both generations. Full test suite re-run clean (554/554 + 16/16, both configs).
+
+Previously: 2026-08-24 (aperture identity across a full gbXML round trip - LICENSED). **`Modify.UpdateIds` cleared every
+aperture's physical stamps unconditionally but never cleared `Pane`/`FrameBuildingElementGuid` - which in
+fact was never cleared anywhere.** A part the refresh could not re-match therefore carried the PREVIOUS TBD's
+definition binding forward as apparent current state, so `Modify.UpdateApertureDefinitions` counted it as
+bound and `Query.ApertureRebindKeys` refused it - the mechanism behind both reported refusal classes and a
+`40 considered / 0 rebound` outcome. Fixed by one new mutator, `Modify.RemoveApertureTasIdentity`, which
+clears stamps and bindings together, called from the one unconditional clearing pass in `UpdateIds`. **No
+refusal was relaxed.** Licensed: A0 -> TBD1 -> FromTBD -> A1 -> TBD2 -> FromTBD -> A2 -> TBD3 on the 9-zone /
+20-aperture Flat1 fixture - all three TBDs hold 40 aperture parts on **3** aperture building elements (one
+shared frame, two panes), `40 rebound` with zero refusals in every generation, and every simulation-effective
+aperture field identical across generations. **Caveat: the originally reported symptom did not reproduce at
+base `372518a6`** - the chain already reached the fixed point there; the fix is proven by a mutation check
+instead (disabling the binding clear fails three of the new tests, one with the exact reported message).
+Detail and limitations in `SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`. **That caveat is retracted -
+see the entry above: the symptom does reproduce, with `_importUnused_` on, and the harness was the thing at
+fault, not the deployment.**
+
+Previously: 2026-08-24 (profile round-trip hardening - LICENSED, and corrected) - **The two leftovers PR #37 pinned as
 baseline are fixed, and the licensed run caught a third defect the fix itself activated: the imported
 ventilation rate was inflated by 3600/volume.** Full detail in
 `SAM_Tas/SAM.Analytical.Tas/PROFILE_ROUND_TRIP_HARDENING.md`.

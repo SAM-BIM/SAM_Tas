@@ -35,17 +35,26 @@ namespace SAM.Analytical.Tas
         public int ZoneSurfaceCount { get; }
 
         /// <summary>
-        /// Whether this element is one of the two aperture types - a pane (<c>GLAZING</c>) or a frame
-        /// (<c>FRAMEELEMENT</c>). A panel's element is never a candidate for anything here.
+        /// Whether this element is half of an opening rather than a panel's - asked through
+        /// <see cref="Query.AperturePart_BEType(int)"/>, the one definition of that reading, so the sweep
+        /// recognises exactly what the import and <c>Query.Match</c> recognise.
         /// <para>
-        /// Asked through <see cref="Query.BEType(AperturePart)"/> rather than against the
-        /// <c>TBD.BuildingElementType</c> enum, so this value type stays free of the embedded interop types
-        /// and a caller in another assembly - the test suite - can construct and interrogate it.
+        /// <b>It used to name only <c>GLAZING</c> and <c>FRAMEELEMENT</c>.</b> TAS types an opening's pane
+        /// <c>DOORELEMENT</c> or <c>ROOFLIGHT</c> rather than <c>GLAZING</c> for a whole model at a time, and
+        /// such an element then failed this test - so once the rebind had moved its surface onto the shared
+        /// definition, the emptied per-aperture element could not be marked and stayed in the TBD. Twenty
+        /// windows left twenty surface-less elements in TAS's Building Elements list, which is the very thing
+        /// the sweep exists to prevent.
+        /// </para>
+        /// <para>
+        /// The signature takes an <c>int</c> and this property returns a <c>bool</c>, so the value type stays
+        /// free of the embedded interop types and a caller in another assembly - the test suite - can
+        /// construct and interrogate it.
         /// </para>
         /// </summary>
         public bool IsAperture
         {
-            get { return BEType == Query.BEType(AperturePart.Pane) || BEType == Query.BEType(AperturePart.Frame); }
+            get { return Query.AperturePart_BEType(BEType) != AperturePart.Undefined; }
         }
 
         public override string ToString()

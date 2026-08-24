@@ -61,11 +61,31 @@ namespace SAM.Analytical.Tas
                                     continue;
                                 }
 
-                                aperture_Panel.RemoveApertureZoneSurfaceReferences(AperturePart.Pane);
-                                aperture_Panel.RemoveApertureZoneSurfaceReferences(AperturePart.Frame);
+                                //Stamps AND definition bindings, through the one mutator that owns the pairing:
+                                //see Modify.RemoveApertureTasIdentity. The binding used to survive this pass
+                                //because it was refreshed only where the match below succeeded, so a part this
+                                //pass could not re-match carried the PREVIOUS TBD's binding forward as though
+                                //it were current state.
+                                aperture_Panel.RemoveApertureTasIdentity();
 
                                 panel.RemoveAperture(aperture_Panel.Guid);
                                 panel.AddAperture(aperture_Panel);
+
+                                //BOTH shapes an aperture can be held in, cleared together - see
+                                //AperturePanelIndex's own note and Modify.UpdateApertureDefinitions'
+                                //RestampApertureBinding, which re-stamps both shapes on a SUCCESSFUL match for
+                                //exactly this reason. Leaving the standalone cluster object uncleared here
+                                //meant that whenever the match below could not re-resolve this aperture, its
+                                //panel copy read UNSTAMPED (the honest, current state) while
+                                //AdjacencyCluster.GetAperture(guid)/GetObject<Aperture> kept handing back the
+                                //stale copy still carrying the previous TBD's binding - the very state this
+                                //whole pass exists to eliminate.
+                                Aperture aperture_Object = adjacencyCluster.GetObject<Aperture>(aperture_Panel.Guid);
+                                if (aperture_Object != null)
+                                {
+                                    aperture_Object.RemoveApertureTasIdentity();
+                                    adjacencyCluster.AddObject(aperture_Object);
+                                }
                             }
                         }
 
