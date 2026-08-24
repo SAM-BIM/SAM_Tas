@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using NUnit.Framework;
@@ -463,8 +463,8 @@ namespace SAM.Analytical.Tas.TM59.Tests
             {
                 new Slot("Cell 1", ticI, Infiltration, "Constant", Flat(1.0, 24)),
                 new Slot("Cell 1", ticLL, Heating, "HTG_7to19_21", Values(16, 7, 21, 12, 16, 5)),
-                new Slot("Cell 1 - HDD", ticI, Infiltration, "Constant - HDD", new[] { 0.20000000298023224 }),
-                new Slot("Cell 1 - HDD", ticLL, Heating, "HTG_7to19_21 - HDD", new[] { 21.0 }),
+                new Slot("Cell 1 - HDD", ticI, Infiltration, TasQuery.ProfileName_HDD("Constant"), new[] { 0.20000000298023224 }),
+                new Slot("Cell 1 - HDD", ticLL, Heating, TasQuery.ProfileName_HDD("HTG_7to19_21"), new[] { 21.0 }),
             };
 
             ProfileReuseIndex generation1 = Index(slots_Generation1);
@@ -472,18 +472,20 @@ namespace SAM.Analytical.Tas.TM59.Tests
             //Both definitions exist per category, and neither needed the signature discriminator.
             Assert.That(generation1.DefinitionCount, Is.EqualTo(4));
             Assert.That(generation1.GetProfileName("Cell 1", ticI), Is.EqualTo("Constant"));
-            Assert.That(generation1.GetProfileName("Cell 1 - HDD", ticI), Is.EqualTo("Constant - HDD"));
+            Assert.That(generation1.GetProfileName("Cell 1 - HDD", ticI), Is.EqualTo(TasQuery.ProfileName_HDD("Constant")));
             Assert.That(generation1.GetProfileName("Cell 1", ticLL), Is.EqualTo("HTG_7to19_21"));
-            Assert.That(generation1.GetProfileName("Cell 1 - HDD", ticLL), Is.EqualTo("HTG_7to19_21 - HDD"));
+            Assert.That(generation1.GetProfileName("Cell 1 - HDD", ticLL), Is.EqualTo(TasQuery.ProfileName_HDD("HTG_7to19_21")));
 
             //The next export writes each slot's resolved name - the HDD sibling is derived from the space's
-            //own condition and adds its " - HDD" - so generation 2 reads back exactly these names...
+            //own condition and applies the SAME production rule (Query.ProfileName_HDD, which is what
+            //Modify.UpdateInternalCondition_HDD calls at both of its write sites) - so generation 2 reads
+            //back exactly these names...
             List<Slot> slots_Generation2 = new List<Slot>
             {
                 new Slot("Cell 1", ticI, Infiltration, generation1.GetProfileName("Cell 1", ticI), Flat(1.0, 24)),
                 new Slot("Cell 1", ticLL, Heating, generation1.GetProfileName("Cell 1", ticLL), Values(16, 7, 21, 12, 16, 5)),
-                new Slot("Cell 1 - HDD", ticI, Infiltration, generation1.GetProfileName("Cell 1", ticI) + " - HDD", new[] { 0.20000000298023224 }),
-                new Slot("Cell 1 - HDD", ticLL, Heating, generation1.GetProfileName("Cell 1", ticLL) + " - HDD", new[] { 21.0 }),
+                new Slot("Cell 1 - HDD", ticI, Infiltration, TasQuery.ProfileName_HDD(generation1.GetProfileName("Cell 1", ticI)), new[] { 0.20000000298023224 }),
+                new Slot("Cell 1 - HDD", ticLL, Heating, TasQuery.ProfileName_HDD(generation1.GetProfileName("Cell 1", ticLL)), new[] { 21.0 }),
             };
 
             ProfileReuseIndex generation2 = Index(slots_Generation2);
@@ -803,6 +805,99 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Profile profile = internalCondition.GetProfile(ProfileType.Ventilation, profileLibrary, false);
             Assert.That(profile, Is.Not.Null, "The ventilation reference must resolve as a Ventilation profile.");
             Assert.That(profile.GetValues(), Is.EqualTo(Flat(1.0, 24)));
+
+            //And the production guard agrees this shape is collectable at all - the boundary the
+            //zero-length tests below hold the other side of.
+            Assert.That(ProductionIsCollectableSlot(ticV, Flat(1.0, 24)), Is.True);
+        }
+
+        // =================================================================================================
+        // Zero-length (TAS function) ventilation must NOT ride the new collected path
+        // =================================================================================================
+
+        [Test]
+        public void ZeroLength_Ventilation_IsNotCollectable_SoItCannotBecomeAResolvableValueProfile()
+        {
+            //Codex P2 on PR #38. Core.Tas.Query.Values has no case for ticFunctionProfile, so a TAS function
+            //profile flattens to ZERO values. Collecting ticV would have given that zero-length profile a
+            //ProfileLibrary entry under its legacy name - the very name the import writes as
+            //VentilationProfileName - so the reference would resolve, the export would call the ordinary
+            //value writer, and Modify.Update would replace the TAS function profile with a 24-value hourly
+            //one (see ZeroLength_ProfileCountIsZero_... below for why Count == 0 lands there).
+            //ticV is therefore collected only when its values are a COMPLETE representation.
+            Assert.That(ProductionIsCollectableSlot(ticV, Flat(1.0, 24)), Is.True, "An ordinary hourly ticV is collected.");
+            Assert.That(ProductionIsCollectableSlot(ticV, new[] { 0.5 }), Is.True, "An ordinary single-value ticV is collected.");
+            Assert.That(ProductionIsCollectableSlot(ticV, new double[0]), Is.False, "A zero-length (function) ticV must NOT be collected.");
+            Assert.That(ProductionIsCollectableSlot(ticV, null), Is.False, "An unreadable ticV must NOT be collected.");
+        }
+
+        [Test]
+        public void ZeroLength_Ventilation_NotCollected_LeavesTheReferenceDanglingExactlyAsBefore()
+        {
+            //What the guard buys: the slot is never registered, so the index has no name for it and no
+            //library entry under one. The import then falls back to the legacy name (Convert.ToSAM's
+            //ProfileName helper returns name_Legacy when the index answers nothing), that name resolves to
+            //nothing, and the export's GetProfile returns null - so Modify.Update is never reached and the
+            //TAS function profile survives untouched. That is precisely the pre-PR-#38 behaviour.
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+            Register(profileReuseIndex, "Cell 1", ticI, Infiltration, "Constant", Flat(1.0, 24));
+            //...and NO ticV registration, because the production guard refused it.
+            profileReuseIndex.Resolve();
+
+            Assert.That(profileReuseIndex.GetProfileName("Cell 1", ticV), Is.Null,
+                "An uncollected slot must not answer a name.");
+            Assert.That(profileReuseIndex.GetProfileName(Ventilation, new double[0]), Is.Null,
+                "Nor may the value lookup answer for an empty definition.");
+
+            ProfileLibrary profileLibrary = Library(profileReuseIndex);
+            Assert.That(profileLibrary.GetProfiles().FindAll(x => x.ProfileType == ProfileType.Ventilation), Is.Empty,
+                "No ventilation definition may exist for a zero-length ticV.");
+
+            //The reference the import writes in that case, and the export's own lookup for it.
+            InternalCondition internalCondition = new InternalCondition("Cell 1");
+            internalCondition.SetProfileName(ProfileType.Ventilation, Legacy("Cell 1", "Fresh Air Function"));
+
+            Assert.That(internalCondition.GetProfile(ProfileType.Ventilation, profileLibrary, false), Is.Null,
+                "The export must not resolve a zero-length ventilation profile - resolving it is what let the "
+                + "ordinary value writer overwrite a TAS function profile.");
+        }
+
+        [Test]
+        public void ZeroLength_ProfileCountIsZero_WhichIsWhyResolvingItWouldCorruptTheFunctionProfile()
+        {
+            //Modify.Update guards on Count == -1, then branches Count == 1 -> ticValueProfile and
+            //Count <= 24 -> ticHourlyProfile. A zero-length profile reports Count == 0, so the guard misses
+            //it and it lands in the 24-hour branch. Pinned so the hazard the guard avoids stays visible
+            //without needing TAS - and so this starts failing if Update ever learns to handle Count 0.
+            Profile profile = new Profile("Fresh Air Function", ProfileType.Ventilation, new List<double>());
+
+            Assert.That(profile.Count, Is.EqualTo(0), "A zero-length profile reports Count 0, not -1.");
+            Assert.That(profile.Count, Is.Not.EqualTo(-1), "So Modify.Update's Count == -1 guard does not catch it.");
+            Assert.That(profile.Count, Is.LessThanOrEqualTo(24), "And it falls into the ticHourlyProfile branch.");
+        }
+
+        [Test]
+        public void ZeroLength_NonVentilationSlots_KeepTheirPR37ExclusionBehaviour()
+        {
+            //The guard is deliberately ticV-only. Every other slot keeps exactly the PR #37 treatment: a
+            //zero-length profile is excluded from dedup but still gets its own legacy-named library entry.
+            //Changing that is function-profile work, not this fix.
+            foreach (int slot in new[] { ticI, ticLG, ticOLG, ticOSG, ticESG, ticELG, ticCOG, ticUL, ticLL, ticHLL, ticHUL })
+            {
+                Assert.That(ProductionIsCollectableSlot(slot, new double[0]), Is.True,
+                    "Slot " + slot + " must keep its PR #37 zero-length behaviour.");
+            }
+
+            ProfileReuseIndex profileReuseIndex = new ProfileReuseIndex();
+            Assert.That(Register(profileReuseIndex, "Cell 1", ticI, Infiltration, "Function", new double[0]), Is.False,
+                "A zero-length profile is never a reusable definition.");
+            profileReuseIndex.Resolve();
+
+            Assert.That(profileReuseIndex.DefinitionCount, Is.EqualTo(0));
+            Assert.That(profileReuseIndex.GetProfileName("Cell 1", ticI), Is.EqualTo(Legacy("Cell 1", "Function")),
+                "The excluded slot still answers its legacy name, as PR #37 established.");
+            Assert.That(Library(profileReuseIndex).GetProfiles().FindAll(x => x.ProfileType == ProfileType.Infiltration), Has.Count.EqualTo(1),
+                "And still carries its own library entry.");
         }
 
         // =================================================================================================
@@ -897,6 +992,18 @@ namespace SAM.Analytical.Tas.TM59.Tests
         /// The <c>TBD.Profiles</c> members of one of <c>Query</c>'s production slot tables, by name. Read
         /// reflectively so this project still needs no Interop.TBD reference of its own.
         /// </summary>
+        /// <summary>
+        /// The production collectability guard (<c>Query.IsCollectableSlot</c>), by reflection - the test
+        /// project deliberately carries no Interop.TBD reference, and internals are not visible to it.
+        /// </summary>
+        private static bool ProductionIsCollectableSlot(int slot, double[] values)
+        {
+            MethodInfo methodInfo = typeof(Analytical.Tas.Query).GetMethod("IsCollectableSlot", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            Assert.That(methodInfo, Is.Not.Null, "Query.IsCollectableSlot no longer exists - the guard this test pins has moved or been renamed.");
+
+            return (bool)methodInfo.Invoke(null, new object[] { slot, values });
+        }
+
         private static List<string> ProductionSlotNames(string fieldName)
         {
             FieldInfo fieldInfo = typeof(Analytical.Tas.Query).GetField(fieldName, BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);

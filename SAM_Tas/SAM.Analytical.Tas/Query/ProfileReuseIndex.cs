@@ -119,9 +119,53 @@ namespace SAM.Analytical.Tas
             }
         }
 
+        /// <summary>
+        /// Whether a slot may be collected at all — i.e. whether the flattened <paramref name="values"/> are a
+        /// COMPLETE representation of the TAS profile behind it.
+        /// <para>
+        /// This matters only for <c>ticV</c>, and only because collecting it is new. <c>Core.Tas.Query.Values</c>
+        /// has no case for <c>ticFunctionProfile</c>, so a TAS function profile flattens to ZERO values. For every
+        /// other slot a zero-length profile takes PR #37's exclusion path: no dedup, but still its own
+        /// legacy-named library entry — harmless there, because those references already resolved and already
+        /// round-tripped that way. For <c>ticV</c> that entry would be new, and it would make
+        /// <c>VentilationProfileName</c> resolve to a zero-value profile for the first time. The export would
+        /// then hand it to the ordinary value writer, where <c>Modify.Update</c>'s <c>Count == -1</c> guard misses
+        /// <c>Count == 0</c> and the <c>Count &lt;= 24</c> branch overwrites the function profile with 24 hourly
+        /// values. Refusing to collect it keeps the reference dangling exactly as it did before PR #38, which is
+        /// the safe deferred behaviour until function semantics are implemented on their own.
+        /// </para>
+        /// <para>
+        /// Slot is an <c>int</c> so the guard is reachable from the COM-free test project
+        /// (<c>ZeroLength_Ventilation_IsNotCollectable_SoItCannotBecomeAResolvableValueProfile</c>).
+        /// </para>
+        /// </summary>
+        internal static bool IsCollectableSlot(int slot, IEnumerable<double> values)
+        {
+            if (slot != (int)TBD.Profiles.ticV)
+            {
+                return true;
+            }
+
+            if (values == null)
+            {
+                return false;
+            }
+
+            using (IEnumerator<double> enumerator = values.GetEnumerator())
+            {
+                return enumerator.MoveNext();
+            }
+        }
+
         private static void Register(ProfileReuseIndex profileReuseIndex, string internalConditionName, TBD.profile profile_TBD, TBD.Profiles slot, ProfileType profileType)
         {
             if (profile_TBD == null)
+            {
+                return;
+            }
+
+            List<double> values = Core.Tas.Query.Values(profile_TBD);
+            if (!IsCollectableSlot((int)slot, values))
             {
                 return;
             }
@@ -130,7 +174,7 @@ namespace SAM.Analytical.Tas
                 internalConditionName,
                 (int)slot,
                 Analytical.Query.Text(profileType),
-                Core.Tas.Query.Values(profile_TBD),
+                values,
                 profile_TBD.name,
                 ProfileName_Legacy(internalConditionName, profile_TBD.name));
         }

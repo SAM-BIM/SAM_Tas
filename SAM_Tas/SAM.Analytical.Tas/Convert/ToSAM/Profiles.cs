@@ -64,7 +64,13 @@ namespace SAM.Analytical.Tas
                 }
 
                 profile = ToSAM(internalGain, TBD.Profiles.ticV, ProfileType.Ventilation, internalCondition.name);
-                if (profile != null)
+
+                //Same guard as the reuse index applies (Query.IsCollectableSlot): a zero-length ticV is a TAS
+                //function profile, and emitting a library entry for it would make VentilationProfileName
+                //resolve to a zero-value profile that the export's ordinary value writer then overwrites with
+                //24 hourly values. Leave it uncollected so the reference dangles as it did before ticV joined
+                //this collector.
+                if (profile != null && Query.IsCollectableSlot((int)TBD.Profiles.ticV, profile.GetValues()))
                 {
                     result.Add(profile);
                 }

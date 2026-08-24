@@ -46,8 +46,11 @@ that **2 of 20** names grew on the feature model.
 
 ### Fix
 
-`UpdateInternalCondition_HDD` names the flattened content after itself: `profile.Name + " - HDD"` — the
-same convention the HDD condition itself already carries (`space.Name + " - HDD"`). The TBD then holds
+`UpdateInternalCondition_HDD` names the flattened content after itself, via `Query.ProfileName_HDD` —
+`profile.Name + " - HDD"`, the same convention the HDD condition itself already carries
+(`space.Name + " - HDD"`). The rule lives in one shared helper rather than inline at the writer's two write
+sites so the COM-free naming test exercises the production rule instead of re-implementing it (Copilot
+raised the duplication on PR #38). The TBD then holds
 `X` (full schedule) and `X - HDD` (flattened scalar): two names for two definitions. The import needs no
 change — its discrimination stays as the safety net for genuinely same-named TAS-authored input (pinned
 unchanged by `Naming_SameNameDifferentDefinitions_DiscriminatesDeterministically` and
@@ -181,10 +184,50 @@ active for native SAM models long before this PR, and narrowing it to the ACH ba
 ventilation for every SAM model that expresses it in m³/s. Whether importing a TAS field that TAS ignores
 should feed a live SAM basis is a separate question, deliberately not answered here.
 
+## Zero-length ticV: collected only when it has a complete value representation
+
+Codex raised this as P2 on PR #38, and it was a real regression of this branch's own making.
+
+**The path.** `Core.Tas.Query.Values` has no `case` for `ticFunctionProfile`, so a TAS function profile
+flattens to **zero values**. For a zero-length profile `ProfileDefinition.IsReusable` is false, and PR #37's
+exclusion branch — correctly, for the eleven slots it was written for — still adds a library entry under the
+profile's legacy `"{internal condition} [{profile}]"` name and lets the slot answer that name. Adding `ticV`
+to the collectors therefore did something new: `VentilationProfileName` resolved to a zero-value profile for
+the first time. The export's `GetProfile(ProfileType.Ventilation, profileLibrary)` returned non-null, the
+ordinary value writer ran, and in `Modify.Update` a `Count == 0` profile slips past the `Count == -1` guard
+and lands in the `Count <= 24` branch — replacing the TAS function profile with 24 hourly values.
+
+Before PR #38 this could not happen: `ticV` was in neither collector, so nothing named the reference and it
+simply dangled. **That dangling reference is the safe deferred behaviour**, and it is what the guard restores.
+
+**The guard.** `Query.IsCollectableSlot(int slot, IEnumerable<double> values)` — true for every slot except
+`ticV`, and for `ticV` only when the flattened values are non-empty. Both collectors consult it: the reuse
+index's registration helper (`Query/ProfileReuseIndex.cs`) and the legacy mirror
+(`Convert/ToSAM_Profiles`). A refused `ticV` is registered nowhere, so the index answers no name for the
+slot, no library entry exists under one, `Convert.ToSAM`'s `ProfileName` helper falls back to the legacy
+name, that name resolves to nothing, and the export never reaches `Modify.Update`. The TAS function profile
+survives untouched.
+
+Deliberately **`ticV`-scoped**: the other eleven slots keep PR #37's exclusion behaviour exactly, because
+their references already resolved and already round-tripped that way — changing them is function-profile
+work, not this fix. `Modify.Update`'s dead `Count == -1` guard is likewise left alone; the guard here stops
+a zero-length profile ever reaching it through the newly-collected slot, which is the whole of the
+regression. **This closes the P2 without attempting function support**: function semantics remain deferred,
+and nothing here brings a function profile into the value export path — it keeps one out.
+
+Pinned COM-free by four tests in `ProfileDefinitionReuseTests.cs`
+(`ZeroLength_Ventilation_IsNotCollectable_…`, `ZeroLength_Ventilation_NotCollected_LeavesTheReferenceDanglingExactlyAsBefore`,
+`ZeroLength_ProfileCountIsZero_WhichIsWhyResolvingItWouldCorruptTheFunctionProfile`,
+`ZeroLength_NonVentilationSlots_KeepTheirPR37ExclusionBehaviour`). Neither licensed model contains a
+function profile, so the licensed A/B was **not** rerun for this guard; a focused licensed check confirmed
+normal `ticV` is byte-identical to the accepted build (792 non-ticV and 56 ticV fields, 0 differences on
+both authored variants) and the 2.0 ACH → 2.0 ACH oracle still holds.
+
 ## Out of scope (unchanged from PR #37, recorded so they are not rediscovered)
 
 - **Function profiles.** Still excluded from dedup (a zero-value flattened form is an incomplete
-  identity), still legacy-named per condition. The full semantics — importing `profile.function` into
+  identity), still legacy-named per condition, and — for `ticV` — now explicitly refused a resolvable
+  library entry so the value exporter can never reach one (see "Zero-length ticV" above). The full semantics — importing `profile.function` into
   `LightingControlFunction`/`VentilationFunction`, reading hourly/yearly values behind the function
   *variants* in `Core.Tas.Query.Values`, and the re-export of an imported function profile (today:
   `Modify.Update(TBD.profile, …)` writes 24 NaN hourly values for a zero-count profile, its
@@ -241,8 +284,8 @@ to drive the whole SAM airflow calculation, and the export's conversion is one l
 
 - `SAM_Tas.sln` builds with **0 errors** in Debug and Release (Framework MSBuild; only the pre-existing
   MSB3270/MSB3277 warnings).
-- `SAM.Analytical.Tas.TM59.Tests`: **509/509** in Debug and Release (498 + 11 new ventilation-magnitude
-  tests). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug and Release.
+- `SAM.Analytical.Tas.TM59.Tests`: **513/513** in Debug and Release (498 + 11 ventilation-magnitude
+  + 4 zero-length ticV guard). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** in Debug and Release.
 - **Licensed TAS A/B: run, and it changed the PR.** One-DLL-swap isolation (67 files, exactly 1
   differing) over three builds — baseline `610696e`, first attempt `e2e88ca`, corrected head — each
   identified by reflecting its own production slot table, with the corrected build reproducing

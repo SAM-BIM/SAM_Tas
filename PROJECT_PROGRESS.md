@@ -42,6 +42,7 @@ defaults, so licensed acceptance compares ticV fields against the SOURCE TBD, no
 `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/Profiles.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Convert/ToSAM/InternalCondition.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateInternalConditionTemplate.cs`,
+`SAM_Tas/SAM.Analytical.Tas/Query/ProfileName.cs` (shared `ProfileName_HDD` naming rule),
 `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/ProfileDefinitionReuseTests.cs` (+1 net: the baseline-pin
 `References_VentilationSlotIsNotCollected_…` became
 `References_VentilationSlotIsCollected_SoItsReferenceResolves`; new
@@ -53,8 +54,8 @@ guard that would have caught the magnitude failure before TAS was run),
 file.
 
 **Validation:** `SAM_Tas.sln` builds 0 errors Debug AND Release (Framework MSBuild; pre-existing
-MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **509/509 Debug and Release**
-(497 inherited, +1 net, +11 ventilation-magnitude). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
+MSB3270/MSB3277 warnings only). `SAM.Analytical.Tas.TM59.Tests`: **513/513 Debug and Release**
+(497 inherited, +1 net, +11 ventilation-magnitude, +4 zero-length ticV guard). `SAM.Analytical.Tas.Benchmark.Tests`: **16/16** both. NOTE: the sibling dependency outputs were stale/missing on this machine and had
 to be rebuilt first (`SAM_gbXML` Core+Analytical, all four `SAM_SolarCalculator` projects, three
 `SAM_Systems` projects, `SAM_Validation/SAM.Analytical.Benchmark`) - build outputs only, no source changes
 in those repos.
@@ -98,6 +99,19 @@ Also measured directly: TAS's `internalGain.freshAirRate` is **inert** in a TBD 
 0 l/s/p → 0 differences in 227,760 values), which is why a source carrying both an ACH schedule and a
 dormant per-person rate still round-trips to their additive sum - established export design, recorded but
 not changed.
+
+**4. Zero-length ticV guard (Codex P2).** Collecting `ticV` also gave zero-length TAS **function**
+profiles a resolvable library entry for the first time: `Core.Tas.Query.Values` has no case for
+`ticFunctionProfile`, so it flattens to zero values, PR #37's exclusion branch still emits a legacy-named
+library entry, and `VentilationProfileName` then resolved to it - after which `Modify.Update`'s dead
+`Count == -1` guard let a `Count == 0` profile fall into the `Count <= 24` branch and overwrite the function
+profile with 24 hourly values. New `Query.IsCollectableSlot(int, IEnumerable<double>)` (true for every slot
+except `ticV`, and for `ticV` only when its values are non-empty) is consulted by both collectors, so a
+zero-length `ticV` is registered nowhere, its reference falls back to the legacy name and dangles exactly as
+it did before PR #38 - the safe deferred behaviour. Deliberately `ticV`-scoped; the other eleven slots keep
+PR #37's treatment, and no function support is attempted. Four COM-free tests pin it. Normal `ticV` is
+unaffected - confirmed licensed as byte-identical to the accepted build (792 non-ticV + 56 ticV fields,
+0 differences) with the 2.0 ACH oracle intact, so the full A/B was not rerun.
 
 **Recommended next step:** [PR #38](https://github.com/SAM-BIM/SAM_Tas/pull/38) is OPEN against
 `sow/2026-Q3` with the licensed gate **run and passed** after the magnitude correction. Remaining: human

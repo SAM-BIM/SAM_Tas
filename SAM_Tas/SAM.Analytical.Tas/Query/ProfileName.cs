@@ -87,6 +87,27 @@ namespace SAM.Analytical.Tas
         }
 
         /// <summary>
+        /// The name a flattened HDD sizing profile carries: the design profile's name plus <c>" - HDD"</c>.
+        /// <para>
+        /// <c>Modify.UpdateInternalCondition_HDD</c> flattens the space condition's infiltration and heating
+        /// profiles onto the HDD sizing condition as single-value <c>ticValueProfile</c>s. That content is a
+        /// DIFFERENT definition from the full schedule it was derived from, so it must not carry the same name —
+        /// sharing it is what forced the next import to discriminate a same-name/different-values pair and
+        /// accreted one <c>_&lt;hash&gt;</c> suffix per SAM → TAS → SAM generation. The suffix matches the one the
+        /// HDD condition itself already uses (<c>space.Name + " - HDD"</c>).
+        /// </para>
+        /// <para>
+        /// A plain concatenation, deliberately: no formatting, no culture, no ordering. It lives here rather than
+        /// inline at the two write sites so the COM-free naming test exercises the production rule instead of
+        /// re-implementing it.
+        /// </para>
+        /// </summary>
+        public static string ProfileName_HDD(string profileName)
+        {
+            return profileName + " - HDD";
+        }
+
+        /// <summary>
         /// The name base a source TAS profile name resolves to: trimmed, with internal whitespace collapsed,
         /// control characters removed, and length bounded by <see cref="ProfileNameBaseLimit"/>. An absent or
         /// unusable name falls back to <see cref="ProfileNameBase_Default"/>.
