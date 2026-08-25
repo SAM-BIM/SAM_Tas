@@ -45,9 +45,25 @@ two 3-generation chains: gains and design loads are now a fixed point from gener
 cooling on the affected zone stops drifting (-5.7% over three generations before, stable after), the
 schedule shape is untouched and the profile library still holds 29 GUIDs / 27 names in every generation.
 Full tables and the classification of every gain slot:
-`SAM_Tas/SAM.Analytical.Tas/INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md`. **This does NOT explain the -28.9%
-cooling drop logged on 2026-08-24** - that is one step change then a fixed point, this is a continuous
-geometric decay. That defect remains open.
+`SAM_Tas/SAM.Analytical.Tas/INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md`.
+
+**Update, same day, after re-checking the historical -28.9% drop against the now-corrected workflow (PR
+#41 + this fix, PR #42 both applied).** That figure was measured on an EARLIER branch state, before either
+fix existed. Re-ran the 3-generation chain against the branch's current HEAD on the SAME production
+regression model the -28.9% figure came from (`SAM_daily/2026-08-05-PartO/SAM_zoningAM_v2.sam`, weather
+`CIBSE Weather 2021.twd`, `Convert.ToSAM -> TogbXML -> WorkflowCalculator.Calculate`, sizing on):
+`GAINP` lines are byte-identical P1 == P2 == P3, and total heating is stable to 1.5e-6 relative (3278.075 W
+-> 3278.070 W -> 3278.071 W) across all three. This model's normal internal conditions are free-running
+(cooling always sizes to 0), so it carries no cooling signal on its own; the earlier synthetic 24 C
+cooling-setpoint chain in `INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md` already showed cooling stable to 7e-6
+relative post-fix on the same seed family. **No generation-to-generation load step reproduces on the
+current workflow.** The exact historical contribution of the design-day-authority defect (PR #41) versus
+the gain-magnitude defect (PR #42) to the original 28.9% figure has NOT been forensically isolated - both
+were live bugs on the branch that measurement was taken from, and disentangling which fraction each one
+contributed was not attempted. That specific attribution question is closed as moot rather than answered:
+**3-generation design-load round-trip stability is solved on the current workflow**, and a fresh
+investigation is warranted only if a future run of `sow/2026-Q3` reproduces a material generation-to-
+generation load difference again.
 
 2026-08-25 (design-day weather authority - HDD/CDD round trip investigated, fixed and licensed).
 

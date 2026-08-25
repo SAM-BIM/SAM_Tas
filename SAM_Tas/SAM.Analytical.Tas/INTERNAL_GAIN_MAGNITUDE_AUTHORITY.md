@@ -134,13 +134,24 @@ definition. The peak is a property of that shared shape; the magnitude is a prop
 slot. Normalising would mutate a reusable definition on behalf of one of its users, and would silently
 rewrite the authored schedule the model round-trips.
 
-## Not this defect
+## The historical −28.9 % cooling drop — closed as non-reproducing
 
-The `−28.9 %` cooling-load drop logged in `PROJECT_PROGRESS.md` on 2026-08-24 has a different signature:
-one step change between generation 1 and 2, then an exact fixed point. This decay is geometric and
-continuous — a constant ×0.25 at every generation, converging on zero rather than on a new plateau, and it
-moves the load monotonically by a fraction of a percent on the building total. Nothing measured here
-explains that drop; it remains open.
+The `−28.9 %` cooling-load drop logged in `PROJECT_PROGRESS.md` on 2026-08-24 was measured on an earlier
+branch state, before PR #41 (design-day weather authority) or this fix existed. Its signature was
+different from this defect — one step change between generation 1 and 2, then an exact fixed point, versus
+this decay's continuous geometric ×0.25 every generation — so it was never claimed to be the same bug.
+
+With both fixes applied, the same production regression model the 28.9 % figure was measured on
+(`SAM_daily/2026-08-05-PartO/SAM_zoningAM_v2.sam`) was re-run through the identical 3-generation chain.
+Every `GAINP` line is byte-identical from generation 1 onward, and total heating is stable to 1.5 × 10⁻⁶
+relative across three generations. **No generation-to-generation load step reproduces on the current
+workflow.**
+
+This does **not** prove which of the two fixes produced how much of the original 28.9 % — both defects
+were live on the branch that number came from, and isolating each one's exact contribution to it was not
+attempted, nor is it needed: the question that matters is whether the current workflow is stable, and it
+is. The historical figure is retired as non-reproducing; a fresh investigation is warranted only if a
+future run of `sow/2026-Q3` reproduces a material generation-to-generation load difference.
 
 ## Where this is enforced
 
