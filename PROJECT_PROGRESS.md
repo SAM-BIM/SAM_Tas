@@ -28,6 +28,43 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-25 (occupancy sensible/latent gains decayed on every round trip - LICENSED).
+
+**Found while validating PR #41.** A TM59 kitchen's occupancy gain shrank by a factor of four on every
+generation of `Convert.ToSAM -> TogbXML -> WorkflowCalculator -> new TBD` - `ticOSG.factor` 2.0 -> 0.5 ->
+0.125 -> 0.031 W/m2, unbounded. Root cause: the import read `profile.GetExtremeValue(true)`
+(= `factor * max(values)`) where the export writes the magnitude as `profile.factor` and the schedule as
+the profile's raw values, so `G(n+1) = G(n) * schedulePeak`. A fixed point only for a schedule normalised
+to 1.0 - which is why lighting, equipment and infiltration in the same model never moved and this kitchen,
+peaking at 0.25, did. What actually decayed was the OCCUPANCY (37.5 -> 150 -> 600 -> 2400 m2/person); the
+authored 75 W/p sensible and 55 W/p latent were preserved throughout, which is why it hid for so long.
+
+Fixed by `Query.GainMagnitude` (= the factor), used by all seven magnitude-carrying slots on both the TBD
+and TIC import paths. `ticV` already did this (PR #40); this generalises the same rule. Licensed A/B over
+two 3-generation chains: gains and design loads are now a fixed point from generation 0 onward, per-space
+cooling on the affected zone stops drifting (-5.7% over three generations before, stable after), the
+schedule shape is untouched and the profile library still holds 29 GUIDs / 27 names in every generation.
+Full tables and the classification of every gain slot:
+`SAM_Tas/SAM.Analytical.Tas/INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md`.
+
+**Update, same day, after re-checking the historical -28.9% drop against the now-corrected workflow (PR
+#41 + this fix, PR #42 both applied).** That figure was measured on an EARLIER branch state, before either
+fix existed. Re-ran the 3-generation chain against the branch's current HEAD on the SAME production
+regression model the -28.9% figure came from (`SAM_daily/2026-08-05-PartO/SAM_zoningAM_v2.sam`, weather
+`CIBSE Weather 2021.twd`, `Convert.ToSAM -> TogbXML -> WorkflowCalculator.Calculate`, sizing on):
+`GAINP` lines are byte-identical P1 == P2 == P3, and total heating is stable to 1.5e-6 relative (3278.075 W
+-> 3278.070 W -> 3278.071 W) across all three. This model's normal internal conditions are free-running
+(cooling always sizes to 0), so it carries no cooling signal on its own; the earlier synthetic 24 C
+cooling-setpoint chain in `INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md` already showed cooling stable to 7e-6
+relative post-fix on the same seed family. **No generation-to-generation load step reproduces on the
+current workflow.** The exact historical contribution of the design-day-authority defect (PR #41) versus
+the gain-magnitude defect (PR #42) to the original 28.9% figure has NOT been forensically isolated - both
+were live bugs on the branch that measurement was taken from, and disentangling which fraction each one
+contributed was not attempted. That specific attribution question is closed as moot rather than answered:
+**3-generation design-load round-trip stability is solved on the current workflow**, and a fresh
+investigation is warranted only if a future run of `sow/2026-Q3` reproduces a material generation-to-
+generation load difference again.
+
 2026-08-25 (design-day weather authority - HDD/CDD round trip investigated, fixed and licensed).
 
 **Question asked.** With unchanged weather, do HDD/CDD and the design loads drift across generations? When

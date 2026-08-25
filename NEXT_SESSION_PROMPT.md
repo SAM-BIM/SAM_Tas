@@ -1,3 +1,33 @@
+# RETIRED — 2026-08-25: closed as non-reproducing, do not pick this up as-is
+
+**The investigation this file describes is closed.** The `~29%` / `-28.9%` cooling-load drop below was
+measured on a branch state that predates two fixes that have since merged/landed:
+
+- PR #41 (`fix/tas-design-day-weather-authority`) — design days were re-derived from weather on TBD
+  import instead of carried as authored state.
+- PR #42 (`fix/tas-internal-gain-magnitude-decay`) — occupancy/lighting/equipment/pollutant/infiltration
+  gain magnitudes were read from a profile's `GetExtremeValue(true)` instead of its `factor`, decaying
+  every generation.
+
+Both fixes were applied to `sow/2026-Q3` and the ORIGINAL 3-generation chain on the SAME model this file's
+numbers came from (`SAM_daily/2026-08-05-PartO/SAM_zoningAM_v2.sam`, `CIBSE Weather 2021.twd`) was re-run
+against the corrected workflow: `GAINP` lines are byte-identical from generation 1 onward and total heating
+is stable to 1.5e-6 relative across three generations. A synthetic 24 C cooling-setpoint variant (this
+model's own internal conditions are free-running and never size a cooling load) showed cooling stable to
+7e-6 relative post-fix. **No generation-to-generation load step reproduces on the current workflow.**
+
+**Not established:** which of the two fixes produced how much of the original -28.9% figure. Both defects
+were live on the branch that number was measured on, and isolating each one's exact contribution was not
+attempted — the question that mattered was whether the current workflow is stable, and it is. Full evidence
+and tables: `SAM_Tas/SAM.Analytical.Tas/INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md`
+(`PROJECT_PROGRESS.md` and `DESIGN_DAY_WEATHER_AUTHORITY.md` also carry the closure note).
+
+**If you are picking up TAS round-trip work next:** do not resume this file's plan. Only reopen a cooling-
+load investigation if a fresh run of the current `sow/2026-Q3` reproduces a material generation-to-
+generation load difference. The content below is kept for historical record only.
+
+---
+
 # Continue: investigate the ~29% cooling-load drop between generation 1 and 2
 
 ## Setup

@@ -223,4 +223,6 @@ kitchen zone sizes to zero, but it would move any cooling result that depends on
 
 It is **not** the `-28.9%` cooling drop logged in `PROJECT_PROGRESS.md`: that one steps once at
 generation 1 -> 2 and is then a fixed point (`LC2 == LC3` exactly), whereas this decays again at every
-generation. Treat them as two separate open items.
+generation. They were tracked as two separate items; both are now resolved (this one by PR #41, the
+occupancy-gain decay by PR #42 - see `INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md`), and re-running the historical
+`-28.9%` chain with both fixes applied no longer reproduces a generation-to-generation load step.

@@ -85,14 +85,14 @@ namespace SAM.Analytical.Tas
                 if (profile_TBD != null)
                 {
                     result.SetValue(InternalConditionParameter.InfiltrationProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticI, ProfileType.Infiltration, profile_TBD));
-                    result.SetValue(InternalConditionParameter.InfiltrationAirChangesPerHour, profile_TBD.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.InfiltrationAirChangesPerHour, Query.GainMagnitude(profile_TBD));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticLG);
                 if (profile_TBD != null)
                 {
                     result.SetValue(InternalConditionParameter.LightingProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticLG, ProfileType.Lighting, profile_TBD));
-                    result.SetValue(InternalConditionParameter.LightingGainPerArea, profile_TBD.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.LightingGainPerArea, Query.GainMagnitude(profile_TBD));
                     result.SetValue(InternalConditionParameter.LightingLevel, internalGain.targetIlluminance);
                 }
 
@@ -103,19 +103,27 @@ namespace SAM.Analytical.Tas
                 // them + personGain, then store the gains PER PERSON (perArea * areaPerPerson) so a
                 // round-trip reproduces the original per-area gains AND the metabolic rate (the
                 // per-person sensible+latent sums back to personGain).
+                //
+                // The per-area gains MUST be the profile factors (Query.GainMagnitude), not the profile
+                // extremes. This block is scale-invariant in the gains themselves - the per-person split
+                // is a RATIO, so it survives any common factor - but the OCCUPANCY it derives is not:
+                // areaPerPerson = personGain / gainPerArea, so an under-read gainPerArea inflates
+                // areaPerPerson, thins the occupancy, and the next export writes an equally thinned gain.
+                // With the extreme (factor * max(values)) that made occupancy decay by the schedule's
+                // peak on EVERY generation, without bound. See Query.GainMagnitude.
                 double sensiblePerArea = double.NaN;
                 double latentPerArea = double.NaN;
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticOSG);
                 if (profile_TBD != null)
                 {
-                    sensiblePerArea = profile_TBD.GetExtremeValue(true);
+                    sensiblePerArea = Query.GainMagnitude(profile_TBD);
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticOLG);
                 if (profile_TBD != null)
                 {
-                    latentPerArea = profile_TBD.GetExtremeValue(true);
+                    latentPerArea = Query.GainMagnitude(profile_TBD);
                     result.SetValue(InternalConditionParameter.OccupancyProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticOLG, ProfileType.Occupancy, profile_TBD));
                 }
 
@@ -164,21 +172,21 @@ namespace SAM.Analytical.Tas
                 if (profile_TBD != null)
                 {
                     result.SetValue(InternalConditionParameter.EquipmentSensibleProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticESG, ProfileType.EquipmentSensible, profile_TBD));
-                    result.SetValue(InternalConditionParameter.EquipmentSensibleGainPerArea, profile_TBD.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.EquipmentSensibleGainPerArea, Query.GainMagnitude(profile_TBD));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticELG);
                 if (profile_TBD != null)
                 {
                     result.SetValue(InternalConditionParameter.EquipmentLatentProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticELG, ProfileType.EquipmentLatent, profile_TBD));
-                    result.SetValue(InternalConditionParameter.EquipmentLatentGainPerArea, profile_TBD.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.EquipmentLatentGainPerArea, Query.GainMagnitude(profile_TBD));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticCOG);
                 if (profile_TBD != null)
                 {
                     result.SetValue(InternalConditionParameter.PollutantProfileName, ProfileName(profileReuseIndex, internalCondition.name, TBD.Profiles.ticCOG, ProfileType.Pollutant, profile_TBD));
-                    result.SetValue(InternalConditionParameter.PollutantGenerationPerArea, profile_TBD.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.PollutantGenerationPerArea, Query.GainMagnitude(profile_TBD));
                 }
 
                 profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
@@ -199,6 +207,8 @@ namespace SAM.Analytical.Tas
                     //   schedule twice, by factor * max^2. Invisible whenever the profile is normalised to a
                     //   peak of 1 (the usual TAS convention, and what the first authored oracle used), but a
                     //   factor of 2 with a peak value of 0.5 round-trips 1.0 ACH as 0.5 ACH.
+                    //   Point 2 was later found to hold for EVERY gain slot, not just this one, and is now
+                    //   stated once in Query.GainMagnitude - which this line is the original instance of.
                     //
                     //Both were harmless while the ventilation reference dangled; both went live the moment
                     //ticV became a collected, resolvable profile.
@@ -264,14 +274,14 @@ namespace SAM.Analytical.Tas
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.InfiltrationProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.InfiltrationAirChangesPerHour, profile_TIC.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.InfiltrationAirChangesPerHour, Query.GainMagnitude(profile_TIC));
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticLG);
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.LightingProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.LightingGainPerArea, profile_TIC.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.LightingGainPerArea, Query.GainMagnitude(profile_TIC));
                     result.SetValue(InternalConditionParameter.LightingLevel, internalGain.targetIlluminance);
                 }
 
@@ -281,19 +291,20 @@ namespace SAM.Analytical.Tas
                 // per-person metabolic rate (W/p). Read the per-area gains, derive the occupancy from
                 // them + personGain, then store the gains PER PERSON (perArea * areaPerPerson) so a
                 // round-trip reproduces the original per-area gains AND the metabolic rate.
+                // Magnitudes come from the profile factor, never its extreme - see Query.GainMagnitude.
                 double sensiblePerArea = double.NaN;
                 double latentPerArea = double.NaN;
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticOSG);
                 if (profile_TIC != null)
                 {
-                    sensiblePerArea = profile_TIC.GetExtremeValue(true);
+                    sensiblePerArea = Query.GainMagnitude(profile_TIC);
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticOLG);
                 if (profile_TIC != null)
                 {
-                    latentPerArea = profile_TIC.GetExtremeValue(true);
+                    latentPerArea = Query.GainMagnitude(profile_TIC);
                     result.SetValue(InternalConditionParameter.OccupancyProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
                 }
 
@@ -341,21 +352,21 @@ namespace SAM.Analytical.Tas
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.EquipmentSensibleProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.EquipmentSensibleGainPerArea, profile_TIC.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.EquipmentSensibleGainPerArea, Query.GainMagnitude(profile_TIC));
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticELG);
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.EquipmentLatentProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.EquipmentLatentGainPerArea, profile_TIC.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.EquipmentLatentGainPerArea, Query.GainMagnitude(profile_TIC));
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticCOG);
                 if (profile_TIC != null)
                 {
                     result.SetValue(InternalConditionParameter.PollutantProfileName, string.Format("{0} [{1}]", internalCondition.name, profile_TIC.name));
-                    result.SetValue(InternalConditionParameter.PollutantGenerationPerArea, profile_TIC.GetExtremeValue(true));
+                    result.SetValue(InternalConditionParameter.PollutantGenerationPerArea, Query.GainMagnitude(profile_TIC));
                 }
 
                 profile_TIC = internalGain.GetProfile((int)TBD.Profiles.ticV);
