@@ -1,7 +1,11 @@
 # Project Progress
 
 ## Branch
-`fix/tas-ventilation-ticv-factor-growth` (off `sow/2026-Q3` at `d10bfac`, i.e. with **PR #39 merged**).
+`fix/tas-design-day-weather-authority` (off `sow/2026-Q3` at `74cb422a`, i.e. with **PR #40 merged**).
+The first TBD generated for a NEW weather file sized on the PREVIOUS weather's design days. See
+`SAM.Analytical.Tas/DESIGN_DAY_WEATHER_AUTHORITY.md`.
+
+Previously: `fix/tas-ventilation-ticv-factor-growth` (off `sow/2026-Q3` at `d10bfac`, i.e. with **PR #39 merged**) - PR #40, merged 2026-08-24.
 The ventilation `ticV` factor grew without bound across repeated TBD round trips. See
 `SAM.Analytical.Tas/VENTILATION_TICV_ROUND_TRIP.md`.
 
@@ -24,6 +28,57 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-25 (design-day weather authority - HDD/CDD round trip investigated, fixed and licensed).
+
+**Question asked.** With unchanged weather, do HDD/CDD and the design loads drift across generations? When
+the weather changes A -> B, does the FIRST Weather-B TBD already use Weather-B design days?
+
+**Answers, from a licensed 3-generation chain** on the 9-space TM59 residential model
+(`Convert.ToSAM` -> `TogbXML` -> `WorkflowCalculator.Calculate`, sizing on; Weather A =
+`cibseweather2005.twd` / Belfast TRY, Weather B = `CIBSE Weather 2021.twd` / Leeds_TRY; artifacts in
+`C:/TasOut/dd2` before and `C:/TasOut/dd3` after):
+
+1. **Unchanged weather: no drift.** A1/A2/A3 carry byte-identical design days (SHA-256 over all 24 hours x 7
+   weather series) and heating loads within 1.3e-6. Only the design-day object GUIDs change.
+2. **Weather changed: the defect was real.** `B1` was written with Weather B installed but **Weather A's**
+   design days - `Belfast TRY ANN HTG`, year-day 363, flat -6.6 C, instead of `Leeds_TRY ANN HTG`, year-day
+   67, flat -5.9 C. `B1` oversized heating by **+95.9 W (+2.93%)**, uniformly across every sized zone
+   (ratio 1.0294 / 1.0294 / 1.0290), which is the design temperature difference and nothing else. `B2 == B3`.
+3. **A worse case with no weather change at all.** A model authored outside TAS carries no design-day
+   parameters, `AddDesignDays` was gated on them being non-null, and the first TBD got **no design days at
+   all** - TAS sized every zone to **0 W**. That is the `A0` row.
+
+**Root cause.** `WorkflowCalculator.Calculate` (and `Convert.ToTBD`) resolved the weather and the design days
+from unrelated sources: `WorkflowSettings.WeatherData` won for the weather, the MODEL won for the design
+days. But a model's design-day parameters are DERIVED, not authored - `Convert.ToSAM(path_TBD, ...)` computes
+them from the weather it finds in the TBD it imports. So changing weather on the component while leaving
+`coolingDesignDays_` / `heatingDesignDays_` unwired installed Weather B next to Weather A's design days, and
+`tBDDocument.sizing(0)` sized on those.
+
+**Fix.** `Query.DesignDays_Authoritative` states the rule once and both export paths call it: *a run that
+states its own weather makes that weather authoritative over every weather-derived design day the caller did
+not state outright.* Explicitly-passed design days (`WorkflowSettings.DesignDays_*`, the `ToTBD` arguments)
+are engineering intent and still win; a run that states no weather leaves the model's design days alone; the
+model is the fallback for a slot the authoritative weather cannot fill.
+
+**Nothing is discarded unnecessarily.** With unchanged weather the re-derivation reproduces the imported
+design days bit for bit: the post-fix `A1` TBD is byte-identical to the pre-fix one, every load digit
+included. After the fix `A0..A3` and `B1..B3` are each a true fixed point, and `B1` lands on the value the
+chain previously only reached at generation 2 (3278.07 W).
+
+**Found, NOT fixed, separate seam:** occupancy sensible/latent gains decay by exactly the schedule's peak
+value on every round trip. `Modify.Update(profile_TBD, profile, factor)` writes the per-area gain into
+`profile_TBD.factor`; `Convert.ToSAM` reads it back as `GetExtremeValue(true)` = `factor x max(hourlyValues)`.
+On `1 Bed Apt. Kitchen Occupancy` (schedule peaks at 0.25) `ticOSG.factor` went 0.5 -> 0.125 -> 0.03125 and
+`ticOLG.factor` 0.366667 -> 0.091667 -> 0.022917 across three generations - unbounded, and the same class as
+PR #40's `ticV` growth in a different slot. It does NOT match the signature of the logged -28.9% cooling drop
+(that steps once and then holds; this decays every generation), so treat them as two separate open items.
+
+**Tests.** `SAM.Analytical.Tas.TM59.Tests` **588/588** Debug and Release (+13: `DesignDayWeatherAuthorityTests`,
+COM-free, synthetic weather years). `SAM.Analytical.Tas.Benchmark.Tests` **16/16** Debug and Release.
+`SAM_Tas.sln` builds clean in both configurations (only the pre-existing MSB3270/MSB3277 and XML-doc
+warnings). `git diff --check` clean.
+
 2026-08-25 (ventilation ticV round trip REDESIGNED around requirement-vs-realisation, licensed and green).
 Earlier in that programme: 2026-08-24 (found, not yet investigated: a ~29% cooling-load drop between
 generation 1 and 2).

@@ -162,17 +162,18 @@ namespace SAM.Analytical.Tas
                 weatherData = WorkflowSettings.WeatherData;
             }
 
-            analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.HeatingDesignDays, out SAMCollection<DesignDay> heatingDesignDays);
-            if (WorkflowSettings?.DesignDays_Heating != null)
-            {
-                heatingDesignDays = new SAMCollection<DesignDay>(WorkflowSettings.DesignDays_Heating);
-            }
-
-            analyticalModel.TryGetValue(Analytical.AnalyticalModelParameter.CoolingDesignDays, out SAMCollection<DesignDay> coolingDesignDays);
-            if (WorkflowSettings?.DesignDays_Cooling != null)
-            {
-                coolingDesignDays = new SAMCollection<DesignDay>(WorkflowSettings.DesignDays_Cooling);
-            }
+            // WorkflowSettings.WeatherData - not the resolved weatherData above - is what decides here: it is
+            // the only case where the weather this run installs can DIFFER from the one the model's design
+            // days were derived from. Reading the design days straight off the model would then size the
+            // first TBD of the new weather on the previous weather's design days. See
+            // Query.DesignDays_Authoritative for the full rule.
+            Query.DesignDays_Authoritative(
+                analyticalModel,
+                WorkflowSettings?.WeatherData,
+                WorkflowSettings?.DesignDays_Cooling,
+                WorkflowSettings?.DesignDays_Heating,
+                out List<DesignDay> coolingDesignDays,
+                out List<DesignDay> heatingDesignDays);
 
             int count = 6;
             if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
@@ -191,7 +192,10 @@ namespace SAM.Analytical.Tas
                 count++;
             }
 
-            if (WorkflowSettings.DesignDays_Cooling != null || WorkflowSettings.DesignDays_Heating != null)
+            //Count the step that actually runs: "Adding Design Days" is gated on the RESOLVED design days,
+            //not on the settings, so a run whose design days came from the weather or the model counted one
+            //step short of what it reported.
+            if (coolingDesignDays != null || heatingDesignDays != null)
             {
                 count++;
             }
