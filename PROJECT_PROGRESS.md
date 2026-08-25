@@ -28,6 +28,27 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
+2026-08-25 (occupancy sensible/latent gains decayed on every round trip - LICENSED).
+
+**Found while validating PR #41.** A TM59 kitchen's occupancy gain shrank by a factor of four on every
+generation of `Convert.ToSAM -> TogbXML -> WorkflowCalculator -> new TBD` - `ticOSG.factor` 2.0 -> 0.5 ->
+0.125 -> 0.031 W/m2, unbounded. Root cause: the import read `profile.GetExtremeValue(true)`
+(= `factor * max(values)`) where the export writes the magnitude as `profile.factor` and the schedule as
+the profile's raw values, so `G(n+1) = G(n) * schedulePeak`. A fixed point only for a schedule normalised
+to 1.0 - which is why lighting, equipment and infiltration in the same model never moved and this kitchen,
+peaking at 0.25, did. What actually decayed was the OCCUPANCY (37.5 -> 150 -> 600 -> 2400 m2/person); the
+authored 75 W/p sensible and 55 W/p latent were preserved throughout, which is why it hid for so long.
+
+Fixed by `Query.GainMagnitude` (= the factor), used by all seven magnitude-carrying slots on both the TBD
+and TIC import paths. `ticV` already did this (PR #40); this generalises the same rule. Licensed A/B over
+two 3-generation chains: gains and design loads are now a fixed point from generation 0 onward, per-space
+cooling on the affected zone stops drifting (-5.7% over three generations before, stable after), the
+schedule shape is untouched and the profile library still holds 29 GUIDs / 27 names in every generation.
+Full tables and the classification of every gain slot:
+`SAM_Tas/SAM.Analytical.Tas/INTERNAL_GAIN_MAGNITUDE_AUTHORITY.md`. **This does NOT explain the -28.9%
+cooling drop logged on 2026-08-24** - that is one step change then a fixed point, this is a continuous
+geometric decay. That defect remains open.
+
 2026-08-25 (design-day weather authority - HDD/CDD round trip investigated, fixed and licensed).
 
 **Question asked.** With unchanged weather, do HDD/CDD and the design loads drift across generations? When
