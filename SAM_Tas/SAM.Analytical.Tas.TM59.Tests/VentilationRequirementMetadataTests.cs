@@ -378,6 +378,27 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void ComposeKeepsTheExistingIdAndLevelName_WhereTheSpaceNoLongerStatesThem()
+        {
+            //The import reads neither back onto the space, so a model that has been through FromTBD carries
+            //neither - and the second generation would silently drop a level name the first one wrote. They
+            //used to survive only by accident, because a space stating neither left the description untouched.
+            SAMZoneMetadata metadata = Export(Space_Licensed(ventilationProfile: true), out double _, out double _);
+
+            string description = SAMZoneMetadata.Compose("[Id]=1234; [LevelName]=Level 01", null, null, metadata);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(description, Does.StartWith("[Id]=1234; [LevelName]=Level 01; "));
+                Assert.That(CountOf(description, "[Id]="), Is.EqualTo(1));
+                Assert.That(CountOf(description, "[LevelName]="), Is.EqualTo(1));
+
+                //A space that DOES state one still wins over what is there.
+                Assert.That(SAMZoneMetadata.Compose(description, "9999", null, metadata), Does.StartWith("[Id]=9999; [LevelName]=Level 01; "));
+            });
+        }
+
+        [Test]
         public void TheSectionRoundTripsDeterministically_AndInInvariantCulture()
         {
             SAMZoneMetadata metadata = Export(Space_Licensed(ventilationProfile: true), out double _, out double _);

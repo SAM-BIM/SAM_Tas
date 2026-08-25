@@ -114,7 +114,7 @@ trip stable by changing the physical total, and is retracted.
 - *Programme invariants.* `40 aperture part(s) considered; 40 rebound` in every generation of both chains.
   Profile reuse, Part F, Part O unchanged; no design-day change included.
 
-**Tests.** `SAM.Analytical.Tas.TM59.Tests` **574/574** Debug and Release (+20 net: new
+**Tests.** `SAM.Analytical.Tas.TM59.Tests` **575/575** Debug and Release (+21 net: new
 `VentilationRequirementMetadataTests`, `VentilationAirflowMagnitudeTests` per-person block rewritten to the
 corrected semantics). `SAM.Analytical.Tas.Benchmark.Tests` **16/16** Debug and Release. `SAM_Tas.sln` builds
 clean in both configurations (only the pre-existing MSB3270/MSB3277 and XML-doc warnings). The suite contains

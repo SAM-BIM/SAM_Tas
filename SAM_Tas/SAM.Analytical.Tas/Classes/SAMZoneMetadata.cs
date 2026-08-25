@@ -120,6 +120,14 @@ namespace SAM.Analytical.Tas
         /// Unrecognised content is preserved verbatim and in its original order - a TAS user's own note in the
         /// zone description survives an export, which the previous unconditional overwrite did not allow.
         /// </para>
+        /// <para>
+        /// <c>[Id]</c> and <c>[LevelName]</c> are rewritten from the space where it states them, and otherwise
+        /// KEPT from the existing description. The import does not read either back onto the space, so a model
+        /// that has been through <c>FromTBD</c> no longer carries them - without the fallback the second
+        /// generation would silently drop a level name the first one wrote. They used to survive only by
+        /// accident, because a space stating neither left the description untouched; now that the SAM section
+        /// is always written, that accident is gone and the intent has to be stated.
+        /// </para>
         /// </summary>
         /// <returns>The description, or <c>null</c> when there is nothing at all to write (leave the existing one alone).</returns>
         public static string Compose(string zoneDescription, string id, string levelName, SAMZoneMetadata metadata)
@@ -127,15 +135,17 @@ namespace SAM.Analytical.Tas
             List<string> values = new List<string>();
 
             //TODO: Update [Id] to [Element Id]
-            if (!string.IsNullOrWhiteSpace(id))
+            string value = string.IsNullOrWhiteSpace(id) ? Existing(zoneDescription, Segment_Id) : id;
+            if (!string.IsNullOrWhiteSpace(value))
             {
-                values.Add(Segment_Id + id);
+                values.Add(Segment_Id + value);
             }
 
             //TODO: Update [LevelName] to [Level Name]
-            if (!string.IsNullOrWhiteSpace(levelName))
+            value = string.IsNullOrWhiteSpace(levelName) ? Existing(zoneDescription, Segment_LevelName) : levelName;
+            if (!string.IsNullOrWhiteSpace(value))
             {
-                values.Add(Segment_LevelName + levelName);
+                values.Add(Segment_LevelName + value);
             }
 
             foreach (string segment in Segments(zoneDescription))
@@ -248,6 +258,20 @@ namespace SAM.Analytical.Tas
 
                 yield return segment_Trimmed;
             }
+        }
+
+        /// <summary>The value an existing description states for one managed segment, or null.</summary>
+        private static string Existing(string zoneDescription, string prefix)
+        {
+            foreach (string segment in Segments(zoneDescription))
+            {
+                if (segment.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    return segment.Substring(prefix.Length).Trim();
+                }
+            }
+
+            return null;
         }
 
         /// <summary>Whether <see cref="Compose"/> rewrites this segment from its own inputs rather than preserving it.</summary>

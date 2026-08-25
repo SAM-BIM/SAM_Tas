@@ -116,6 +116,9 @@ A versioned, SAM-only section of `TBD.zone.description`, the string the exporter
 - **One parser/writer.** `SAMZoneMetadata.Compose` / `.Parse` own the whole string. `Compose` rewrites the
   segments it manages, **preserves anything it does not** (a TAS user's own note in the zone description now
   survives an export, which the previous unconditional overwrite did not allow) and appends its section last.
+  `[Id]` and `[LevelName]` come from the space where it states them and are otherwise **kept from the existing
+  description** — the import reads neither back onto the space, and they previously survived only by accident,
+  because a space stating neither left the description untouched.
 - **Deterministic**, invariant-culture numbers, fixed key order — a re-export of an unchanged model produces
   an unchanged file.
 - **No derived geometry.** Area and volume belong to the TBD zone; a second copy here could only go stale.
