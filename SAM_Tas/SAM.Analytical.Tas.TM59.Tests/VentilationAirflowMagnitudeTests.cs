@@ -299,5 +299,117 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(TemplateTicVParameter(internalCondition), Is.EqualTo(InternalConditionParameter.SupplyAirFlow),
                 "Native SAM-authored template ventilation must not be silently dropped by the correction.");
         }
+
+        // =================================================================================================
+        // Every basis reaches the ticV factor - including per person
+        // =================================================================================================
+
+        //Occupant fresh air on the fixture: 8 l/s/p over 5 people is 0.04 m3/s, which on 200 m3 is exactly
+        //0.72 ACH. Exact binary values, so the assertions are equalities.
+        private const double AirFlowPerPerson = 0.008; // m3/s/p, i.e. TBD freshAirRate 8 l/s/p
+        private const double AreaPerPerson = 10.0;     // m2/p -> occupancy 5.0 on the 50 m2 fixture
+        private const double PerPersonAirChangesPerHour = 0.72;
+
+        private static Space Space_WithAirChangesAndOccupants()
+        {
+            return Space_WithCondition(x =>
+            {
+                x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, SourceRate);
+                x.SetValue(InternalConditionParameter.SupplyAirFlowPerPerson, AirFlowPerPerson);
+                x.SetValue(InternalConditionParameter.AreaPerPerson, AreaPerPerson);
+            });
+        }
+
+        [Test]
+        public void TicVFactor_IsTheWholeRequirement_PerPersonIncluded()
+        {
+            //A ticV factor is only ever written where a SAM Ventilation profile has CHOSEN Building Simulator
+            //mechanical ventilation as the realisation (Modify.UpdateInternalCondition gates on it). Having
+            //chosen it, that profile has to deliver the whole requirement: leaving a basis out would
+            //under-ventilate the zone in the simulation by exactly that term.
+            Space space = Space_WithAirChangesAndOccupants();
+
+            double occupancy = Area / AreaPerPerson;
+            double perPerson_m3s = AirFlowPerPerson * occupancy;
+
+            Assert.Multiple(() =>
+            {
+                //Sanity on the fixture arithmetic the rest of the file leans on.
+                Assert.That(perPerson_m3s / Volume * 3600.0, Is.EqualTo(PerPersonAirChangesPerHour).Within(1e-12));
+
+                Assert.That(SAM.Analytical.Query.CalculatedSupplyAirFlow(space),
+                    Is.EqualTo(SourceRate * Volume / 3600.0 + perPerson_m3s).Within(1e-12),
+                    "CalculatedSupplyAirFlow sums all four bases; that contract is untouched.");
+
+                Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
+                    Is.EqualTo(SourceRate + PerPersonAirChangesPerHour).Within(1e-9),
+                    "The factor states the full calculated requirement, not a part of it.");
+
+                //It IS the plain conversion of the summed total - nothing is subtracted on the way.
+                Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
+                    Is.EqualTo(TicVFactor(space)).Within(1e-12));
+            });
+        }
+
+        [Test]
+        public void TicVFactor_AndFreshAirRate_HoldTheSameRateWithoutDoubleCounting()
+        {
+            //internalGain.freshAirRate carries the per-person rate too - but as TAS's OUTSIDE AIR field, which
+            //feeds Part L / EPC and Tas Systems and does not itself supply the zone in the TSD simulation.
+            //Both holding it is therefore not a Building Simulator double count, and the ticV factor must not
+            //be reduced on the assumption that it is. Pinned because an earlier revision of this fix did
+            //exactly that, and changed the physical total to manufacture a fixed point.
+            Space space = Space_WithAirChangesAndOccupants();
+
+            space.InternalCondition.TryGetValue(InternalConditionParameter.SupplyAirFlowPerPerson, out double airFlowPerPerson);
+
+            Assert.Multiple(() =>
+            {
+                //What Modify.UpdateInternalCondition writes to freshAirRate, verbatim: m3/s/p -> l/s/p.
+                Assert.That(airFlowPerPerson * 1000, Is.EqualTo(8.0).Within(1e-9));
+
+                Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space) - SourceRate,
+                    Is.EqualTo(PerPersonAirChangesPerHour).Within(1e-9),
+                    "The per-person term is present in the factor, in full.");
+            });
+        }
+
+        [Test]
+        public void TicVFactor_WithNoOccupants_IsJustTheOtherBases()
+        {
+            //Nothing is added where there is no per-person rate to add. On the licensed fixture these are the
+            //corridor, bathroom and ensuites, which state no AreaPerPerson and held a stable 1.00 ACH in every
+            //generation both before and after this work.
+            Space space = Space_WithCondition(x => x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, SourceRate));
+
+            Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space), Is.EqualTo(TicVFactor(space)).Within(1e-12));
+            Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space), Is.EqualTo(SourceRate).Within(1e-9));
+        }
+
+        [Test]
+        public void TicVFactor_KeepsTheAreaAndFlatBases_WhichHaveNoOtherHomeInTBD()
+        {
+            //The bases with no native TAS field at all. Dropping either would lose that ventilation outright.
+            Space space = Space_WithCondition(x =>
+            {
+                x.SetValue(InternalConditionParameter.SupplyAirFlow, 0.01);
+                x.SetValue(InternalConditionParameter.SupplyAirFlowPerArea, 0.0004);
+            });
+
+            double expected_m3s = 0.01 + 0.0004 * Area;
+
+            Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
+                Is.EqualTo(expected_m3s / Volume * 3600.0).Within(1e-9));
+        }
+
+        [Test]
+        public void TicVFactor_StatingNoSupplyAirAtAll_IsRefusedRatherThanZero()
+        {
+            //NaN, so Modify.UpdateInternalCondition's own "then use 1" fallback still fires - the correction
+            //must not turn "nothing stated" into "no ventilation".
+            Space space = Space_WithCondition(x => x.SetValue(InternalConditionParameter.AreaPerPerson, AreaPerPerson));
+
+            Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space), Is.NaN);
+        }
     }
 }

@@ -1,8 +1,13 @@
 # Project Progress
 
 ## Branch
-`fix/tas-fromtbd-gbxml-aperture-roundtrip` (off `sow/2026-Q3` at `372518a6`, i.e. with **PR #38 merged**).
-Aperture identity across a FULL gbXML round trip - `TBD -> FromTBD -> new SAM -> gbXML -> a NEW TBD`. See
+`fix/tas-ventilation-ticv-factor-growth` (off `sow/2026-Q3` at `d10bfac`, i.e. with **PR #39 merged**).
+The ventilation `ticV` factor grew without bound across repeated TBD round trips. See
+`SAM.Analytical.Tas/VENTILATION_TICV_ROUND_TRIP.md`.
+
+Previously: `fix/tas-fromtbd-gbxml-aperture-roundtrip` (off `sow/2026-Q3` at `372518a6`, i.e. with **PR #38
+merged**) - PR #39, merged 2026-08-24. Aperture identity across a FULL gbXML round trip -
+`TBD -> FromTBD -> new SAM -> gbXML -> a NEW TBD`. See
 `SAM.Analytical.Tas/APERTURE_ROUND_TRIP_IDENTITY.md`.
 
 Previously: `feature/tas-profile-round-trip-hardening` (off `sow/2026-Q3` at `610696e9`, i.e. with **PR #37 merged** —
@@ -19,7 +24,113 @@ Stage 1 was `feature/tas-aperturetype-reuse` (PR #30, merged 2026-08-21).
 Stage 2 was `feature/tas-aperture-definition-reuse` (PR #31, merged 2026-08-21).
 
 ## Last updated
-2026-08-24 (aperture round trip, second pass - the REAL Grasshopper failure, reproduced and fixed - LICENSED).
+2026-08-25 (ventilation ticV round trip REDESIGNED around requirement-vs-realisation, licensed and green).
+Earlier in that programme: 2026-08-24 (found, not yet investigated: a ~29% cooling-load drop between
+generation 1 and 2).
+
+While validating the ventilation fix above, ran heating/cooling design loads (`Modify.UpdateDesignLoads`, the
+same call `WorkflowCalculator` makes after sizing) across a 3-generation chain built with BOTH this session's
+fixes applied (`RA0.tbd` -> `LC1` -> `LC2` -> `LC3`, `Convert.ToSAM` -> `TogbXML` -> `WorkflowCalculator`,
+sizing on, `_importUnused_`/`_importSurfaceShades_` both false):
+
+| generation | heating (W) | cooling (W) |
+|---|---|---|
+| RA0 (seed) | 11,037 | 115,192 |
+| LC1 | 11,289 (+2.3%) | 115,168 (~same) |
+| **LC2** | 11,726 (+3.9%) | **81,883 (-28.9%)** |
+| LC3 | 11,726 (same) | 81,883 (same) |
+
+`ticV.factor`/`freshAirRate` are RULED OUT as the cause - confirmed identical (2.44/1.72 Studio/Bedroom,
+8.0 l/s/p) across all three generations via direct COM dump. Cooling drops sharply exactly once, between
+generation 1 and 2, then reaches a fixed point (LC2 == LC3 exactly) - the same signature as both bugs fixed
+this session (stable gen0->gen1, a jump at gen1->gen2, then stable). A ~29% cooling swing with no ventilation
+change points at solar gain: glazing g-value/SHGC, shading, or aperture-type control are the leading
+suspects, not yet narrowed down.
+
+**Not yet investigated further - logged per explicit instruction to stop here.** Whoever picks this up next
+should reproduce with the `P39` harness pattern used for the other two fixes (`Convert.ToSAM` ->
+`TogbXML` -> `WorkflowCalculator.Calculate`, `Modify.UpdateDesignLoads` to read back loads), then diff the
+SAM-side `ApertureConstruction`/glazing parameters and any shading/blind state between generation 1 and 2 to
+find what actually changes at that seam.
+
+2026-08-25 (ventilation ticV factor grew on every round trip - REDESIGNED and LICENSED).
+
+**Reported from a real Grasshopper run:** the ventilation profile VALUES were identical across generations
+but the FACTOR kept climbing, without bound.
+
+**The distinction this now rests on**, clarified with the SAM design author and against the TAS 9.5.7 manual:
+SAM ventilation properties describe an engineering airflow REQUIREMENT (four simultaneous bases, summed by
+`Query.CalculatedSupplyAirFlow`). They do NOT prescribe how TAS realises it - that may be a TBD Internal
+Condition Ventilation profile, an IZAM, Tas Systems, or another explicit workflow. `InternalGain.freshAirRate`
+is TAS's Outside Air field (Part L / EPC / Tas Systems) and does **not** itself supply the thermal zone in the
+TSD simulation; `ticV.factor` is Building Simulator mechanical ventilation and exists only where a Ventilation
+profile has been assigned.
+
+**Root cause.** The export wrote the whole summed total into `ticV.factor`; the import read that total back
+into the single `SupplyAirChangesPerHour` BASIS. So last generation's output became an ingredient of this
+generation's sum, re-adding the other bases once per generation. Zones with no `AreaPerPerson` have a NaN
+per-person term, were never inflated, and sat at a stable 1.00 ACH - the fingerprint that isolated it.
+
+**Fix (three parts).**
+1. `Query.VentilationAirChangesPerHour(Space)` is the FULL calculated requirement over the volume - every
+   basis, per-person included. Where a Ventilation profile has chosen Building Simulator ventilation as the
+   realisation, it must deliver all of the requirement. `freshAirRate` holding the same per-person rate is not
+   a double count, because it does not supply the zone in the TSD.
+2. `SAMZoneMetadata` - a versioned SAM-only section of `TBD.zone.description` (beside the existing `[Id]` /
+   `[LevelName]`) carrying the four authored bases plus a flag for whether a Ventilation profile realised
+   them, and a fingerprint of the native TAS fields as the export left them. One parser/writer owns the whole
+   string; it rewrites what it manages, PRESERVES unrelated content (previously overwritten), is deterministic
+   and invariant-culture, stores no derived geometry, and is extensible for exhaust later.
+3. `Modify.RestoreVentilationRequirement` puts the authored bases back on import in place of what was inferred
+   from the total - REMOVING a basis the export did not record, not just writing the ones it did - and, where
+   the metadata says no profile was assigned, removes the `VentilationProfileName` the native import writes
+   from the mere presence of a `ticV` slot. Stale metadata (native fields no longer matching) is refused whole,
+   the native import stands, and a note is stamped on the space (`"SAM Zone Metadata Note"`).
+
+**The `profile != null` gate in `Modify.UpdateInternalCondition` is unchanged and load-bearing**: SAM airflow
+data never activates a TBD Ventilation profile by itself. The explicit seam remains
+`SAMAnalytical.UpdateVentilationProfile`. Part F (`ApplyPartFVentilationRates`) and Part O
+(`PreparePartOIteration`) are untouched and neither assigns a Ventilation profile.
+
+**Supersedes the first attempt on this branch** (commit `140acb4c`), which SUBTRACTED the per-person term from
+the factor on the assumption that `freshAirRate` supplies it to the Building Simulator. That made the round
+trip stable by changing the physical total, and is retracted.
+
+**Licensed acceptance** on the 9-zone residential fixture, `Convert.ToSAM` -> `TogbXML` ->
+`WorkflowCalculator.Calculate` (sizing on), artifacts in `C:/TasOut/v40`:
+- *Chain B, explicit Ventilation profile, 3 generations.* Authored `ach=1.0` + `flowPerPerson=0.008`.
+  `ticV.factor` `Bedroom 2_3` **1.137143 -> 1.137143 -> 1.137143**, `Studio 1_0` / `Living Kitchen_4`
+  **1.192** throughout, `Kitchen_7` **1.048**, `Corridor_1` / `Bathroom_2` / `Ensuite_5` / `Ensuite_8`
+  **1.000**. `freshAirRate` 8.0 l/s/p throughout. Each import restores `ach=1.0` and `flowPerPerson=0.008` -
+  the AUTHORED bases, not the total. Baseline on the same starting model: **1.137143 -> 1.274286 -> 1.411...**
+- *Chain C, requirement data with NO Ventilation profile, 2 generations.* `flowPerArea=0.0004`,
+  `flowPerPerson=0.008`, `ach=1.0`, profile removed. `ticV.factor` never written (holds the T3D default of 1),
+  all three bases restored unchanged, `ventProfileName` ABSENT after import so nothing is activated,
+  `freshAirRate` still 8.0, calculated requirement identical across generations (1.497143 ACH on
+  `Bedroom 2_3`).
+- *Stale metadata on a real file.* `TBD1.tbd` re-opened, `freshAirRate` set to 12 on all 18 internal
+  conditions, re-imported: section refused, native import used in full (`flowPerPerson=0.012`,
+  `ach=1.137143`), note visible on every space.
+- *Programme invariants.* `40 aperture part(s) considered; 40 rebound` in every generation of both chains.
+  Profile reuse, Part F, Part O unchanged; no design-day change included.
+
+**Tests.** `SAM.Analytical.Tas.TM59.Tests` **575/575** Debug and Release (+21 net: new
+`VentilationRequirementMetadataTests`, `VentilationAirflowMagnitudeTests` per-person block rewritten to the
+corrected semantics). `SAM.Analytical.Tas.Benchmark.Tests` **16/16** Debug and Release. `SAM_Tas.sln` builds
+clean in both configurations (only the pre-existing MSB3270/MSB3277 and XML-doc warnings). The suite contains
+its own control - `WithoutTheMetadata_TheSameChainCompounds` shows 2.44 -> 3.16 -> 3.88 with the mechanism
+removed - so disabling the fix fails the tests. Detail in
+`SAM.Analytical.Tas/VENTILATION_TICV_ROUND_TRIP.md`.
+
+**Files changed.** New: `Classes/SAMZoneMetadata.cs`, `Modify/RestoreVentilationRequirement.cs`,
+`Create/ZoneMetadata.cs`, `Query/PrimaryInternalConditionIndex.cs`,
+`SAM.Analytical.Tas.TM59.Tests/VentilationRequirementMetadataTests.cs`. Modified:
+`Query/VentilationAirChangesPerHour.cs`, `Modify/UpdateZone.cs`, `Modify/UpdateInternalCondition.cs`
+(comment only), `Convert/ToSAM/Space.cs`, `Convert/ToSAM/AdjacencyCluster.cs`,
+`SAM.Analytical.Tas.TM59.Tests/VentilationAirflowMagnitudeTests.cs`,
+`SAM.Analytical.Tas/VENTILATION_TICV_ROUND_TRIP.md`.
+
+Previously: 2026-08-24 (aperture round trip, second pass - the REAL Grasshopper failure, reproduced and fixed - LICENSED).
 
 **The previous entry's caveat was wrong and is retracted.** It said the reported symptom "did not reproduce"
 and pointed at a Grasshopper install running older DLLs. The DLL was current - measured, not assumed: the
@@ -1715,6 +1826,19 @@ Earlier sessions:
   remain deferred - see **Deferred** above.
 
 ## Next step
+- **PR #40 is ready for human review and merge.** Branch `fix/tas-ventilation-ticv-factor-growth`. The
+  first attempt on this branch (`140acb4c`, per-person subtraction) is superseded by the metadata design
+  described under "Last updated"; the PR body has been rewritten accordingly. Merging remains a human call -
+  it was NOT done here.
+- Do not fold the ~29% cooling-load drop (logged 2026-08-24, `NEXT_SESSION_PROMPT.md`) into PR #40. It is a
+  separate design-day / solar-gain investigation on its own branch.
+- Exhaust airflow is deliberately NOT in PR #40. `SAMZoneMetadata`'s payload is a JSON object so an
+  `"exhaust"` section can be added beside `"ventilation"` without a version bump, when that work is scoped.
+- Throwaway licensed harness: `C:/TasOut/inv` (`Inv.exe venttbd|ventsam|ventauthor|venttamper|fromtbd|togbxml|workflow`),
+  artifacts in `C:/TasOut/v40`. Both are outside the repo and will not exist on another machine - rebuild
+  from the `run-tas` skill if the licensed chain needs re-running.
+
+## Previously (superseded next steps)
 - The licensed A/B is done and recorded, PR #36 is merged into this branch, and
   [PR #37](https://github.com/SAM-BIM/SAM_Tas/pull/37) is open against `sow/2026-Q3` with the Copilot
   automated review addressed (see "Post-review fix (2)" below). Remaining: human review of PR #37, then

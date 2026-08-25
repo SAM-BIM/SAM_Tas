@@ -166,11 +166,9 @@ namespace SAM.Analytical.Tas
 
                 if(internalConditions != null && internalConditions.Count != 0)
                 {
-                    InternalCondition internalCondition = internalConditions.Find(x => !x.Name.EndsWith("HDD") && !x.Name.EndsWith("CDD"));
-                    if(internalCondition == null)
-                    {
-                        internalCondition = internalConditions[0];
-                    }
+                    //The same rule Space.ToSAM applied when it restored the zone's SAM airflow metadata, stated
+                    //once so the two cannot drift onto different conditions.
+                    InternalCondition internalCondition = internalConditions[Query.PrimaryInternalConditionIndex(internalConditions)];
 
                     space.InternalCondition = internalCondition;
                     internalConditions.Remove(internalCondition);
