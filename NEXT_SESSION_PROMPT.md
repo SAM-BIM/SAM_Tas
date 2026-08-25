@@ -34,6 +34,12 @@ call `WorkflowCalculator` itself makes at the end of a sizing run.
 1.72 ACH / 8.0 l/s/p) across all three generations by direct COM dump. This is NOT the bug PR #40 fixes,
 and NOT the bug PR #39 fixed either (aperture rebind counts were clean 40/40 throughout this same run).
 
+> **Note (2026-08-25).** Those absolute ACH figures were measured against PR #40's FIRST attempt, which
+> subtracted the per-person basis from `ticV.factor`. That attempt is superseded: the factor now carries the
+> full calculated requirement, so the absolute values on this chain will be HIGHER. The conclusion is
+> unaffected - what ruled ventilation out was that the factor is constant ACROSS generations, which the final
+> design also guarantees - but re-dump before relying on the numbers themselves.
+
 **Leading suspects**, since a ~29% cooling swing with no ventilation change points at solar gain or
 shading, not airflow:
 

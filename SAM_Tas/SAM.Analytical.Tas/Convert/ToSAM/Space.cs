@@ -104,7 +104,11 @@ namespace SAM.Analytical.Tas
             if(internalConditions_TBD != null)
             {
                 internalConditions = new List<InternalCondition>();
-                
+
+                //Kept in step with internalConditions so the zone's own condition can be paired back to the
+                //TBD one the metadata fingerprint is compared against.
+                List<TBD.InternalCondition> internalConditions_TBD_Imported = new List<TBD.InternalCondition>();
+
                 foreach(TBD.InternalCondition internalCondition_TBD in internalConditions_TBD)
                 {
                     InternalCondition internalCondition = internalCondition_TBD.ToSAM(area, profileReuseIndex);
@@ -114,10 +118,68 @@ namespace SAM.Analytical.Tas
                     }
 
                     internalConditions.Add(internalCondition);
+                    internalConditions_TBD_Imported.Add(internalCondition_TBD);
                 }
+
+                RestoreVentilationRequirement(result, zone, internalConditions, internalConditions_TBD_Imported);
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The SAM name for the diagnostic a refused zone-metadata section leaves on the space. Present ONLY
+        /// when a section was found and rejected - a normal import, and a TAS-authored model with no section
+        /// at all, stamp nothing.
+        /// </summary>
+        public const string SpaceParameter_VentilationMetadataNote = "SAM Zone Metadata Note";
+
+        /// <summary>
+        /// Replaces what the native import inferred about ventilation with the airflow REQUIREMENT the export
+        /// recorded in the zone description, where there is one and it still matches what TAS states.
+        /// <para>
+        /// This is the whole COM part of the mechanism: read the description, read the two native fields off
+        /// the zone's own internal condition, and hand both to the COM-free
+        /// <see cref="Modify.RestoreVentilationRequirement(InternalCondition, SAMZoneMetadata, double, double, out string)"/>,
+        /// which decides and applies. A refusal is stamped on the space so a stale file is visible in the
+        /// model rather than only in a debugger.
+        /// </para>
+        /// </summary>
+        private static void RestoreVentilationRequirement(Space space, TBD.zone zone, List<InternalCondition> internalConditions, List<TBD.InternalCondition> internalConditions_TBD)
+        {
+            SAMZoneMetadata metadata = SAMZoneMetadata.Parse(zone?.description);
+            if (metadata == null)
+            {
+                return;
+            }
+
+            int index = Query.PrimaryInternalConditionIndex(internalConditions);
+            if (index < 0 || index >= internalConditions_TBD.Count)
+            {
+                return;
+            }
+
+            TBD.InternalGain internalGain = internalConditions_TBD[index]?.GetInternalGain();
+
+            double freshAirRate = double.NaN;
+            double ventilationFactor = double.NaN;
+            if (internalGain != null)
+            {
+                freshAirRate = internalGain.freshAirRate;
+
+                TBD.profile profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
+                if (profile_TBD != null)
+                {
+                    ventilationFactor = profile_TBD.factor;
+                }
+            }
+
+            Modify.RestoreVentilationRequirement(internalConditions[index], metadata, freshAirRate, ventilationFactor, out string note);
+
+            if (!string.IsNullOrEmpty(note))
+            {
+                space?.SetValue(SpaceParameter_VentilationMetadataNote, note);
+            }
         }
     }
 }

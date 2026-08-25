@@ -301,13 +301,14 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         // =================================================================================================
-        // The per-person basis belongs in freshAirRate, NOT in the ticV factor
+        // Every basis reaches the ticV factor - including per person
         // =================================================================================================
 
-        //Occupant fresh air, sized so the per-person term is a round 0.72 ACH on the fixture volume:
-        //0.06 m3/s over 200 m3 is 1.08 ACH. Exact binary values, so the assertions are equalities.
+        //Occupant fresh air on the fixture: 8 l/s/p over 5 people is 0.04 m3/s, which on 200 m3 is exactly
+        //0.72 ACH. Exact binary values, so the assertions are equalities.
         private const double AirFlowPerPerson = 0.008; // m3/s/p, i.e. TBD freshAirRate 8 l/s/p
-        private const double AreaPerPerson = 10.0;    // m2/p -> occupancy 5.0 on the 50 m2 fixture
+        private const double AreaPerPerson = 10.0;     // m2/p -> occupancy 5.0 on the 50 m2 fixture
+        private const double PerPersonAirChangesPerHour = 0.72;
 
         private static Space Space_WithAirChangesAndOccupants()
         {
@@ -320,67 +321,65 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
-        public void TicVFactor_ExcludesThePerPersonBasis_BecauseFreshAirRateAlreadyCarriesIt()
+        public void TicVFactor_IsTheWholeRequirement_PerPersonIncluded()
         {
-            //THE DEFECT. Modify.UpdateInternalCondition writes SupplyAirFlowPerPerson to
-            //InternalGain.freshAirRate - TAS's own per-person outside-air field - and then used to sum the
-            //same rate into the ticV factor as well, stating the occupants' fresh air twice.
+            //A ticV factor is only ever written where a SAM Ventilation profile has CHOSEN Building Simulator
+            //mechanical ventilation as the realisation (Modify.UpdateInternalCondition gates on it). Having
+            //chosen it, that profile has to deliver the whole requirement: leaving a basis out would
+            //under-ventilate the zone in the simulation by exactly that term.
             Space space = Space_WithAirChangesAndOccupants();
 
             double occupancy = Area / AreaPerPerson;
             double perPerson_m3s = AirFlowPerPerson * occupancy;
-            double perPerson_ach = perPerson_m3s / Volume * 3600.0;
-
-            //What the summing query still reports - unchanged, it is not the thing being corrected.
-            Assert.That(SAM.Analytical.Query.CalculatedSupplyAirFlow(space),
-                Is.EqualTo(SourceRate * Volume / 3600.0 + perPerson_m3s).Within(1e-12),
-                "CalculatedSupplyAirFlow sums all four bases; that contract is untouched.");
-
-            //What the export now writes: the volumetric supply air only.
-            Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
-                Is.EqualTo(SourceRate).Within(1e-9),
-                "The ticV factor must state only the air TAS has no other field for.");
-
-            //And the size of what was being double-counted, so a regression is legible rather than a nudge.
-            Assert.That(TicVFactor(space) - SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
-                Is.EqualTo(perPerson_ach).Within(1e-9),
-                "The old factor exceeded the new one by exactly the per-person term.");
-        }
-
-        [Test]
-        public void TicVFactor_WithOccupants_IsAFixedPointAcrossRepeatedRoundTrips()
-        {
-            //The compounding, and its absence. The import writes the factor it reads back into the single
-            //SupplyAirChangesPerHour basis, so whatever the export puts in the factor is what the next
-            //export starts from. Feeding the result round again must therefore change nothing.
-            Space space = Space_WithAirChangesAndOccupants();
-
-            double generation_1 = SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space);
-
-            //Generation 2: exactly what Convert.ToSAM does with the TBD the line above just described.
-            Space space_2 = Space_WithCondition(x =>
-            {
-                x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, generation_1);
-                x.SetValue(InternalConditionParameter.SupplyAirFlowPerPerson, AirFlowPerPerson);
-                x.SetValue(InternalConditionParameter.AreaPerPerson, AreaPerPerson);
-            });
-
-            double generation_2 = SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space_2);
 
             Assert.Multiple(() =>
             {
-                Assert.That(generation_1, Is.EqualTo(SourceRate).Within(1e-9));
-                Assert.That(generation_2, Is.EqualTo(generation_1).Within(1e-9),
-                    "A licensed bedroom grew 1.72 -> 2.44 -> 3.16 ACH before this: the same constant added every generation.");
+                //Sanity on the fixture arithmetic the rest of the file leans on.
+                Assert.That(perPerson_m3s / Volume * 3600.0, Is.EqualTo(PerPersonAirChangesPerHour).Within(1e-12));
+
+                Assert.That(SAM.Analytical.Query.CalculatedSupplyAirFlow(space),
+                    Is.EqualTo(SourceRate * Volume / 3600.0 + perPerson_m3s).Within(1e-12),
+                    "CalculatedSupplyAirFlow sums all four bases; that contract is untouched.");
+
+                Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
+                    Is.EqualTo(SourceRate + PerPersonAirChangesPerHour).Within(1e-9),
+                    "The factor states the full calculated requirement, not a part of it.");
+
+                //It IS the plain conversion of the summed total - nothing is subtracted on the way.
+                Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space),
+                    Is.EqualTo(TicVFactor(space)).Within(1e-12));
             });
         }
 
         [Test]
-        public void TicVFactor_WithNoOccupants_IsUnchangedByTheCorrection()
+        public void TicVFactor_AndFreshAirRate_HoldTheSameRateWithoutDoubleCounting()
         {
-            //Nothing is taken away where there is no per-person rate to take: a zone with no occupancy
-            //basis writes exactly what it always did. On the licensed fixture these are the corridor,
-            //bathroom and ensuites, which held 1.0 ACH in every generation both before and after.
+            //internalGain.freshAirRate carries the per-person rate too - but as TAS's OUTSIDE AIR field, which
+            //feeds Part L / EPC and Tas Systems and does not itself supply the zone in the TSD simulation.
+            //Both holding it is therefore not a Building Simulator double count, and the ticV factor must not
+            //be reduced on the assumption that it is. Pinned because an earlier revision of this fix did
+            //exactly that, and changed the physical total to manufacture a fixed point.
+            Space space = Space_WithAirChangesAndOccupants();
+
+            space.InternalCondition.TryGetValue(InternalConditionParameter.SupplyAirFlowPerPerson, out double airFlowPerPerson);
+
+            Assert.Multiple(() =>
+            {
+                //What Modify.UpdateInternalCondition writes to freshAirRate, verbatim: m3/s/p -> l/s/p.
+                Assert.That(airFlowPerPerson * 1000, Is.EqualTo(8.0).Within(1e-9));
+
+                Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space) - SourceRate,
+                    Is.EqualTo(PerPersonAirChangesPerHour).Within(1e-9),
+                    "The per-person term is present in the factor, in full.");
+            });
+        }
+
+        [Test]
+        public void TicVFactor_WithNoOccupants_IsJustTheOtherBases()
+        {
+            //Nothing is added where there is no per-person rate to add. On the licensed fixture these are the
+            //corridor, bathroom and ensuites, which state no AreaPerPerson and held a stable 1.00 ACH in every
+            //generation both before and after this work.
             Space space = Space_WithCondition(x => x.SetValue(InternalConditionParameter.SupplyAirChangesPerHour, SourceRate));
 
             Assert.That(SAM.Analytical.Tas.Query.VentilationAirChangesPerHour(space), Is.EqualTo(TicVFactor(space)).Within(1e-12));
@@ -390,9 +389,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
         [Test]
         public void TicVFactor_KeepsTheAreaAndFlatBases_WhichHaveNoOtherHomeInTBD()
         {
-            //Only the per-person basis is excluded, and only because freshAirRate carries it. SupplyAirFlow
-            //and SupplyAirFlowPerArea have no native TAS field, so dropping them would lose the ventilation
-            //outright rather than move it.
+            //The bases with no native TAS field at all. Dropping either would lose that ventilation outright.
             Space space = Space_WithCondition(x =>
             {
                 x.SetValue(InternalConditionParameter.SupplyAirFlow, 0.01);

@@ -274,12 +274,21 @@ namespace SAM.Analytical.Tas
             profile_TBD = internalGain.GetProfile((int)TBD.Profiles.ticV);
             if (profile_TBD != null)
             {
-                //The volumetric supply air TAS has no other field for, in ACH - and ONLY that. The
-                //per-person basis is excluded because internalGain.freshAirRate above has already carried it,
-                //from the very same SupplyAirFlowPerPerson parameter; summing it in here as well stated the
-                //occupants' fresh air twice, and - because the import writes this factor back into the single
-                //SupplyAirChangesPerHour basis - added the same constant again on every round trip
-                //(a licensed bedroom grew 1.72 -> 2.44 -> 3.16 ACH). See Query.VentilationAirChangesPerHour.
+                //The FULL calculated supply-air requirement, in ACH - every basis, per-person included.
+                //
+                //REQUIREMENT vs REALISATION. The four SAM airflow parameters state an engineering requirement;
+                //they do not by themselves prescribe how TAS delivers it (a TBD Ventilation profile, an IZAM,
+                //Tas Systems). The "profile != null" gate below is that choice, and it is deliberately the only
+                //thing that activates Building Simulator mechanical ventilation here: the presence of airflow
+                //data must never switch it on by itself. Where a profile IS assigned, the rate written must be
+                //the whole requirement - internalGain.freshAirRate above holds the per-person rate too, but as
+                //TAS's Outside Air field, which does not itself supply the zone in the simulation, so this is
+                //not a double count.
+                //
+                //This total is not what stopped the ticV factor growing on every round trip: the import used to
+                //read it back as the single SupplyAirChangesPerHour basis, so the next export summed the other
+                //bases on top of it again. SAMZoneMetadata now carries the authored decomposition across the
+                //seam instead. See Query.VentilationAirChangesPerHour and Modify.RestoreVentilationRequirement.
                 double value_Temp = Query.VentilationAirChangesPerHour(space);
 
                 if (double.IsNaN(value_Temp))
