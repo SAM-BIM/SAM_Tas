@@ -181,6 +181,7 @@ namespace SAM.Analytical.Tas
                 zone.name = airHandlingUnit.Name;
                 if (!string.IsNullOrWhiteSpace(airHandlingUnit.Name))
                     zonesByKey[airHandlingUnit.Name.Trim().ToUpper()] = zone;
+
                 zone.sizeHeating = (int)TBD.SizingType.tbdSizing;
 
                 string name = string.Format("{0}", airHandlingUnitAirMovement.Name);
@@ -276,6 +277,33 @@ namespace SAM.Analytical.Tas
 
                 foreach (SpaceMovementInfo info in movements)
                 {
+                    // The zone the movement delivers INTO.
+                    //
+                    // A TBD inter-zone air movement only ever moves air INTO the zones it is assigned to,
+                    // from a source zone or from outside - TBD.IIZAM has a source zone and target zones and
+                    // a fromOutside flag, and no outward direction of any kind. So the target has to be read
+                    // from the movement's To endpoint rather than assumed to be the space the movement is
+                    // related to. An EXTRACT movement is "room -> air handling unit": an IZAM on the UNIT's
+                    // zone, sourced from the room. Writing it onto the room's own zone with neither a source
+                    // zone nor fromOutside - which is what a To of null produces, and what every movement
+                    // produced before this - is an IZAM that moves no air at all.
+                    //
+                    // Where To does not resolve to a zone, including where it is null, the target is the
+                    // space's own zone, which is exactly the behaviour every existing caller relies on: a
+                    // supply movement's To IS the space, so it resolves to the same zone either way.
+                    zone zone_Target = zone;
+                    string key_Target = space.Name.Trim().ToUpper();
+
+                    if (info.To != null && !string.IsNullOrWhiteSpace(info.To.Name))
+                    {
+                        string key_To = info.To.Name.Trim().ToUpper();
+                        if (zonesByKey.TryGetValue(key_To, out zone zone_To) && zone_To != null)
+                        {
+                            zone_Target = zone_To;
+                            key_Target = key_To;
+                        }
+                    }
+
                     IZAM iZAM = building.AddIZAM(null);
 
                     foreach (dayType dayType in dayTypes)
@@ -290,11 +318,14 @@ namespace SAM.Analytical.Tas
                     profile profile = iZAM.GetProfile();
                     profile.Update(info.Movement.Profile, info.Movement.AirFlow);
 
-                    zone.AssignIZAM(iZAM, true);
+                    zone_Target.AssignIZAM(iZAM, true);
 
-                    if (info.From != null && info.From.Guid != space.Guid && !string.IsNullOrWhiteSpace(info.From.Name))
+                    // Compared by resolved zone key rather than by COM object identity: two runtime callable
+                    // wrappers over the same TAS zone are not reference-equal.
+                    if (info.From != null && !string.IsNullOrWhiteSpace(info.From.Name))
                     {
-                        if (zonesByKey.TryGetValue(info.From.Name.Trim().ToUpper(), out zone zoneFrom) && zoneFrom != null)
+                        string key_From = info.From.Name.Trim().ToUpper();
+                        if (key_From != key_Target && zonesByKey.TryGetValue(key_From, out zone zoneFrom) && zoneFrom != null)
                         {
                             iZAM.SetSourceZone(zoneFrom);
                         }
