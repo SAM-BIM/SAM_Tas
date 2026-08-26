@@ -1,6 +1,62 @@
 # Project Progress
 
 ## Branch
+`feature/parto-nv-workflow` (off `sow/2026-Q3` at `ab5525c6`, i.e. with **PR #42 merged**) -
+PR [SAM_Tas#43](https://github.com/SAM-BIM/SAM_Tas/pull/43), companion to
+[SAM#76](https://github.com/SAM-BIM/SAM/pull/76). **Tests only in this repo**; the production change is
+all on the SAM side.
+
+## Last updated
+2026-08-26 - the explicit Part O ventilation route, and the Iteration 1b NV-OPEN / NV-NIGHT A/B, pinned
+COM-free.
+
+### What this repo contributes
+`SAM.Analytical.Tas.TM59.Tests/PartONaturalVentilationWorkflowTests.cs` carries ONE naturally ventilated
+dwelling from the production `Modify.PreparePartOIteration` to the three places the TAS side has to agree
+with it - the exported ventilation type, the aperture control the TBD write is given, and the TM59
+criterion - with **no TAS COM, no licence and no install**. `Building`/`Zone` are XML writers over
+analytical objects, `Query.ApertureTypeDefinition` is the COM-free half of `Modify.SetApertureType`, and
+`TMOverheatingCalculator` reads hourly series off a `Space`.
+
+This session the fixture became **two cases**, parameterised by `OpeningRestriction`, so it builds exactly
+what the licensed acceptance runs:
+
+- **NV-OPEN** - `Unrestricted`. Reaches the aperture-definition write with the same function, factor and
+  discharge coefficient as NV-NIGHT and **no** availability schedule, which is how "unrestricted" is
+  represented.
+- **NV-NIGHT** - `NightClosed` 08-23. Reaches it with `PartO_DayOpen_08_23` and all 24 values.
+
+Both are prepared at `PartOIteration.BaseNaturalVentilation` (Iteration 1b) on the explicit
+`PartOVentilationMode.NaturalVentilation` route - the preparation's settled route is **asserted**, not
+inferred from the airflow answer - and `TheTwoCases_DifferOnlyInTheOpeningAvailability` pins the A/B
+invariant: same zone, internal conditions compared field by field, no continuous mechanical supply or
+extract on **either**, same opening geometry and TAS function, availability schedule as the one difference.
+
+The fixture's internal condition still states `VentilationSystemTypeName = "MVRE"` on purpose, so every
+assertion has a control showing the pre-scenario derivation answering "mechanical" for the same model. The
+explicit route wins, or these tests would pass for the wrong reason.
+
+`SAM.Analytical.Tas.TM59.Tests`: **624 passed, 0 failed** (was 620, +4).
+
+### Licensed evidence
+Lives in the SAM repo - `SAM/documentation/PartO-TAS-VALIDATION.md` section "Iteration 1b / Base Natural
+Ventilation - licensed A/B acceptance (2026-08-26)". The two produced TBDs differ by exactly one line (the
+extra `ApertureType` carrying the schedule); zero `"flow"` keys in either NV case's zone descriptions
+against 8 in the MVRE control; and 16 690 of 78 840 hourly resultant temperatures differ, with the largest
+delta - 0.674 K - on the one space whose window was restricted.
+
+### One TAS-side limitation this recorded
+`SAM.Analytical.Tas` has **no TBD write path for exhaust at all**.
+`InternalConditionParameter.ExhaustAirFlow` is read in exactly one place in this repository -
+`PartODiagnosticLog`, for reporting - and reaches no TBD field. Only the supply side travels
+(`SupplyAirFlow*` -> `freshAirRate` / `ticV` factor, plus the `SAMZoneMetadata` decomposition in the zone
+description). This is why Part O Iteration 1b models no wet-room intermittent extract runtime behaviour:
+SAM has the Table 1.1 rate but no operating schedule, and TAS has neither. See
+`SAM/documentation/PartO-ARCHITECTURE.md` section 6.
+
+---
+
+## Branch
 `fix/tas-design-day-weather-authority` (off `sow/2026-Q3` at `74cb422a`, i.e. with **PR #40 merged**).
 The first TBD generated for a NEW weather file sized on the PREVIOUS weather's design days. See
 `SAM.Analytical.Tas/DESIGN_DAY_WEATHER_AUTHORITY.md`.
