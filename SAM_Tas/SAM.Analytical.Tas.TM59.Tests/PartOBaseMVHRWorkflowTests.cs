@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using NUnit.Framework;
@@ -10,6 +10,7 @@ using SAM.Weather;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Nodes;
+using AnalyticalCreate = SAM.Analytical.Create;
 using AnalyticalModify = SAM.Analytical.Modify;
 using AnalyticalQuery = SAM.Analytical.Query;
 using AnalyticalZone = SAM.Analytical.Zone;
@@ -389,6 +390,12 @@ namespace SAM.Analytical.Tas.TM59.Tests
             adjacencyCluster.AddObject(Space(SpaceName_Habitable, "Bedroom", 16.0, PartFVentilationType.supply, PartFTerminalRole.Supply, Supply_Lps));
             adjacencyCluster.AddObject(Space(SpaceName_WetRoom, "Bathroom", 6.0, PartFVentilationType.extract, PartFTerminalRole.GeneralExtract, Extract_Lps));
 
+            //The partition between them. It is what makes this a dwelling rather than two loose rooms: the
+            //supplied bedroom's air reaches the extracted bathroom across it, which is the transfer air an
+            //MVHR design depends on. Without it neither room can balance, and TAS will not simulate a zone
+            //that gains air it never loses - so the preparation refuses instead of producing one.
+            AddPartition(adjacencyCluster, SpaceName_Habitable, SpaceName_WetRoom);
+
             adjacencyCluster.AddObject(new AnalyticalZone(ZoneName));
 
             AnalyticalModel result = new AnalyticalModel("Part O Base MVHR Dwelling", null, null, null, adjacencyCluster);
@@ -397,6 +404,30 @@ namespace SAM.Analytical.Tas.TM59.Tests
             result.SetValue(Analytical.AnalyticalModelParameter.WeatherData, new WeatherData("Test", "Test", 51.5, -0.1, 0, WeatherYear()));
 
             return result;
+        }
+
+        /// <summary>
+        /// Puts an internal separating element between two of the model's spaces, which is what makes them
+        /// adjacent and so what puts an edge in the dwelling's transfer air network.
+        /// </summary>
+        private static void AddPartition(AdjacencyCluster adjacencyCluster, string name_1, string name_2)
+        {
+            List<Space> spaces = adjacencyCluster.GetSpaces();
+
+            Panel panel = AnalyticalCreate.Panel(
+                new Construction(System.Guid.NewGuid(), "Internal Partition"),
+                PanelType.WallInternal,
+                new Face3D(new Polygon3D(
+                [
+                    new Point3D(0, 0, 0),
+                    new Point3D(4, 0, 0),
+                    new Point3D(4, 0, 3),
+                    new Point3D(0, 0, 3),
+                ])));
+
+            adjacencyCluster.AddObject(panel);
+            adjacencyCluster.AddRelation(spaces.Find(x => x.Name == name_1), panel);
+            adjacencyCluster.AddRelation(spaces.Find(x => x.Name == name_2), panel);
         }
 
         private static Space Space(string name, string name_InternalCondition, double area, PartFVentilationType partFVentilationType, PartFTerminalRole partFTerminalRole, double continuous_Lps)

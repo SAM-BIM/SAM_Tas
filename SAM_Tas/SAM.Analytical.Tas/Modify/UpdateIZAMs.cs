@@ -93,6 +93,7 @@ namespace SAM.Analytical.Tas
             //  (a) bulk-remove all to-be-replaced ICs and IZAMs in two calls (was per-iteration → O(N^2)),
             //  (b) avoid re-fetching GetRelatedObjects / GetObjects inside the modify loops.
             Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement> ahuMovements = new Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement>();
+            Dictionary<AirHandlingUnit, List<SpaceAirMovement>> ahuOutwardMovements = new Dictionary<AirHandlingUnit, List<SpaceAirMovement>>();
             HashSet<string> icNamesToReplace = new HashSet<string>();
             HashSet<string> izamNamesToReplace = new HashSet<string>();
 
@@ -107,6 +108,28 @@ namespace SAM.Analytical.Tas
                     icNamesToReplace.Add(m.Name);
                     izamNamesToReplace.Add(string.Format("IZAM {0} FROM OUTSIDE", m.Name));
                 }
+
+                // The unit's own movements OUT of the building - its exhaust, carrying away the extract air
+                // it has drawn out of the rooms. These are movements of the UNIT rather than of a space, so
+                // the space loop below never reaches them, and without them the unit's zone gains the whole
+                // extract duty and never loses it. TAS refuses to simulate such a zone.
+                List<SpaceAirMovement> outward = new List<SpaceAirMovement>();
+                ObjectReference objectReference_AHU = new ObjectReference(ahu);
+
+                foreach (SpaceAirMovement spaceAirMovement in adjacencyCluster.GetRelatedObjects<SpaceAirMovement>(ahu) ?? new List<SpaceAirMovement>())
+                {
+                    if (spaceAirMovement == null || !string.IsNullOrWhiteSpace(spaceAirMovement.To))
+                        continue;
+
+                    if (objectReference_AHU != Core.Convert.ComplexReference<ObjectReference>(spaceAirMovement.From))
+                        continue;
+
+                    outward.Add(spaceAirMovement);
+                    izamNamesToReplace.Add(OutwardIZAMName(ahu));
+                }
+
+                if (outward.Count != 0)
+                    ahuOutwardMovements[ahu] = outward;
             }
 
             // Resolved space-air-movement metadata, keyed by Space so the loop is O(spaces).
@@ -261,6 +284,34 @@ namespace SAM.Analytical.Tas
                     zone.AssignIZAM(iZAM, true);
                 }
 
+                // The unit's exhaust. A TBD inter-zone air movement that is assigned to a zone, has NO source
+                // zone and is not from outside moves air OUT of that zone to outside - which is how TAS
+                // itself authors a zone that discharges to outside (the "From Atrium to Outside" movement of
+                // the shipped `example.tbd` sample has exactly this shape, and re-creating it through
+                // Building.AddIZAM keeps that sample balanced and simulating). TBD.IIZAM exposes no outward
+                // flag of any kind, so this shape is the whole of the representation.
+                if (ahuOutwardMovements.TryGetValue(airHandlingUnit, out List<SpaceAirMovement> outwardMovements))
+                {
+                    foreach (SpaceAirMovement spaceAirMovement in outwardMovements)
+                    {
+                        IZAM iZAM = building.AddIZAM(null);
+                        iZAM.fromOutside = 0;
+                        iZAM.name = OutwardIZAMName(airHandlingUnit);
+                        result.Add(iZAM.name);
+
+                        foreach (dayType dayType in dayTypes)
+                        {
+                            iZAM.SetDayType(dayType, true);
+                        }
+
+                        profile profile = iZAM.GetProfile();
+                        profile.Update(spaceAirMovement.Profile, spaceAirMovement.AirFlow);
+
+                        // Deliberately no SetSourceZone: a source zone would make this air arriving from
+                        // somewhere else rather than leaving the building.
+                        zone.AssignIZAM(iZAM, true);
+                    }
+                }
             }
 
             foreach(Space space in spaces)
@@ -334,6 +385,15 @@ namespace SAM.Analytical.Tas
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The name of the inter-zone air movement that takes an air handling unit's extract air out of the
+        /// building, in the same form the space loop names an outward movement.
+        /// </summary>
+        private static string OutwardIZAMName(AirHandlingUnit airHandlingUnit)
+        {
+            return string.Format("IZAM {0} TO OUTSIDE", airHandlingUnit?.Name);
         }
 
         private sealed class SpaceMovementInfo

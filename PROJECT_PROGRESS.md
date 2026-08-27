@@ -1,14 +1,47 @@
 # Project Progress
 
 ## Branch
-`feature/parto-nv-workflow` (off `sow/2026-Q3` at `ab5525c6`, i.e. with **PR #42 merged**) -
-PR [SAM_Tas#43](https://github.com/SAM-BIM/SAM_Tas/pull/43), companion to
-[SAM#76](https://github.com/SAM-BIM/SAM/pull/76). **Tests only in this repo**; the production change is
-all on the SAM side.
+`feature/parto-base-mvhr` (off `sow/2026-Q3` at `1b3add6a`, i.e. with **PR #43 merged**). No PR opened yet.
 
 ## Last updated
-2026-08-26 - the explicit Part O ventilation route, and the Iteration 1b NV-OPEN / NV-NIGHT A/B, pinned
-COM-free.
+2026-08-27 - the inter-zone air movement shape TAS actually accepts, and the air handling unit's exhaust.
+
+## Current status (this session)
+Iteration 1a's licensed annual simulation was refused by TAS with `Simulation Failed`. The cause is
+**conservation**: TAS refuses a TBD in which any one zone's inter-zone air movements do not balance, and
+balance over the building as a whole is not enough. Both facts are established by experiment against the
+TAS-authored control files in `Tas Data\Sample Projects`, not from documentation alone - see
+`SAM/documentation/PartO-TAS-VALIDATION.md` §"Iteration 1a / Base MVHR - the block resolved (2026-08-27)".
+
+### What this repo contributes this session
+`Modify.UpdateIZAMs` now writes an air handling unit's **outward** movements - the exhaust that takes the
+extract air out of the building. `TBD.IIZAM` exposes a source zone, target zones and `fromOutside`, and no
+outward flag of any kind; a late-bound probe against the live COM object confirms the Building Simulator's
+"To Outside" field is not reachable through automation, so this is not an absence in the checked-in
+interop. The representation is therefore **assigned to the zone, no source zone, `fromOutside = 0`** -
+which is exactly the shape of the TAS-authored *"From Atrium to Outside"* movement in the shipped
+`example.tbd`, and re-creating that movement through `Building.AddIZAM` keeps that file balanced and
+simulating.
+
+The `To`-endpoint change of `4f70f08d` **survived evaluation against that control** and is kept: a TBD
+inter-zone air movement only ever moves air INTO the zones it is assigned to, so a room's extract has to be
+a movement on the UNIT's zone sourced from the room.
+
+Ruled out as causes, each by experiment: `profile.factor` versus `profile.value` (**both work** - TAS's own
+files put the flow in `value`, SAM puts it in `factor`), `profile.units`, profile and movement names,
+day-type coverage including `HDD`, and the unit's zone itself.
+
+Two pre-existing defects found and deliberately **not** fixed here: TAS reads the stored flow as a mass
+flow in kg/s while SAM writes m3/s, and `Modify.Simulate` returns true for a simulation TAS refused to run
+- it only waits for the TSD to unlock, so every failed licensed run has reported success.
+
+`SAM.Analytical.Tas.TM59.Tests`: **633 passed, 0 failed**. The Base MVHR fixture gained the internal
+partition it always should have had: two rooms that share no separating element cannot move transfer air
+between them, and the preparation is right to refuse such a model.
+
+---
+
+## Previous session (2026-08-26, Iteration 1b)
 
 ### What this repo contributes
 `SAM.Analytical.Tas.TM59.Tests/PartONaturalVentilationWorkflowTests.cs` carries ONE naturally ventilated
