@@ -173,8 +173,18 @@ namespace SAM.Analytical.Tas
                     //
                     // The movement's flow, profile and source are untouched. Only the SAM model's statement
                     // that this air passes through the unit is dropped, and only for the export.
+                    //
+                    // A TBD written before this movement was flattened carries it under the OLD name - "IZAM
+                    // <room> TO <unit>". Queuing only the new "TO OUTSIDE" name below would leave that old
+                    // IZAM behind on a re-export: the stale room-to-unit extract would survive alongside the
+                    // new room-to-outside one while the unit's matching exhaust is suppressed, and the
+                    // duplicate inflow would unbalance the unit's zone. Both names are queued so either
+                    // vintage of this movement is replaced cleanly.
                     if (sTo != null && guids_FlattenedExtract.Contains(sam.Guid))
+                    {
+                        izamNamesToReplace.Add(string.Format("IZAM {0} TO {1}", sFrom.Name, sTo.Name));
                         sTo = null;
+                    }
 
                     string izamName = string.Format("IZAM {0}", sFrom.Name);
                     izamName = sTo == null ? string.Format("{0} TO OUTSIDE", izamName) : string.Format("{0} TO {1}", izamName, sTo.Name);
