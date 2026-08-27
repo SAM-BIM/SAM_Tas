@@ -4,9 +4,65 @@
 `feature/parto-base-mvhr` (off `sow/2026-Q3` at `1b3add6a`, i.e. with **PR #43 merged**). No PR opened yet.
 
 ## Last updated
-2026-08-27 - the inter-zone air movement shape TAS actually accepts, and the air handling unit's exhaust.
+2026-08-27 - an inter-zone air movement is a MASS flow rate, and this repo now writes one.
 
 ## Current status (this session)
+The accepted Iteration 1a recorded a defect it deliberately did not fix: **TAS reads an inter-zone air
+movement's stored flow as a mass flow in kg/s, and SAM writes a volume flow in m3/s.** That is now closed
+in this repo, and only in this repo.
+
+### The evidence
+Two independent sources, used together rather than one instead of the other:
+
+- The **EDSL Building Simulator documentation** states the Inter-Zone Air Movement flow rate as a
+  time-varying *mass flow rate*, and its Inter-Zone Air Movement table gives the unit explicitly as
+  **kg/s**. It is the same document that states the balance rule the accepted work was built on.
+- The **licensed file itself**: read back through Tas's own accessors, the profile
+  `Modify.UpdateIZAMs` writes reports `units=kg/s` - TAS's own declaration about the field SAM was filling
+  with cubic metres.
+
+Nothing failed while this was wrong. The model balanced, simulated and produced a full year of results,
+for a dwelling ventilated about 21% below its design. That is the whole reason it needs a test.
+
+### The change
+- **`Query.IZAMMassFlow_KgPerSecond` / `Query.IZAMVolumeFlow_M3PerSecond`** (new) with
+  **`Query.IZAMAirDensity_KgPerM3`**, which is `SAM.Core.FluidProperty.Air.Density` = **1.210 kg/m3** -
+  SAM's own authority, the value `Modify.AddAirMovementObjects` already writes as an air handling unit's
+  density profile. A second constant was deliberately **not** minted to reach the 1.204 kg/m3 of dry air
+  at 20 C and sea level: two competing densities for the same air is a worse defect than a slightly
+  different one.
+- **`Modify.UpdateIZAMProfile`** (new): the one seam where a SAM `SpaceAirMovement` becomes a TBD profile.
+  All three write sites in `Modify.UpdateIZAMs` go through it, so **every** shape is converted - outside
+  into the unit, unit into a room, room to room transfer, room back to the unit, and the unit's exhaust.
+  One density across the whole graph, which is what keeps a network that balanced by volume balancing by
+  mass exactly; a per-movement temperature-corrected density would unbalance every node, which is precisely
+  what TAS refuses.
+
+**Nothing in `SAM` changed.** `SpaceAirMovement.AirFlow`, the Approved Document F requirement and the
+design terminal duties all stay volumetric. The conversion is an interoperability concern and lives at the
+interoperability boundary.
+
+**The legacy `Create.IZAM` / `Modify.UpdateIZAMsBySpaceParameter` route is NOT converted.** It builds a
+movement from `SAM_IZAM_*` space parameters a modeller typed by hand, in whatever unit they meant;
+rescaling those would silently change existing models. Only the Part O runtime realization, which knows its
+own values are m3/s, is converted.
+
+`SAM.Analytical.Tas.TM59.Tests`: **642 passed, 0 failed** (was 633, +9). `IZAMMassFlowTests` runs the real
+`Modify.UpdateIZAMProfile` against the existing managed `FakeProfile` - no licence, no COM - and pins both
+the conversion and the inequality that catches a regression back to writing m3/s.
+
+### Licensed evidence
+In the SAM repo: `SAM/documentation/PartO-TAS-VALIDATION.md` §"Iteration 1a / Base MVHR - the two
+magnitude and scope corrections (2026-08-27)". Every IZAM in the re-run acceptance TBD reads back in kg/s,
+converts back exactly to its l/s design duty, and every zone conserves **mass** to 5e-6 l/s. The
+Iteration 1b OPEN/NIGHT regression is unchanged at **16 690**, as it must be: the natural ventilation
+route writes no inter-zone air movement at all.
+
+Still deliberately **not** fixed: `Modify.Simulate` returns true for a simulation TAS refused to run.
+
+---
+
+## Previous session (2026-08-27, the inter-zone air movement shape)
 Iteration 1a's licensed annual simulation was refused by TAS with `Simulation Failed`. The cause is
 **conservation**: TAS refuses a TBD in which any one zone's inter-zone air movements do not balance, and
 balance over the building as a whole is not enough. Both facts are established by experiment against the

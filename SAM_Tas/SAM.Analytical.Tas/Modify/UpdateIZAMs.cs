@@ -279,7 +279,8 @@ namespace SAM.Analytical.Tas
                     }
 
                     profile profile = iZAM.GetProfile();
-                    profile.Update(profile_AirHandlingUnit, airFlow);
+                    //Volumetric m3/s in, mass kg/s out - a TBD inter-zone air movement is a mass flow rate.
+                    profile.UpdateIZAMProfile(profile_AirHandlingUnit, airFlow);
 
                     zone.AssignIZAM(iZAM, true);
                 }
@@ -305,7 +306,7 @@ namespace SAM.Analytical.Tas
                         }
 
                         profile profile = iZAM.GetProfile();
-                        profile.Update(spaceAirMovement.Profile, spaceAirMovement.AirFlow);
+                        profile.UpdateIZAMProfile(spaceAirMovement.Profile, spaceAirMovement.AirFlow);
 
                         // Deliberately no SetSourceZone: a source zone would make this air arriving from
                         // somewhere else rather than leaving the building.
@@ -367,7 +368,7 @@ namespace SAM.Analytical.Tas
                     result.Add(iZAM.name);
 
                     profile profile = iZAM.GetProfile();
-                    profile.Update(info.Movement.Profile, info.Movement.AirFlow);
+                    profile.UpdateIZAMProfile(info.Movement.Profile, info.Movement.AirFlow);
 
                     zone_Target.AssignIZAM(iZAM, true);
 
