@@ -89,6 +89,14 @@ namespace SAM.Analytical.Tas
                     zonesByKey[n.Trim().ToUpper()] = z;
             }
 
+            // The room extract that must leave the building from the ROOM rather than through the unit,
+            // because the unit is about to become a well-mixed TAS zone and cannot carry a supply and an
+            // extract airstream past each other. Scoped to the design-terminal realization alone - see
+            // Query.DesignTerminalExtractFlattening for what qualifies and why nothing else can.
+            //
+            // Empty on every generic MEP model, which routes nothing into its unit in the first place.
+            HashSet<Guid> guids_FlattenedExtract = Query.DesignTerminalExtractFlattening(adjacencyCluster, out HashSet<Guid> guids_AirHandlingUnit_NoExhaust);
+
             // Pre-resolve everything the loops need so we can:
             //  (a) bulk-remove all to-be-replaced ICs and IZAMs in two calls (was per-iteration → O(N^2)),
             //  (b) avoid re-fetching GetRelatedObjects / GetObjects inside the modify loops.
@@ -128,7 +136,11 @@ namespace SAM.Analytical.Tas
                     izamNamesToReplace.Add(OutwardIZAMName(ahu));
                 }
 
-                if (outward.Count != 0)
+                // Where this unit's extract has been flattened to leave from the rooms instead, the unit has
+                // nothing left to exhaust: writing one anyway would take the same air out of the building
+                // twice and unbalance the unit's zone. The name is still queued for removal above, so a
+                // stale exhaust from an earlier export of the same building does not survive.
+                if (outward.Count != 0 && !guids_AirHandlingUnit_NoExhaust.Contains(ahu.Guid))
                     ahuOutwardMovements[ahu] = outward;
             }
 
@@ -151,6 +163,18 @@ namespace SAM.Analytical.Tas
 
                     if (sFrom == null)
                         continue;
+
+                    // The room's extract leaves the building HERE rather than at the unit. Dropping the
+                    // destination is the whole of the transformation: everything downstream already treats a
+                    // movement with no destination as one leaving from its source zone, so this lands as an
+                    // IZAM on the ROOM's own zone with no source zone and fromOutside = 0 - the shape TAS
+                    // itself authors for a zone discharging to outside - and is named "... TO OUTSIDE",
+                    // which is also the name queued for removal, so a re-export replaces it cleanly.
+                    //
+                    // The movement's flow, profile and source are untouched. Only the SAM model's statement
+                    // that this air passes through the unit is dropped, and only for the export.
+                    if (sTo != null && guids_FlattenedExtract.Contains(sam.Guid))
+                        sTo = null;
 
                     string izamName = string.Format("IZAM {0}", sFrom.Name);
                     izamName = sTo == null ? string.Format("{0} TO OUTSIDE", izamName) : string.Format("{0} TO {1}", izamName, sTo.Name);
@@ -335,14 +359,17 @@ namespace SAM.Analytical.Tas
                     // from a source zone or from outside - TBD.IIZAM has a source zone and target zones and
                     // a fromOutside flag, and no outward direction of any kind. So the target has to be read
                     // from the movement's To endpoint rather than assumed to be the space the movement is
-                    // related to. An EXTRACT movement is "room -> air handling unit": an IZAM on the UNIT's
-                    // zone, sourced from the room. Writing it onto the room's own zone with neither a source
-                    // zone nor fromOutside - which is what a To of null produces, and what every movement
-                    // produced before this - is an IZAM that moves no air at all.
+                    // related to. A movement that names another model object as its destination - "room A ->
+                    // room B" transfer air, or a "room -> air handling unit" extract this export has chosen
+                    // to keep - is an IZAM on THAT object's zone, sourced from this one; writing it onto the
+                    // space it happens to be related to would move the air the wrong way, or nowhere.
                     //
                     // Where To does not resolve to a zone, including where it is null, the target is the
                     // space's own zone, which is exactly the behaviour every existing caller relies on: a
-                    // supply movement's To IS the space, so it resolves to the same zone either way.
+                    // supply movement's To IS the space, so it resolves to the same zone either way, and a
+                    // generic space's outward movement has no destination and leaves from its own zone.
+                    // A Part O extract flattened above arrives here with To already dropped, and so takes
+                    // that same outward path.
                     zone zone_Target = zone;
                     string key_Target = space.Name.Trim().ToUpper();
 

@@ -14,6 +14,7 @@ using AnalyticalCreate = SAM.Analytical.Create;
 using AnalyticalModify = SAM.Analytical.Modify;
 using AnalyticalQuery = SAM.Analytical.Query;
 using AnalyticalZone = SAM.Analytical.Zone;
+using TasQuery = SAM.Analytical.Tas.Query;
 
 namespace SAM.Analytical.Tas.TM59.Tests
 {
@@ -172,6 +173,139 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(spaceAirMovement.From, Is.EqualTo(new ObjectReference(Space(analyticalModel, SpaceName_WetRoom)).ToString()));
             Assert.That(spaceAirMovement.To, Is.EqualTo(new ObjectReference(preparation.AirHandlingUnit).ToString()));
+        }
+
+        // =================================================================================================
+        // 1b. Where the export stops agreeing with the model, and why
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>The export takes the room's extract straight outside, and gives the unit no exhaust.</b>
+        /// <para>
+        /// The SAM model above is right and stays as it is: the extract air physically passes through the
+        /// unit. TAS cannot hold that, because <c>Modify.UpdateIZAMs</c> makes the unit a <b>thermal
+        /// zone</b> and a TAS thermal zone is one well-mixed air node - a supply airstream and an extract
+        /// airstream cannot pass through it without meeting. A licensed A/B measured what the meeting
+        /// costs: the unit's zone ran 3.79 K above outside in the annual mean and its Air Movement Gain
+        /// averaged +755 W, an unstated ~50%-effective heat exchanger in an iteration that specifies none.
+        /// </para>
+        /// <para>
+        /// So <c>room -&gt; unit</c> plus <c>unit -&gt; Outside</c> is written as <c>room -&gt; Outside</c>.
+        /// Both halves are asserted here, because either alone would be wrong: the flattening without the
+        /// exhaust dropped would take the same air out of the building twice.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void TheExport_TakesTheRoomExtractStraightOutside_AndLeavesTheUnitNoExhaust()
+        {
+            AnalyticalModel analyticalModel = Prepared(out PartOIterationPreparation preparation);
+
+            AdjacencyCluster adjacencyCluster = analyticalModel.AdjacencyCluster;
+
+            Movements(adjacencyCluster, SpaceName_WetRoom, preparation.AirHandlingUnit, out List<SpaceAirMovement> _, out List<SpaceAirMovement> extract);
+
+            HashSet<System.Guid> guids_Flattened = TasQuery.DesignTerminalExtractFlattening(adjacencyCluster, out HashSet<System.Guid> guids_AirHandlingUnit);
+
+            //The wet room's extract, and only it.
+            Assert.That(guids_Flattened, Is.EquivalentTo(new[] { extract[0].Guid }));
+
+            //And the unit it used to arrive at loses its exhaust, so that duty leaves the building once.
+            Assert.That(guids_AirHandlingUnit, Is.EquivalentTo(new[] { preparation.AirHandlingUnit.Guid }));
+        }
+
+        /// <summary>
+        /// <b>Only the extract is touched.</b> The supply movement from the unit into the habitable room and
+        /// the transfer air between the rooms are the two shapes that must survive the correction unchanged
+        /// - the first because <c>Outside -&gt; unit -&gt; room</c> is the airflow route being modelled, the
+        /// second because the Approved Document F network is what balances a room that is extracted and not
+        /// supplied. Flattening either would be a different building.
+        /// </summary>
+        [Test]
+        public void TheExport_LeavesTheSupplyAndTheTransferAirAlone()
+        {
+            AnalyticalModel analyticalModel = Prepared(out PartOIterationPreparation preparation);
+
+            AdjacencyCluster adjacencyCluster = analyticalModel.AdjacencyCluster;
+
+            HashSet<System.Guid> guids_Flattened = TasQuery.DesignTerminalExtractFlattening(adjacencyCluster, out HashSet<System.Guid> _);
+
+            string reference_AirHandlingUnit = new ObjectReference(preparation.AirHandlingUnit).ToString();
+
+            int count_Supply = 0;
+            int count_Transfer = 0;
+
+            foreach (SpaceAirMovement spaceAirMovement in adjacencyCluster.GetObjects<SpaceAirMovement>() ?? new List<SpaceAirMovement>())
+            {
+                //Out of the unit into a room - the supply.
+                if (spaceAirMovement.From == reference_AirHandlingUnit)
+                {
+                    Assert.That(guids_Flattened, Does.Not.Contain(spaceAirMovement.Guid), "A supply movement was flattened to outside.");
+
+                    count_Supply++;
+
+                    continue;
+                }
+
+                //Room to room - the Part F transfer network.
+                if (adjacencyCluster.AirMovementEndpoint(spaceAirMovement.From) is Space && adjacencyCluster.AirMovementEndpoint(spaceAirMovement.To) is Space)
+                {
+                    Assert.That(guids_Flattened, Does.Not.Contain(spaceAirMovement.Guid), "A transfer air movement was flattened to outside.");
+
+                    count_Transfer++;
+                }
+            }
+
+            Assert.That(count_Supply, Is.GreaterThan(0), "The fixture carries no supply movement, so nothing was actually checked.");
+            Assert.That(count_Transfer, Is.GreaterThan(0), "The fixture carries no transfer air, so nothing was actually checked.");
+        }
+
+        /// <summary>
+        /// <b>The scope is the design terminal, not the shape and not the name.</b>
+        /// <para>
+        /// This is the same prepared dwelling - the same <c>MVHR-01</c>-style unit, the same
+        /// <c>room -&gt; unit</c> extract movement, the same everything - with the design
+        /// <c>VentilationTerminal</c>s taken off it. Nothing flattens. The gate is the authority
+        /// <c>Modify.AddAirMovementObjects</c> itself uses to choose its design-terminal branch, which is
+        /// the only branch that ever routes a room's air INTO a unit; the generic branch every MEP model
+        /// without design terminals reaches already writes each space's outward movement straight to
+        /// outside and gives its unit nothing to receive.
+        /// </para>
+        /// <para>
+        /// So a generic MEP export cannot reach this correction even when it carries an air handling unit,
+        /// and no existing workflow changes. Take this test away and the scope is a guess.
+        /// </para>
+        /// </summary>
+        [Test]
+        public void TheExport_FlattensNothingWithoutDesignTerminals_SoGenericMEPIsUntouched()
+        {
+            AnalyticalModel analyticalModel = Prepared(out PartOIterationPreparation preparation);
+
+            AdjacencyCluster adjacencyCluster = analyticalModel.AdjacencyCluster;
+
+            //Control: with the terminals on, this model does flatten - so the assertion below is a change of
+            //answer rather than an agreement.
+            Assert.That(TasQuery.DesignTerminalExtractFlattening(adjacencyCluster, out HashSet<System.Guid> _), Is.Not.Empty);
+
+            List<VentilationTerminal> ventilationTerminals = adjacencyCluster.GetObjects<VentilationTerminal>();
+
+            Assert.That(ventilationTerminals, Is.Not.Empty);
+
+            foreach (VentilationTerminal ventilationTerminal in ventilationTerminals)
+            {
+                Assert.That(adjacencyCluster.RemoveObject<VentilationTerminal>(ventilationTerminal.Guid), Is.True);
+            }
+
+            //The unit and the room -> unit extract movement are both still there. Only the authority is gone.
+            Assert.That(adjacencyCluster.GetObjects<AirHandlingUnit>(), Is.Not.Empty);
+
+            Movements(adjacencyCluster, SpaceName_WetRoom, preparation.AirHandlingUnit, out List<SpaceAirMovement> _, out List<SpaceAirMovement> extract);
+
+            Assert.That(extract.Count, Is.EqualTo(1));
+
+            HashSet<System.Guid> guids_Flattened = TasQuery.DesignTerminalExtractFlattening(adjacencyCluster, out HashSet<System.Guid> guids_AirHandlingUnit);
+
+            Assert.That(guids_Flattened, Is.Empty, "A model with no design terminals was flattened, so generic MEP exports are affected.");
+            Assert.That(guids_AirHandlingUnit, Is.Empty, "A generic air handling unit lost its exhaust.");
         }
 
         /// <summary>
