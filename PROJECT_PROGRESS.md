@@ -1,12 +1,156 @@
 # Project Progress
 
 ## Branch
-`feature/parto-base-mvhr` (off `sow/2026-Q3` at `1b3add6a`, i.e. with **PR #43 merged**). No PR opened yet.
+`feature/parto-base-mvhr` (off `sow/2026-Q3` at `1b3add6a`, i.e. with **PR #43 merged**).
+**PR #44 open against `sow/2026-Q3`.** Companion PR [SAM-BIM/SAM#77](https://github.com/SAM-BIM/SAM/pull/77)
+carries the matching SAM-side changes; the two are meant to land together.
 
 ## Last updated
-2026-08-27 - an inter-zone air movement is a MASS flow rate, and this repo now writes one.
+2026-08-28 - second-round Codex fix: a stale AHU→Outside exhaust IZAM is now queued for removal
+unconditionally, independent of whether this run still builds a replacement.
 
 ## Current status (this session)
+
+### The final architecture, this repo's half of it
+
+**SAM physical model (`SAM.Analytical`, unchanged by this repo): four legs, always.**
+```
+Outside -> AHU (generic Base MVHR unit)
+AHU     -> supply room(s)
+extract room(s) -> AHU
+AHU     -> Outside
+```
+Every design-terminal-served room is supplied from the unit, or extracted back to it, or both; the
+dwelling's own internal transfer air closes each room's balance; the unit is a full four-legged node like
+any other MEP system. This is the truth `SAM.Analytical.Modify.AddAirMovementObjects` writes and it is
+never altered for export - see [SAM-BIM/SAM#77](https://github.com/SAM-BIM/SAM/pull/77) for that side of
+the work, most recently the "one Base MVHR system per assessed dwelling" fix (`PartFCalculator` sizes each
+dwelling independently, so this iteration now builds one generic system/AHU **per assessed dwelling zone**,
+never one shared system across independent dwellings).
+
+**TAS export (`SAM_Tas`, this repo): the extract leg is flattened, export-only.**
+```
+Outside -> MVHR
+MVHR    -> supply room(s)
+extract room(s) -> Outside          (flattened - see below)
+```
+`Modify.UpdateIZAMs`/`Query.DesignTerminalExtractFlattening` write a design-terminal room's extract as
+`room -> Outside` directly rather than `room -> unit` plus `unit -> Outside`, and give the unit **no**
+exhaust for that duty. The reason is TAS-specific and does not touch the SAM model: `Modify.UpdateIZAMs`
+represents the AHU as one well-mixed TAS thermal zone, which cannot hold a supply airstream and an extract
+airstream passing through it without them mixing - a licensed A/B measured what that mixing costs at
++755 W of unstated heat-recovery-shaped gain on the unit's own zone. Flattening removes the meeting point;
+every node still conserves exactly, because the same air still leaves the building exactly once.
+
+### This session's fix - second-round Codex P1 (stale AHU exhaust)
+
+**Before this fix**, `Modify.UpdateIZAMs` only queued an air handling unit's outward "IZAM `<AHU>` TO
+OUTSIDE" name for removal from *inside* the loop that walks the unit's *current* outward
+`SpaceAirMovement`s. A TBD written by an earlier export - back when the unit still had its own exhaust,
+before this session's flattening, or before any other topology change removed it - carries that IZAM. A
+re-export of a model where the unit no longer builds one never queued it for removal, so the stale exhaust
+survived: unmatched outflow on the unit's zone, which TAS refuses to simulate.
+
+**The fix**: the outward name is now queued unconditionally, for every AHU this run is about to process
+(every one carrying an `AirHandlingUnitAirMovement`) - independent of whether a current replacement
+movement exists. An AHU this run does not touch at all (no `AirHandlingUnitAirMovement`) still contributes
+nothing to the removal set, so a modeller-authored unit and its own hand-built IZAMs are untouched.
+
+**Extracted for testability**: the resolution step (`ahuMovements` / `ahuOutwardMovements` /
+`icNamesToReplace` / `izamNamesToReplace`) is pulled out of `Modify.UpdateIZAMs` into a new public
+`Modify.ResolveAirHandlingUnitMovements`, pure `SAM.Analytical` with no TBD/COM type anywhere in it - so it
+runs COM-free, with no licence. `ResolveAirHandlingUnitMovementsTests.cs` (new, 4 tests) pins: an AHU with
+no current outward movement still gets its stale name queued (the defect); an AHU with a current outward
+movement still gets it queued and carried forward (no regression); an AHU with no
+`AirHandlingUnitAirMovement` at all is not processed (the "don't touch modeller AHUs" guard); a flattened
+AHU (`guids_AirHandlingUnit_NoExhaust`) still queues its name but does not write a replacement.
+
+`SAM.Analytical.Tas.TM59.Tests`: **649 passed, 0 failed** (was 645, +4).
+
+### Keeping the already-fixed `room -> AHU` stale-name removal intact
+
+The first-round fix - queuing BOTH the pre-flattening `"IZAM <room> TO <unit>"` name and the current
+`"IZAM <room> TO OUTSIDE"` name before nulling the movement's destination, so either vintage of a room's
+own extract is replaced cleanly on re-export - is untouched by this session's change. Both stale-removal
+paths (the room's own extract, and now the unit's own exhaust) are queued unconditionally, independent of
+each other and of the current topology, which is what re-exporting an old TBD onto a model built by ANY
+prior commit on this branch now requires.
+
+### Licensed status - `A0.sam` retired as the Base MVHR whole-model acceptance fixture
+
+Re-ran the licensed acceptance against the original `C:\TasOut\v40\A0.sam` fixture on the real TAS
+harness, exactly as the "Original A0 Final Acceptance" section of `SAM/documentation/PartO-TAS-VALIDATION.md`
+describes. **The original acceptance assessed the WHOLE model - all four zones (Flat 1, Corridor, Flat 2,
+Flat 3) - confirmed straight from the harness source, not assumed.** Under the SAM-side "one Base MVHR
+system per assessed dwelling" fix, that same whole-model run now **refuses outright**, and so does every
+one of A0's three flats assessed in isolation:
+
+| dwelling | own net design-duty imbalance | result assessed alone |
+|---|---|---|
+| Flat 1 (`Studio 1_0`, `Bathroom_2`) | -19.5 l/s | refuses |
+| Flat 2 (`Bedroom 2_3`, `Living Kitchen_4`, `Ensuite_5`) | +26 l/s | refuses |
+| Flat 3 (`Bedroom 2_6`, `Kitchen_7`, `Ensuite_8`) | -6.5 l/s | refuses |
+
+**This is a fixture defect the fix correctly exposes, not a code regression.** The three imbalances sum to
+exactly zero only across the whole building - the fingerprint of the exact bug being fixed: the old
+single-shared-system code let one flat's surplus transfer air balance a different flat's deficit through
+whatever adjacency happened to connect them, and the "156/156 l/s, 0 W gain, 0 residual" result the original
+acceptance recorded was resting on that invalid cross-dwelling transfer. Confirmed directly, twice:
+
+- **Adjacency is not the cause.** Flat 2's own three rooms are directly wall-connected to each other
+  (`Bedroom 2_3 <-> Living Kitchen_4 <-> Ensuite_5`) with no need to route through `Corridor_1` or another
+  flat - so a self-contained transfer route exists in principle. It still refuses, because `Bedroom 2_3`
+  alone (45.5 l/s supply, no extract) needs to shed more air internally than the other two rooms can sink
+  (19.5 l/s of combined extract capacity), a **26 l/s deficit intrinsic to this flat's own Part F sizing**,
+  independent of any code scope.
+- **Every flat fails the same way**, each for its own room-level reason (`Modify.RefuseUnbalancedAirMovement`
+  names the exact rooms and residuals in every case) - there is no dwelling-scoping bug hiding behind one
+  passing case and two failing ones; the fixture's Part F terminal data was simply never authored (or
+  re-sized) to balance per dwelling, only in aggregate.
+
+**Disposition.** `A0.sam` can no longer serve as the licensed acceptance fixture for Base MVHR's
+per-dwelling behaviour - not because the fix is wrong, but because doing so would require either (a)
+re-authoring the fixture's per-flat Part F terminal duties to actually balance, which is design work on the
+fixture, not this PR, or (b) letting transfer air cross dwelling boundaries again, which would silently
+reintroduce the bug this PR closes. Production logic was **not** changed to make `A0.sam` pass. The
+multi-dwelling seam this fixture can no longer prove is instead pinned by
+[SAM-BIM/SAM#77](https://github.com/SAM-BIM/SAM/pull/77)'s own automated `SAM.Tests` (a real, independently
+balanced two-dwelling fixture built for exactly this purpose: `TwoAssessedDwellings_EachGetsItsOwnVentilationSystemAndAirHandlingUnit`
+and its three siblings). `A0.sam`'s **Iteration 1b** (Base Natural Ventilation) route is untouched and was
+re-confirmed live: `1b OPEN/NIGHT` still reproduces the historic **16690/78840** figure exactly, because 1b
+never reaches `PrepareBaseMVHR` at all. This session's own fix (the stale AHU exhaust) is a pure `SAM_Tas`
+export-path change, unaffected by any of the above, and is fully pinned by the COM-free
+`ResolveAirHandlingUnitMovementsTests`.
+
+Evidence: `C:\TasOut\p1a4\` (whole-model refusal, `zonespaces` adjacency dump, 1b regression log) and
+`C:\TasOut\single\` (Flat 1/Flat 2 isolated re-runs). Full detail belongs in
+`SAM/documentation/PartO-TAS-VALIDATION.md`, not duplicated here.
+
+### Current risks / limitations, carried forward unchanged
+
+- `Modify.Simulate` returns `true` even for a simulation TAS refused to run (it only waits for the TSD to
+  unlock) - still not fixed, still the reason every licensed check here reads the TBD/TSD directly rather
+  than trusting a boolean.
+- No manufacturer MVHR unit, no heat-recovery efficiency, no summer bypass, no cooling/tempering, no 23°C
+  MVHR supply setpoint - Iteration 1a states the topology and duty a real unit will have to meet;
+  selecting one is Iteration 2.
+- The legacy `InternalCondition.VentilationProfileName` / `ticV` double-count risk that a previous Codex
+  round flagged is now closed on the SAM side by an explicit refusal in `PreparePartOIteration` (a served
+  space carrying a Ventilation profile that actually resolves in the model's library refuses preparation
+  rather than risking both `ticV` and the directional IZAM realizing the same air) - see
+  [SAM-BIM/SAM#77](https://github.com/SAM-BIM/SAM/pull/77).
+
+### Exact next step
+
+Merged: SAM#77 then SAM_Tas#44, both CI-green, full regression suites green
+(`SAM.Tests` 1479/1479, `SAM.Analytical.Tas.TM59.Tests` 649/649), licensed status disposed as above. Do not
+start Iteration 2 (manufacturer MVHR selection) next - a fresh, genuinely per-dwelling-balanced fixture
+would be a reasonable follow-up if a full multi-dwelling licensed run is ever wanted, but it is not a
+blocker for anything currently planned.
+
+---
+
+## Previous session (2026-08-27, mass flow)
 The accepted Iteration 1a recorded a defect it deliberately did not fix: **TAS reads an inter-zone air
 movement's stored flow as a mass flow in kg/s, and SAM writes a volume flow in m3/s.** That is now closed
 in this repo, and only in this repo.
