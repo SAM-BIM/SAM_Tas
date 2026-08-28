@@ -530,7 +530,17 @@ namespace SAM.Analytical.Tas.TM59.Tests
             //that gains air it never loses - so the preparation refuses instead of producing one.
             AddPartition(adjacencyCluster, SpaceName_Habitable, SpaceName_WetRoom);
 
-            adjacencyCluster.AddObject(new AnalyticalZone(ZoneName));
+            AnalyticalZone zone = new AnalyticalZone(ZoneName);
+            adjacencyCluster.AddObject(zone);
+
+            //Related to every space this fixture builds, matching how a real model's own zoning relates a
+            //dwelling zone to its rooms - Modify.PrepareBaseMVHR (SAM.Analytical) partitions the assessed
+            //scope into one Base MVHR system per dwelling zone using exactly this relation
+            //(Query.PartFDwellingZones plus the zone -> space relation).
+            foreach (Space space_Existing in adjacencyCluster.GetSpaces())
+            {
+                adjacencyCluster.AddRelation(zone, space_Existing);
+            }
 
             AnalyticalModel result = new AnalyticalModel("Part O Base MVHR Dwelling", null, null, null, adjacencyCluster);
 

@@ -100,49 +100,14 @@ namespace SAM.Analytical.Tas
             // Pre-resolve everything the loops need so we can:
             //  (a) bulk-remove all to-be-replaced ICs and IZAMs in two calls (was per-iteration → O(N^2)),
             //  (b) avoid re-fetching GetRelatedObjects / GetObjects inside the modify loops.
-            Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement> ahuMovements = new Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement>();
-            Dictionary<AirHandlingUnit, List<SpaceAirMovement>> ahuOutwardMovements = new Dictionary<AirHandlingUnit, List<SpaceAirMovement>>();
-            HashSet<string> icNamesToReplace = new HashSet<string>();
-            HashSet<string> izamNamesToReplace = new HashSet<string>();
-
-            foreach (AirHandlingUnit ahu in airHandlingUnits)
-            {
-                AirHandlingUnitAirMovement m = adjacencyCluster.GetRelatedObjects<AirHandlingUnitAirMovement>(ahu)?.FirstOrDefault();
-                if (m == null)
-                    continue;
-                ahuMovements[ahu] = m;
-                if (!string.IsNullOrEmpty(m.Name))
-                {
-                    icNamesToReplace.Add(m.Name);
-                    izamNamesToReplace.Add(string.Format("IZAM {0} FROM OUTSIDE", m.Name));
-                }
-
-                // The unit's own movements OUT of the building - its exhaust, carrying away the extract air
-                // it has drawn out of the rooms. These are movements of the UNIT rather than of a space, so
-                // the space loop below never reaches them, and without them the unit's zone gains the whole
-                // extract duty and never loses it. TAS refuses to simulate such a zone.
-                List<SpaceAirMovement> outward = new List<SpaceAirMovement>();
-                ObjectReference objectReference_AHU = new ObjectReference(ahu);
-
-                foreach (SpaceAirMovement spaceAirMovement in adjacencyCluster.GetRelatedObjects<SpaceAirMovement>(ahu) ?? new List<SpaceAirMovement>())
-                {
-                    if (spaceAirMovement == null || !string.IsNullOrWhiteSpace(spaceAirMovement.To))
-                        continue;
-
-                    if (objectReference_AHU != Core.Convert.ComplexReference<ObjectReference>(spaceAirMovement.From))
-                        continue;
-
-                    outward.Add(spaceAirMovement);
-                    izamNamesToReplace.Add(OutwardIZAMName(ahu));
-                }
-
-                // Where this unit's extract has been flattened to leave from the rooms instead, the unit has
-                // nothing left to exhaust: writing one anyway would take the same air out of the building
-                // twice and unbalance the unit's zone. The name is still queued for removal above, so a
-                // stale exhaust from an earlier export of the same building does not survive.
-                if (outward.Count != 0 && !guids_AirHandlingUnit_NoExhaust.Contains(ahu.Guid))
-                    ahuOutwardMovements[ahu] = outward;
-            }
+            ResolveAirHandlingUnitMovements(
+                adjacencyCluster,
+                airHandlingUnits,
+                guids_AirHandlingUnit_NoExhaust,
+                out Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement> ahuMovements,
+                out Dictionary<AirHandlingUnit, List<SpaceAirMovement>> ahuOutwardMovements,
+                out HashSet<string> icNamesToReplace,
+                out HashSet<string> izamNamesToReplace);
 
             // Resolved space-air-movement metadata, keyed by Space so the loop is O(spaces).
             Dictionary<Space, List<SpaceMovementInfo>> spaceMovements = new Dictionary<Space, List<SpaceMovementInfo>>();
@@ -423,6 +388,95 @@ namespace SAM.Analytical.Tas
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Resolves, from the SAM model alone, what <see cref="UpdateIZAMs(TBDDocument, AdjacencyCluster)"/>
+        /// needs to know about each air handling unit before it touches the TBD file: its own supply/extract
+        /// movement, its current outward (unit-to-outside) movements if any, and the internal-condition and
+        /// IZAM names a re-export must remove before writing fresh ones.
+        /// <para>
+        /// Pure SAM.Analytical - no TBD/COM type appears anywhere in this method - which is what lets it be
+        /// unit-tested with no TAS licence, install or COM server.
+        /// </para>
+        /// <para>
+        /// <b>The outward IZAM name is queued unconditionally</b>, for every air handling unit this run is
+        /// about to process (every one carrying an <see cref="AirHandlingUnitAirMovement"/>), independent of
+        /// whether a current outward <see cref="SpaceAirMovement"/> exists for it. A TBD written by an
+        /// earlier export can carry an "IZAM &lt;AHU&gt; TO OUTSIDE" from a topology this run no longer
+        /// builds - for example after the unit's extract was flattened to leave from the rooms instead - and
+        /// that stale movement would otherwise survive a re-export, adding unmatched outflow to the unit's
+        /// zone that TAS refuses to simulate. An air handling unit this run does not process at all - no
+        /// <see cref="AirHandlingUnitAirMovement"/>, so nothing of this export's is on it - contributes
+        /// nothing to the removal set, so a modeller-authored unit and its own hand-built IZAMs are left
+        /// alone.
+        /// </para>
+        /// </summary>
+        public static void ResolveAirHandlingUnitMovements(
+            AdjacencyCluster adjacencyCluster,
+            IEnumerable<AirHandlingUnit> airHandlingUnits,
+            HashSet<Guid> guids_AirHandlingUnit_NoExhaust,
+            out Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement> ahuMovements,
+            out Dictionary<AirHandlingUnit, List<SpaceAirMovement>> ahuOutwardMovements,
+            out HashSet<string> icNamesToReplace,
+            out HashSet<string> izamNamesToReplace)
+        {
+            ahuMovements = new Dictionary<AirHandlingUnit, AirHandlingUnitAirMovement>();
+            ahuOutwardMovements = new Dictionary<AirHandlingUnit, List<SpaceAirMovement>>();
+            icNamesToReplace = new HashSet<string>();
+            izamNamesToReplace = new HashSet<string>();
+
+            if (adjacencyCluster == null || airHandlingUnits == null)
+            {
+                return;
+            }
+
+            guids_AirHandlingUnit_NoExhaust ??= new HashSet<Guid>();
+
+            foreach (AirHandlingUnit ahu in airHandlingUnits)
+            {
+                if (ahu == null)
+                    continue;
+
+                AirHandlingUnitAirMovement m = adjacencyCluster.GetRelatedObjects<AirHandlingUnitAirMovement>(ahu)?.FirstOrDefault();
+                if (m == null)
+                    continue;
+                ahuMovements[ahu] = m;
+                if (!string.IsNullOrEmpty(m.Name))
+                {
+                    icNamesToReplace.Add(m.Name);
+                    izamNamesToReplace.Add(string.Format("IZAM {0} FROM OUTSIDE", m.Name));
+                }
+
+                // Queued unconditionally - see the summary above - rather than only when the loop below
+                // still finds a current outward movement to write.
+                izamNamesToReplace.Add(OutwardIZAMName(ahu));
+
+                // The unit's own movements OUT of the building - its exhaust, carrying away the extract air
+                // it has drawn out of the rooms. These are movements of the UNIT rather than of a space, so
+                // the space loop below never reaches them, and without them the unit's zone gains the whole
+                // extract duty and never loses it. TAS refuses to simulate such a zone.
+                List<SpaceAirMovement> outward = new List<SpaceAirMovement>();
+                ObjectReference objectReference_AHU = new ObjectReference(ahu);
+
+                foreach (SpaceAirMovement spaceAirMovement in adjacencyCluster.GetRelatedObjects<SpaceAirMovement>(ahu) ?? new List<SpaceAirMovement>())
+                {
+                    if (spaceAirMovement == null || !string.IsNullOrWhiteSpace(spaceAirMovement.To))
+                        continue;
+
+                    if (objectReference_AHU != Core.Convert.ComplexReference<ObjectReference>(spaceAirMovement.From))
+                        continue;
+
+                    outward.Add(spaceAirMovement);
+                }
+
+                // Where this unit's extract has been flattened to leave from the rooms instead, the unit has
+                // nothing left to exhaust: writing one anyway would take the same air out of the building
+                // twice and unbalance the unit's zone. The name is still queued for removal above, so a
+                // stale exhaust from an earlier export of the same building does not survive.
+                if (outward.Count != 0 && !guids_AirHandlingUnit_NoExhaust.Contains(ahu.Guid))
+                    ahuOutwardMovements[ahu] = outward;
+            }
         }
 
         /// <summary>
