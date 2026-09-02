@@ -1,15 +1,113 @@
 # Project Progress
 
 ## Branch
-`feature/parto-base-mvhr` (off `sow/2026-Q3` at `1b3add6a`, i.e. with **PR #43 merged**).
-**PR #44 open against `sow/2026-Q3`.** Companion PR [SAM-BIM/SAM#77](https://github.com/SAM-BIM/SAM/pull/77)
-carries the matching SAM-side changes; the two are meant to land together.
+`feature/parto-iteration2b-tas-warm-start`, off `sow/2026-Q3` at **`78f7afbe`** (the merge of PR #44).
+
+Companion PRs: `SAM-BIM/SAM#90` and `SAM-BIM/SAM_UI#79` (the capacity envelope) land first; SAM_UI's
+warm-start PR depends on **this** one.
 
 ## Last updated
-2026-08-28 - second-round Codex fix: a stale AHU→Outside exhaust IZAM is now queued for removal
-unconditionally, independent of whether this run still builds a replacement.
+2026-09-02 - a workflow run can start from an already-converted canonical TBD instead of converting the
+same geometry again.
 
-## Current status (this session)
+## Latest (2026-09-02): starting a run from a canonical TBD
+
+**Status: implemented and tested; PR open against `sow/2026-Q3`.**
+
+### Why it was needed - measured, not assumed
+
+An Approved Document O Iteration 2B optimisation runs the same thermal case ten times over ten designs, and
+between rounds only the **ventilation** state changes: the design airflow on each terminal, the balanced
+system duty, and the transfer/mechanical network `PreparePartOIteration` rebuilds from them. The geometry,
+zones, surfaces, apertures, constructions and the shading calculation are identical every round.
+
+The licensed acceptance run's own timing CSV says how much that is worth. One round of
+`SAM_zoningAM-CIBSEfutureZ1.sam`:
+
+| Step | ms |
+| --- | --- |
+| Opening TBD file | 4 937 |
+| Updating Weather Data | 28 |
+| Updating HDD and CDD Day Types | 99 |
+| Opening T3D file | 10 174 |
+| Importing gbXML | 43 |
+| Updating T3D file | 345 |
+| **T3D to TBD -> Shading** | **26 011** |
+| *conversion subtotal* | **41 638** |
+| Reusing Aperture Definitions | 1 345 |
+| Updating Aperture Types | 2 216 |
+| Updating Ids | 3 779 |
+| Updating Zones | 1 872 |
+| Add IZAMs | 620 |
+| Setting Adiabatic | 1 955 |
+| Updating Building Elements | 978 |
+| **Simulating Model** | **3 622** |
+| Adding Results | 5 033 |
+| other | ~1 400 |
+| **TOTAL** | **64 247** |
+
+**The full-year TAS simulation is 3.6 s of a 64.2 s round.** The conversion is 41.6 s - 65% - and with the
+two aperture steps that only the gbXML route needs, 45.2 s, i.e. **70%**.
+
+### What was added
+
+`WorkflowSettings.Path_TBD_Canonical`. Where it is set, `WorkflowCalculator.Calculate` copies that TBD to
+`Path_TBD` and **skips the conversion block only** - everything after it runs exactly as it always does:
+the adiabatic and building-element updates, `Modify.UpdateIds` (which stamps the TAS zone identities the
+assessment resolves results through), `UpdateZones`, the zone groups, `UpdateIZAMs`, sizing, a **real**
+full-year simulation, and the results.
+
+**Nothing is reimplemented.** This is the same method body entered with a TBD that already exists, which is
+what makes the warm-started and full paths structurally equivalent rather than equivalent by inspection.
+The conversion block was already gated on `Path_gbXML`, so the change is a copy, a step count, and three
+guards.
+
+### The guards
+
+- **Both `Path_gbXML` and `Path_TBD_Canonical`** - contradictory instructions ("convert the geometry" /
+  "the geometry is already converted"). Refused, with its reason, **before** the setup that deletes an
+  existing T3D and TBD.
+- **A canonical that is not on disk** - refused by name rather than silently falling through to a
+  conversion the caller did not ask for. Whether to fall back is the caller's decision.
+- **A canonical that is the run's own TBD** - refused, because the copy would overwrite its own source and
+  every later round would then start from whatever the last one left behind. Compared on full,
+  case-insensitive paths, so a differently spelled route to the same file is caught too.
+
+Each refusal fires `Ended` after `Started`, which the pre-existing null-input return does not - a listener
+left waiting on a run that announced itself is a small defect, and pairing them is free here.
+
+### Files
+
+| File | Change |
+| --- | --- |
+| `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowSettings.cs` | `Path_TBD_Canonical`, carried through the copy constructor and the JSON round trip. |
+| `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs` | The copy, its step count, and the three guards. |
+| `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/WorkflowCanonicalTBDTests.cs` | New - 6 tests. |
+
+### Validation
+
+- `SAM_Tas.sln` builds clean (MSBuild; the COM references need the .NET Framework MSBuild).
+- `SAM.Analytical.Tas.TM59.Tests`: **655 passed, 0 failed** (649 baseline + 6 new).
+- The 6 new tests cover the three guards - including the path-spelling variant of the self-overwrite one -
+  plus a refused run reporting only its own reason, and the setting surviving a copy and a JSON round trip.
+- No TAS COM is needed: every guard returns before anything touches a TBD type, the same way
+  `WorkflowCalculatorTests` works.
+
+### What is deliberately NOT decided here
+
+Whether a canonical TBD is still **valid** for the current model. This class cannot know what changed since
+it was made; the caller proves compatibility and falls back to the full path where it cannot - see
+`SAM_UI`'s `PartOCanonicalTBD`. What this half guarantees is that the canonical file is only ever read.
+
+### Issues / blockers
+
+- None known.
+
+### Next step
+
+- Merge order: `SAM-BIM/SAM#90` -> `SAM-BIM/SAM_UI#79` -> **this** -> SAM_UI's warm-start PR.
+
+## Superseded (2026-08-28): the Part O base MVHR half - merged as PR #44
 
 ### The final architecture, this repo's half of it
 

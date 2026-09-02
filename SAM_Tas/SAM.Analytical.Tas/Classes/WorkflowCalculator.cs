@@ -149,6 +149,18 @@ namespace SAM.Analytical.Tas
             // already-cancelled token (the WorkflowTBD pre-step shares one) must not lose those files.
             CancellationToken.ThrowIfCancellationRequested();
 
+            // "Convert the geometry" and "the geometry is already converted" are contradictory
+            // instructions, and choosing between them here would be this class deciding something the
+            // caller has to. Refused BEFORE any file is touched.
+            if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_TBD_Canonical) && !string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
+            {
+                notes.Add("This run was given both a gbXML to convert and a canonical TBD to start from, which are contradictory instructions - one says the geometry must be converted, the other that it already is. Nothing was run. Supply one or the other.");
+
+                Ended?.Invoke(this, new System.EventArgs());
+
+                return null;
+            }
+
             AnalyticalModel result = new AnalyticalModel(analyticalModel);
 
             string directory = System.IO.Path.GetDirectoryName(WorkflowSettings.Path_TBD);
@@ -180,6 +192,13 @@ namespace SAM.Analytical.Tas
             {
                 //Nine gbXML-only steps, plus "Reusing Aperture Definitions".
                 count = count + 10;
+            }
+
+            //One step for the clone, so a warm-started run's progress reports what it actually does rather
+            //than counting a conversion it is deliberately not performing.
+            if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_TBD_Canonical))
+            {
+                count++;
             }
 
             if (WorkflowSettings.UpdateZones)
@@ -227,6 +246,57 @@ namespace SAM.Analytical.Tas
             bool hasWeatherData = false;
 
             Core.Tas.Modify.SetProjectDirectory(directory);
+
+            // ---- The warm start: this round's TBD is a COPY of the canonical one -------------------------
+            //
+            // A file copy, and deliberately nothing cleverer. The canonical TBD is opened only by the
+            // framework's own copy, never by this process, so it cannot be mutated by a round however that
+            // round then fails - which is what lets every round start from the same known state instead of
+            // from its predecessor's leftovers.
+            //
+            // The conversion block below is skipped because a canonical TBD already carries every product
+            // of it, and everything AFTER it still runs on the copy - see
+            // WorkflowSettings.Path_TBD_Canonical.
+            if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_TBD_Canonical))
+            {
+                if (!System.IO.File.Exists(WorkflowSettings.Path_TBD_Canonical))
+                {
+                    notes.Add(string.Format("The canonical TBD '{0}' this run was to start from does not exist, so there is nothing to warm start from and nothing was run. Convert the model in full instead.", WorkflowSettings.Path_TBD_Canonical));
+
+                    Ended?.Invoke(this, new System.EventArgs());
+
+                    return null;
+                }
+
+                //Refused rather than resolved: a canonical path that IS the target would have the copy
+                //below overwrite its own source, and every later round would then start from whatever the
+                //last one left behind - the cumulative mutation the canonical baseline exists to prevent.
+                if (string.Equals(System.IO.Path.GetFullPath(WorkflowSettings.Path_TBD_Canonical), System.IO.Path.GetFullPath(WorkflowSettings.Path_TBD), System.StringComparison.OrdinalIgnoreCase))
+                {
+                    notes.Add(string.Format("The canonical TBD and this run's TBD are the same file ('{0}'), so warm starting would write to the baseline every later run depends on. Nothing was run - give the run its own TBD path.", WorkflowSettings.Path_TBD));
+
+                    Ended?.Invoke(this, new System.EventArgs());
+
+                    return null;
+                }
+
+                Step("Copying Canonical TBD");
+
+                try
+                {
+                    System.IO.File.Copy(WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD, true);
+                }
+                catch (System.Exception exception)
+                {
+                    notes.Add(string.Format("The canonical TBD '{0}' could not be copied to '{1}', so this run has no TBD to work on and nothing was run: {2}", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD, exception.Message));
+
+                    Ended?.Invoke(this, new System.EventArgs());
+
+                    return null;
+                }
+
+                notes.Add(string.Format("This run started from the canonical TBD '{0}', copied to '{1}'. The geometry, constructions, apertures and shading calculation it carries were not recomputed; the ventilation state, the zone identities and the full-year simulation were.", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD));
+            }
 
             if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
             {
