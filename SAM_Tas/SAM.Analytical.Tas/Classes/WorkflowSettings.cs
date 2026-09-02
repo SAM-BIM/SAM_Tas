@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Text.Json.Nodes;
@@ -13,6 +13,50 @@ namespace SAM.Analytical.Tas
         public string Path_TBD { get; set; } = null;
 
         public string Path_gbXML { get; set; } = null;
+
+        /// <summary>
+        /// An already-converted TBD to <b>start this run from</b>, instead of converting the geometry
+        /// again. Copied to <see cref="Path_TBD"/> before anything else runs; never itself written to.
+        ///
+        /// <para><b>What it is for</b></para>
+        /// <para>
+        /// An Approved Document O Iteration 2B optimisation runs the same thermal case ten times over ten
+        /// designs, and between rounds only the <i>ventilation</i> state changes - the design airflow on
+        /// each terminal, the balanced system duty, and the transfer/mechanical network rebuilt from them.
+        /// The geometry, zones, surfaces, apertures, constructions and the shading calculation are
+        /// identical every round, and on a real model they are the great majority of the work: measured on
+        /// the licensed acceptance model, the conversion is 41.6 s of a 64.2 s round while the full-year
+        /// simulation itself is 3.6 s.
+        /// </para>
+        /// <para>
+        /// So a caller converts <b>once</b>, keeps that TBD as its canonical baseline, and hands it here for
+        /// every later round.
+        /// </para>
+        ///
+        /// <para><b>What is still done, and why that is the whole point</b></para>
+        /// <para>
+        /// Everything after the conversion runs exactly as it always does - the adiabatic and building
+        /// element updates, <c>Modify.UpdateIds</c> (which stamps the TAS zone identities the assessment
+        /// resolves results through), <c>UpdateZones</c>, the zone groups, <c>UpdateIZAMs</c>, sizing, a
+        /// <b>real</b> full-year simulation, and the results. Nothing is skipped except the conversion of
+        /// inputs that did not change, and nothing is reimplemented: this is the same method body, entered
+        /// with a TBD that already exists.
+        /// </para>
+        ///
+        /// <para><b>Set this or <see cref="Path_gbXML"/>, never both</b></para>
+        /// <para>
+        /// They are contradictory instructions - one says "convert the geometry", the other says "the
+        /// geometry is already converted" - so a run given both is refused rather than silently preferring
+        /// one. It is the caller's job to decide, and a caller that cannot show its canonical TBD is still
+        /// valid for the current model must use the full conversion.
+        /// </para>
+        /// <para>
+        /// <b>Whether the canonical TBD is still valid is not decided here.</b> This class cannot know what
+        /// changed in the model since it was made; the caller proves compatibility and falls back to the
+        /// full path where it cannot. What this does guarantee is that the canonical file is only ever read.
+        /// </para>
+        /// </summary>
+        public string Path_TBD_Canonical { get; set; } = null;
 
         public Weather.WeatherData WeatherData { get; set; } = null;
 
@@ -58,6 +102,7 @@ namespace SAM.Analytical.Tas
             {
                 Path_TBD = workflowSettings.Path_TBD;
                 Path_gbXML = workflowSettings.Path_gbXML;
+                Path_TBD_Canonical = workflowSettings.Path_TBD_Canonical;
                 WeatherData = workflowSettings.WeatherData;
                 DesignDays_Heating = workflowSettings.DesignDays_Heating;
                 DesignDays_Cooling = workflowSettings.DesignDays_Cooling;
@@ -87,6 +132,11 @@ namespace SAM.Analytical.Tas
             if(jObject.ContainsKey("Path_TBD"))
             {
                 Path_TBD = jObject["Path_TBD"]?.GetValue<string>() ?? null;
+            }
+
+            if (jObject.ContainsKey("Path_TBD_Canonical"))
+            {
+                Path_TBD_Canonical = jObject["Path_TBD_Canonical"]?.GetValue<string>() ?? null;
             }
 
             if (jObject.ContainsKey("Path_gbXML"))
@@ -215,6 +265,11 @@ namespace SAM.Analytical.Tas
             if(Path_TBD != null)
             {
                 jObject.Add("Path_TBD", Path_TBD);
+            }
+
+            if (Path_TBD_Canonical != null)
+            {
+                jObject.Add("Path_TBD_Canonical", Path_TBD_Canonical);
             }
 
             if (Path_gbXML != null)
