@@ -175,38 +175,69 @@ namespace SAM.Analytical.Tas
             if (izamNamesToReplace.Count > 0)
                 RemoveIZAMs(building, izamNamesToReplace);
 
+            // Which unit already has a plant zone in this file, and which needs one built. Resolved once,
+            // before the loop, from the zones as they stand now - so a warm-started round, which opens a copy
+            // of a canonical TBD this method has already run over, updates the three zones it finds instead of
+            // appending three more beside them. See ResolvePlantZoneReuse for the two authorities it uses.
+            Dictionary<Guid, PlantZoneCandidate> plantZoneReuse = ResolvePlantZoneReuse(
+                airHandlingUnits,
+                PlantZoneCandidates(zonesList),
+                spaces.ConvertAll(x => x?.Name));
+
             foreach (AirHandlingUnit airHandlingUnit in airHandlingUnits)
             {
                 if (!ahuMovements.TryGetValue(airHandlingUnit, out AirHandlingUnitAirMovement airHandlingUnitAirMovement) || airHandlingUnitAirMovement == null)
                     continue;
 
-                AdjacencyCluster adjacencyCluster_Temp = Create.AdjacencyCluster(elevation, 3, height, 3);
-                elevation -= height - 1;
+                zone zone;
 
-                int zoneCountBefore = zonesList.Count;
-                Update(building, adjacencyCluster_Temp, Analytical.Query.DefaultMaterialLibrary(), true);
-
-                Space space = adjacencyCluster_Temp.GetSpaces().FirstOrDefault();
-                if (space == null || string.IsNullOrWhiteSpace(space.Name))
-                    continue;
-
-                // Refresh local zone tracking. Update() appends one new zone — pick it up and add to the dict
-                // without doing a per-iteration zones.Match scan over hundreds of zones.
-                zonesList = building.Zones() ?? new List<zone>();
-                for (int i = zoneCountBefore; i < zonesList.Count; i++)
+                if (plantZoneReuse.TryGetValue(airHandlingUnit.Guid, out PlantZoneCandidate plantZoneCandidate) && plantZoneCandidate != null)
                 {
-                    zone newZ = zonesList[i];
-                    string n = newZ?.name;
-                    if (!string.IsNullOrWhiteSpace(n))
-                        zonesByKey[n.Trim().ToUpper()] = newZ;
+                    // This unit's plant zone is already here. Its internal condition and inter-zone air
+                    // movements were stripped by the remove-by-name step above and are rebuilt below, exactly
+                    // as they would be on a freshly built zone - so the zone is brought fully up to date
+                    // rather than merely left in place. No box is created and no elevation is consumed.
+                    zone = zonesList[plantZoneCandidate.Index];
+                    if (zone == null)
+                        continue;
                 }
+                else
+                {
+                    AdjacencyCluster adjacencyCluster_Temp = Create.AdjacencyCluster(elevation, 3, height, 3);
+                    elevation -= height - 1;
 
-                if (!zonesByKey.TryGetValue(space.Name.Trim().ToUpper(), out zone zone) || zone == null)
-                    continue;
+                    int zoneCountBefore = zonesList.Count;
+                    Update(building, adjacencyCluster_Temp, Analytical.Query.DefaultMaterialLibrary(), true);
+
+                    Space space = adjacencyCluster_Temp.GetSpaces().FirstOrDefault();
+                    if (space == null || string.IsNullOrWhiteSpace(space.Name))
+                        continue;
+
+                    // Refresh local zone tracking. Update() appends one new zone — pick it up and add to the dict
+                    // without doing a per-iteration zones.Match scan over hundreds of zones.
+                    zonesList = building.Zones() ?? new List<zone>();
+                    for (int i = zoneCountBefore; i < zonesList.Count; i++)
+                    {
+                        zone newZ = zonesList[i];
+                        string n = newZ?.name;
+                        if (!string.IsNullOrWhiteSpace(n))
+                            zonesByKey[n.Trim().ToUpper()] = newZ;
+                    }
+
+                    if (!zonesByKey.TryGetValue(space.Name.Trim().ToUpper(), out zone) || zone == null)
+                        continue;
+                }
 
                 zone.name = airHandlingUnit.Name;
                 if (!string.IsNullOrWhiteSpace(airHandlingUnit.Name))
                     zonesByKey[airHandlingUnit.Name.Trim().ToUpper()] = zone;
+
+                // Stamped every time, not only on the zones this run creates: it is what the NEXT run matches
+                // on, so a zone adopted by name here answers by identity from now on and stops depending on
+                // what either it or its unit is currently called.
+                string description = PlantZoneIdentity.Compose(zone.description, airHandlingUnit.Guid);
+                if (!string.IsNullOrEmpty(description))
+                    zone.description = description;
 
                 zone.sizeHeating = (int)TBD.SizingType.tbdSizing;
 
@@ -481,6 +512,184 @@ namespace SAM.Analytical.Tas
                 if (outward.Count != 0 && !guids_AirHandlingUnit_NoExhaust.Contains(ahu.Guid))
                     ahuOutwardMovements[ahu] = outward;
             }
+        }
+
+        /// <summary>
+        /// <b>Which existing TBD zone, if any, is the plant zone each air handling unit already owns.</b>
+        /// This is what makes <see cref="UpdateIZAMs(TBDDocument, AdjacencyCluster)"/> idempotent: a unit that
+        /// resolves to a zone here has that zone updated, and only a unit that resolves to nothing gets a new
+        /// one built.
+        /// <para>
+        /// Without it, every re-run appended another zone. A Part O optimisation round warm starts from a
+        /// copy of the canonical TBD - which has already been through this method's caller once - and then
+        /// runs the ventilation half of the workflow again, so three units came back as six zones, three of
+        /// them stripped of their internal conditions by the remove-by-name step that precedes the rebuild.
+        /// </para>
+        /// <para>
+        /// <b>Two passes, strongest authority first.</b>
+        /// </para>
+        /// <para>
+        /// 1. <b>Identity.</b> A candidate whose description states this unit's guid
+        /// (<see cref="PlantZoneIdentity"/>) is its plant zone, whatever either is called. That is unaffected
+        /// by renaming the unit and by two units sharing a name.
+        /// </para>
+        /// <para>
+        /// 2. <b>Adoption.</b> A plant zone written before the identity existed states nothing, so without
+        /// this pass it would be duplicated exactly once more before the new zone took over. Such a candidate
+        /// is adopted when its name matches the unit's and it is <b>not</b> one of the model's own spaces -
+        /// the zone this method's caller writes is a bare 3 x 3 x 2 box with no space behind it, so a name
+        /// that belongs to a real room is a room, and a modeller's own zone sharing the unit's name is left
+        /// alone rather than seized. Adoption only ever reuses; it never deletes.
+        /// </para>
+        /// <para>
+        /// <b>One zone is claimed at most once.</b> Where a TBD already carries duplicates from before this
+        /// fix, or two units genuinely share a name, each unit takes a different zone rather than all of them
+        /// converging on the first match. Zones left over from that earlier accumulation are not touched:
+        /// they cannot be told apart from a modeller's own work with any confidence, and the contract here is
+        /// to stop the growth, not to prune history.
+        /// </para>
+        /// <para>
+        /// Pure SAM.Analytical - no TBD/COM type appears anywhere in this method, which is what lets it be
+        /// unit-tested with no TAS licence, install or COM server.
+        /// </para>
+        /// </summary>
+        /// <param name="airHandlingUnits">The units this run is about to write plant zones for.</param>
+        /// <param name="plantZoneCandidates">Every zone the TBD currently holds, as name and description.</param>
+        /// <param name="spaceNames">The names of the model's spaces - the zones that are rooms, not plant.</param>
+        /// <returns>The zone to reuse per air handling unit guid. A unit absent from it needs a new zone.</returns>
+        public static Dictionary<Guid, PlantZoneCandidate> ResolvePlantZoneReuse(
+            IEnumerable<AirHandlingUnit> airHandlingUnits,
+            IEnumerable<PlantZoneCandidate> plantZoneCandidates,
+            IEnumerable<string> spaceNames)
+        {
+            Dictionary<Guid, PlantZoneCandidate> result = new Dictionary<Guid, PlantZoneCandidate>();
+
+            if (airHandlingUnits == null || plantZoneCandidates == null)
+            {
+                return result;
+            }
+
+            List<AirHandlingUnit> airHandlingUnits_Temp = new List<AirHandlingUnit>();
+            foreach (AirHandlingUnit airHandlingUnit in airHandlingUnits)
+            {
+                if (airHandlingUnit != null && airHandlingUnit.Guid != Guid.Empty)
+                {
+                    airHandlingUnits_Temp.Add(airHandlingUnit);
+                }
+            }
+
+            List<PlantZoneCandidate> candidates = new List<PlantZoneCandidate>();
+            foreach (PlantZoneCandidate plantZoneCandidate in plantZoneCandidates)
+            {
+                if (plantZoneCandidate != null)
+                {
+                    candidates.Add(plantZoneCandidate);
+                }
+            }
+
+            HashSet<string> keys_Space = new HashSet<string>();
+            foreach (string spaceName in spaceNames ?? new List<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(spaceName))
+                {
+                    keys_Space.Add(spaceName.Trim().ToUpper());
+                }
+            }
+
+            HashSet<int> claimed = new HashSet<int>();
+
+            //Pass 1 - the identity the zone itself states.
+            foreach (AirHandlingUnit airHandlingUnit in airHandlingUnits_Temp)
+            {
+                foreach (PlantZoneCandidate candidate in candidates)
+                {
+                    if (claimed.Contains(candidate.Index))
+                    {
+                        continue;
+                    }
+
+                    if (PlantZoneIdentity.Parse(candidate.Description) != airHandlingUnit.Guid)
+                    {
+                        continue;
+                    }
+
+                    result[airHandlingUnit.Guid] = candidate;
+                    claimed.Add(candidate.Index);
+                    break;
+                }
+            }
+
+            //Pass 2 - adopting a plant zone written before the identity existed.
+            foreach (AirHandlingUnit airHandlingUnit in airHandlingUnits_Temp)
+            {
+                if (result.ContainsKey(airHandlingUnit.Guid) || string.IsNullOrWhiteSpace(airHandlingUnit.Name))
+                {
+                    continue;
+                }
+
+                string key = airHandlingUnit.Name.Trim().ToUpper();
+
+                //A room keeps its zone. The generated plant zone has no space behind it, so a name that is
+                //also a space name cannot be one.
+                if (keys_Space.Contains(key))
+                {
+                    continue;
+                }
+
+                foreach (PlantZoneCandidate candidate in candidates)
+                {
+                    if (claimed.Contains(candidate.Index) || string.IsNullOrWhiteSpace(candidate.Name))
+                    {
+                        continue;
+                    }
+
+                    //Only a zone claiming NO unit is adoptable. One that names a different unit belongs to
+                    //that unit, however it is currently spelled.
+                    if (PlantZoneIdentity.Parse(candidate.Description) != Guid.Empty)
+                    {
+                        continue;
+                    }
+
+                    if (!string.Equals(candidate.Name.Trim().ToUpper(), key, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    result[airHandlingUnit.Guid] = candidate;
+                    claimed.Add(candidate.Index);
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The zones as <see cref="ResolvePlantZoneReuse"/> needs to see them: name and description only, with
+        /// the position in <paramref name="zones"/> carried through so the caller can get back to the COM
+        /// object. Reading both strings here is the whole of the COM work the resolution requires.
+        /// </summary>
+        private static List<PlantZoneCandidate> PlantZoneCandidates(List<zone> zones)
+        {
+            List<PlantZoneCandidate> result = new List<PlantZoneCandidate>();
+
+            if (zones == null)
+            {
+                return result;
+            }
+
+            for (int i = 0; i < zones.Count; i++)
+            {
+                zone zone = zones[i];
+                if (zone == null)
+                {
+                    continue;
+                }
+
+                result.Add(new PlantZoneCandidate(i, zone.name, zone.description));
+            }
+
+            return result;
         }
 
         /// <summary>
