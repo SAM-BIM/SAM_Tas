@@ -1,14 +1,94 @@
 # Project Progress
 
 ## Branch
-`feature/parto-iteration2b-tas-warm-start`, off `sow/2026-Q3` at **`78f7afbe`** (the merge of PR #44).
+`feature/parto-plant-zone-daytypes`, off `sow/2026-Q3`.
 
-Companion PRs: `SAM-BIM/SAM#90` and `SAM-BIM/SAM_UI#79` (the capacity envelope) land first; SAM_UI's
-warm-start PR depends on **this** one.
+Companions: **SAM-BIM/SAM#92** and **SAM-BIM/SAM_UI#82**. This branch is behaviour-neutral, so its merge
+order relative to those two is free.
+
+Everything below the entry dated 2026-09-03 is superseded history retained for context; the branch it
+describes (`feature/parto-iteration2b-tas-warm-start`) merged as PR #44's successor.
 
 ## Last updated
-2026-09-02 - a workflow run can start from an already-converted canonical TBD instead of converting the
-same geometry again.
+2026-09-03 - the generated MVHR plant zone's HDD/CDD daytype exclusion extracted to a named, tested
+predicate. Behaviour-neutral; the TAS "missing internal conditions on some daytypes" warning is intended
+and must stay a warning.
+
+## Latest (2026-09-03): the plant zone's HDD/CDD exclusion, named so it can be pinned
+
+**Status: implemented and tested; PR SAM-BIM/SAM_Tas#46 open against `sow/2026-Q3`. Behaviour-neutral.**
+
+Where the engineering is: **SAM-BIM/SAM#92** (two model-generation defects TAS refuses a model for, and
+the `Create.Log` rules that now report both) and **SAM-BIM/SAM_UI#82** (`SAMAnalytical.Check` as a
+mandatory Part O pre-simulation gate).
+
+### What changed
+
+`Modify.UpdateIZAMs` already excluded the **HDD** and **CDD** design daytypes from the internal condition
+it assigns to an air handling unit's generated plant zone, as a predicate inside a COM loop no test could
+reach:
+
+```csharp
+dayTypes.RemoveAll(x => x.name.Equals("CDD") || x.name.Equals("HDD"));
+```
+
+That is extracted to `Query.DayType_PlantZoneInternalCondition`, which holds the decision and the reason.
+`UpdateIZAMs` filters the calendar's daytypes through it. **Which daytypes are excluded does not change.**
+
+### Why it is worth naming
+
+TAS notices the exclusion and warns:
+
+> `Zone 'MVHR-01' is missing internal conditions on some daytypes.`
+
+**The message is expected.** The generated zone is a duct volume standing in for a unit rather than a
+room, and it is deliberately not wanted active in the heating and cooling design-day sizing runs. Adding
+HDD and CDD internal conditions to silence the warning would put it into those runs, which is the thing
+the exclusion exists to prevent.
+
+So the risk worth guarding against is somebody helpfully adding them back to make a TAS warning go away -
+which became more likely once SAM_UI#82 made `SAMAnalytical.Check` **Errors** fatal on a prepared Part O
+run. This is that guard. Nothing on that path promotes the warning to an error.
+
+### Important decisions and assumptions
+
+- The predicate matches the two names **exactly**. A daytype merely containing `HDD` is a different
+  daytype and keeps its internal condition; dropping it would silently shrink the schedule the plant zone
+  runs on.
+- An **unnamed** daytype is kept rather than throwing - which the old predicate would have done on a null
+  `name`. It is not one of the two the exclusion is about.
+- No TBD or COM type appears in the query or the tests, so the tests run with no TAS licence, install or
+  COM server - the same rule the rest of `SAM.Analytical.Tas.TM59.Tests` follows.
+
+### Files changed
+
+- `SAM_Tas/SAM.Analytical.Tas/Query/DayType_PlantZoneInternalCondition.cs` - new.
+- `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateIZAMs.cs` - applies the extracted predicate.
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PlantZoneDayTypeTests.cs` - new, 13 tests.
+- `PROJECT_PROGRESS.md` - this entry.
+
+### Tests, builds and validation
+
+- Full `SAM.Analytical.Tas.TM59.Tests` **669 passed**, 0 failed. `SAM_Tas.sln` builds clean (VS 18
+  MSBuild).
+- Validated end to end by the licensed TAS acceptance run recorded in SAM#92: Flat 1 isolated out of
+  `000000_SAM_AnalyticalModel-It1a-futureZ1.sam` completes a full year (TSD 4,691,076 bytes) **with the
+  HDD/CDD exclusion in place**, which is the evidence that the warning is not a blocker.
+
+### Unresolved issues, risks and blockers
+
+- **Observed, not investigated:** the full-building Part O `Opt` TBDs from that acceptance project carry
+  **six** MVHR plant zones - three named `MVHR-01/02/03` with internal conditions and three with none at
+  all - so `UpdateIZAMs` appears to accumulate a duplicate plant zone per optimisation round rather than
+  reusing or removing the previous one. It does not stop TAS and is **not addressed here**. Worth a
+  separate look.
+- Copilot asked for this `PROJECT_PROGRESS.md` entry on PR #46; addressed by this update.
+
+### Exact recommended next step
+
+Wait for the re-requested Codex review on **SAM-BIM/SAM_Tas#46**. **Do not merge.**
+
+---
 
 ## Latest (2026-09-02): starting a run from a canonical TBD
 
