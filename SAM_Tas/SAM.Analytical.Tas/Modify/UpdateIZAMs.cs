@@ -63,8 +63,12 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            //HDD and CDD are excluded from the generated plant zone's internal condition on purpose, and
+            //TAS's own pre-simulation check says so ("Zone 'MVHR-01' is missing internal conditions on some
+            //daytypes"). That warning is expected - see Query.DayType_PlantZoneInternalCondition, which
+            //holds the decision and the reason, and is what pins it.
             List<dayType> dayTypes = building.DayTypes();
-            dayTypes.RemoveAll(x => x.name.Equals("CDD") || x.name.Equals("HDD"));
+            dayTypes.RemoveAll(x => !Query.DayType_PlantZoneInternalCondition(x?.name));
 
             List<string> result = new List<string>();
 
