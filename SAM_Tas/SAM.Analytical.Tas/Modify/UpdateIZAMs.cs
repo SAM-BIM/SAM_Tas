@@ -534,12 +534,32 @@ namespace SAM.Analytical.Tas
         /// by renaming the unit and by two units sharing a name.
         /// </para>
         /// <para>
-        /// 2. <b>Adoption.</b> A plant zone written before the identity existed states nothing, so without
-        /// this pass it would be duplicated exactly once more before the new zone took over. Such a candidate
-        /// is adopted when its name matches the unit's and it is <b>not</b> one of the model's own spaces -
-        /// the zone this method's caller writes is a bare 3 x 3 x 2 box with no space behind it, so a name
-        /// that belongs to a real room is a room, and a modeller's own zone sharing the unit's name is left
-        /// alone rather than seized. Adoption only ever reuses; it never deletes.
+        /// 2. <b>Adoption by name - a fallback for TBDs written before the identity existed.</b> Such a
+        /// plant zone states no guid, so without this pass it would be duplicated exactly once more before
+        /// the new zone took over. A candidate is adopted when it states NO unit at all and its name matches
+        /// the unit's exactly, case-insensitively.
+        /// </para>
+        /// <para>
+        /// <b>What that protects, and what it does not.</b> Only one exclusion applies: a candidate whose
+        /// name is also the name of one of the model's own spaces is never adopted. The zone this method's
+        /// caller writes is a bare 3 x 3 x 2 box with no space behind it, so a name that belongs to a real
+        /// room is a room. That is the whole of the guard.
+        /// </para>
+        /// <para>
+        /// It follows - and is <b>not</b> currently prevented - that a zone a TAS user created themselves,
+        /// which is not one of the model's spaces and which happens to be named exactly after an air
+        /// handling unit, <b>can be adopted as that unit's plant zone</b>: renamed to the unit (a no-op,
+        /// the names already match), stamped with the unit's guid, and given the internal condition and
+        /// inter-zone air movements of a generated plant zone. No claim is made here that every
+        /// modeller-created zone sharing a unit's name is left alone; only room-named ones are.
+        /// </para>
+        /// <para>
+        /// The exposure is narrow - it needs an exact name collision with an air handling unit on a
+        /// non-space zone, in a TBD predating the identity marker, and it cannot recur once the zone is
+        /// stamped - and the alternative was worse: without pass 2, every such file duplicates its plant
+        /// zones once on the next run. Adoption only ever reuses; it never deletes. Where a stronger
+        /// guarantee is wanted, the discriminator to add is a positive marker on the zones this method
+        /// writes, not a wider name rule.
         /// </para>
         /// <para>
         /// <b>One zone is claimed at most once.</b> Where a TBD already carries duplicates from before this
@@ -630,7 +650,8 @@ namespace SAM.Analytical.Tas
                 string key = airHandlingUnit.Name.Trim().ToUpper();
 
                 //A room keeps its zone. The generated plant zone has no space behind it, so a name that is
-                //also a space name cannot be one.
+                //also a space name cannot be one. This is the ONLY exclusion: a non-space zone a TAS user
+                //created, named exactly after a unit, is adoptable - see the summary.
                 if (keys_Space.Contains(key))
                 {
                     continue;
