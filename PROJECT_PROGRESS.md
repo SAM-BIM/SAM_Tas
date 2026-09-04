@@ -1,20 +1,107 @@
 # Project Progress
 
 ## Branch
-`feature/parto-plant-zone-daytypes`, off `sow/2026-Q3`.
+`fix/parto-plant-zone-idempotency`, off `sow/2026-Q3` at **`d9e14e47`** (the merge of PR #46).
 
-Companions: **SAM-BIM/SAM#92** and **SAM-BIM/SAM_UI#82**. This branch is behaviour-neutral, so its merge
-order relative to those two is free.
+**No companion branch in any other repository.** Self-contained in `SAM.Analytical.Tas`; `SAM` and
+`SAM_UI` are unchanged and both suites were re-run against the rebuilt assembly.
 
-Everything below the entry dated 2026-09-03 is superseded history retained for context; the branch it
-describes (`feature/parto-iteration2b-tas-warm-start`) merged as PR #44's successor.
+Everything below the entry dated 2026-09-03 is superseded history retained for context.
 
 ## Last updated
-2026-09-03 - the generated MVHR plant zone's HDD/CDD daytype exclusion extracted to a named, tested
-predicate. Behaviour-neutral; the TAS "missing internal conditions on some daytypes" warning is intended
-and must stay a warning.
+2026-09-03 (later) - `Modify.UpdateIZAMs` is idempotent with respect to the generated MVHR plant zones:
+a re-conversion updates the zone each air handling unit already owns instead of appending a second one.
 
-## Latest (2026-09-03): the plant zone's HDD/CDD exclusion, named so it can be pinned
+## Latest (2026-09-03, later): one plant zone per unit, however many times the model is converted
+
+**Status: root-caused, fixed and tested.** The defect reported from a comparison of working Part O TBD
+files - six MVHR plant zones where three were expected, three of them without internal conditions.
+
+### Root cause
+
+`Modify.UpdateIZAMs` built each unit's plant zone unconditionally. For every `AirHandlingUnit` carrying an
+`AirHandlingUnitAirMovement` it created a fresh 3 x 3 x 2 box (`Create.AdjacencyCluster`), appended it to
+the TBD building through `Update`, and renamed it to the unit. **Nothing looked for the zone it had written
+on a previous run.**
+
+The trigger is the Part O warm start. `WorkflowCalculator` copies the canonical TBD onto the round's path
+and skips only the geometry conversion block - everything after it, `UpdateIZAMs` included, still runs. So
+a round opens a file that already carries the baseline's plant zones and appends its own beside them.
+
+That also explains the missing internal conditions exactly. The ICs and IZAMs are removed **by name**
+(`RemoveInternalConditions` / `RemoveIZAMs`) before the rebuild, and the rebuild assigns the fresh ones to
+the new zone. The older zone therefore survives with its name, its geometry, and nothing else: three
+zones with internal conditions and three without, which is what was observed.
+
+Because each round starts from a fresh copy of the canonical rather than from its predecessor, the count
+was pinned at exactly 2x per warm-started round rather than growing 3x, 4x - which is why it was 6 and not
+12, and why it was easy to miss.
+
+**Not** a duplicate-IZAM problem: the IZAMs and ICs were correctly replaced. The duplicates were zones
+only, and the orphans were inert - no internal condition, no air movements, nothing referencing them - so
+TAS still simulated. Their one real hazard is geometric: `elevation` restarts from the same datum on every
+run, so the second round's boxes are created at the same elevations as the first round's.
+
+### The fix
+
+Idempotency at the authority, `SAM.Analytical.Tas.Modify`. No TBD file is patched after generation.
+
+- **`PlantZoneIdentity`** (new) - the generated zone states which unit it belongs to, as one `"; "`
+  segment of `TBD.zone.description`: `[SAM_AHU_V1]=<AirHandlingUnit.Guid>`. That description is the
+  channel the exporter already uses for SAM-only data (`[Id]`, `[LevelName]`, `SAMZoneMetadata`'s own
+  section), and every segment this class does not own is preserved verbatim. Versioned, with a single
+  `Compose`/`Parse` pair.
+- **`Modify.ResolvePlantZoneReuse`** (new) - decides, per unit, which existing zone is its plant zone.
+  Two passes: **identity** (the zone states this unit's guid - unaffected by renaming the unit or by two
+  units sharing a name), then **adoption** of a pre-fix zone that states nothing, matched by name and only
+  when that name is not one of the model's own spaces. One zone is claimed at most once. It never deletes.
+- **`UpdateIZAMs`** now takes the resolved zone where there is one and builds a box only where there is
+  not, then stamps the identity every round - so a zone adopted by name answers by guid from then on.
+
+`AirHandlingUnit.Guid` rather than the zone name is the identity because the name is a presentation
+string: not unique, and changed by a rename, either of which would orphan the zone and duplicate it.
+
+`ResolvePlantZoneReuse` is pure `SAM.Analytical` - no TBD/COM type - for the same reason
+`ResolveAirHandlingUnitMovements` is: it can be tested with no TAS licence, install or COM server.
+`PlantZoneCandidate` is the plain carrier that keeps it that way.
+
+### What is deliberately NOT done
+
+Zones left over from the accumulation that already happened are **not** removed. They cannot be told apart
+from a modeller's own work with confidence, and the contract is to stop the growth, not to prune history.
+A model reconverted after this fix settles at one zone per unit from its next run onward.
+
+### Semantics untouched
+
+`PartFRequiredAirFlow != DesignAirFlow != SelectedEquipmentCapacity != OperatingAirFlow` is read by
+neither the plant-zone decision nor the airflow decision, and no airflow code path was touched. Pinned by
+`ReusingAPlantZone_DoesNotChangeTheAirflowAndIZAMPlan` and by SAM's own 1831-test suite, re-run green.
+
+### Files changed
+
+- `SAM_Tas/SAM.Analytical.Tas/Classes/PlantZoneIdentity.cs` - **new.**
+- `SAM_Tas/SAM.Analytical.Tas/Classes/PlantZoneCandidate.cs` - **new.**
+- `SAM_Tas/SAM.Analytical.Tas/Modify/UpdateIZAMs.cs` - `ResolvePlantZoneReuse`, `PlantZoneCandidates`, and
+  the create-or-reuse branch in the AHU loop.
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PlantZoneIdempotencyTests.cs` - **new**, 15 tests.
+
+### Validation
+
+- `SAM.Analytical.Tas.TM59.Tests` - **684 passed** (669 baseline + 15).
+- `SAM.Analytical.Tas.Benchmark.Tests` - **16 passed**.
+- `SAM_Tas.sln` (MSBuild, Debug) - **0 errors**.
+- `SAM` **1831 passed**, `SAM_UI` **411 passed**, both against the rebuilt `SAM.Analytical.Tas.dll`.
+
+**The tests are load-bearing.** With the reuse resolution temporarily short-circuited to return nothing -
+the pre-fix behaviour - 9 of the 15 fail, and the baseline-plus-three-rounds test reports **"Expected: 3,
+But was: 6"**: the reported symptom exactly. The repeated-rounds-on-one-file test goes 2 -> 12.
+
+### Not performed
+
+No licensed TAS run. The change is pinned by automated coverage at the conversion authority; a licensed
+before/after zone count on the real multi-flat model is still worth doing before release.
+
+## Superseded (2026-09-03): the plant zone's HDD/CDD exclusion, named so it can be pinned
 
 **Status: implemented and tested; PR SAM-BIM/SAM_Tas#46 open against `sow/2026-Q3`. Behaviour-neutral.**
 
