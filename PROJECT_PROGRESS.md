@@ -1,18 +1,113 @@
 # Project Progress
 
 ## Branch
-`fix/parto-plant-zone-idempotency`, off `sow/2026-Q3` at **`d9e14e47`** (the merge of PR #46).
+`fix/2b-correctness-closeout`, off `sow/2026-Q3` at **`4d7c3444`** (the merge of PR #47).
 
-**No companion branch in any other repository.** Self-contained in `SAM.Analytical.Tas`; `SAM` and
-`SAM_UI` are unchanged and both suites were re-run against the rebuilt assembly.
+This branch is **SAM-BIM/SAM_Tas#48**.
 
-Everything below the entry dated 2026-09-03 is superseded history retained for context.
+**DOES NOT stand alone.** It requires **`SAM` branch `fix/2b-correctness-closeout` (SAM-BIM/SAM#100)**,
+which adds `AnalyticalModel(AnalyticalModel, bool deepClone)`. **Merge order: SAM#100 first.** `SAM_UI`
+`fix/2b-correctness-closeout` (SAM-BIM/SAM_UI#87) is the third; it is independent of this one to compile,
+but both are needed for the ownership invariant to hold end to end. `SAM_Systems` is unchanged.
+
+Everything below the entry dated 2026-09-05 is superseded history retained for context.
 
 ## Last updated
-2026-09-03 (later) - `Modify.UpdateIZAMs` is idempotent with respect to the generated MVHR plant zones:
-a re-conversion updates the zone each air handling unit already owns instead of appending a second one.
+2026-09-05 - the workflow takes a working model it owns, and lets a caller that already owns one skip the
+copy so the normal Part O run makes exactly one.
 
-## Latest (2026-09-03, later): one plant zone per unit, however many times the model is converted
+## Latest (2026-09-05): the workflow's working model - ownership, and only one copy of it
+
+**Status: implemented and tested. Not merged. Blocked on SAM-BIM/SAM#100.**
+
+### The defect (F1/F3 of the DeepSeek V4 Pro Max review)
+
+`WorkflowCalculator.Calculate` has always worked on a copy and handed the result back, so that a run which
+failed or was cancelled left the caller's model as it was. The copy was
+`new AnalyticalModel(analyticalModel)`, which rebuilds the cluster's dictionaries but stores **the same**
+`Space`, `Panel` and `Aperture` instances.
+
+That is safe for an operation writing by same-guid replacement. This one does not:
+
+- `Modify.UpdateIds` reads the live objects out of the cluster and stamps `SpaceParameter.ZoneGuid`,
+  `PanelParameter.ZoneSurfaceReference_1`/`_2`, `PanelParameter.BuildingElementGuid` and the aperture
+  identity parameters straight onto their parameter sets **in place**;
+- `UpdateAdiabatic`, `UpdateBuildingElements`, `UpdateThermalParameters` and `UpdateApertureDefinitions` do
+  the same.
+
+Every one of those writes was visible through the caller's model. On Iteration 2B the caller **is** the
+retained last-valid design of the previous round, so a round that stamped it and then failed or was
+cancelled handed that design back carrying a later run's identities - disagreeing with its own persisted
+`SimulationResultProvenance.Fingerprint_Model`, which reads on reopening as a false "the model has changed
+since the simulation results were produced from it" and forces a re-simulation nobody needed.
+
+### The fix, and why at the copy
+
+One deep working copy at the top of `Calculate`, through the SAM authority. Converting each conversion step
+to replacement semantics - the alternative - would be a redesign of the TAS model conversion for an
+isolation guarantee one copy already gives, and it would have to be repeated for every step added later.
+
+### And then only one of them
+
+`Calculate(AnalyticalModel)` is unchanged and still takes the copy, so every caller that has not thought
+about ownership - the Grasshopper components, the benchmark CLI, `Modify.RunWorkflow`'s other callers -
+keeps the guarantee it had.
+
+`Calculate(AnalyticalModel, bool analyticalModel_Owned)` is the seam. `true` is a promise about the
+argument: the caller has already taken a deep working copy that nothing else holds.
+`Modify.RunPartOSimulation` is the boundary that makes it for a Part O run. Without it the normal Part O
+path cloned the whole model **three** times over for one guarantee - `Simulate`, `RunPartOSimulation` and
+here - which on a five thousand space project is most of a second and half a gigabyte of allocation to no
+end.
+
+### Changed files
+
+- `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs`
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/WorkflowModelOwnershipTests.cs`
+
+The tests use the **production** `SAM.Analytical.Tas` identity enums on the real types and reproduce exactly
+the read-mutate-`AddObject` sequence `UpdateIds` uses, including the `RemoveAperture`/`AddAperture` pairing.
+No TAS licence: what is pinned is the ownership of the objects those writes land on, which is decided by the
+copy and not by TAS. They cover the shallow leak, the deep isolation, a failed or cancelled round leaving
+`SimulationResultProvenance.IsCurrent` true, a successful run still adopting the stamped model, the
+warm-start path being isolated **even when the stamped values are identical**, and relations surviving.
+
+### Merge order
+
+1. **SAM-BIM/SAM#100** - the ownership constructor, the deep-clone completeness fix, and the TM59 series
+   rules. Nothing else compiles without it.
+2. **SAM-BIM/SAM_Tas#48** - the workflow's owned-model overload. Needs #100.
+3. **SAM-BIM/SAM_UI#87** - the Part O boundaries, the capacity-envelope name, and the full-year authority.
+   Needs #100. Independent of #48 to compile; both are needed for the F1/F3 invariant to hold end to end.
+
+`SAM_Systems` is untouched.
+
+### Validation
+
+| Suite | Result |
+| --- | --- |
+| `SAM.Tests` | 1934 passed, 0 failed |
+| `SAM.Analytical.Tas.TM59.Tests` | 690 passed, 0 failed |
+| `SAM.Analytical.UI.WPF.Tests` | 510 passed, 0 failed |
+
+`SAM.sln`, `SAM_Tas.sln` (MSBuild - COM references) and `SAM_UI.sln` all build with 0 errors.
+`git diff --check` is clean in all three repositories.
+
+Deep-clone cost, measured Release on 5,000 spaces / 30,000 panels: **250.7 ms, 136.8 MB**, against
+36.5 ms / 13.8 MB for the shallow copy. Paid **once** per Part O TAS run.
+
+### Remaining risks and next task
+
+- No licensed TAS run was made. Every invariant here is established by deterministic tests over production
+  code; what is not covered is TAS's own behaviour, which none of these changes touch.
+- `SAM.Weather.Query.RunningMeanDryBulbTemperatures` still throws on a weather year shorter than the one the
+  running mean needs, so a TSD with a damaged weather record fails loudly rather than being refused with a
+  diagnostic. Pre-existing, characterised by test, and a fix reaches wider than Part O.
+- Next: the pre-Iteration-3 list is unchanged - PF3-PF7 and `SetSpaceDesignFlowRate` indexing, the Part O
+  defaults / minimum-click audit, re-isolation, the Grasshopper variable-output updater, catalogue identity
+  drift, final UI acceptance, then freeze Iterations 1-2.
+
+## Previous (2026-09-03, later): one plant zone per unit, however many times the model is converted
 
 **Status: root-caused, fixed and tested.** The defect reported from a comparison of working Part O TBD
 files - six MVHR plant zones where three were expected, three of them without internal conditions.
