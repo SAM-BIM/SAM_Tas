@@ -131,7 +131,59 @@ namespace SAM.Analytical.Tas
             }
         }
         
+        /// <summary>
+        /// Runs the workflow over a model this calculator does <b>not</b> own, and hands back what it
+        /// produced. The caller's instance is untouched: a working copy is taken here.
+        /// <para>
+        /// This is the entry point for every caller that has not thought about ownership - the Grasshopper
+        /// components, the benchmark CLI, anything reaching <c>Modify.RunWorkflow</c> without saying
+        /// otherwise - and it is deliberately the safe one. See
+        /// <see cref="Calculate(AnalyticalModel, bool)"/> for the caller that already owns its model.
+        /// </para>
+        /// </summary>
         public AnalyticalModel Calculate(AnalyticalModel analyticalModel)
+        {
+            return Calculate(analyticalModel, false);
+        }
+
+        /// <summary>
+        /// Runs the workflow, stating whether the model handed over is already the caller's own working
+        /// copy.
+        ///
+        /// <para><b>The ownership seam</b></para>
+        /// <para>
+        /// Everything below mutates the model IN PLACE - <see cref="Modify.UpdateIds"/> stamps
+        /// <c>SpaceParameter.ZoneGuid</c>, <c>PanelParameter.ZoneSurfaceReference_1</c>/<c>_2</c>,
+        /// <c>PanelParameter.BuildingElementGuid</c> and the aperture identity parameters straight onto the
+        /// live objects' parameter sets, and <c>UpdateAdiabatic</c>, <c>UpdateBuildingElements</c>,
+        /// <c>UpdateThermalParameters</c> and <c>UpdateApertureDefinitions</c> do the same. So a model the
+        /// workflow is given has to be one somebody is entitled to mutate.
+        /// </para>
+        /// <para>
+        /// <b>false</b> - the default, and every public caller - takes that working copy here, through
+        /// <c>new AnalyticalModel(analyticalModel, true)</c>. That is what guarantees a failed or cancelled
+        /// run leaves the caller's model exactly as it was.
+        /// </para>
+        /// <para>
+        /// <b>true</b> says the caller has already taken one and this run may mutate it directly. It is a
+        /// promise about the argument, not a request to skip protection: pass it only from a boundary that
+        /// itself cloned, and whose clone no other holder shares. <c>Modify.RunPartOSimulation</c> is that
+        /// boundary for Approved Document O - it clones once, at the point it renames and re-materials the
+        /// model, and everything from there to here works on that one copy. Without this the normal Part O
+        /// run cloned the whole model three times over for one isolation guarantee, which on a five
+        /// thousand space project is most of a second and half a gigabyte of allocation to no end.
+        /// </para>
+        /// <para>
+        /// Getting it wrong in the unsafe direction - passing true from a caller that did not clone - puts
+        /// this run's TAS identities on somebody else's model, which is precisely the defect the copy
+        /// exists to prevent. When in doubt, pass false: the cost is one clone.
+        /// </para>
+        /// </summary>
+        /// <param name="analyticalModel">The model to run the workflow over.</param>
+        /// <param name="analyticalModel_Owned">
+        /// True only where the caller has already taken a deep working copy that nothing else holds.
+        /// </param>
+        public AnalyticalModel Calculate(AnalyticalModel analyticalModel, bool analyticalModel_Owned)
         {
             //A calculator instance can be re-run; each run reports only its own notes. Cleared ahead of the
             //validation gate below, so a run rejected there leaves no previous run's notes visible either.
@@ -161,29 +213,30 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            // THE ownership boundary of a workflow run, and the reason it is a DEEP copy.
+            // THE working model, and the reason a copy has to be DEEP when this run takes one itself.
             //
             // Everything below works on `result` and the model is handed back at the end, so the intent has
             // always been that the caller's instance is untouched until it chooses to adopt what comes back.
             // The ordinary copy constructor does not deliver that: it rebuilds the cluster's dictionaries
             // but stores the SAME Space, Panel and Aperture instances, which is safe only for an operation
-            // that writes by same-guid replacement. This one does not. Modify.UpdateIds reads the live
-            // objects out of the cluster and stamps SpaceParameter.ZoneGuid,
-            // PanelParameter.ZoneSurfaceReference_1/_2, PanelParameter.BuildingElementGuid and the aperture
-            // identity parameters straight onto their parameter sets in place; UpdateAdiabatic,
-            // UpdateBuildingElements, UpdateThermalParameters and UpdateApertureDefinitions do the same.
-            // Against a shallow copy every one of those writes was visible through the caller's model.
+            // that writes by same-guid replacement. This one does not - see the summary on this method for
+            // the list of steps that mutate in place. Against a shallow copy every one of those writes was
+            // visible through the caller's model.
             //
             // Converting each of those steps to replacement semantics would be a redesign of the conversion
-            // for an isolation guarantee one copy already gives, so the copy is where it is fixed. One
-            // clone per run, against a run that then spends minutes in COM - and NOT on any read path: the
-            // shallow copy stays the default everywhere else precisely so a getter never pays for this.
+            // for an isolation guarantee one copy already gives, so the copy is where it is fixed. It is on
+            // no read path: the shallow copy stays the default everywhere else precisely so a getter never
+            // pays for this.
+            //
+            // Skipped where the caller already owns the model, which is the whole point of the overload -
+            // otherwise the normal Approved Document O run took three copies of the same model to establish
+            // one guarantee. The clone is then the caller's, taken once, and `result` mutates it directly.
             //
             // See AnalyticalModel(AnalyticalModel, bool) for the rule, and the Part O optimiser for what
             // depended on it: its caller is the retained last-valid design, and a round that stamped new
             // TAS identities onto that model left it disagreeing with its own persisted
             // SimulationResultProvenance after a later round failed or was cancelled.
-            AnalyticalModel result = new AnalyticalModel(analyticalModel, true);
+            AnalyticalModel result = analyticalModel_Owned ? analyticalModel : new AnalyticalModel(analyticalModel, true);
 
             string directory = System.IO.Path.GetDirectoryName(WorkflowSettings.Path_TBD);
             string fileName = System.IO.Path.GetFileNameWithoutExtension(WorkflowSettings.Path_TBD);
