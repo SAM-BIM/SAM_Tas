@@ -1,22 +1,66 @@
 # Project Progress
 
 ## Branch
-`fix/2b-correctness-closeout`, off `sow/2026-Q3` at **`4d7c3444`** (the merge of PR #47).
+`docs/large-model-lookup-closeout`, off `sow/2026-Q3` at **`7946479`** (the merge of PR #48).
 
-This branch is **SAM-BIM/SAM_Tas#48**.
+This branch is **SAM-BIM/SAM_Tas#49**, and it is **documentation only** - no SAM_Tas source file changes.
 
-**DOES NOT stand alone.** It requires **`SAM` branch `fix/2b-correctness-closeout` (SAM-BIM/SAM#100)**,
-which adds `AnalyticalModel(AnalyticalModel, bool deepClone)`. **Merge order: SAM#100 first.** `SAM_UI`
-`fix/2b-correctness-closeout` (SAM-BIM/SAM_UI#87) is the third; it is independent of this one to compile,
-but both are needed for the ownership invariant to hold end to end. `SAM_Systems` is unchanged.
+The large-model lookup closeout is **SAM-BIM/SAM#101** and **SAM-BIM/SAM_UI#88**. It touches no SAM_Tas
+source, but it does change `SAM.Analytical` code this repository builds against and exercises heavily -
+`TMOverheatingCalculator`, `TM59AssessmentCalculator` and `OverheatingScenarioMap`. This branch records the
+checkpoint and the evidence that the TAS-side behaviour did not move. `SAM_Systems` is unchanged.
 
-Everything below the entry dated 2026-09-05 is superseded history retained for context.
+Everything below the entry dated 2026-09-05 (large-model lookups) is superseded history retained for
+context.
 
 ## Last updated
-2026-09-05 - the workflow takes a working model it owns, and lets a caller that already owns one skip the
-copy so the normal Part O run makes exactly one.
+2026-09-05 (later) - the checkpoint after the large-model lookup closeout, and the TM59 suite result that
+shows it changed nothing on this side.
 
-## Latest (2026-09-05): the workflow's working model - ownership, and only one copy of it
+## Latest (2026-09-05, later): large-model lookup closeout - what it means here
+
+**Status: no SAM_Tas source change. Validated against the rebuilt `SAM.Analytical.dll`.**
+
+`SAM-BIM/SAM#101` replaced the whole-model lookups that sat inside per-room and per-zone traversals in
+`SAM.Analytical` with request-scoped indexes and with the cluster's own `GetObject<T>(guid)` authority. Three
+of the classes it changed are ones this repository builds on:
+
+- `TMOverheatingCalculator.Calculate_TM59` / `Calculate_TM52` - reached through
+  `SAM.Analytical.Tas.OverheatingCalculator`, which is a thin wrapper over it. Every room used to be resolved
+  with `GetSpaces().Find(...)` inside the loop over the rooms; it is now one `Dictionary<Guid, Space>` per
+  call. The resolution rule is unchanged - a caller's stale instance still resolves to the instance the model
+  holds, which is what carries the restored design internal condition.
+- `TM59AssessmentCalculator.Spaces` - reached through `Create.TM59AssessmentCalculator`. The design zone is
+  now resolved through one index and the design cluster is read once for the whole traversal, instead of the
+  zone list being rebuilt and the cluster being copied per requested zone.
+- `OverheatingScenarioMap` - one zone index and one cluster for the whole map, instead of one of each per
+  scenario.
+
+**None of it changes an engineering result**, and nothing in this repository needed to change.
+
+### Validation
+
+| suite | result |
+| --- | --- |
+| `SAM.Analytical.Tas.TM59.Tests` | **690 passed, 0 failed**, built and run against the rebuilt `SAM.Analytical.dll` |
+
+That is the evidence that matters here: the TAS-side TM59 suite is the closest thing to an acceptance test
+for the changed calculators, and it is unchanged. `SAM.Tests` is 1974 passing and
+`SAM.Analytical.UI.WPF.Tests` 528 passing on the same assemblies. `git diff --check` clean.
+
+No licensed TAS run was made and none is owed: no engineering behaviour changes.
+
+### Remaining risks and next task
+
+- `SAM.Weather.Query.RunningMeanDryBulbTemperatures` still throws on a weather year shorter than the one the
+  running mean needs, so a TSD with a damaged weather record fails loudly rather than being refused with a
+  diagnostic. Pre-existing, characterised by test, and a fix reaches wider than Part O.
+- Next: PF3-PF7 and `SetSpaceDesignFlowRate` are **done** (SAM#101, SAM_UI#88). What remains before
+  Iteration 3 is the Part O Sizing / Simulation defaults and minimum-click workflow, the weather / range /
+  output restoration UX, resume 2B from a restored run, re-isolation and re-cutting, the Grasshopper
+  variable-output updater, catalogue identity drift, final UI acceptance, then freeze Iterations 1-2.
+
+## Previous (2026-09-05): the workflow's working model - ownership, and only one copy of it
 
 **Status: implemented and tested. Not merged. Blocked on SAM-BIM/SAM#100.**
 
