@@ -161,7 +161,29 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
-            AnalyticalModel result = new AnalyticalModel(analyticalModel);
+            // THE ownership boundary of a workflow run, and the reason it is a DEEP copy.
+            //
+            // Everything below works on `result` and the model is handed back at the end, so the intent has
+            // always been that the caller's instance is untouched until it chooses to adopt what comes back.
+            // The ordinary copy constructor does not deliver that: it rebuilds the cluster's dictionaries
+            // but stores the SAME Space, Panel and Aperture instances, which is safe only for an operation
+            // that writes by same-guid replacement. This one does not. Modify.UpdateIds reads the live
+            // objects out of the cluster and stamps SpaceParameter.ZoneGuid,
+            // PanelParameter.ZoneSurfaceReference_1/_2, PanelParameter.BuildingElementGuid and the aperture
+            // identity parameters straight onto their parameter sets in place; UpdateAdiabatic,
+            // UpdateBuildingElements, UpdateThermalParameters and UpdateApertureDefinitions do the same.
+            // Against a shallow copy every one of those writes was visible through the caller's model.
+            //
+            // Converting each of those steps to replacement semantics would be a redesign of the conversion
+            // for an isolation guarantee one copy already gives, so the copy is where it is fixed. One
+            // clone per run, against a run that then spends minutes in COM - and NOT on any read path: the
+            // shallow copy stays the default everywhere else precisely so a getter never pays for this.
+            //
+            // See AnalyticalModel(AnalyticalModel, bool) for the rule, and the Part O optimiser for what
+            // depended on it: its caller is the retained last-valid design, and a round that stamped new
+            // TAS identities onto that model left it disagreeing with its own persisted
+            // SimulationResultProvenance after a later round failed or was cancelled.
+            AnalyticalModel result = new AnalyticalModel(analyticalModel, true);
 
             string directory = System.IO.Path.GetDirectoryName(WorkflowSettings.Path_TBD);
             string fileName = System.IO.Path.GetFileNameWithoutExtension(WorkflowSettings.Path_TBD);
