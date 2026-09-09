@@ -30,6 +30,8 @@ namespace Inv
             W("  togbxml        <in.sam> <out.xml>");
             W("  noizam         <in.sam> <in.xml> <out.tbd> <weather.twd> <sizing|full>");
             W("  dump-tbd       <in.tbd>               IZAM / ticV / ticI inventory");
+            W("  dump-graph     <in.tpd> <out.txt>     exhaustive late-bound native graph dump");
+            W("  build-ref      <out.tpd> [s eo bs be t1 t2]   reference system with asymmetric flows");
         }
 
         private static int Main(string[] args)
@@ -81,6 +83,23 @@ namespace Inv
                     return NoIzam(args[1], args[2], args[3], args[4], args[5], args.Length > 6 && string.Equals(args[6], "control", StringComparison.OrdinalIgnoreCase));
                 case "dump-tbd":
                     return DumpTbd(args[1]);
+                case "dump-graph":
+                    return DumpGraph(args[1], args[2]);
+                case "resize":
+                    return Resize.Run(args[1], args[2], int.Parse(args[3]));
+                case "attach-tsd":
+                    return Attach.Run(args[1], args[2], args.Length > 3 ? int.Parse(args[3]) : 8);
+                case "build-ref2":
+                    return BuildRef2.Build(args[1], Ref.Supply_Only_Lps, Ref.Extract_Only_Lps, Ref.Both_Supply_Lps, Ref.Both_Extract_Lps, Ref.Transfer_Lps, Ref.Transfer_Second_Lps);
+                case "build-ref":
+                    return BuildRef.Build(
+                        args[1],
+                        args.Length > 2 ? double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : Ref.Supply_Only_Lps,
+                        args.Length > 3 ? double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) : Ref.Extract_Only_Lps,
+                        args.Length > 4 ? double.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture) : Ref.Both_Supply_Lps,
+                        args.Length > 5 ? double.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : Ref.Both_Extract_Lps,
+                        args.Length > 6 ? double.Parse(args[6], System.Globalization.CultureInfo.InvariantCulture) : Ref.Transfer_Lps,
+                        args.Length > 7 ? double.Parse(args[7], System.Globalization.CultureInfo.InvariantCulture) : Ref.Transfer_Second_Lps);
                 default:
                     Usage();
                     return 1;
@@ -636,6 +655,16 @@ namespace Inv
                 try { tBDDocument.close(); } catch { }
             }
 
+            return 0;
+        }
+
+
+        private static int DumpGraph(string path_TPD, string path_Out)
+        {
+            W("dump-graph {0} -> {1}", path_TPD, path_Out);
+            string text = Ref.Graph(path_TPD);
+            File.WriteAllText(path_Out, text);
+            W("written: {0} bytes, {1} lines", text.Length, text.Split('\n').Length);
             return 0;
         }
 

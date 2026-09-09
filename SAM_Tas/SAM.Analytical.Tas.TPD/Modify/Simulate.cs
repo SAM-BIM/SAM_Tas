@@ -99,8 +99,21 @@ namespace SAM.Analytical.Tas.TPD
 
                 try
                 {
-                    tPDDoc.Simulate(startHour + 1, endHour + 1, 0);
+                    // ITPD.Simulate is declared as returning a STRING, and this call used to discard it.
+                    // Measured on licensed TAS, that string is a precise diagnosis of why nothing ran -
+                    // "Plant room has no components", "Plant Room Has Errors", "Failed to open the TSD file".
+                    // It is the best evidence available and it is free.
+                    string returned = tPDDoc.Simulate(startHour + 1, endHour + 1, 0);
+
                     tPDDoc.Save();
+
+                    if (!string.IsNullOrWhiteSpace(returned))
+                    {
+                        simulationEvidence.RecordCallFailed(
+                            string.Format("TAS answered \"{0}\".", returned.Trim()));
+                        return false;
+                    }
+
                     simulationEvidence.RecordCallReturned();
                 }
                 catch (Exception exception)
