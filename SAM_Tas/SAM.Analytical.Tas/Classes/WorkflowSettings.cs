@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Text.Json.Nodes;
@@ -78,6 +78,28 @@ namespace SAM.Analytical.Tas
 
         public bool AddIZAMs { get; set; } = true;
 
+        /// <summary>
+        /// Removes every IZAM the TBD carries - inherited or otherwise - after the conversion steps.
+        /// <para>
+        /// <c>AddIZAMs = false</c> only skips <i>creation</i>; nothing removes IZAMs a warm start from
+        /// <c>Path_TBD_Canonical</c>, or a reused TBD under <c>RemoveExistingTBD = false</c>, brought in. This
+        /// sweeps them, which is what a genuinely IZAM-free thermal source needs.
+        /// </para>
+        /// <para><b>Defaults to false</b>, so no existing caller changes behaviour.</para>
+        /// </summary>
+        public bool RemoveIZAMs { get; set; } = false;
+
+        /// <summary>
+        /// Zeroes the mechanical ventilation gain - the <c>ticV</c> profile - on every internal condition.
+        /// <para>
+        /// Infiltration (<c>ticI</c>) and natural ventilation (aperture types and their opening schedules)
+        /// are untouched: they are structurally distinct carriers, so no heuristic is needed to tell them
+        /// apart. See <c>Query/ProfileReuseIndex.cs</c> for the slot-to-type authority.
+        /// </para>
+        /// <para><b>Defaults to false</b>, so no existing caller changes behaviour.</para>
+        /// </summary>
+        public bool RemoveMechanicalVentilationGains { get; set; } = false;
+
         public int SimulateFrom { get; set; } = 1;
 
         public int SimulateTo { get; set; } = 1;
@@ -113,6 +135,8 @@ namespace SAM.Analytical.Tas
                 UpdateZones = workflowSettings.UpdateZones;
                 UseWidths = workflowSettings.UseWidths;
                 AddIZAMs = workflowSettings.AddIZAMs;
+                RemoveIZAMs = workflowSettings.RemoveIZAMs;
+                RemoveMechanicalVentilationGains = workflowSettings.RemoveMechanicalVentilationGains;
                 SimulateFrom = workflowSettings.SimulateFrom;
                 SimulateTo = workflowSettings.SimulateTo;
 
@@ -234,6 +258,16 @@ namespace SAM.Analytical.Tas
                 AddIZAMs = jObject["AddIZAMs"]?.GetValue<bool>() ?? default(bool);
             }
 
+            if (jObject.ContainsKey("RemoveIZAMs"))
+            {
+                RemoveIZAMs = jObject["RemoveIZAMs"]?.GetValue<bool>() ?? default(bool);
+            }
+
+            if (jObject.ContainsKey("RemoveMechanicalVentilationGains"))
+            {
+                RemoveMechanicalVentilationGains = jObject["RemoveMechanicalVentilationGains"]?.GetValue<bool>() ?? default(bool);
+            }
+
             if (jObject.ContainsKey("SimulateFrom"))
             {
                 SimulateFrom = jObject["SimulateFrom"]?.GetValue<int>() ?? default(int);
@@ -321,6 +355,8 @@ namespace SAM.Analytical.Tas
             jObject.Add("UpdateZones", UpdateZones);
             jObject.Add("UseWidths", UseWidths);
             jObject.Add("AddIZAMs", AddIZAMs);
+            jObject.Add("RemoveIZAMs", RemoveIZAMs);
+            jObject.Add("RemoveMechanicalVentilationGains", RemoveMechanicalVentilationGains);
 
             jObject.Add("SimulateFrom", SimulateFrom);
             jObject.Add("SimulateTo", SimulateTo);
