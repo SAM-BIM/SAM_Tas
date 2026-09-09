@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -81,6 +81,10 @@
          DLL for the same reason as the assemblies above. -->
     <Reference Include="SAM.Analytical.Tas.TPD">
       <HintPath>..\..\build\SAM.Analytical.Tas.TPD.dll</HintPath>
+    </Reference>
+    <Reference Include="Interop.TPD">
+      <HintPath>..\..\build\Interop.TPD.dll</HintPath>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
     </Reference>
     <Reference Include="SAM.Analytical.Systems">
       <HintPath>..\..\build\SAM.Analytical.Systems.dll</HintPath>
