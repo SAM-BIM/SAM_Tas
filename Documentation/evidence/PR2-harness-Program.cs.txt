@@ -85,6 +85,10 @@ namespace Inv
                     return DumpTbd(args[1]);
                 case "dump-graph":
                     return DumpGraph(args[1], args[2]);
+                case "seed":
+                    return Seed.SeedTbd(args[1], args[2], args.Length > 3 ? int.Parse(args[3]) : 2, args.Length > 4 ? double.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture) : 5.0);
+                case "clean":
+                    return Seed.CleanTbd(args[1]);
                 case "resize":
                     return Resize.Run(args[1], args[2], int.Parse(args[3]));
                 case "attach-tsd":

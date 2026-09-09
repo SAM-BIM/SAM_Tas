@@ -205,3 +205,57 @@ Space.Guid -> SystemSpace.Guid -> SystemZone.GUID (component, late-bound read)
 
 Because the typed accessors throw, **the late-bound read must be encapsulated in one place** in
 SAM_Tas rather than spread as `dynamic` reads through the conversion.
+
+---
+
+## E. Strengthened no-IZAM acceptance - a control that actually has something to remove
+
+The earlier fixtures were **weak controls** and were reported as such: neither SAM model carries
+ventilation systems, so even the control TBD answered `IZAM COUNT: 0`, and its `ticV` read `v=0 f=1` -
+a TBD profile is *factor x value*, so the effective contribution was already zero. Nothing non-zero was
+ever removed, and that evidence must not be read as full acceptance.
+
+This is the missing control, built by **controlled mutation of a real TBD** - the fixture-2 control
+`f2c.tbd`, with genuine inherited IZAMs and a genuinely non-zero mechanical `ticV` injected into the
+file. No production code was changed to make it: the mutation is applied to a document, and the code
+under test is then run against it unmodified.
+
+**Seeded:** 3 IZAMs named `INHERITED_IZAM_1..3`, and `ticV value=5, factor=1, setbackValue=2.5` on
+every one of the 36 internal conditions - effective contribution 5 each, 180 in total.
+
+**Then the production cleanup, exactly as `WorkflowCalculator` calls it:**
+
+```
+Modify.RemoveIZAMs returned True
+Modify.RemoveVentilationGains touched 36 internal condition(s)
+```
+
+**Before and after, read by walking TAS's own accessors:**
+
+| measure | BEFORE | AFTER |
+| --- | --- | --- |
+| IZAM count | **3** | **0** |
+| internal conditions | 36 | 36 |
+| `ticV` effective non-zero count | **36** | **0** |
+| `ticV` effective **sum** | **180** | **0** |
+| `ticI` (infiltration) | 36 rows | **IDENTICAL, all 36** |
+| aperture types (name, Cd, sheltered, profile, schedule) | 2 | **IDENTICAL** |
+
+```
+ticI IDENTICAL across all internal conditions
+APERTURE TYPES IDENTICAL
+  APERTURETYPE[0] name=Opening Cd0.411 F1 Cd=0.41059074 sheltered=0 profile(v=1 f=1 sched=<none>)
+  APERTURETYPE[1] name=Opening Cd0.477 F1 Cd=0.477327 sheltered=0 profile(v=1 f=1 sched=<none>)
+```
+
+**This is the acceptance the weak fixtures could not give.** A real inherited IZAM was present and is
+gone; a real non-zero mechanical ventilation contribution was present and is gone; and the infiltration
+term in the adjacent profile slot and the natural-ventilation aperture types are byte-for-byte what
+they were. Mechanical ventilation was removed and nothing else was.
+
+Reproduce with:
+
+```
+inv.exe seed  C:\TasOut\po2\f2c.tbd C:\TasOut\po2\f2seed.tbd 3 5.0
+inv.exe clean C:\TasOut\po2\f2seed.tbd
+```
