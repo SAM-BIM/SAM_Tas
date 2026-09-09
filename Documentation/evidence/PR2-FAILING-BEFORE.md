@@ -44,3 +44,21 @@ made on the COM calls themselves, so the fix cannot be faked by de-duplicating t
 `ZoneLoads_SingleLoadZone_IsUnchanged`, `ZoneLoads_EmptyZone_ReturnsEmptyNotNull` and
 `ZoneLoads_NullComponent_ReturnsNull` passed before the fix and must keep passing after it - they are
 the guard that the fix changes only the multi-load case.
+
+## D-2 - the TPD `Modify.Simulate` false positive
+
+Source: `SAM.Analytical.Tas.TPD/Modify/Simulate.cs:31` returns a literal `true`; `:23` silently skips
+the whole simulation when `tPDDoc?.EnergyCentre` is null; nothing inspects `tPDDoc.Simulate`'s outcome
+or any output.
+
+Reproduced on the licensed machine, one operation per process, against a TPD carrying an energy centre
+but **zero plant rooms, zero systems and zero zones**:
+
+```
+PRODUCTION Modify.Simulate RETURNED: True
+before: 4068 bytes   after: 4069 bytes
+error log: absent
+```
+
+Nothing was simulated and no result of any kind exists. The one byte of growth is `Save()`. Full
+transcript and the rest of the licensed checkpoint in `PR2-NATIVE-TAS-FINDINGS.md`.
