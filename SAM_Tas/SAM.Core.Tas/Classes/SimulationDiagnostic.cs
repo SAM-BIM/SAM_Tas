@@ -6,58 +6,67 @@ using System.Collections.Generic;
 
 namespace SAM.Core.Tas
 {
-    /// <summary>What a TAS <c>Simulate</c> return string is known to mean.</summary>
+    /// <summary>What a TAS simulate return string is known to mean.</summary>
     public enum SimulationDiagnosticKind
     {
-        /// <summary>TAS returned nothing. Not proof of success on its own - see <see cref="SimulationDiagnostic"/>.</summary>
+        /// <summary>TAS returned nothing. Not proof of success on its own.</summary>
         Silent,
 
-        /// <summary>TAS returned text matching a diagnostic measured to accompany a failed run.</summary>
+        /// <summary>Text measured to accompany a run that produced results - currently <c>"Done"</c>.</summary>
+        KnownSuccess,
+
+        /// <summary>Text measured to accompany a failed run.</summary>
         KnownFailure,
 
         /// <summary>
-        /// TAS returned text that has not been observed on the licensed machine. It is preserved as
-        /// evidence and is deliberately <b>not</b> read as either success or failure.
+        /// Text that has not been observed on the licensed machine. Preserved as evidence and
+        /// deliberately read as neither success nor failure.
         /// </summary>
         Unrecognised,
     }
 
     /// <summary>
-    /// Classifies the string <c>ITPD.Simulate</c> returns.
+    /// Classifies the string TAS's simulate entry points return.
     /// <para>
-    /// <b>Why this is a vocabulary and not <c>!string.IsNullOrEmpty(x)</c>.</b> <c>ITPD.Simulate</c> is
-    /// declared as returning a <c>String</c>, and production discarded it. Four distinct returns have been
-    /// measured on the licensed machine, and every one of them accompanied a run that produced nothing:
+    /// <b>Measured, not assumed.</b> <c>ITPD.Simulate</c>, <c>IPlantRoom.Simulate</c>,
+    /// <c>IPlantRoom.SimulateExx</c> and <c>ISystem.Simulate</c> all return a <c>String</c>, and
+    /// production discarded it. Five distinct returns have been measured on the licensed machine:
     /// </para>
     /// <code>
+    /// "Done"                          <- SUCCESS. ISystem.Simulate, with 24 finite ZoneTemperature
+    ///                                    values coming back for a 24-hour request.
+    /// "Sizing Flow Failed"            <- the plant side could not size a flow
+    /// "&lt;plant room name&gt; Has Errors"  <- e.g. "Plant Room Has Errors", "PR Has Errors"
     /// "Plant room has no components"
-    /// "Plant Room Has Errors"
     /// "Failed to open the TSD file"
-    /// "Sizing Flow Failed"
     /// </code>
     /// <para>
-    /// But <b>no successful run has yet been observed through this route</b>, so what TAS returns on
-    /// success - null, empty, or some status text - is <b>not established</b>. Treating every non-empty
-    /// answer as an error would therefore be an assumption, and a status string on success would turn
-    /// every good run into a refusal.
+    /// Note that the "Has Errors" message embeds the plant room's <b>name</b>, so it cannot be matched
+    /// literally - which is why the failure vocabulary is fragment-based.
     /// </para>
     /// <para>
-    /// So: a measured failure refuses; anything else is preserved verbatim as evidence and decides
-    /// nothing. That is safe because it is <b>not</b> the success gate - the decisive gate is the
-    /// complete <c>ZoneTemperature</c> reconciliation, which refuses a run that produced no results
-    /// whatever TAS said about it.
-    /// </para>
-    /// <para>
-    /// When a successful run is finally observed, add its return here: if success is silent, nothing
-    /// changes; if success carries text, this is the one place that needs to learn it.
+    /// A measured failure refuses. A measured success is recorded as such but is still <b>not</b> the
+    /// gate. Anything else is preserved verbatim and decides nothing. That is safe because the decisive
+    /// gate is the complete <c>ZoneTemperature</c> reconciliation, which refuses a run that produced no
+    /// results whatever TAS said about it.
     /// </para>
     /// </summary>
     public static class SimulationDiagnostic
     {
         /// <summary>
-        /// Fragments measured on licensed TAS, each seen accompanying a run that produced no results.
-        /// Matched case-insensitively as substrings, because TAS's casing varies between them
-        /// ("Plant room has no components" against "Plant Room Has Errors").
+        /// Measured on licensed TAS accompanying a run that produced complete, finite results.
+        /// Compared whole (case-insensitively), not as a fragment, because a success word appearing
+        /// inside a longer sentence is not evidence that the sentence means success.
+        /// </summary>
+        private static readonly string[] knownSuccessAnswers = new string[]
+        {
+            "Done",
+        };
+
+        /// <summary>
+        /// Fragments measured accompanying runs that produced nothing. Matched case-insensitively as
+        /// substrings, because TAS's casing varies ("Plant room has no components" against "Plant Room
+        /// Has Errors") and because "Has Errors" is prefixed by the plant room's own name.
         /// </summary>
         private static readonly string[] knownFailureFragments = new string[]
         {
@@ -72,13 +81,19 @@ namespace SAM.Core.Tas
             "missing",
         };
 
-        /// <summary>The fragments this classifier recognises, for reporting and for tests.</summary>
+        /// <summary>The success answers this classifier recognises, for reporting and for tests.</summary>
+        public static IEnumerable<string> KnownSuccessAnswers
+        {
+            get { return (string[])knownSuccessAnswers.Clone(); }
+        }
+
+        /// <summary>The failure fragments this classifier recognises, for reporting and for tests.</summary>
         public static IEnumerable<string> KnownFailureFragments
         {
             get { return (string[])knownFailureFragments.Clone(); }
         }
 
-        /// <summary>Classifies a <c>Simulate</c> return.</summary>
+        /// <summary>Classifies a simulate return.</summary>
         public static SimulationDiagnosticKind Classify(string returned)
         {
             if (string.IsNullOrWhiteSpace(returned))
@@ -87,6 +102,17 @@ namespace SAM.Core.Tas
             }
 
             string trimmed = returned.Trim();
+
+            // Success is matched whole and checked FIRST, so a future success answer that happened to
+            // contain a failure fragment would still need to be added here deliberately rather than
+            // being silently misread.
+            foreach (string answer in knownSuccessAnswers)
+            {
+                if (string.Equals(trimmed, answer, StringComparison.OrdinalIgnoreCase))
+                {
+                    return SimulationDiagnosticKind.KnownSuccess;
+                }
+            }
 
             foreach (string fragment in knownFailureFragments)
             {
@@ -105,6 +131,15 @@ namespace SAM.Core.Tas
         public static bool IsFailure(string returned)
         {
             return Classify(returned) == SimulationDiagnosticKind.KnownFailure;
+        }
+
+        /// <summary>
+        /// Whether TAS itself reported success. <b>Not</b> sufficient to accept a run - the results
+        /// reconciliation still decides - but it is positive evidence rather than mere silence.
+        /// </summary>
+        public static bool IsSuccess(string returned)
+        {
+            return Classify(returned) == SimulationDiagnosticKind.KnownSuccess;
         }
     }
 }

@@ -375,3 +375,126 @@ Three things follow directly:
   exactly the branch the source-order hardening protects.
 * **Fan duty is derived** (`DesignFlowType=2`), consistent with the authored-file measurement, so PR2
   reconciles it rather than writing it.
+
+
+---
+
+# "Sizing Flow Failed" - root cause, and the first genuinely successful Systems run
+
+## 1. Differential comparison, TAS-authored against production-converted
+
+| property / topology | TAS-authored (`AirTemp.tpd`, simulates) | production-converted MV (`Sizing Flow Failed`) | relevance |
+| --- | --- | --- | --- |
+| plant components | (its own, valid) | **19** - refrigerant/heating/cooling/DHW groups, 6 electrical groups, ASHP, 3 pumps, 2 multi-boilers, multi-chiller, 2 DHW plant junctions | the whole difference, see below |
+| DHW circuit | n/a | **`DHW Junction In` pipesIn=0, `DHW Junction Out` pipesOut=0** - a dangling loop | real defect, but NOT the cause (tested) |
+| air system components | Junction x2, Exchanger, Supply Fan, Extract Fan, SystemZone | Junction x3, Fan x2, ComponentGroup, GroupJunction x2, Damper x2, SystemZone x2 | both valid |
+| component group | Multiplicity=1, Base=6 | **Multiplicity=2, Base=2 -> 6** | the replication branch is live |
+| fan `DesignFlowType` | 3 (AllAttachedZonesFreshAir) | 2 (AllAttachedZonesFlowRate) | both derive; both size correctly |
+| damper | none | 2, `DesignFlowType=4` (NearestZoneFlowRate) | template already carries the leg carrier |
+| zone `ZoneComponentCount` | 1 (fancoil) | **2** (the template's radiator + DX/fancoil kit) | heating/cooling kit a ventilation route does not need |
+| zone loads | bound | **NOT bound** until `AddZoneLoad` is called - the name match never fires | separate defect, see C above |
+| air-side topology | connected | **connected** - intake -> fan -> group -> zones -> group -> fan -> exhaust | not the cause |
+
+## 2. One-change experiments - what did NOT move the diagnostic
+
+Every run below starts from a freshly production-converted TPD, applies exactly the named change,
+saves, reopens, simulates, and records the raw return.
+
+| experiment | switches | `ITPD.Simulate` |
+| --- | --- | --- |
+| E0 baseline | none | `Sizing Flow Failed` |
+| E1 | bind zone loads | `Sizing Flow Failed` |
+| E2 | + dampers to absolute Value | `Sizing Flow Failed` |
+| E3 | + fans to absolute Value | `Sizing Flow Failed` |
+| E4 | + dampers and fans | `Sizing Flow Failed` |
+| E5 | + zone flows to absolute Value | `Sizing Flow Failed` |
+| E6 | + group multiplicity 1 | `Sizing Flow Failed` |
+| E7 | + close the dangling DHW loop | `Sizing Flow Failed` |
+
+**No air-side change moves it.** The dangling DHW loop is a genuine defect in the converted output but
+is not the cause either.
+
+## 3. TAS's deeper diagnostic surface
+
+No error-log file is written beside a TPD. There is no per-component error accessor. But three further
+entry points exist, and **all of them return strings**:
+
+```
+ISystem.Simulate      (Int32 StartHour, Int32 EndHour, Int32 hWnd)
+IPlantRoom.Simulate   (Int32 StartHour, Int32 EndHour, Int32 hWnd)
+IPlantRoom.SimulateExx(StartHour, EndHour, PrecondHours, resetSizes, simSystem, mwf,
+                       designConditions, simdata, nThreads, hWnd)
+```
+
+Run against the identical failing document:
+
+```
+ISystem.Simulate          -> "Done"
+IPlantRoom.Simulate       -> "Sizing Flow Failed"
+IPlantRoom.SimulateExx    -> "Sizing Flow Failed"   (resetSizes = 1 and 0 alike)
+ITPD.Simulate             -> "Sizing Flow Failed"
+```
+
+## 4. ROOT CAUSE
+
+**The air system is valid and simulates. The plant side is what fails to size.**
+
+`ITPD.Simulate` and `IPlantRoom.Simulate` simulate the whole plant room, plant included. The shipped
+`MV.json` template brings a multi-boiler, a multi-chiller, an air-source heat pump and a DHW circuit
+whose junctions the conversion leaves dangling. That plant cannot size a flow, so TAS answers
+`"Sizing Flow Failed"` and no results appear - even though the ventilation network beside it is
+completely fine.
+
+Part O Iteration 3 is a **ventilation-only** route. What it needs out of TAS Systems is each zone's
+`ZoneTemperature`, which is an air-system result. Simulating the plant is not merely unnecessary, it is
+the thing that was preventing the route from producing anything at all.
+
+Note also that the failure message embeds the plant room's **name**: `"Plant Room Has Errors"` and
+`"PR Has Errors"` are the same message from differently named plant rooms. It can only ever be matched
+as a fragment.
+
+## 5. MINIMAL PRODUCTION CORRECTION
+
+`SAM.Analytical.Tas.TPD/Modify/Simulate.cs` gains **`SimulateSystems`**, which walks
+`EnergyCentre -> PlantRoom -> System` and calls `ISystem.Simulate` on each air system, classifying the
+returned diagnostic. The document-level `Simulate` is **unchanged** for callers that do want plant
+results. Nothing else in the TPD conversion is touched.
+
+## 6. ITPD/ISystem Simulate SUCCESS RETURN = `"Done"`
+
+Measured. `SimulationDiagnostic` now carries a `KnownSuccess` vocabulary alongside the failure
+fragments, checked first and matched **whole** rather than as a fragment, so a future success answer
+containing a failure word could not be silently misread. A measured success is recorded as positive
+evidence but still does **not** pass the run: the `ZoneTemperature` reconciliation remains the gate.
+
+## 7. The first genuinely successful Systems run, through PRODUCTION code
+
+`inv.exe verify` on a production-converted TPD, calling the production methods directly:
+
+```
+== PRODUCTION Modify.Simulate (document level - simulates the PLANT too) ==
+returned: False
+NativeDiagnostic: [Sizing Flow Failed]  kind=KnownFailure
+refusal: TAS reported a failure: "Sizing Flow Failed".
+
+== PRODUCTION Modify.SimulateSystems (air systems only) ==
+returned: True
+NativeDiagnostic: [Done]  kind=KnownSuccess
+note: 1 air system(s) simulated.
+note: TAS reported success: "Done". Positive evidence, but not the gate...
+
+== ZoneTemperature, read back from the same document ==
+  zone "{F735FFBD-...}" load="Cell 1" guid="{37FA3D5C-...}": 24/24 values, 24 finite, min=16 max=21  COMPLETE
+  zone "{6101A4F7-...}" load="Cell 2" guid="{211ECCA2-...}": 24/24 values, 24 finite, min=16 max=21  COMPLETE
+
+VERDICT: 2 of 2 zones returned a complete finite ZoneTemperature series for hours 0..23
+SimulationEvidence.Completed after reconciliation: True
+```
+
+All four of the brief's success conditions are met: no measured failure diagnostic; the simulation
+actually ran; result data exist; and every SystemZone returns a complete finite `ZoneTemperature`
+series for the requested period. `min=16 max=21` are real temperatures, not placeholder zeros.
+
+**One API detail worth recording:** `GetResultsData` hands back an array that a plain
+`array.GetValue(int)` walk indexes out of bounds. `foreach` over the array works, which is what the
+production `IndexedDoubles` path already relies on.

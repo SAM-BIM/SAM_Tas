@@ -11,16 +11,15 @@ namespace SAM.Analytical.Tas.TM59.Tests
     /// <summary>
     /// What the string <c>ITPD.Simulate</c> returns is allowed to decide.
     /// <para>
-    /// Four returns were measured on licensed TAS, each accompanying a run that produced nothing. But
-    /// <b>no successful run has been observed through that route</b>, so what TAS returns on success is
-    /// not established - it could be null, empty, or a status. Treating every non-empty answer as an
-    /// error would be an assumption, and would turn every good run into a refusal if TAS ever says
-    /// something on success.
+    /// Five returns are now measured on licensed TAS. Four accompanied runs that produced nothing, and
+    /// one - <c>"Done"</c>, from <c>ISystem.Simulate</c> - accompanied a run that returned 24 finite
+    /// ZoneTemperature values for a 24-hour request. Note that the "Has Errors" message embeds the
+    /// plant room's own NAME, so it can only be matched as a fragment.
     /// </para>
     /// <para>
-    /// So this fixture pins the conservative contract: a <b>measured</b> failure refuses; anything else is
-    /// preserved verbatim and decides nothing, leaving the complete <c>ZoneTemperature</c> reconciliation
-    /// as the decisive gate.
+    /// The contract this fixture pins: a <b>measured failure refuses</b>; a <b>measured success is
+    /// recorded but still does not pass the run</b>; anything else is preserved verbatim and decides
+    /// nothing. The decisive gate is always the complete <c>ZoneTemperature</c> reconciliation.
     /// </para>
     /// </summary>
     [TestFixture]
@@ -55,7 +54,40 @@ namespace SAM.Analytical.Tas.TM59.Tests
             });
         }
 
-        [TestCase("Success")]
+        [Test]
+        public void MeasuredSuccess_IsClassifiedAsSuccess()
+        {
+            // Measured on licensed TAS: ISystem.Simulate answered "Done" on a run that then returned 24
+            // finite ZoneTemperature values for a 24-hour request. That is the success vocabulary.
+            Assert.Multiple(() =>
+            {
+                Assert.That(SimulationDiagnostic.Classify("Done"), Is.EqualTo(SimulationDiagnosticKind.KnownSuccess));
+                Assert.That(SimulationDiagnostic.IsSuccess("Done"), Is.True);
+                Assert.That(SimulationDiagnostic.IsFailure("Done"), Is.False);
+                Assert.That(SimulationDiagnostic.IsSuccess("done"), Is.True, "Casing must not matter.");
+            });
+        }
+
+        [Test]
+        public void PlantRoomNameIsEmbeddedInTheHasErrorsMessage()
+        {
+            // "Has Errors" is prefixed by the plant room's own NAME - measured as both "Plant Room Has
+            // Errors" and "PR Has Errors" - so it can only be matched as a fragment, never literally.
+            Assert.Multiple(() =>
+            {
+                Assert.That(SimulationDiagnostic.IsFailure("PR Has Errors"), Is.True);
+                Assert.That(SimulationDiagnostic.IsFailure("Main PlantRoom Has Errors"), Is.True);
+            });
+        }
+
+        [Test]
+        public void SuccessIsCheckedBeforeFailureFragments()
+        {
+            // A success answer is matched WHOLE and checked first, so a future success word that happened
+            // to contain a failure fragment could not be silently misread as an error.
+            Assert.That(SimulationDiagnostic.Classify("Done"), Is.EqualTo(SimulationDiagnosticKind.KnownSuccess));
+        }
+
         [TestCase("Simulation complete")]
         [TestCase("8760 hours simulated")]
         public void UnrecognisedAnswer_IsNotTreatedAsAFailure(string returned)
@@ -178,6 +210,33 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 simulationEvidence.Completed,
                 Is.True,
                 "Once the results reconcile, the run is evidenced.");
+        }
+
+        [Test]
+        public void Evidence_MeasuredSuccess_StillNeedsTheResultsToReconcile()
+        {
+            // TAS saying "Done" is positive evidence, but it is NOT the gate. A run whose results do not
+            // reconcile must still refuse - which is what stops a plant-side success being read as
+            // "the ventilation results are there".
+            SimulationEvidence simulationEvidence = InPlaceRun();
+
+            bool mayProceed = simulationEvidence.RecordCallReturned("Done");
+            simulationEvidence.Conclude();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(mayProceed, Is.True);
+                Assert.That(simulationEvidence.NativeDiagnosticKind, Is.EqualTo(SimulationDiagnosticKind.KnownSuccess));
+                Assert.That(simulationEvidence.Notes, Has.Some.Contains("TAS reported success"));
+                Assert.That(
+                    simulationEvidence.Completed,
+                    Is.False,
+                    "Even a measured success does not complete the run on its own.");
+            });
+
+            simulationEvidence.RecordResultsReconciled(2, 0, 23);
+
+            Assert.That(simulationEvidence.Completed, Is.True);
         }
 
         [Test]

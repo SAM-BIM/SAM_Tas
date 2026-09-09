@@ -48,6 +48,146 @@ namespace SAM.Analytical.Tas.TPD
         /// True when every stage this method can judge passed. That is <b>not</b> the same as the simulation
         /// having produced usable results - see the remarks on the other overload.
         /// </returns>
+        /// <summary>
+        /// Simulates only the <b>air systems</b> in a TPD, rather than the whole plant room.
+        /// <para>
+        /// <b>Why this exists, measured on licensed TAS.</b> The Part O Iteration 3 route is ventilation
+        /// only: what it needs out of TAS Systems is each zone's <c>ZoneTemperature</c>. Simulating the
+        /// whole document also simulates the <i>plant</i> side - and on the shipped <c>MV.json</c>
+        /// template that plant (multi-boiler, multi-chiller, an air-source heat pump and a DHW circuit
+        /// whose junctions are left dangling) fails to size, so TAS answers <c>"Sizing Flow Failed"</c>
+        /// and no results appear.
+        /// </para>
+        /// <para>
+        /// The air system itself is perfectly valid. Measured on exactly that document:
+        /// </para>
+        /// <code>
+        /// ISystem.Simulate     -> "Done"                  and 24 finite ZoneTemperature values
+        /// IPlantRoom.Simulate  -> "Sizing Flow Failed"
+        /// IPlantRoom.SimulateExx -> "Sizing Flow Failed"  (resetSizes 0 and 1 alike)
+        /// ITPD.Simulate        -> "Sizing Flow Failed"
+        /// </code>
+        /// <para>
+        /// So the route simulates what it actually needs. The document-level overload is unchanged for
+        /// callers that do want plant results.
+        /// </para>
+        /// </summary>
+        /// <param name="simulationEvidence">What the run left behind. Never null.</param>
+        public static bool SimulateSystems(string path_TPD, int startHour, int endHour, out SimulationEvidence simulationEvidence)
+        {
+            simulationEvidence = new SimulationEvidence(SimulationOutputShape.InPlaceDocument, path_TPD, null);
+
+            if (string.IsNullOrWhiteSpace(path_TPD))
+            {
+                simulationEvidence.Refuse("No TPD path was given.");
+                return false;
+            }
+
+            if (!File.Exists(path_TPD))
+            {
+                simulationEvidence.Refuse(string.Concat("The TPD does not exist: ", path_TPD));
+                return false;
+            }
+
+            if (endHour < startHour)
+            {
+                simulationEvidence.Refuse(
+                    string.Format("The requested period ends before it starts: {0}..{1}.", startHour, endHour));
+                return false;
+            }
+
+            simulationEvidence.Prepare(DateTime.UtcNow);
+
+            if (simulationEvidence.Refusals.Count != 0)
+            {
+                return false;
+            }
+
+            using (SAMTPDDocument sAMTPDDocument = new SAMTPDDocument(path_TPD))
+            {
+                TPDDoc tPDDoc = sAMTPDDocument.TPDDocument;
+
+                if (tPDDoc == null)
+                {
+                    simulationEvidence.RecordCallFailed(string.Concat("the document could not be opened: ", path_TPD));
+                    return false;
+                }
+
+                EnergyCentre energyCentre = tPDDoc.EnergyCentre;
+
+                if (energyCentre == null)
+                {
+                    simulationEvidence.RecordCallFailed(
+                        string.Concat("the document carries no energy centre, so there is nothing to simulate: ", path_TPD));
+                    return false;
+                }
+
+                int count_Simulated = 0;
+                string diagnostic_Last = null;
+
+                try
+                {
+                    int count_PlantRoom = energyCentre.GetPlantRoomCount();
+
+                    for (int i = 1; i <= count_PlantRoom; i++)
+                    {
+                        PlantRoom plantRoom = energyCentre.GetPlantRoom(i);
+                        if (plantRoom == null)
+                        {
+                            continue;
+                        }
+
+                        int count_System = plantRoom.GetSystemCount();
+
+                        for (int j = 1; j <= count_System; j++)
+                        {
+                            global::TPD.System system = plantRoom.GetSystem(j);
+                            if (system == null)
+                            {
+                                continue;
+                            }
+
+                            // ISystem.Simulate returns a diagnostic string, exactly like the document-level
+                            // call. "Done" is the measured success answer.
+                            diagnostic_Last = system.Simulate(startHour + 1, endHour + 1, 0);
+                            count_Simulated++;
+
+                            if (SimulationDiagnostic.IsFailure(diagnostic_Last))
+                            {
+                                simulationEvidence.RecordCallReturned(diagnostic_Last);
+                                return false;
+                            }
+                        }
+                    }
+
+                    tPDDoc.Save();
+                }
+                catch (Exception exception)
+                {
+                    simulationEvidence.RecordCallFailed(
+                        string.Format("{0}: {1}", exception.GetType().Name, exception.Message));
+                    return false;
+                }
+
+                if (count_Simulated == 0)
+                {
+                    simulationEvidence.RecordCallFailed("the document carries no air system, so nothing was simulated.");
+                    return false;
+                }
+
+                simulationEvidence.Note(string.Format("{0} air system(s) simulated.", count_Simulated));
+
+                if (!simulationEvidence.RecordCallReturned(diagnostic_Last))
+                {
+                    return false;
+                }
+            }
+
+            simulationEvidence.Conclude();
+
+            return simulationEvidence.Refusals.Count == 0;
+        }
+
         public static bool Simulate(string path_TPD, int startHour, int endHour, out SimulationEvidence simulationEvidence)
         {
             simulationEvidence = new SimulationEvidence(SimulationOutputShape.InPlaceDocument, path_TPD, null);

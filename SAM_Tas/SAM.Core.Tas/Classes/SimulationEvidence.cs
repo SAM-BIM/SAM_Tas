@@ -329,6 +329,14 @@ namespace SAM.Core.Tas
                     Refuse(string.Format("TAS reported a failure: \"{0}\".", (nativeDiagnostic ?? string.Empty).Trim()));
                     return false;
 
+                case SimulationDiagnosticKind.KnownSuccess:
+                    CallReturned = true;
+                    Note(string.Format(
+                        "TAS reported success: \"{0}\". Positive evidence, but not the gate - the results "
+                        + "reconciliation still decides.",
+                        (nativeDiagnostic ?? string.Empty).Trim()));
+                    return true;
+
                 case SimulationDiagnosticKind.Unrecognised:
                     CallReturned = true;
                     Note(string.Format(

@@ -85,6 +85,12 @@ namespace Inv
                     return DumpTbd(args[1]);
                 case "dump-graph":
                     return DumpGraph(args[1], args[2]);
+                case "verify":
+                    return Verify.Run(args[1], int.Parse(args[2]), int.Parse(args[3]));
+                case "minimal":
+                    return Minimal.Run(args[1], args[2], args[3], int.Parse(args[4]), int.Parse(args[5]));
+                case "exp":
+                    return Experiment.Run(args[1], args[2], int.Parse(args[3]), int.Parse(args[4]));
                 case "convert-template":
                     return ConvertRef.Build(args[1], args[2], args[3]);
                 case "prove":
