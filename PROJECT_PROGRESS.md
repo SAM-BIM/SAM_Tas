@@ -1,14 +1,14 @@
 # Project Progress
 
 ## Branch
-`part-o/iteration3-tas-systems-route`, off `sow/2026-Q3` at **`ec7f505`**. 9 commits.
+`part-o/iteration3-tas-systems-route`, off `sow/2026-Q3` at **`ec7f505`**. 12 commits.
 
 This is **PR2 of SAM-BIM/SAM #111** (Part O Iteration 3 - explicit Systems/TPD ventilation route).
 **Not merged, not pushed, not complete.** Read "What is NOT done" before continuing.
 
 ## Last updated
-2026-09-09 - PR2 build pass 2: licensed checkpoint 1B complete (native carriers, units, identity,
-strengthened no-IZAM control) plus the binding records.
+2026-09-09 - PR2 build pass 3: licensed checkpoint 1B **closed** (flow unit proven, `Simulate` success
+semantics characterised as unknown and handled conservatively).
 
 ## Baselines
 
@@ -18,109 +18,104 @@ strengthened no-IZAM control) plus the binding records.
 | SAM-BIM/SAM_Systems | `89cf139966f4fe426459851d09f052834551792f` | the PR1 merge (#20), read-only, untouched |
 | SAM-BIM/SAM_Tas | `ec7f50543e123f8a734b6e27b2b16c0cf1f1edde` | this repo's base |
 
-Build order SAM -> SAM_Mollier -> SAM_Systems -> SAM_Tas. `SAM_Tas` consumes sibling **build outputs**;
-building the `SAM_Tas` solution is what propagates `SAM.Analytical.Systems.dll` into `SAM_Tas\build` for
-the test project. The solution needs .NET Framework MSBuild with **Restore and Build as separate
-invocations**.
+Build order SAM -> SAM_Mollier -> SAM_Systems -> SAM_Tas. `SAM_Tas` consumes sibling **build outputs**.
+The solution needs .NET Framework MSBuild with **Restore and Build as separate invocations**.
 
-## Licensed TAS findings that CONSTRAIN the remaining code
+## The licensed findings that CONSTRAIN the remaining code
 
-Full transcripts in `Documentation/evidence/PR2-CHECKPOINT-1B.md` and `PR2-NATIVE-TAS-FINDINGS.md`.
-The harness source is archived in `Documentation/evidence/PR2-harness-*.txt`; it lives at
+Transcripts: `Documentation/evidence/PR2-CHECKPOINT-1B.md`, `PR2-NATIVE-TAS-FINDINGS.md`,
+`PR2-unit-proof.log`. Harness archived as `Documentation/evidence/PR2-harness-*.txt`; it lives at
 `C:\TasOut\inv`, argv modes, **one operation per process**, TAS GUI closed.
 
-1. **Read every native identifier late-bound.** The typed `ISystemComponent.GUID`/`.Name` accessors
-   **throw** on a `SystemZone` and a `Fan`'s typed `.GUID` answered the string `"0"`.
-   `Query.NativeIdentity` encapsulates this in one place - **do not** "tidy" it into typed reads.
-2. **`SystemZone.GUID` and `ZoneLoad.GUID` are DISTINCT.** `AddZoneLoad` is the explicit pairing point;
-   `GetSystemZoneZoneLoad` is the zone->load direction; `GetZoneLoadForGuid` is the load->result bridge;
-   `GetComponentByGUID` round-trips the component.
-3. **Carriers**: supply on `SystemZone.FlowRate`/`.FreshAir` with `Type = tpdSizedVariableValue`;
-   **extract and transfer on an in-line `Damper`** (`DesignFlowRate` + `DesignFlowType =
-   tpdFlowRateValue`). A `Duct` has no guid and no design flow; a `Junction` has no members at all.
-   Fan duty is **derived** from attached zones and must be reconciled, never written.
-4. **`ITPD.Simulate` returns a diagnostic STRING** which production discarded. Observed:
-   `"Plant room has no components"`, `"Plant Room Has Errors"`, `"Failed to open the TSD file"`.
-   The TPD evidence path now captures it.
-5. **Units are stated as l/s** on convergent measured evidence (TAS's own defaults of 1.6 per m2 and
-   8 ACH; a consistent 1.11 l/s/m2 across both zones of an authored file; **no unit conversion anywhere
-   on the SAM->TPD path**). The confirming sizing round trip was attempted three ways and blocked each
-   time by TAS's own diagnostic, so it is **deferred to step 7**, where a production-converted TPD can
-   be simulated. Until then PR2 must not silently rely on the unit.
+1. **ABSOLUTE FLOW UNIT = l/s. PROVEN.** TAS's own ACH sizing against a zone load of volume 200 m3
+   answered `444.44444444444446` = 200 x 8 / 3600 x 1000. m3/s and m3/h are wrong by 1000x and 3.6x.
+   Applies to `SystemZone.FlowRate`, `.FreshAir` and `Damper.DesignFlowRate` - all `SizedFlowVariable.Value`.
+   PR2's write mode (`Type = tpdSizedVariableValue`) was confirmed to hold authored values exactly.
+2. **Read every native identifier late-bound.** The typed `ISystemComponent.GUID`/`.Name` accessors
+   **throw** on a `SystemZone`. `Query.NativeIdentity` encapsulates this - **do not** convert it to a
+   typed read.
+3. **`SystemZone.GUID` and `ZoneLoad.GUID` are DISTINCT.** `AddZoneLoad` is the explicit pairing point;
+   `GetSystemZoneZoneLoad` is zone->load; `GetZoneLoadForGuid` is load->result; `GetComponentByGUID`
+   round-trips the component.
+4. **Carriers**: supply on `SystemZone.FlowRate`/`.FreshAir`; **extract and transfer on an in-line
+   `Damper`** (`DesignFlowRate` + `DesignFlowType = tpdFlowRateValue`). A `Duct` has no guid and no
+   design flow; a `Junction` has no members. Fan duty is derived and must be reconciled, never written.
+   **The MV template already places one `Damper` per room**, currently `DesignFlowType=4`.
+5. **`ITPD.Simulate` success semantics are UNKNOWN.** Four returns are measured and all four are
+   failures, but **no successful run has been obtained**, so TAS may return a status on success.
+   `SimulationDiagnostic` therefore refuses only a **measured** failure; silence and unrecognised text
+   decide nothing and are preserved verbatim. The decisive gate is the `ZoneTemperature` reconciliation.
+   **Do not reintroduce `if (!IsNullOrEmpty) fail`.** When a successful return is observed,
+   `SimulationDiagnostic` is the one place to teach it.
+
+### Two production defects observed live in the converted output
+
+* The production conversion left every zone with **no zone load at all** (`volume=NaN`), because
+  `Query.ZoneLoads(TSDData, systemSpaces)` matches `SpaceName` against `ZoneLoad.Name` and the
+  template's "System Zone 1" never matches the TSD's "Cell 1". Binding by `AddZoneLoad` fixed it.
+* **Both converted zones carry the same display name** ("System Zone 1"), so any name-keyed lookup
+  aliases them.
 
 ## What IS done
 
-1. **`Query.ZoneLoads` fixed-index defect** - fixed. Reproduced first: a three-load zone answered the
-   first load three times and requested COM index 1 three times.
-2. **`SimulationEvidence` / `SimulationOutputShape`** (in `SAM.Core.Tas`, the only assembly both
-   simulate paths already reference). Two output shapes held to different rules; stale error logs
-   deleted or excluded by timestamp; a saved in-place document is explicitly *not* evidence.
-3. **Both `Modify.Simulate` paths report evidence.** The TPD one refuses the null-energy-centre path that
-   used to return a literal `true`, and now refuses on TAS's returned diagnostic string. The TBD one
-   demotes `Core.Query.WaitToUnlock` from verdict to wait.
-4. **The no-IZAM thermal source** - `RemoveIZAMs` and `RemoveMechanicalVentilationGains`, both defaulting
-   **false**, run as gated steps inside the TBD session that is already open.
-5. **Order independence in the replicated-group branch (B-14)** - buckets sorted by source guid through
-   `Query.SourceOrderKey`, so `tuples[0]`/`RemoveAt(0)` consume in a stated rule rather than caller
-   enumeration order.
-6. **`Query.NativeIdentity`** - the single encapsulated late-bound identity read.
-7. **`SystemVentilationBinding` and `SystemVentilationConnectionBinding`** - the two records, carrying
-   both native identifiers, supply and extract as separate nullable duties, and a transfer row naming
-   both rooms plus its `SpaceAirMovement`.
+1. `Query.ZoneLoads` fixed-index defect - fixed, reproduced first.
+2. `SimulationEvidence` / `SimulationOutputShape` / `SimulationDiagnostic` (in `SAM.Core.Tas`).
+3. Both `Modify.Simulate` paths report evidence; the TPD one refuses the old literal-`true` path.
+4. The no-IZAM thermal source - `RemoveIZAMs`, `RemoveMechanicalVentilationGains`, both default false.
+5. Order independence in the replicated-group branch (B-14) via `Query.SourceOrderKey`.
+6. `Query.NativeIdentity` - the single encapsulated late-bound identity read.
+7. `SystemVentilationBinding` and `SystemVentilationConnectionBinding`.
 
-### Native acceptance obtained so far
+### Native acceptance obtained
 
-**Strengthened no-IZAM control (the one that actually proves the cleanup):** built by controlled
-mutation of the real fixture-2 control TBD - 3 genuine inherited IZAMs and `ticV v=5 f=1 sb=2.5` on all
-36 internal conditions. After the production cleanup:
+**Items 1-3 PASS**, on a **strong** control built by controlled mutation of the fixture-2 control TBD
+(3 genuine inherited IZAMs, `ticV v=5 f=1 sb=2.5` on all 36 ICs):
 
 | measure | BEFORE | AFTER |
 | --- | --- | --- |
 | IZAM count | 3 | **0** |
-| `ticV` effective non-zero | 36 | **0** |
-| `ticV` effective **sum** | 180 | **0** |
+| `ticV` effective sum | 180 | **0** |
 | `ticI` infiltration | 36 rows | **IDENTICAL** |
-| aperture types (name, Cd, sheltered, profile, schedule) | 2 | **IDENTICAL** |
+| aperture types | 2 | **IDENTICAL** |
 
 Reproduce: `inv.exe seed C:\TasOut\po2\f2c.tbd C:\TasOut\po2\f2seed.tbd 3 5.0` then
 `inv.exe clean C:\TasOut\po2\f2seed.tbd`.
 
-The earlier fixture-1/2 workflow runs remain valid as evidence that **the workflow executes, the cleanup
-steps run, `ticI` is preserved and the native environment works** - they are **not** full IZAM/ticV
-acceptance, because both controls had IZAM count 0 and an effective `ticV` of zero.
+## What is NOT done
 
-## What is NOT done - the remaining PR2 scope
-
-- **Step 7, conversion hardening.** Wiring the binding capture into `Convert/ToTPD/TPD.cs` at the
-  explicit pairing points (`dictionary_SystemComponent[...] = ...` in the non-group branch, and the
-  `ToTPD(DisplaySystemSpace, ..., SystemZone)` call in the group branch); replacing the two `return true`
-  literals with a reconciliation; binding the zone load by identity instead of `SpaceName`; scoping
-  `Create.Ducts` and carrying `DesignFlowRate` onto a **`Damper`** per the checkpoint; the deep clone
-  that keeps PR1's graph unmutated. **Also the deferred unit confirmation.**
-- **Step 8, results.** `SystemSpaceResult` identity (stop `FirstOrDefault()`), stop adding `null` in
-  `SystemSpaceResults`, `IndexedDoubles` reporting its swallowed failures, and
-  `SystemZoneTemperatureResults` with the completeness gate. Remember the key trap: the series is
+- **Step 7, conversion hardening.** Capture the room binding **at** the two explicit pairing points in
+  `Convert/ToTPD/TPD.cs` (`dictionary_SystemComponent[...] = ...` in the non-group branch;
+  `ToTPD(DisplaySystemSpace, ..., SystemZone)` in the group branch). Bind the zone load by identity
+  (`AddZoneLoad`) instead of by `SpaceName`. Write extract/transfer duties onto the in-line `Damper`
+  with `DesignFlowType = tpdFlowRateValue` in l/s. Replace the two `return true` literals with the
+  reconciliation. Deep-clone so PR1's graph is unmutated.
+- **Step 8, results.** `SystemSpaceResult` identity (drop `FirstOrDefault()`, select the load the
+  binding names), stop adding `null` in `SystemSpaceResults`, `IndexedDoubles` reporting its swallowed
+  failures, and `SystemZoneTemperatureResults` with the completeness gate. Key trap: the series is
   reachable only by `SpaceDataType.ZoneTemperature.ToString()`, never the enum indexer.
 - **Step 9**, `SystemVentilationRoute` + `Create.NoIzamThermalSource` + the path guard.
 - **Step 10**, scaling at 100/1,000/5,000.
-- **Step 12**, acceptance items 4-15 (items 1-3 are done, and now properly controlled).
+- **Step 12**, acceptance items 4-15.
+- **Open sub-question**: the production-converted MV template still answers `"Sizing Flow Failed"` even
+  with loads bound and flows absolute, so something in its plant or fan configuration is not yet valid.
+  That must be resolved for a successful simulation - and resolving it is also what will finally reveal
+  the `Simulate` success return.
 
 ## Validation performed
 
 | check | result |
 | --- | --- |
-| `SAM.Analytical.Tas.TM59.Tests` | **746 passed, 0 failed** (690 at the base commit; 56 added) |
+| `SAM.Analytical.Tas.TM59.Tests` | **761 passed, 0 failed** (690 at the base commit; 71 added) |
 | Release build, `SAM_Tas.sln`, .NET Framework MSBuild, Restore and Build separate | **0 errors** |
 | `git diff --check` | clean |
-| licensed runs | 4 full-year workflow runs, a TAS-authored system observed, 2 reference systems built and round-tripped, 1 seeded control cleaned |
+| licensed runs | 4 full-year workflows, a TAS-authored system observed, 2 reference systems round-tripped, 1 seeded control cleaned, 4 production-converted TPDs simulated |
 
 ## Exact recommended next step
 
-Step 7. Capture the room binding **at** the two explicit pairing points in `Convert/ToTPD/TPD.cs` rather
-than re-deriving it afterwards, reading identity only through `Query.NativeIdentity`, and carry
-extract/transfer duties onto an in-line `Damper` in `Create.Ducts` as the checkpoint established. Take
-the deferred unit confirmation at the same time: once a production-converted TPD exists it can be
-simulated, and the sized value read back against a known zone volume.
+Step 7, starting with the binding capture at the two pairing points, reading identity only through
+`Query.NativeIdentity`. Take the `"Sizing Flow Failed"` question at the same time: it is the last thing
+standing between PR2 and a successful native simulation, and therefore between PR2 and acceptance items
+12-15.
 
 ---
 
