@@ -259,3 +259,119 @@ Reproduce with:
 inv.exe seed  C:\TasOut\po2\f2c.tbd C:\TasOut\po2\f2seed.tbd 3 5.0
 inv.exe clean C:\TasOut\po2\f2seed.tbd
 ```
+
+
+---
+
+# Checkpoint 1B closure - the two remaining native semantics
+
+## A. ABSOLUTE FLOW UNIT = **litres per second (l/s)** - PROVEN
+
+Proven by **TAS's own arithmetic**, read back through the **exact COM property PR2 writes**
+(`SystemZone.FlowRate.Value`), on a topologically valid current-TAS file.
+
+**Method.** The shipped Part O template `MV.json` was converted by the **production**
+`SAM.Analytical.Tas.TPD.Convert.ToTPD` against the real fixture-1 no-IZAM TSD, producing a TPD with a
+complete plant circuit (19 plant components) and a live air system. Each zone was then bound to a real
+`ZoneLoad` by explicit `AddZoneLoad`, so TAS itself reports the zone volume. Every zone's `FlowRate`
+was set to **TAS's own ACH sizing rule at 8 ACH** and the document simulated, so TAS - not the harness -
+computed the flow.
+
+```
+zone[1] bound -> load "Cell 1" guid "{37FA3D5C-...}" volume 200
+zone[2] bound -> load "Cell 2" guid "{211ECCA2-...}" volume 200
+      Method=2 (tpdSizeFlowACH)  SizeValue1=8  Type=2 (Size)
+
+== AFTER ==
+  zone[1] volume=200 sized=444.44444444444446 Type=3 (SizeDone)
+      candidates  m3/s=0.44444  l/s=444.44444  m3/h=1600.00000   -> MATCHES l/s
+  zone[2] volume=200 sized=444.44444444444446 Type=3 (SizeDone)
+      candidates  m3/s=0.44444  l/s=444.44444  m3/h=1600.00000   -> MATCHES l/s
+```
+
+200 m3 x 8 ACH = 1600 m3/h = 0.4444 m3/s = **444.444 l/s**. TAS answered **444.44444444444446** and
+marked the variable `tpdSizedVariableSizeDone`. The other two candidates are wrong by factors of 1000
+and 3.6 respectively, so this is unambiguous.
+
+**Independently corroborated on the same file**: with the template's own `PeakInternalCondition` method
+TAS sized the same 200 m3 zones to `266.66668701171875`, i.e. 4.8 ACH - a sensible ventilation rate in
+l/s and absurd in m3/s.
+
+**And PR2's write mode was confirmed on the same file.** Forcing `Type = tpdSizedVariableValue` held the
+authored values exactly through save, simulate and reopen:
+
+```
+      forced absolute: Value=128.00001525878906 Type=1
+      forced absolute: Value=149.33334350585938 Type=1
+  ...
+  zone[1] sized=128.00001525878906 Type=1
+  zone[2] sized=149.33334350585938 Type=1
+```
+
+> **ABSOLUTE FLOW UNIT = l/s**, for `SystemZone.FlowRate`, `SystemZone.FreshAir` and
+> `Damper.DesignFlowRate` alike - they are all `SizedFlowVariable.Value`.
+
+## B. `ITPD.Simulate` success semantics - NOT established, and the code says so
+
+Four distinct returns have now been measured, **every one of them accompanying a run that produced
+nothing**:
+
+```
+"Plant room has no components"     bare system, no plant side
+"Plant Room Has Errors"            plant side present but not a valid circuit
+"Failed to open the TSD file"      TSD unreadable (3 locations tried)
+"Sizing Flow Failed"               production-converted MV template
+```
+
+**No successful run was obtained.** The production-converted MV template still answers
+`"Sizing Flow Failed"` even when the zones are bound to real loads and their flows are absolute with
+nothing left to size - so the remaining failure is elsewhere in the template's plant or fan
+configuration, and chasing it is step 7 work, not a checkpoint question.
+
+**Therefore what TAS returns on success is unknown**, and the earlier implementation -
+`if (!string.IsNullOrWhiteSpace(returned)) fail` - was an assumption. It has been **removed**.
+
+`SimulationDiagnostic` now classifies the return against the **measured** vocabulary:
+
+* a measured failure -> **refuses**;
+* silence -> decides nothing;
+* anything unrecognised -> **preserved verbatim, recorded as a note, and decides nothing**.
+
+`SimulationEvidence.NativeDiagnostic` and `.NativeDiagnosticKind` keep the raw answer as evidence
+whatever it says. This is safe precisely because the string is **not** the success gate: the decisive
+gate remains the complete `ZoneTemperature` reconciliation, which refuses a run that produced no
+results regardless of what TAS said. When a successful return is finally observed,
+`SimulationDiagnostic` is the one place that needs to learn it.
+
+## C. Two production defects observed live during this closure
+
+1. **Zone loads were not bound at all.** After the production conversion the zones read
+   `GetSystemZoneZoneLoad -> <no object>` and `volume=NaN`, because `Query.ZoneLoads(TSDData,
+   systemSpaces)` matches `SystemSpaceParameter.SpaceName` against `ZoneLoad.Name` - and the template's
+   spaces are "System Zone 1" while the TSD's loads are "Cell 1"/"Cell 2". That is the N2 name-matching
+   defect, reproduced end to end. Binding by explicit `AddZoneLoad` fixed it immediately.
+2. **Duplicate display names in the production output.** Both converted zones are named
+   `"System Zone 1"` - so any name-keyed result lookup would alias them onto one another.
+
+## D. What the production conversion actually builds, and why it matters for step 7
+
+```
+Component[1..3]  Junction  "Junction Fresh Air", "Junction Exhaust Air", "Junction Return"
+Component[4]     Fan       "Return Air Fan"   DesignFlowType=2  (AllAttachedZonesFlowRate)
+Component[5]     Fan       "Fresh Air Fan"    DesignFlowType=2
+Component[6]     ComponentGroup "MV 1_AHU1_AHU1"  Multiplicity=2  BaseComponentCount=2 -> 6
+                   GroupJunction -> Damper 1 -> System Zone 1 -> GroupJunction     (x2 replicas)
+Component[9,11]  Damper    DesignFlowType=4  (NearestZoneFlowRate)
+Component[10,12] SystemZone  ZoneLoadCount=1
+```
+
+Three things follow directly:
+
+* **The template already places one in-line `Damper` per room.** The damper is not something PR2 has to
+  invent as a carrier - it is already there, currently deriving its duty from the nearest zone
+  (`DesignFlowType=4`). PR2 sets it to `tpdFlowRateValue` with PR1's authored duty for the legs that
+  carry one.
+* **The multiplicity path is live** - `Multiplicity=2`, two base components replicated to six. This is
+  exactly the branch the source-order hardening protects.
+* **Fan duty is derived** (`DesignFlowType=2`), consistent with the authored-file measurement, so PR2
+  reconciles it rather than writing it.

@@ -126,6 +126,15 @@ namespace SAM.Core.Tas
         /// <summary>Whether the COM call returned rather than throwing.</summary>
         public bool CallReturned { get; private set; }
 
+        /// <summary>
+        /// The raw string <c>ITPD.Simulate</c> returned, preserved verbatim as evidence whatever it said.
+        /// <c>null</c> for a shape whose call returns nothing, or when the call threw.
+        /// </summary>
+        public string NativeDiagnostic { get; private set; }
+
+        /// <summary>What <see cref="NativeDiagnostic"/> was classified as. See <see cref="SimulationDiagnostic"/>.</summary>
+        public SimulationDiagnosticKind NativeDiagnosticKind { get; private set; } = SimulationDiagnosticKind.Silent;
+
         /// <summary>Whether the caller has confirmed the results read back and reconciled. In-place runs turn on this.</summary>
         public bool ResultsReconciled { get; private set; }
 
@@ -296,6 +305,44 @@ namespace SAM.Core.Tas
         {
             CallReturned = true;
             Note("The TAS call returned without throwing.");
+        }
+
+        /// <summary>
+        /// Stage 2 for a call that answers with a diagnostic string. The string is preserved verbatim
+        /// whatever it says; only a <b>measured</b> failure refuses.
+        /// <para>
+        /// An unrecognised answer is recorded and decides nothing, because no successful run has yet been
+        /// observed and TAS may well return a status on success. The decisive gate is the results
+        /// reconciliation, not this string.
+        /// </para>
+        /// </summary>
+        /// <returns>True when the run may proceed to be judged on its results.</returns>
+        public bool RecordCallReturned(string nativeDiagnostic)
+        {
+            NativeDiagnostic = nativeDiagnostic;
+            NativeDiagnosticKind = SimulationDiagnostic.Classify(nativeDiagnostic);
+
+            switch (NativeDiagnosticKind)
+            {
+                case SimulationDiagnosticKind.KnownFailure:
+                    CallReturned = false;
+                    Refuse(string.Format("TAS reported a failure: \"{0}\".", (nativeDiagnostic ?? string.Empty).Trim()));
+                    return false;
+
+                case SimulationDiagnosticKind.Unrecognised:
+                    CallReturned = true;
+                    Note(string.Format(
+                        "TAS returned \"{0}\", which is not a diagnostic measured on the licensed machine. It is "
+                        + "recorded as evidence and treated as neither success nor failure; the results "
+                        + "reconciliation decides.",
+                        (nativeDiagnostic ?? string.Empty).Trim()));
+                    return true;
+
+                default:
+                    CallReturned = true;
+                    Note("The TAS call returned without throwing and said nothing.");
+                    return true;
+            }
         }
 
         /// <summary>Stage 2, failed. The COM call threw, or the document could not be opened.</summary>

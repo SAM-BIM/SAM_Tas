@@ -100,21 +100,22 @@ namespace SAM.Analytical.Tas.TPD
                 try
                 {
                     // ITPD.Simulate is declared as returning a STRING, and this call used to discard it.
-                    // Measured on licensed TAS, that string is a precise diagnosis of why nothing ran -
-                    // "Plant room has no components", "Plant Room Has Errors", "Failed to open the TSD file".
-                    // It is the best evidence available and it is free.
+                    // Measured on licensed TAS, that string diagnoses why nothing ran - "Plant room has no
+                    // components", "Plant Room Has Errors", "Failed to open the TSD file", "Sizing Flow
+                    // Failed". It is preserved verbatim as evidence.
+                    //
+                    // It is NOT treated as "non-empty means failure": no successful run has been observed
+                    // through this route, so TAS may return a status on success too. Only a measured
+                    // failure refuses here; anything else is recorded and left to the results
+                    // reconciliation, which is the decisive gate.
                     string returned = tPDDoc.Simulate(startHour + 1, endHour + 1, 0);
 
                     tPDDoc.Save();
 
-                    if (!string.IsNullOrWhiteSpace(returned))
+                    if (!simulationEvidence.RecordCallReturned(returned))
                     {
-                        simulationEvidence.RecordCallFailed(
-                            string.Format("TAS answered \"{0}\".", returned.Trim()));
                         return false;
                     }
-
-                    simulationEvidence.RecordCallReturned();
                 }
                 catch (Exception exception)
                 {
