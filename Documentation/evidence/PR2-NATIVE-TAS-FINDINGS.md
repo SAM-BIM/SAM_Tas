@@ -167,3 +167,80 @@ These need the fixture-1 run, which attaches a real no-IZAM TSD to the energy ce
 2. the absolute flow unit when `Type = tpdSizedVariableValue`;
 3. how an extract-only room and a room-to-room transfer are actually expressed once a TSD is present;
 4. `ZoneTemperature` unit and API agreement.
+
+---
+
+# Fixture runs - no-IZAM thermal source (native acceptance items 1, 2, 3)
+
+Both fixtures were run twice through the harness: once as a **control** carrying the pre-Iteration-3
+behaviour (`AddIZAMs = true`, both new switches off) and once as the **Iteration 3** source
+(`AddIZAMs = false`, `RemoveIZAMs = true`, `RemoveMechanicalVentilationGains = true`). Everything else
+- model, gbXML, weather, sizing, full-year simulation - is identical. Each TBD is then read back by
+walking TAS's own `GetIZAM(i)` / `GetIC(i)` / `GetProfile(ticV|ticI)` accessors, **independently of the
+code under test**.
+
+Weather: `C:\Users\Public\Documents\Tas Data\Databases\CIBSE Weather 2021.twd`, 31 years read, `[0]`.
+Simulation: `Sizing = true`, `Simulate = true`, days 1..365.
+
+## Fixture 1 - `ModelA-Tas.sam`, 2 spaces, 4 internal conditions
+
+| | control | Iteration 3 |
+| --- | --- | --- |
+| workflow | completed | completed |
+| TBD | 302,105 bytes | 302,013 bytes |
+| TSD | 2,287,991 bytes | **2,287,480 bytes** - a real result set, not the ~22-byte stub |
+| IZAM count | 0 | **0** |
+| internal conditions | 4 | 4 |
+| `ticV` non-zero | **4** | **0** |
+| `ticI` present | 4 | 4, **identical values** |
+
+Workflow notes from the Iteration 3 run:
+
+```
+note: Removing IZAMs: none remain.
+note: Removing Mechanical Ventilation Gains: ticV zeroed on 4 internal condition(s):
+      Cell 1, Cell 1 - HDD, Cell 2, Cell 2 - HDD. Infiltration (ticI) and natural
+      ventilation (aperture types and opening schedules) are untouched - they are
+      separate carriers.
+```
+
+## Fixture 2 - `SAM_zoningAM_v2zonesisDomestic.sam`, 9 spaces, 36 internal conditions
+
+| | control | Iteration 3 |
+| --- | --- | --- |
+| TBD | 411,333 bytes | 411,477 bytes |
+| TSD | 4,767,060 bytes | **4,768,975 bytes** |
+| IZAM count | 0 | **0** |
+| internal conditions | 36 | 36 |
+| `ticV` non-zero | **36** | **0** |
+| `ticI` present | 36 | 36 |
+
+`ticI` compared field by field across every internal condition in both TBDs:
+
+```
+ticI IDENTICAL across all 36 internal conditions
+control ticV non-zero: 36
+no-IZAM ticV non-zero: 0
+```
+
+Every room keeps `ticI(v=0 f=0.15)` or `ticI(v=0.15 f=1)` exactly as the control produced it, while
+every `ticV` factor moves from `1` to `0`. **That is item 3 proved by comparison rather than asserted:
+the mechanical ventilation term was zeroed and the infiltration term in the adjacent slot was not
+touched.**
+
+## Two honest limits on what these runs prove
+
+1. **The IZAM sweep is not stressed.** Both fixtures answer `IZAM COUNT: 0` in the **control** too,
+   because neither SAM model carries mechanical ventilation systems for `Modify.UpdateIZAMs` to build
+   IZAMs from. So "no IZAM survives" is satisfied on both fixtures but has not been shown to remove an
+   IZAM that was actually there. Demonstrating the sweep needs a model with ventilation systems
+   assigned, or a warm start from a canonical TBD that already carries IZAMs.
+
+2. **The `ticV` magnitude was already zero.** A TBD profile is *factor x value*, and the control's
+   `ticV` reads `v=0 f=1` on every internal condition - product zero. What the cleanup demonstrably
+   does is drive the factor to `0` as well, so the term cannot be re-activated by a later value write.
+   It does **not** on these two fixtures demonstrate the removal of a non-zero mechanical ventilation
+   load, because there was not one to remove.
+
+Neither limit affects the design - the removal is structural and slot-specific either way - but both
+are stated so the evidence is not read as more than it is.
