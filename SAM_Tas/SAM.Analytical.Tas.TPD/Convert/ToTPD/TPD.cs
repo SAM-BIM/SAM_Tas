@@ -656,6 +656,25 @@ namespace SAM.Analytical.Tas.TPD
 
                                             systemComponents_SAM.RemoveAt(i);
                                         }
+
+                                        //--------------------------------------------------------------------------------
+                                        //Order independence. Both loops above walk BACKWARDS and RemoveAt(i), so each
+                                        //bucket ends up in reverse caller-enumeration order; the replica walk below then
+                                        //claims from it with tuples[0]/RemoveAt(0). That made "which analytical room owns
+                                        //which replicated TAS zone" a function of the order the caller's collection
+                                        //happened to be in.
+                                        //
+                                        //Sorting each bucket by the SOURCE component's own guid replaces that with a
+                                        //stated rule - ascending source guid, the same rule PR1 materialises by - so the
+                                        //same graph supplied in any order produces the same room-to-zone mapping. The
+                                        //ordering is total and deterministic: guid first, and the group index is already
+                                        //the bucket key, so no two entries can compare equal unless they are the same
+                                        //source object.
+                                        //--------------------------------------------------------------------------------
+                                        foreach (List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples in sortedDictionary_SystemComponent.Values)
+                                        {
+                                            tuples?.Sort((x, y) => Query.SourceOrderKey(x?.Item1).CompareTo(Query.SourceOrderKey(y?.Item1)));
+                                        }
                                     }
 
                                     int count = 1;
