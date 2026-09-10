@@ -1,5 +1,38 @@
 # Project Progress
 
+## Current: PR3 of SAM-BIM/SAM #111 - the ResultantTemperature thermostat bridge
+`part-o/iteration3-resultant-temperature-bridge`, off `sow/2026-Q3` at **`5bec3a6d`** (the PR2 merge).
+SAM_Tas only; no SAM / SAM_Systems / SAM_UI change.
+
+2026-09-10 (night) - **IMPLEMENTED, LICENSED BRIDGE ACCEPTANCE COMPLETE.** Route:
+`TPD ZoneTemperature -> COPY of the route's own no-IZAM TBD -> ticLL AND ticUL := achieved air
+temperature, hour by hour -> second TSD -> ResultantTemperature per Space.Guid`, behind
+`IResultantTemperatureProvider` (`ThermostatBridgeResultantTemperatureProvider` is the one class to delete
+when TAS Systems answers a native resultant temperature). Evidence:
+`Documentation/evidence/PR3-RESULTANT-TEMPERATURE-BRIDGE.md`.
+
+On the real fixture (`A7E09A25...7E4B`, intent byte-identical to PR2's): 8 of 8 rooms, 8760 ZoneTemperature
+-> 8760 heating and 8760 cooling thermostat slots on both internal conditions, **max transfer delta 0**;
+8760 finite ResultantTemperature each; achieved air within 0.0010 K of the imposed series; all 9 TBD zones
+renamed to one string -> 8 of 8 rooms bit-identical; source TBD/TSD hashes unchanged; second simulation
+evidenced by a fresh TSD. PR2's own acceptance (items 4-15) and 14/14 directed topology re-run PASS on
+this build. Tests: `ThermostatBridgeTests` 21/21; TM59 882/882 (861 + 21); benchmark 16/16.
+
+Native facts this PR measured, not to be re-derived:
+- `TBD.profile.SetYearlyValues(float[])` **ignores element 0** and repeats the last element: a 0-based
+  `float[8760]` shifts every hour by one, silently. Write `yearlyValues[h]`, h = 1..8760, and read back.
+  `SAM.Analytical.Tas/Modify/Update.cs` and `UpdateACCI.cs` write 0-based arrays through it - raised as a
+  separate follow-up, deliberately not changed here.
+- TSD annual index k == yearly slot k + 1 == 0-based hour k (self-imposition control + acceptance, +-1 h
+  shift tests). TAS Systems ZoneTemperature is single precision, so the TBD profile stores it exactly.
+- SAM's TBD export gives each zone its own normal + HDD internal conditions, thermostats radiant 0 /
+  proportional 0 - the air control the bridge needs; the bridge refuses rather than reconfigures otherwise.
+
+Harness: `C:\TasOut\pr3\h` (PR2 re-acceptance harness + `Bridge.cs`, archived as
+`Documentation/evidence/PR3-harness-*.txt`); modes `prep`, `source`, `bridge`, `bridgecheck`, `rename`.
+
+## Previous: PR2 (merged as SAM-BIM/SAM_Tas #50, merge `5bec3a6d`)
+
 ## Branch
 `part-o/iteration3-tas-systems-route`, off `sow/2026-Q3` at **`ec7f505`**. The corrective
 re-acceptance delta sits on top of **`fc32261`**, the previously pushed head.
