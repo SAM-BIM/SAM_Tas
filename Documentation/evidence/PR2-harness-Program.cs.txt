@@ -87,6 +87,14 @@ namespace Inv
                     return DumpGraph(args[1], args[2]);
                 case "verify":
                     return Verify.Run(args[1], int.Parse(args[2]), int.Parse(args[3]));
+                case "route-source":
+                    return Route.Source(args[1], args[2], args[3], args.Length > 4 ? args[4] : "sizing");
+                case "route-acceptance":
+                    return Route.Run(args[1], args[2], args[3], args.Length > 4 ? args[4] : "sizing");
+                case "fanout":
+                    return FanOut.Run(args[1], int.Parse(args[2]));
+                case "zoneload-identity":
+                    return Ident.Run(args[1], args[2], args[3]);
                 case "minimal":
                     return Minimal.Run(args[1], args[2], args[3], int.Parse(args[4]), int.Parse(args[5]));
                 case "exp":

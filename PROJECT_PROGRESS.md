@@ -1,123 +1,156 @@
 # Project Progress
 
 ## Branch
-`part-o/iteration3-tas-systems-route`, off `sow/2026-Q3` at **`ec7f505`**. 13 commits.
+`part-o/iteration3-tas-systems-route`, off `sow/2026-Q3` at **`ec7f505`**.
 
 This is **PR2 of SAM-BIM/SAM #111** (Part O Iteration 3 - explicit Systems/TPD ventilation route).
-**Not merged, not pushed, not complete.** Read "What is NOT done" before continuing.
+**Not merged, not pushed.** The PR2 build is complete and the licensed acceptance is recorded below.
 
 ## Last updated
-2026-09-09 - PR2 build pass 4: **"Sizing Flow Failed" root cause found and fixed**, and the first
-genuinely successful TAS Systems run obtained through production code, with complete ZoneTemperature.
+2026-09-10 - PR2 BUILD COMPLETE. The explicit ventilation route converts by identity, reconciles
+against the PR1 graph, simulates the air systems and returns a complete finite `ZoneTemperature` for
+every room over a full year. Licensed acceptance items 1-15 recorded individually.
 
 ## Baselines
 
 | repository | SHA | note |
 | --- | --- | --- |
-| SAM-BIM/SAM | `413215cca722a70b660c4ef367f6faab1d6d9357` | read-only, untouched |
-| SAM-BIM/SAM_Systems | `89cf139966f4fe426459851d09f052834551792f` | the PR1 merge (#20), read-only, untouched |
+| SAM-BIM/SAM | `413215cca722a70b660c4ef367f6faab1d6d9357` | read-only, **untouched and clean** |
+| SAM-BIM/SAM_Systems | `89cf139966f4fe426459851d09f052834551792f` | the PR1 merge (#20), read-only, **untouched and clean** |
 | SAM-BIM/SAM_Tas | `ec7f50543e123f8a734b6e27b2b16c0cf1f1edde` | this repo's base |
 
 Build order SAM -> SAM_Mollier -> SAM_Systems -> SAM_Tas. The solution needs .NET Framework MSBuild
 with **Restore and Build as separate invocations**.
 
-## THE NATIVE FACTS THE REST OF PR2 DEPENDS ON
+## THE NATIVE FACTS THE ROUTE RESTS ON
 
-Transcripts: `Documentation/evidence/PR2-CHECKPOINT-1B.md` (the main record),
-`PR2-NATIVE-TAS-FINDINGS.md`, `PR2-unit-proof.log`,
-`PR2-first-successful-systems-run.log`. Harness archived as `Documentation/evidence/PR2-harness-*.txt`;
-it lives at `C:\TasOut\inv`, argv modes, **one operation per process**, TAS GUI closed.
+Full transcripts: `Documentation/evidence/PR2-BUILD.md` (this session's findings and the acceptance),
+`PR2-CHECKPOINT-1B.md`, `PR2-NATIVE-TAS-FINDINGS.md`. Harness at `C:\TasOut\inv`, argv modes,
+**one operation per process**, TAS GUI closed.
 
-1. **Simulate the AIR SYSTEMS, not the document.** `ITPD.Simulate` / `IPlantRoom.Simulate` simulate the
-   plant too, and the shipped `MV.json` plant (multi-boiler, multi-chiller, ASHP, a DHW circuit left
-   dangling) cannot size a flow - so the whole run answers `"Sizing Flow Failed"` and produces nothing,
-   while the ventilation network beside it is fine. `Modify.SimulateSystems` calls `ISystem.Simulate`
-   per air system. **Do not "simplify" it back to the document-level call.**
-2. **Simulate success return = `"Done"`.** Measured. Failure vocabulary measured too:
-   `"Sizing Flow Failed"`, `"<plant room NAME> Has Errors"`, `"Plant room has no components"`,
-   `"Failed to open the TSD file"`. The "Has Errors" message embeds the plant room's own name, so it can
-   only be matched as a fragment. A measured success is positive evidence but **never** the gate - the
-   `ZoneTemperature` reconciliation is.
-3. **ABSOLUTE FLOW UNIT = l/s. PROVEN** by TAS's own ACH arithmetic: a 200 m3 zone at 8 ACH answered
-   `444.44444444444446`. Applies to `SystemZone.FlowRate`, `.FreshAir` and `Damper.DesignFlowRate`.
+1. **A TSD `ZoneLoad.GUID` IS the TBD `zone.GUID`.** Measured with `inv.exe zoneload-identity`: 2 of 2
+   load guids on fixture 1 are also TBD zone guids, and `GetZoneLoadForGuid` resolves them braced or
+   bare. SAM stamps that same guid onto the analytical space as `SpaceParameter.ZoneGuid`, so the whole
+   room chain is identity with no display name anywhere.
+2. **Simulate the AIR SYSTEMS, not the document.** `ITPD.Simulate` / `IPlantRoom.Simulate` simulate the
+   plant too, and the shipped `MV.json` plant cannot size a flow. `ISystem.Simulate` answers `"Done"`.
+   **Do not "simplify" `Modify.SimulateSystems` back to the document-level call.**
+3. **ABSOLUTE FLOW UNIT = l/s**, proven by TAS's own ACH arithmetic (200 m3 at 8 ACH -> 444.444).
+   Applies to `SystemZone.FlowRate`, `.FreshAir` and `Damper.DesignFlowRate` alike.
 4. **Read every native identifier late-bound.** The typed `ISystemComponent.GUID`/`.Name` accessors
    **throw** on a `SystemZone`. `Query.NativeIdentity` encapsulates it - do not convert to a typed read.
-5. **`SystemZone.GUID` and `ZoneLoad.GUID` are DISTINCT.** `AddZoneLoad` is the explicit pairing point;
-   `GetSystemZoneZoneLoad` is zone->load; `GetZoneLoadForGuid` is load->result; `GetComponentByGUID`
-   round-trips the component.
-6. **Carriers**: supply on `SystemZone.FlowRate`/`.FreshAir`; extract and transfer on an in-line
-   **`Damper`** (`DesignFlowRate` + `DesignFlowType = tpdFlowRateValue`). Ducts have no guid and no
-   design flow; junctions have no members. Fan duty is derived and must be reconciled, never written.
-   **The MV template already places one `Damper` per room** (currently `DesignFlowType=4`).
-7. **`GetResultsData` returns an array that `GetValue(int)` indexes out of bounds.** Walk it with
-   `foreach`, which is what the production `IndexedDoubles` path already does.
+5. **`SystemZone.GUID` and `ZoneLoad.GUID` are DISTINCT.** `AddZoneLoad` is the pairing point;
+   `GetSystemZoneZoneLoad` is zone->load; `GetZoneLoadForGuid` is load->result.
+6. **`AddDuct` accepts several ducts on one ordinary component port, but TAS rejects that air system
+   when it is simulated** - `"<system name> Has Errors"`. A `Junction` is the native branch carrier.
+   Measured both ways this session (`inv.exe fanout` accepted the ducts; the simulation refused them).
+7. **A `Damper` on `tpdFlowRateNearestZoneFlowRate` is ambiguous once more than one zone sits behind
+   it**, and TAS says so. The template's supply damper is switched to
+   `tpdFlowRateAllAttachedZonesFlowRate` on the explicit route; it is a derived topology component and
+   the rooms' own zones remain the supply authority.
+8. **TAS replaces an air system's in-memory result surface when `ISystem.Simulate` is called for the
+   next system in the same document.** Reading all zones after the loop returns results for the last
+   system only. `Modify.SimulateSystems` therefore captures each system's series before advancing.
+9. **TAS will only simulate a design whose zone air balances.** An as-designed fixture with 44 l/s
+   supply against 34 l/s extract converts and reconciles perfectly and then answers
+   `"Sizing Flow Failed"`. **Production does not rebalance anything** - the route refuses, which is
+   correct: an unbalanced MVHR design is a defect in the design.
+10. **`GetResultsData` returns an array that `GetValue(int)` indexes out of bounds.** Walk it with
+    `foreach`.
+11. **The TBD workflow needs a full-year simulation on this route.** `SimulateTo = 1` produced a
+    one-day TSD and the workflow then died in its post-simulation results step with
+    `COMException: The RPC server is unavailable`. `SimulateTo = 365` completes.
 
-### Two production defects seen live in the converted output, still unfixed
+## What IS done - the complete PR2 build
 
-* Converted zones get **no zone load at all** - `Query.ZoneLoads(TSDData, systemSpaces)` matches
-  `SpaceName` against `ZoneLoad.Name`, and the template's "System Zone 1" never matches the TSD's
-  "Cell 1". `AddZoneLoad` fixes it. **This is step 7 work.**
-* **Both converted zones carry the same display name**, so any name-keyed lookup aliases them.
-* The converted output leaves the DHW plant junctions dangling (`pipesIn=0` / `pipesOut=0`). Real, but
-  measured NOT to be the cause of the sizing failure, and irrelevant once only the air system is run.
+### The conversion, by identity
 
-## What IS done
+* `Create.SystemVentilationConversionContext` reads PR1's lineage and the thermal source's
+  room-to-TAS-zone map and states, by identity alone, what TAS is to build: every room, every leg,
+  every duty. Legs are classified from PR1's **topology** - a `SystemSpace`'s connector 0 is its supply
+  inlet and connector 1 its extract outlet - and cross-checked against PR1's own lineage rows.
+* `Convert/ToTPD/SystemZone.cs` is the pairing point. It binds the intended `ZoneLoad` by
+  `TSDData.GetZoneLoadForGuid` + `AddZoneLoad`, writes the room's supply absolutely onto `FlowRate` and
+  `FreshAir` with `Type = tpdSizedVariableValue`, and records the native identities read back off the
+  objects. **The `SpaceName`-to-`ZoneLoad.Name` match is gone.**
+* `Modify.MaterialiseVentilationDutyCarriers` puts one `SystemDamper` into every extract and transfer
+  leg of a **working copy**, with a derived guid. PR1's graph is never touched - pinned by a
+  byte-for-byte JSON comparison.
+* `Modify.BindVentilationLegs` writes each leg's duty onto its native carrier, reads it back, and
+  records one `SystemVentilationConnectionBinding` per PR1 connection.
+* `Create.Ducts` inserts a native `Junction` at every connector end carrying more than one leg, on the
+  explicit route only.
+* `Convert.ToTPD` returns the **reconciliation's verdict** when a context is supplied, and behaves
+  exactly as before when one is not.
 
-1. `Query.ZoneLoads` fixed-index defect - fixed, reproduced first.
-2. `SimulationEvidence` / `SimulationOutputShape` / `SimulationDiagnostic` (in `SAM.Core.Tas`), with
-   the measured success and failure vocabularies and the raw diagnostic preserved.
-3. `Modify.Simulate` (TBD and TPD) report evidence; **`Modify.SimulateSystems`** is the working route.
-4. The no-IZAM thermal source - `RemoveIZAMs`, `RemoveMechanicalVentilationGains`, both default false.
-5. Order independence in the replicated-group branch (B-14) via `Query.SourceOrderKey`.
-6. `Query.NativeIdentity` - the single encapsulated late-bound identity read.
-7. `SystemVentilationBinding` and `SystemVentilationConnectionBinding`.
+### The results, and the gate
 
-### Native acceptance obtained
+* `SystemZoneTemperatureResults` / `SystemZoneTemperatureResult` request only
+  `SpaceDataType.ZoneTemperature`, keyed by `.ToString()`, and refuse a missing room, a short series, a
+  hole in the period, a non-finite value, a series off the wrong zone or load, two rooms sharing a
+  zone, and a series for a room nobody asked about. The period is `EndHour - StartHour + 1`, never a
+  hardcoded 8760.
+* `Modify.SimulateSystems` captures each air system's series **before** simulating the next.
+* `Create.IndexedDoubles` reports the reason TAS gave instead of swallowing it, on all four overloads.
+* `ToSAM_SpaceSystemResult` uses `GetSystemZoneZoneLoad` rather than the first load in the collection;
+  `ToSAM_SpaceSystemResults` no longer adds a null element per resultless zone.
 
-**Items 1-3 PASS** on a strong seeded control (3 real IZAMs, `ticV` effective 180 -> 0, `ticI` and
-aperture types identical). Reproduce: `inv.exe seed C:\TasOut\po2\f2c.tbd C:\TasOut\po2\f2seed.tbd 3
-5.0` then `inv.exe clean C:\TasOut\po2\f2seed.tbd`.
+### The route
 
-**First successful Systems run** (`inv.exe verify C:\TasOut\ref\v1.tpd 0 23`), through production code:
+* `NoIzamThermalSource` (in `SAM.Core.Tas`, so both assemblies can see it) states both paths, both
+  cleanups and the room-to-zone map. `Create.NoIzamThermalSource` forces both cleanups on.
+* `SystemVentilationRoute` carries the thermal source, the document, the evidence, the room bindings,
+  the leg bindings and the zone temperatures. **There is no partial route**: on any refusal the payload
+  is empty, including the document path, enforced in the constructor.
+* The path guard refuses to write the TPD over the thermal source's own TBD or TSD, before anything
+  runs.
 
-```
-Modify.Simulate        -> False, [Sizing Flow Failed], KnownFailure, refused
-Modify.SimulateSystems -> True,  [Done], KnownSuccess
-zone "Cell 1": 24/24 values, 24 finite, min=16 max=21  COMPLETE
-zone "Cell 2": 24/24 values, 24 finite, min=16 max=21  COMPLETE
-SimulationEvidence.Completed after reconciliation: True
-```
+### Hardening carried out during this build
 
-## What is NOT done
-
-- **Step 7, conversion hardening.** Bind the zone load by `AddZoneLoad` at the pairing point instead of
-  by `SpaceName`. Capture the room binding **at** the two explicit pairing points in
-  `Convert/ToTPD/TPD.cs`. Write extract/transfer duties onto the in-line `Damper` with
-  `DesignFlowType = tpdFlowRateValue` in l/s. Replace the two `return true` literals with the
-  reconciliation. Deep-clone so PR1's graph is unmutated.
-- **Step 8, results.** `SystemSpaceResult` identity (drop `FirstOrDefault()`, select the load the
-  binding names), stop adding `null` in `SystemSpaceResults`, `IndexedDoubles` reporting its swallowed
-  failures, `SystemZoneTemperatureResults` with the completeness gate. Key trap: the series is
-  reachable only by `SpaceDataType.ZoneTemperature.ToString()`, never the enum indexer.
-- **Step 9**, `SystemVentilationRoute` + `Create.NoIzamThermalSource` + the path guard.
-- **Step 10**, scaling at 100/1,000/5,000.
-- **Step 12**, acceptance items 4-15.
+* `SimulationDiagnostic` matches a success answer **whole** and only when the text carries no measured
+  failure fragment, so `"Done, but Sizing Flow Failed"` refuses. A vocabulary self-check test keeps the
+  two lists disjoint.
+* `SimulateSystems` keeps every air system's answer rather than only the last.
+* Three quadratic paths removed: `BindVentilationLegs` filtered all legs per air system,
+  `SystemVentilationRoute.Binding` scanned linearly, and the per-system result capture re-indexed the
+  whole document per system.
+* `SystemZoneTemperatureResult.TryGetValue` added, because `Values` is a defensive copy on every
+  access and reading it per hour is quadratic in the period - which cost one acceptance run.
 
 ## Validation performed
 
 | check | result |
 | --- | --- |
-| `SAM.Analytical.Tas.TM59.Tests` | **764 passed, 0 failed** (690 at the base commit; 74 added) |
+| `SAM.Analytical.Tas.TM59.Tests` | **840 passed, 0 failed** (690 at the base commit, 764 at the previous checkpoint) |
 | Release build, `SAM_Tas.sln`, .NET Framework MSBuild, Restore and Build separate | **0 errors** |
 | `git diff --check` | clean |
-| licensed runs | 4 full-year workflows, a TAS-authored system observed, 2 reference systems round-tripped, 1 seeded control cleaned, 8 one-change diagnostic experiments, 1 successful Systems run through production code |
+| SAM-BIM/SAM | untouched, clean, at `413215cc` |
+| SAM-BIM/SAM_Systems | untouched, clean, at `89cf139` |
+| licensed acceptance items 1-3 | **PASS** - `Documentation/evidence/PR2-ACCEPTANCE.md` |
+| licensed acceptance items 4-15 | **PASS**, individually |
+| licensed full-period route | 2 air systems `"Done"`, 9 of 9 rooms with 8760 finite values |
+| scaling | 2.20 indexed lookups per room at 100, 1,000 **and** 5,000 rooms |
+
+**One caveat, stated plainly.** The test project's copy of a referenced assembly can go stale after a
+solution build: `dotnet build` the test project before `dotnet test --no-build`, or a run will silently
+exercise the previous DLL. That cost one confusing failure in this session.
+
+## What is NOT done
+
+* **The branch-junction topology, the orphan-component skip and the nearest-zone damper switch are
+  covered by the licensed acceptance only**, not by unit tests: they are decisions about native TAS
+  behaviour taken inside COM-touching code.
+* **No licensed run at 1,000 or 5,000 rooms.** The scaling evidence is structural, by design - a
+  licensed annual simulation at that size would measure TAS, not this code.
+* **PR3 and PR4** are not started. `SystemVentilationRoute` is the seam they consume.
 
 ## Exact recommended next step
 
-Step 7, now unblocked. Start by binding the zone load with `AddZoneLoad` in
-`Convert/ToTPD/SystemZone.cs` instead of the `SpaceName` match - that is the defect that leaves every
-converted zone load-less, and it is the same pairing point where the room binding must be captured.
-Then carry extract/transfer duties onto the in-line `Damper`, and reconcile.
+Review this branch's diff, then start PR3 against `SystemVentilationRoute`. It already carries
+everything PR3 needs - the thermal source with both paths, the room bindings with the full identity
+chain, the leg bindings with each design airflow, and the zone temperatures - so PR3 should never need
+to open the TPD, guess a basename, match a display name or reconstruct topology. If it finds itself
+doing any of those, the seam is wrong and should be widened rather than worked around.
 
 ---
 
