@@ -86,12 +86,15 @@ namespace SAM.Analytical.Tas.TPD
                 result.Flags = result.Flags | (int)tpdSystemZoneFlags.tpdSystemZoneFlagDisplacementVent;
             }
 
-            if (displaySystemSpace.ModelInterzoneFlow)
+            //The explicit ventilation graph already carries every supply, extract and room-to-room
+            //transfer. Retaining the template zone's own ventilation/interzone models would apply the
+            //same air movement a second time. Legacy conversion keeps its existing flag behaviour.
+            if (systemVentilationConversionContext == null && displaySystemSpace.ModelInterzoneFlow)
             {
                 result.Flags = result.Flags | (int)tpdSystemZoneFlags.tpdSystemZoneFlagModelInterzoneFlow;
             }
 
-            if (displaySystemSpace.ModelVentilationFlow)
+            if (systemVentilationConversionContext == null && displaySystemSpace.ModelVentilationFlow)
             {
                 result.Flags = result.Flags | (int)tpdSystemZoneFlags.tpdSystemZoneFlagModelVentFlow;
             }

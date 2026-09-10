@@ -500,6 +500,21 @@ namespace SAM.Analytical.Tas.TPD
 
                                 foreach (Core.Systems.SystemComponent systemComponent_Temp in systemComponents_AirSystem)
                                 {
+                                    //Disabling ComponentGroup replication exposes the group's unused
+                                    //prototype components as ordinary members of the air system. They
+                                    //have no connection in the PR1 graph and materialising them creates
+                                    //a native component with no ducts, which TAS rejects as an invalid
+                                    //air system. The explicit route therefore converts only components
+                                    //that participate in the graph (rooms are retained defensively so
+                                    //a missing room connection is caught by reconciliation, not hidden
+                                    //here). This does not affect the legacy replicated conversion.
+                                    if (systemVentilationConversionContext != null
+                                        && !(systemComponent_Temp is DisplaySystemSpace)
+                                        && (systemPlantRoom.GetRelatedObjects<Core.Systems.ISystemConnection>(systemComponent_Temp)?.Count ?? 0) == 0)
+                                    {
+                                        continue;
+                                    }
+
                                     //----------------------------------------------------------------------
                                     //Under the explicit ventilation route every component is materialised in
                                     //its own right. Otherwise only the first component of each group index is
@@ -598,6 +613,20 @@ namespace SAM.Analytical.Tas.TPD
                                         continue;
                                     }
 
+                                    //The template's supply damper used the nearest-zone rule because a
+                                    //replicated group put exactly one zone behind each copy. The explicit
+                                    //route has one real damper in front of a branch junction, so "nearest"
+                                    //is ambiguous. It remains a derived topology component: the rooms'
+                                    //SystemZone values are still the supply design-flow authority. The
+                                    //absolute PR2 dampers are excluded by their leg-carrier identity.
+                                    if (systemVentilationConversionContext != null
+                                        && systemComponent_Temp is DisplaySystemDamper
+                                        && systemComponent_TPD is Damper damper_TPD
+                                        && systemVentilationConversionContext.LegIntentByDutyCarrier(systemComponent_Temp.Guid) == null)
+                                    {
+                                        damper_TPD.DesignFlowType = tpdFlowRateType.tpdFlowRateAllAttachedZonesFlowRate;
+                                    }
+
                                     dictionary_SystemComponent[systemComponent_Temp.Guid] = systemComponent_TPD;
                                     systemComponent_Temp.SetReference(Query.Reference(systemComponent_TPD));
                                     systemPlantRoom.Add(systemComponent_Temp);
@@ -607,7 +636,7 @@ namespace SAM.Analytical.Tas.TPD
                                     systemVentilationConversionContext?.RecordPairing(systemComponent_Temp.Guid, Query.NativeReference(systemComponent_TPD));
                                 }
 
-                                Create.Ducts(systemPlantRoom, system, dictionary_SystemComponent, out Dictionary<Guid, Duct> dictionary_Ducts);
+                                Create.Ducts(systemPlantRoom, system, dictionary_SystemComponent, out Dictionary<Guid, Duct> dictionary_Ducts, systemVentilationConversionContext);
                                 dictionary_Controller = Create.Controllers(systemPlantRoom, system, airSystem, dictionary_SystemComponent, dictionary_Ducts, false);
 
                                 if(systemLabels != null)
