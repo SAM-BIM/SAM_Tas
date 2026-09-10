@@ -35,33 +35,27 @@ namespace SAM.Analytical.Tas.TPD
         /// not contain.
         /// </para>
         /// <para>
-        /// <b>Operation is continuous, and that is checked rather than assumed.</b> Measured on the
-        /// acceptance document, a fan's operation on this route does not come from a value this code
-        /// writes:
+        /// <b>Operation is continuous at factor 1.0, and that is read back rather than assumed.</b> The
+        /// frozen #111 parity configuration is supplied as an ordinary 8760-hour constant-1.0
+        /// <c>YearlySchedule</c> through PR1's <c>MechanicalVentilationSettings.Schedule</c>: PR1 names it
+        /// on every fan, <c>Modify.Add(EnergyCentre, ISchedule)</c> writes it as a
+        /// <c>tpdScheduleYearly</c> table and <c>Convert.ToTPD(SystemFan, …)</c> attaches it by name. A
+        /// TAS plant schedule is an on/off table, so factor 1.0 is that table on in all 8760 hours - which
+        /// TAS reports as <c>GetNumOperableHours() == 8760</c>, read here off each fan's own schedule.
         /// </para>
-        /// <list type="bullet">
-        /// <item><description>the schedule TAS reports for each fan is
-        /// <c>tpdScheduleType.tpdScheduleFunction</c> with
-        /// <c>tpdScheduleFunctionType.tpdScheduleFunctionAllZonesLoad</c> - operation is derived from
-        /// the attached zones' loads, so there is no authored profile that could be less than
-        /// continuous. <c>GetNumOperableHours()</c> and <c>GetYearlyValue(hour)</c> answer <c>0</c> for
-        /// such a schedule because they describe a yearly or hourly <i>table</i>; reading those and
-        /// concluding the fan never runs would be
-        /// wrong;</description></item>
-        /// <item><description><c>PartLoad</c> carries base <c>Value = 0</c> and one
-        /// <c>tpdProfileDataModifierTable</c> modifier - a part-load performance table, not an
-        /// operating schedule - and <c>OverallEfficiency.Value = 1</c> with no
-        /// modifier;</description></item>
-        /// <item><description>every damper and every zone of the produced system answers
-        /// <c>GetSchedule() == null</c>: 23 of 23 on the acceptance fixture. So the fan schedule above
-        /// is the <b>only</b> operation carrier in the air side, and no diversity factor other than 1.0
-        /// exists anywhere for one to be inherited from.</description></item>
-        /// </list>
         /// <para>
-        /// A <b>yearly or hourly</b> schedule on a fan is therefore refused: that is an authored
-        /// operating profile, it would scale the delivered ventilation below the design duty, and the
-        /// analytical model states no such profile. A function schedule or no schedule at all is
-        /// accepted.
+        /// Anything else is refused - see <see cref="Query.ContinuousOperationRefusal"/>. That includes
+        /// the shipped <c>MV.json</c> <c>"Occupancy Schedule"</c> every fan keeps when no schedule is
+        /// supplied: a <c>tpdScheduleFunctionAllZonesLoad</c> function schedule that switches the fan with
+        /// the attached zones' demand. The route used to accept it, and to refuse the frozen yearly
+        /// schedule; that was a defect against the parity contract, measured and recorded in
+        /// <c>Documentation/evidence/PR2-FAN-OPERATION.md</c>.
+        /// </para>
+        /// <para>
+        /// Every damper and every zone of the produced system answers <c>GetSchedule() == null</c>, 23 of
+        /// 23 on the acceptance fixture, so the fan schedule is the <b>only</b> operation carrier in the
+        /// air side. <c>PartLoad</c> is a part-load performance table and <c>OverallEfficiency.Value = 1</c>
+        /// with no modifier - neither is an operating profile.
         /// </para>
         /// <para>
         /// <b>Every read here is late-bound.</b> The typed
@@ -69,14 +63,12 @@ namespace SAM.Analytical.Tas.TPD
         /// <c>DISP_E_MEMBERNOTFOUND</c> on a fan - see <see cref="Schedule"/>.
         /// </para>
         /// <para>
-        /// <b>What is not proved here.</b> TAS exposes no hourly flow series for this route's ducts or
-        /// zones - <c>IDuct.GetFlowRate(hour)</c> answers <c>COMException: Hour out of range</c> for
-        /// every hour in <c>-1..8761</c> on a document that simulated to <c>"Done"</c>, and
-        /// <c>GetResultsData</c> answers "Failed to get the results series" for every variable
-        /// <c>0..24</c> on a duct and for every variable but 9, 10, 11, 12 and 13 on a zone. So
-        /// continuous delivery at factor 1.0 is established by <b>exhausting the carriers that could
-        /// hold a factor other than 1</b>, not by reading back an hourly delivered flow. That limit is
-        /// native, and it is stated rather than papered over.
+        /// <b>What the simulated document proves.</b> A fan answers exactly one hourly results series,
+        /// <c>GetResultsData</c> variable 9 - its Load, <c>Q x dp / eta</c> - and every other variable
+        /// <c>0..24</c> answers "Failed to get the results series". Delivered flow is therefore read as
+        /// <c>Load x eta / dp</c>; the licensed acceptance holds it against the derived duty in every
+        /// hour. That read belongs to the acceptance, not to this conversion step, which runs before
+        /// anything is simulated.
         /// </para>
         /// </summary>
         public static bool GroundVentilationFans(
@@ -118,7 +110,7 @@ namespace SAM.Analytical.Tas.TPD
                     continue;
                 }
 
-                if (!TryCheckOperation(systemVentilationConversionContext, fan, reference_Fan))
+                if (!TryCheckOperation(systemVentilationConversionContext, fan, reference_Fan, out string operation))
                 {
                     continue;
                 }
@@ -130,12 +122,11 @@ namespace SAM.Analytical.Tas.TPD
                 //state a duty this route neither authored nor believes.
                 notes.Add(string.Format(
                     "Fan {0} derives its duty from the attached zones ({1}), adds no heat to the air "
-                    + "stream (HeatGainFactor {2}) and runs continuously - its only operation carrier is "
-                    + "a {3} schedule.",
+                    + "stream (HeatGainFactor {2}) and runs continuously at factor 1.0 - {3}.",
                     reference_Fan,
                     fan.DesignFlowType,
                     fan.HeatGainFactor,
-                    ScheduleType(fan)));
+                    operation));
             }
 
             notes.Sort(StringComparer.Ordinal);
@@ -204,8 +195,11 @@ namespace SAM.Analytical.Tas.TPD
         private static bool TryCheckOperation(
             SystemVentilationConversionContext systemVentilationConversionContext,
             global::TPD.Fan fan,
-            string reference_Fan)
+            string reference_Fan,
+            out string operation)
         {
+            operation = null;
+
             object plantSchedule;
 
             try
@@ -223,58 +217,64 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
-            if (plantSchedule == null)
+            int? type = null;
+            int? operableHours = null;
+            string name = null;
+
+            if (plantSchedule != null)
             {
-                return true;
+                try
+                {
+                    type = (int)((dynamic)plantSchedule).Type;
+                    name = ((dynamic)plantSchedule).Name as string;
+                }
+                catch (Exception exception)
+                {
+                    systemVentilationConversionContext.Refuse(string.Format(
+                        "Fan {0}: reading the schedule attached to it threw {1}: {2}, so its operation could "
+                        + "not be settled.",
+                        reference_Fan,
+                        exception.GetType().Name,
+                        exception.Message));
+
+                    return false;
+                }
+
+                //Only a yearly table answers this. On a function schedule TAS throws "Not a Yearly
+                //Schedule" - measured - and an unreadable count is refused below, never assumed.
+                if (type == (int)tpdScheduleType.tpdScheduleYearly)
+                {
+                    try
+                    {
+                        operableHours = (int)((dynamic)plantSchedule).GetNumOperableHours();
+                    }
+                    catch
+                    {
+                        operableHours = null;
+                    }
+                }
             }
 
-            int type;
+            string refusal = Query.ContinuousOperationRefusal(type, operableHours);
 
-            try
-            {
-                type = (int)((dynamic)plantSchedule).Type;
-            }
-            catch (Exception exception)
+            if (refusal != null)
             {
                 systemVentilationConversionContext.Refuse(string.Format(
-                    "Fan {0}: reading the type of the schedule attached to it threw {1}: {2}, so its "
-                    + "operation could not be settled.",
+                    "Fan {0}{1} {2}",
                     reference_Fan,
-                    exception.GetType().Name,
-                    exception.Message));
+                    name == null ? string.Empty : string.Format(" (schedule \"{0}\")", name),
+                    refusal));
 
                 return false;
             }
 
-            if (type == (int)tpdScheduleType.tpdScheduleYearly || type == (int)tpdScheduleType.tpdScheduleHourly)
-            {
-                systemVentilationConversionContext.Refuse(string.Format(
-                    "Fan {0} carries a {1} schedule, which is an authored operating profile: it would scale "
-                    + "the delivered ventilation below the design duty in the hours it reduces, and the "
-                    + "analytical model states no such profile.",
-                    reference_Fan,
-                    (tpdScheduleType)type));
-
-                return false;
-            }
+            operation = string.Format(
+                "its operation carrier is the yearly schedule \"{0}\", operable in {1} of {2} hours",
+                name,
+                operableHours,
+                Query.HoursPerYear);
 
             return true;
-        }
-
-        private static string ScheduleType(global::TPD.Fan fan)
-        {
-            try
-            {
-                object plantSchedule = Schedule(fan);
-
-                return plantSchedule == null
-                    ? tpdScheduleType.tpdScheduleNone.ToString()
-                    : ((tpdScheduleType)(int)((dynamic)plantSchedule).Type).ToString();
-            }
-            catch
-            {
-                return "<unreadable>";
-            }
         }
     }
 }

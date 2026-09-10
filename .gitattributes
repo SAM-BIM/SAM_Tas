@@ -2,3 +2,8 @@
 # output, which is UTF-8 without BOM and uses LF newlines. Pin them to LF so Git's autocrlf
 # setting cannot rewrite them to CRLF on checkout and break the byte-stability comparison.
 benchmark/**/*.json text eol=lf
+
+# Committed licensed-TAS transcripts are evidence, kept exactly as the harness wrote them - including
+# the trailing space its fixed-width verdict lines end with. Only end-of-line blanks are exempted, and
+# only for these transcripts; every other whitespace check still applies to them and to all sources.
+Documentation/evidence/*.log whitespace=-blank-at-eol

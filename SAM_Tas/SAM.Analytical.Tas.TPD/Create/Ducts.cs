@@ -271,6 +271,9 @@ namespace SAM.Analytical.Tas.TPD
 
                 junction_By_End[branchKey] = junction;
 
+                //Presentation only: beside the component whose connector it branches.
+                Modify.PlaceVentilationJunction(junction, end.Native, end.Direction != Direction.In);
+
                 Duct bridge = end.Direction == Direction.In
                     ? AddDuct(system, (global::TPD.SystemComponent)junction, 1, end.Native, end.Index_Port, systemVentilationConversionContext, "branch-to-component bridge")
                     : AddDuct(system, end.Native, end.Index_Port, (global::TPD.SystemComponent)junction, 1, systemVentilationConversionContext, "component-to-branch bridge");
@@ -311,7 +314,22 @@ namespace SAM.Analytical.Tas.TPD
                 dictionary_Ducts[edge.Connection.Guid] = duct;
                 result.Add(duct);
 
-                if (edge.Connection is DisplaySystemConnection displaySystemConnection)
+                //A duct reaching a room, a duty carrier or a branch junction is routed from where
+                //Modify.LayOutVentilationSystem drew them; PR1's polyline was drawn for the template
+                //prototype's position and would bend to nowhere. Trunk-to-trunk ducts keep it.
+                bool laidOut = junction_Upstream != null
+                    || junction_Downstream != null
+                    || LaidOut(systemVentilationConversionContext, edge.Upstream.Guid_Component)
+                    || LaidOut(systemVentilationConversionContext, edge.Downstream.Guid_Component);
+
+                if (laidOut)
+                {
+                    foreach (int[] node in Modify.VentilationDuctNodes(upstream, downstream, junction_Downstream != null))
+                    {
+                        duct.AddNode(node[0], node[1]);
+                    }
+                }
+                else if (edge.Connection is DisplaySystemConnection displaySystemConnection)
                 {
                     SystemPolyline systemPolyline = displaySystemConnection.SystemGeometry;
                     List<Point2D> point2Ds = systemPolyline?.Points;
@@ -328,6 +346,12 @@ namespace SAM.Analytical.Tas.TPD
             }
 
             return result;
+        }
+
+        private static bool LaidOut(SystemVentilationConversionContext systemVentilationConversionContext, Guid guid_Component)
+        {
+            return systemVentilationConversionContext.RoomIntent(guid_Component) != null
+                || systemVentilationConversionContext.LegIntentByDutyCarrier(guid_Component) != null;
         }
 
         private static BranchDuctEnd BranchEnd(

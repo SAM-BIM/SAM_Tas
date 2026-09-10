@@ -636,6 +636,14 @@ namespace SAM.Analytical.Tas.TPD
                                     systemVentilationConversionContext?.RecordPairing(systemComponent_Temp.Guid, Query.NativeReference(systemComponent_TPD));
                                 }
 
+                                //Presentation only: where the explicit route draws its rooms and duty
+                                //carriers. Before the ducts, because a duct's bend nodes can only be given
+                                //when the duct is created.
+                                if (systemVentilationConversionContext != null)
+                                {
+                                    Modify.LayOutVentilationSystem(systemVentilationConversionContext, airSystem.Guid, dictionary_SystemComponent);
+                                }
+
                                 Create.Ducts(systemPlantRoom, system, dictionary_SystemComponent, out Dictionary<Guid, Duct> dictionary_Ducts, systemVentilationConversionContext);
                                 dictionary_Controller = Create.Controllers(systemPlantRoom, system, airSystem, dictionary_SystemComponent, dictionary_Ducts, false);
 

@@ -156,10 +156,8 @@ Three further reasons not to add them, beyond "it buys no correctness":
 3. **Grouping must not become display-name authority.** Section 1 shows that in the authored idiom it
    does.
 
-What *would* improve is the graphical layout, which is a separate and purely presentational concern:
-`Create.Ducts` places components from PR1's own `SystemGeometry` and adds no layout of its own for
-the junctions it introduces, which is why the schematic reads as a star even though the graph does
-not. That is worth doing and is not a correctness item.
+What *would* improve is the graphical layout, which is a separate and purely presentational concern -
+and the closeout did it. See section 6.
 
 ## 5. Two native limits found while establishing this, both recorded rather than worked around
 
@@ -184,7 +182,64 @@ path (d).
 `-1..8761`, and `IDuct.GetResultsData(Hourly, Max, variable, 1, 8760)` answers "Failed to get the
 results series" for every variable `0..24`. A `SystemZone` exposes exactly five series - variables
 9 (ZoneTemperature, 9.13..25.65 degC), 10 (constant 0), 11 (0..60), 12 (constant 16) and 13
-(constant 150) - and none of them is a delivered airflow. So a per-hour "the design duty was actually
-delivered" proof is **not available** through this API, which is why the continuous-operation claim in
-`Modify.GroundVentilationFans` is grounded by exhausting the carriers that could hold a factor other
-than 1.0 rather than by reading a delivered flow back.
+(constant 150) - and none of them is a delivered airflow.
+
+**Correction (closeout): a fan does answer an hourly series, and it settles delivered flow.** The sweep
+above never probed a `Fan`. Done in the closeout, a fan answers exactly one of variables `0..24`:
+variable 9, its Load in W, `Q x dp / eta` - 44 W on a 1000 Pa fresh air fan and 26.4 W on a 600 Pa
+return fan at 44 l/s and `OverallEfficiency = 1`. Delivered flow is `Load x eta / dp`, and a control
+that switches the fans off for hours 0..23 drives exactly those hours to 0. The earlier conclusion -
+that continuous operation could only be grounded by exhausting the carriers - was wrong, and it hid a
+real defect: the fans were running on a demand-driven function schedule, not the frozen constant 1.0.
+Measured, fixed and re-accepted in `PR2-FAN-OPERATION.md`.
+
+## 6. The layout - presentation only, measured before it was trusted
+
+Manual inspection of the accepted document in the TAS GUI found the schematic unreadable. Measured
+off the native document (`PR2-layout-before-fix.txt`): every native zone of a system at one point
+(630, 80), every extract damper at one point, every transfer damper at another, all five branch
+junctions at (0, 0), and no duct bend nodes - **45 overlapping box pairs and 225 duct passes through a
+box that is neither of the duct's ends**. The network was right; the drawing was not.
+
+**TAS exposes a presentation-only mechanism, with no `ComponentGroup` in it:**
+`ISystemComponent.SetPosition(x, y)` / `SetDirection(tpdDirection)`, and `IDuct.AddNode(x, y)` for
+bend nodes - which TAS accepts **only when the duct is created** (there is no node removal).
+
+**It was proved presentation only before any production code used it.** Every one of the 42
+components of an accepted document was moved to an arbitrary grid position and direction on a copy
+(`PR2-layout-spread-control.txt`), and all 9 zones x 8760 hours of ZoneTemperature came back
+**bit-identical - maximum difference exactly 0 K**, both systems `"Done"`.
+
+**What PR2 now draws** (`Query.VentilationLayout`, `Modify.LayOutVentilationSystem`, called before
+`Create.Ducts` on the explicit route only):
+
+* every room its own row, in air-path order - supply-only, supply and extract, transfer-only,
+  extract-only - by identity, never by name;
+* each room's transfer dampers stacked beneath it; extract-only rooms in their own column past the
+  transfer dampers, so a transfer into one drops straight down to it; extract dampers level with their
+  room in the right-most column, clear of the occupied rooms;
+* each branch junction beside the component it branches, facing the same way;
+* every duct reaching a room, a duty carrier or a branch junction routed orthogonally, turning just
+  before its target or - when it runs back - travelling in the free lane above its target's row;
+* the template trunk (fans, supply damper, the template's own junctions) left where the template
+  draws it; the replicated conversion untouched.
+
+The first layout was inspected in the TAS GUI and approved (`PR2-layout-approved-first.txt`); the
+refinement then moved the extract-only rooms into their own column (x 820 -> 1060) and the extract
+dampers further right (x 1100 -> 1200), coordinates only.
+
+**Result on the FINAL ACCEPTED document** (`PR2-layout-after-fix.txt`):
+
+| | before | first layout (approved) | FINAL (refined) |
+| --- | --- | --- | --- |
+| overlapping box pairs | 45 | 0 | **0** |
+| duct passes through a non-endpoint box | 225 | 0 | **0** |
+| canonical network (components, names, duties, edges; guids masked) | - | identical | identical |
+| ZoneTemperature, 9 zones x 8760 h, keyed by ZoneLoad guid | - | identical, max \|dT\| 0 K | identical, max \|dT\| 0 K |
+| acceptance items 4-15 | pass | pass | pass |
+
+Native component guids cannot be compared across regenerated documents: two documents from identical
+code and settings, with no layout at all, differ in every native guid and in nothing else. The
+identity that must not change - PR1's derived guids and the room -> zone -> zone-load chain - is
+item 15, which passes. Creation order is unchanged: the layout calls no `Add…`, and positions and bend
+nodes are set on components and ducts the conversion creates exactly as before.

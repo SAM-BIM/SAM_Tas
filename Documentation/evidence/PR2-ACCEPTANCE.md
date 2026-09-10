@@ -1,9 +1,30 @@
 # PR2 licensed TAS acceptance - items 1 to 15, individually
 
-Run on the licensed machine, `inv.exe route-source` then `inv.exe route-acceptance`, one COM document
-cycle per process. Model `C:\TasOut\po2\f2.sam` (9 spaces), weather
-`CIBSE Weather 2021.twd`, full-year TBD simulation (days 1..365), Systems simulation over hours
-**0..8759**.
+Run on the licensed machine, `route-source` then `route-acceptance`, one COM document cycle per
+process. Model `C:\TasOut\po2\f2.sam` (9 spaces), weather `CIBSE Weather 2021.twd`, full-year TBD
+simulation (days 1..365), Systems simulation over hours **0..8759**.
+
+**Closeout re-run (2026-09-10).** Every item below was re-established by the closeout on **one**
+regenerated thermal source, with the frozen #111 operating configuration - the constant 1.0 yearly
+schedule supplied through PR1's settings (`PR2-FAN-OPERATION.md`) - and the presentation-only layout
+(`PR2-NATIVE-TOPOLOGY.md` section 6). Harness `PR2-closeout-harness-*.txt`; verdicts unchanged.
+
+### Provenance - one thermal source, byte-identical everywhere
+
+The original evidence cited `C:\TasOut\acc\acc.tbd` for items 1-3 while the accepted simulation used
+`C:\TasOut\rev4\acc.tbd`. Those files were on the other licensed machine and could not be hashed from
+this one, so their identity is **unverified and superseded**: the closeout regenerated the source once
+and ran every check against byte-identical copies of it, hashing each copy before and after each run.
+
+| artifact | SHA-256 |
+| --- | --- |
+| `C:\TasOut\pr2z\src\acc.tbd` - the no-IZAM thermal source | `054ED2376EC8687D859CF444B3A3DAE0032C9E840FA68276DAAF04BFA56C8C45` |
+| `C:\TasOut\pr2z\src\acc.tsd` - its paired TSD | `44D8DB7B7F822D8820C17B9347DA86CA2E7BB47DC9CC20C8942580252CB65013` |
+
+The copies in `before`, `final`, `final2`, `nosched`, `rename-n1..n3`, `final-layout` and
+`final-layout2` hash to exactly these values before **and** after every run (`provenance.txt` in each
+folder): the route reads its thermal source and never writes it. Items 1-3 and the accepted Systems
+run therefore stand on the identical thermal source, by construction and by hash.
 
 Every step is a **production** call:
 
@@ -122,9 +143,9 @@ From `PR2-acceptance-source.log`, read by walking TAS's own `GetIZAM(i)` / `GetI
 
 | # | item | verdict | evidence |
 | --- | --- | --- | --- |
-| 1 | the thermal source carries no IZAM | **PASS** | IZAM count 0 on `acc.tbd` |
-| 2 | the mechanical ventilation gain is zero on every internal condition | **PASS** | 36 internal condition(s), 0 with a non-zero `ticV` |
-| 3 | the infiltration term is untouched | **PASS** | `ticI` present on 36 of 36 internal condition(s) |
+| 1 | the thermal source carries no IZAM | **PASS** | IZAM count 0 on `C:\TasOut\pr2z\src\acc.tbd` (SHA-256 `054ED237…`), and again on its byte-identical copies `before\acc.tbd` and `final\acc.tbd` |
+| 2 | the mechanical ventilation gain is zero on every internal condition | **PASS** | 36 internal condition(s), 0 with a non-zero `ticV` - on the same three files |
+| 3 | the infiltration term is untouched | **PASS** | `ticI` present and non-zero on 36 of 36 internal condition(s) (`value=0.15 factor=1` / `value=0 factor=0.15`) - `PR2-fanop-before-source-check.txt` |
 
 The stronger control for these - a real TBD seeded with 3 inherited IZAMs and a genuinely non-zero
 `ticV` summing to 180, cleaned to 0 with `ticI` and the aperture types byte-identical - is recorded in
@@ -140,8 +161,8 @@ The stronger control for these - a real TBD seeded with 3 inherited IZAMs and a 
 | 7 | supply DesignFlowRate preserved | **PASS** | 4 supply room(s) checked against the native zone, 0 mismatch(es) - value, `FreshAir` and `Type = tpdSizedVariableValue` |
 | 8 | extract DesignFlowRate preserved | **PASS** | 5 extract leg(s) checked against the native damper, 0 mismatch(es) - value, `DesignFlowRate.Type` and `DesignFlowType = tpdFlowRateValue` |
 | 9 | transfer DesignFlowRate preserved | **PASS** | 7 transfer leg(s) checked against the native damper, 0 mismatch(es) |
-| 10 | no duplicated ventilation / System Modelled semantics | **PASS** | 9 native zone(s), 0 still modelling their own ventilation (bit 4) or interzone flow (bit 2); flags seen `Flags=1` |
-| 11 | fan + System Modelled configuration correct | **PASS** | every fan `DesignFlowType = tpdFlowRateAllAttachedZonesFlowRate`, value 44 - derived from the attached zones, never authored |
+| 10 | no duplicated ventilation / System Modelled semantics | **PASS** | grounded on the source, not on the flags: (1) the accepted run's thermal source is the no-IZAM TBD hashed above - 0 IZAM; (2) 0 of 36 internal conditions carry mechanical `ticV`; (3) all ventilation is explicit in TAS Systems - 4 supply, 5 extract, 7 transfer legs on their own carriers (items 6-9). Zone flags corroborate only: 9 of 9 zones have `ModelVentFlow` (4) and `ModelInterzoneFlow` (2) clear |
+| 11 | fan + System Modelled configuration correct | **PASS** | every fan `DesignFlowType = tpdFlowRateAllAttachedZonesFlowRate`, value 44 - derived, never authored; `HeatGainFactor = 0`; operation carrier the frozen constant 1.0 yearly schedule, operable 8760 of 8760 hours; native hourly fan Load shows all 4 fans at 44 l/s in 8760 of 8760 hours |
 | 12 | complete ZoneTemperature | **PASS** | 9 of 9 room(s) complete over hours 0..8759, 8760 finite values each |
 | 13 | API / native sampled agreement | **PASS** | 9 of 9 room(s) agreed value for value over 8760 hour(s), each read after a **raw late-bound** simulate of its own air system |
 | 14 | duplicate display names do not alter identity | **PASS** | 23 native zone(s) and damper(s) renamed to one shared string; results still validate, and 9 of 9 room(s) returned **identical** values |
@@ -192,7 +213,22 @@ duties, which is what item 14 exists to prove is safe.
 
 ### Notes on four of them
 
-**Item 10, and what the zone flags are and are not worth.** `Flags=1` is
+**Item 10 - why nothing can be counted twice, and why the flags are not the proof.** Ventilation could
+reach a zone twice only if the thermal source still carried it alongside the Systems network. It does
+not, and that is established on the exact bytes the accepted run read:
+
+1. **no IZAM** - interzone air movement is where the reference route states ventilation; the accepted
+   source has none (item 1, hashed);
+2. **zero mechanical `ticV`** - the building model's own mechanical ventilation gain is zero on every
+   internal condition (item 2); infiltration and natural ventilation are left as they were (item 3),
+   because they are not the MVHR's air;
+3. **explicit Systems ventilation** - every supply, extract and transfer leg of the design is a native
+   carrier with its own duty (items 6-9), so the MVHR's air exists in exactly one place.
+
+The zone flags come **after** that, as structural corroboration - not as the proof, which would be
+circular: a flag says what TAS would do with building-model ventilation, and the source has none.
+
+**What the zone flags are and are not worth.** `Flags=1` is
 `tpdSystemZoneFlagDisplacementVent`, which is what the template's prototype room states about how air
 is delivered - not a second ventilation model. It is **inherited from the template and not decided by
 this route**, which the route now says in a note per room rather than leaving a reader to infer it
@@ -219,14 +255,15 @@ four orders of magnitude larger than the zone-flag effect above. SAM's own repli
 on the value: `TPD_CAV`, `TPD_EOL` and `TPD_EOC` zero it, `TPD_MV`, `TPD_VAV` and `TPD_MVRE` leave it
 at 1. **This route deviates from `TPD_MV` deliberately.**
 
-The same method also settles operation, and the limits are stated in
-`Modify.GroundVentilationFans` and in `PR2-NATIVE-TOPOLOGY.md` section 5: the only operation carrier
-anywhere in the produced air side is a `tpdScheduleFunction` /
-`tpdScheduleFunctionAllZonesLoad` schedule on each fan - every damper and every zone answers
-`GetSchedule() == null`, 23 of 23 - so no diversity factor other than 1.0 exists to be inherited, and
-a yearly or hourly schedule on a fan is refused. TAS exposes **no hourly delivered-flow series** for a
-duct or a zone on this route, so continuous delivery at factor 1.0 is established by exhausting the
-carriers that could hold a factor other than 1, not by reading a flow back.
+**Item 11, and operation - corrected in the closeout.** The earlier text here claimed the fans ran
+continuously because their only carrier was a `tpdScheduleFunctionAllZonesLoad` schedule. **That was
+wrong, and it hid a defect**: the reviewed configuration supplied no schedule, so every fan kept the
+template's occupant-sensible function schedule - demand-driven - and production refused the frozen
+constant 1.0 yearly schedule outright. A fan *does* answer an hourly series (variable 9, its Load), and
+controls on it show the same function switching the fans off (0 hours with a heating load, 356 and
+470 with a cooling load). Production now accepts only a yearly schedule operable in 8760 of 8760
+hours, and the accepted run carries the frozen one: all four fans deliver 44 l/s in 8760 of 8760
+hours. The full record is `PR2-FAN-OPERATION.md`.
 
 **Item 13 is a genuinely independent read, and getting there mattered.** A first attempt read every
 zone once, after both systems had been simulated, and reported "4 of 4 room(s) agreed" while listing
@@ -261,3 +298,33 @@ validate - they come back **identical**, room for room. A name-keyed lookup woul
 * **The fan heat gain and zone flag magnitudes above are one fixture.** 2.80 K and 4.0e-05 K are
   measured on this 9-room design with this weather file. They establish the *order* of each effect,
   not a general figure.
+
+---
+
+## Artifact register (closeout, licensed machine)
+
+Everything under `C:\TasOut` is generated and **not tracked in git**; the transcripts and harness copied
+into this folder **are**. Every run folder holds a byte-identical copy of the one thermal source and a
+`provenance.txt` with its hashes before and after the run.
+
+| role | path | produced by | tracked |
+| --- | --- | --- | --- |
+| **FINAL ACCEPTED PR2 TPD** | `C:\TasOut\pr2z\final-layout2\acc.tpd` | `route-acceptance full balanced continuity const1`, schedule "PartO Constant 1.0", refined layout | no |
+| FINAL's source TBD | `C:\TasOut\pr2z\final-layout2\acc.tbd` (= `src\acc.tbd`) | copied from `src` | no |
+| FINAL's paired TSD | `C:\TasOut\pr2z\final-layout2\acc.tsd` (= `src\acc.tsd`) | copied from `src` | no |
+| the one thermal source | `C:\TasOut\pr2z\src\acc.tbd`, `acc.tsd`, `acc-design.sam`, `acc-zones.txt` | `route-source … full` (production `Create.NoIzamThermalSource`) | no |
+| manually inspected and approved layout (superseded only by the refinement) | `C:\TasOut\pr2z\final-layout\acc.tpd` | as FINAL, first layout | no |
+| diagnostic: accepted network before the layout fix | `C:\TasOut\pr2z\rename-n2\acc.tpd` | as FINAL, no layout | no |
+| diagnostic: reviewed configuration reproduced (no schedule, old code) | `C:\TasOut\pr2z\before\acc.tpd` | `route-acceptance full balanced continuity` at `0fefca76` | no |
+| control: fan operation carriers | `C:\TasOut\pr2z\controls\ctl.{gap,funcload4,funcload8}.tpd`, `C:\TasOut\pr2z\carrier\car.*.tpd` | `fancontrol` on copies | no |
+| control: refused by the fix (no schedule) | `C:\TasOut\pr2z\nosched\` | `route-acceptance`, fixed code | no |
+| control: order sensitivity, refused | `C:\TasOut\pr2z\final\acc.tpd`, `C:\TasOut\pr2z\final2\acc.tpd` | const1, schedule "Part O Continuous Operation" | no |
+| control: order sensitivity, passing | `C:\TasOut\pr2z\rename-n1\`, `rename-n3\` | const1, other schedule names | no |
+| control: position is presentation only | `C:\TasOut\pr2z\layout\spread.tpd` | `spread` on a copy | no |
+| harness copies (never the accepted document) | `acc.agree.tpd`, `acc.renamed.tpd`, `acc.fanprobe.tpd`, `acc.zt.tpd` beside each `acc.tpd` | items 13, 14, `fanprobe`, `zt` | no |
+| fan operation evidence | `PR2-FAN-OPERATION.md`, `PR2-fanop-*.txt` | `fanprobe`, `fancontrol` | **yes** |
+| item 10 / no-IZAM evidence | `PR2-fanop-before-source-check.txt`; section "Provenance" above | `source-check` on the exact bytes | **yes** |
+| native connector / topology evidence | `PR2-NATIVE-TOPOLOGY.md`, `PR2-native-*.txt`, `PR2-layout-*.txt` | `graph`, `net`, `layout` | **yes** |
+| acceptance logs | `PR2-acceptance-*.log`; per run `acceptance.console.txt` under `C:\TasOut\pr2z\*` | `route-acceptance` | logs **yes**, run folders no |
+| error logs | `C:\TasOut\inv3\last-exception.log` (written only on a harness exception; none occurred in the accepted runs) | harness | no |
+| harness | `PR2-closeout-harness-*.txt` (source at `C:\TasOut\inv3`) | - | **yes** |
