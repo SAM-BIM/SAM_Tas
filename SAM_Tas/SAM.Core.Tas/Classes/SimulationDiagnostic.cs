@@ -103,26 +103,41 @@ namespace SAM.Core.Tas
 
             string trimmed = returned.Trim();
 
-            // Success is matched whole and checked FIRST, so a future success answer that happened to
-            // contain a failure fragment would still need to be added here deliberately rather than
-            // being silently misread.
-            foreach (string answer in knownSuccessAnswers)
+            bool failure = ContainsFailureFragment(trimmed);
+
+            // Success is matched WHOLE, and only when the answer carries no measured failure fragment.
+            //
+            // Matching whole is what stops "Sizing Flow Failed" being read as a success because some
+            // future success word appears inside it. The second condition is the other direction, and
+            // it is deliberately belt and braces: if a success answer were ever added to the vocabulary
+            // that also contained a failure fragment - or if TAS answered something like "Done, sizing
+            // failed" - the two vocabularies would be in conflict, and a conflict must never resolve
+            // to success. It resolves to failure, which refuses, which is the safe direction.
+            if (!failure)
             {
-                if (string.Equals(trimmed, answer, StringComparison.OrdinalIgnoreCase))
+                foreach (string answer in knownSuccessAnswers)
                 {
-                    return SimulationDiagnosticKind.KnownSuccess;
+                    if (string.Equals(trimmed, answer, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SimulationDiagnosticKind.KnownSuccess;
+                    }
                 }
             }
 
+            return failure ? SimulationDiagnosticKind.KnownFailure : SimulationDiagnosticKind.Unrecognised;
+        }
+
+        private static bool ContainsFailureFragment(string trimmed)
+        {
             foreach (string fragment in knownFailureFragments)
             {
                 if (trimmed.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    return SimulationDiagnosticKind.KnownFailure;
+                    return true;
                 }
             }
 
-            return SimulationDiagnosticKind.Unrecognised;
+            return false;
         }
 
         /// <summary>

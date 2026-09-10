@@ -3,6 +3,7 @@
 
 using SAM.Core.Tas;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using TPD;
 
@@ -125,6 +126,10 @@ namespace SAM.Analytical.Tas.TPD
                 int count_Simulated = 0;
                 string diagnostic_Last = null;
 
+                // Every air system's answer, kept separately. With more than one system the document
+                // has more than one diagnostic, and reporting only the last would hide the others.
+                List<string> diagnostics = new List<string>();
+
                 try
                 {
                     int count_PlantRoom = energyCentre.GetPlantRoomCount();
@@ -151,6 +156,7 @@ namespace SAM.Analytical.Tas.TPD
                             // call. "Done" is the measured success answer.
                             diagnostic_Last = system.Simulate(startHour + 1, endHour + 1, 0);
                             count_Simulated++;
+                            diagnostics.Add(diagnostic_Last);
 
                             if (SimulationDiagnostic.IsFailure(diagnostic_Last))
                             {
@@ -177,7 +183,20 @@ namespace SAM.Analytical.Tas.TPD
 
                 simulationEvidence.Note(string.Format("{0} air system(s) simulated.", count_Simulated));
 
-                if (!simulationEvidence.RecordCallReturned(diagnostic_Last))
+                foreach (string diagnostic in diagnostics)
+                {
+                    simulationEvidence.Note(string.Format("An air system answered: \"{0}\".", (diagnostic ?? string.Empty).Trim()));
+                }
+
+                // With several air systems there are several answers. Reporting one of them as THE
+                // diagnostic would be a choice the measurement does not support, so a set of answers
+                // that are not all the same is preserved verbatim and classified conservatively - the
+                // combined text matches no measured success answer whole, so it decides nothing and
+                // the zone temperature reconciliation remains the gate. A single distinct answer -
+                // which is every case measured so far - is reported exactly as TAS gave it.
+                string diagnostic_Reported = Distinct(diagnostics);
+
+                if (!simulationEvidence.RecordCallReturned(diagnostic_Reported))
                 {
                     return false;
                 }
@@ -186,6 +205,31 @@ namespace SAM.Analytical.Tas.TPD
             simulationEvidence.Conclude();
 
             return simulationEvidence.Refusals.Count == 0;
+        }
+
+        /// <summary>
+        /// The one answer to report for a set of per-system answers: that answer when they all agree,
+        /// and all of them joined when they do not - which classifies as unrecognised, decides nothing,
+        /// and loses no text.
+        /// </summary>
+        private static string Distinct(List<string> diagnostics)
+        {
+            if (diagnostics == null || diagnostics.Count == 0)
+            {
+                return null;
+            }
+
+            string first = (diagnostics[0] ?? string.Empty).Trim();
+
+            for (int i = 1; i < diagnostics.Count; i++)
+            {
+                if (!string.Equals((diagnostics[i] ?? string.Empty).Trim(), first, StringComparison.Ordinal))
+                {
+                    return string.Join(" | ", diagnostics.ConvertAll(x => (x ?? string.Empty).Trim()));
+                }
+            }
+
+            return first;
         }
 
         public static bool Simulate(string path_TPD, int startHour, int endHour, out SimulationEvidence simulationEvidence)
