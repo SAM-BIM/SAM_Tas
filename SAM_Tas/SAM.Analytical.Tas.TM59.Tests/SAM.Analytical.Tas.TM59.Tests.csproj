@@ -92,6 +92,12 @@
     <Reference Include="SAM.Core.Systems">
       <HintPath>..\..\build\SAM.Core.Systems.dll</HintPath>
     </Reference>
+    <!-- The PR2 ventilation tests run the REAL PR1 materialisation and then the real PR2 conversion
+         helpers over its output, so they name DisplaySystemSpace and DisplaySystemDamper - whose display
+         geometry lives here. No COM type is involved and no TAS licence is needed. -->
+    <Reference Include="SAM.Geometry.Systems">
+      <HintPath>..\..\build\SAM.Geometry.Systems.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -100,6 +106,13 @@
          on ActiveSetting or a %APPDATA%\SAM install being present on the build machine. -->
     <None Include="..\..\..\SAM\files\resources\Analytical\SAM_InternalConditionTextMap_TM59.JSON">
       <Link>Resources\SAM_InternalConditionTextMap_TM59.JSON</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- The SHIPPED Part O mechanical ventilation topology template, taken from SAM_Systems' own
+         resources rather than copied into this repository, so the PR2 tests convert the same template a
+         real run does. SAM_Systems is read-only here: the file is linked, never written. -->
+    <None Include="..\..\..\SAM_Systems\files\resources\Analytical\Systems\SystemEnergyCentre\MV.json">
+      <Link>Resources\MV.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

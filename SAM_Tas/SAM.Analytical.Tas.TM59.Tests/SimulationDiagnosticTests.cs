@@ -256,5 +256,70 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(simulationEvidence.Completed, Is.True);
         }
+
+        // ------------------------------------------------------- the two vocabularies cannot conflict
+
+        [Test]
+        public void AnAnswerCarryingBothASuccessWordAndAFailureFragmentIsRefused()
+        {
+            //Substring matching is the hazard: a classifier that looked for "Done" anywhere would read
+            //every one of these as a success. Success is matched WHOLE, and never when the answer also
+            //carries a measured failure fragment - so a conflict resolves to refusal, not to success.
+            string[] answers = new string[]
+            {
+                "Done, but Sizing Flow Failed",
+                "Sizing Flow Failed - not Done",
+                "Done. Plant Room Has Errors",
+                "Failed to open the TSD file. Done.",
+            };
+
+            foreach (string answer in answers)
+            {
+                Assert.Multiple(() =>
+                {
+                    Assert.That(SimulationDiagnostic.Classify(answer), Is.EqualTo(SimulationDiagnosticKind.KnownFailure), answer);
+                    Assert.That(SimulationDiagnostic.IsSuccess(answer), Is.False, answer);
+                    Assert.That(SimulationDiagnostic.IsFailure(answer), Is.True, answer);
+                });
+            }
+        }
+
+        [Test]
+        public void NoDeclaredSuccessAnswerContainsADeclaredFailureFragment()
+        {
+            //The vocabularies must stay disjoint. If a future measured success answer ever contained a
+            //failure fragment, the classifier would refuse it - correctly, but confusingly - and this
+            //test is what says so at the moment the vocabulary is edited rather than months later.
+            foreach (string answer in SimulationDiagnostic.KnownSuccessAnswers)
+            {
+                foreach (string fragment in SimulationDiagnostic.KnownFailureFragments)
+                {
+                    Assert.That(
+                        answer.IndexOf(fragment, System.StringComparison.OrdinalIgnoreCase),
+                        Is.LessThan(0),
+                        string.Format("the success answer \"{0}\" carries the failure fragment \"{1}\".", answer, fragment));
+                }
+            }
+        }
+
+        [Test]
+        public void AMeasuredSuccessIsStillNotTheGate()
+        {
+            SimulationEvidence simulationEvidence = InPlaceRun();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(simulationEvidence.RecordCallReturned("Done"), Is.True);
+                Assert.That(simulationEvidence.NativeDiagnosticKind, Is.EqualTo(SimulationDiagnosticKind.KnownSuccess));
+                Assert.That(simulationEvidence.NativeDiagnostic, Is.EqualTo("Done"), "the exact native text is kept");
+            });
+
+            simulationEvidence.Conclude();
+
+            Assert.That(
+                simulationEvidence.Completed,
+                Is.False,
+                "TAS reporting success is positive evidence and not the gate - the results reconciliation is.");
+        }
     }
 }
