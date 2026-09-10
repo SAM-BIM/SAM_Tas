@@ -5,10 +5,22 @@
 re-acceptance delta sits on top of **`fc32261`**, the previously pushed head.
 
 This is **PR2 of SAM-BIM/SAM #111** (Part O Iteration 3 - explicit Systems/TPD ventilation route).
-**Pushed to the feature branch, not merged, no PR opened.**
-READY FOR FINAL INDEPENDENT DELTA RE-REVIEW.
+Open as **SAM-BIM/SAM_Tas PR #50**, head **`8485cf6`**, CI green (build PASS, spdx PASS), mergeable,
+**not merged**. A final PR-level sanity review passed; a Codex P2 finding found after it is fixed.
 
 ## Last updated
+2026-09-10 (evening) - **CODEX P2 FIXED: the no-IZAM workflow now fails closed on a surviving IZAM.**
+`WorkflowCalculator`'s `RemoveIZAMs` step verified the sweep but only NOTED a survivor and continued
+to save/size/simulate - a building that refused removal would have reached the Systems route as its
+"no-IZAM" source with its ventilation double-counted. Fixed on the calculator's established refusal
+convention: the COM-free decision is `Query.IzamSurvivorRefusal` (new, `Query.CancelNote` precedent);
+the calculator adds the refusal and returns `null` BEFORE the save, and `Create.NoIzamThermalSource`
+already records a null return as a failed call. Zero-IZAM path unchanged; `RemoveIZAMs = false`
+callers untouched. Regression: `NoIzamSurvivorRefusalTests` (3 tests). Evidence:
+`Documentation/evidence/PR2-NOIZAM-FAILCLOSED.md`; Codex thread answered on the PR. Release build
+clean; TM59 tests 861/861; benchmark tests 16/16. Earlier the same day: SPDX headers added to the
+four files CI named (`76d95e8`), header check green.
+
 2026-09-10 - **PR2 CORRECTIVE RE-ACCEPTANCE.** A manual inspection of the previously accepted `.tpd`
 found the acceptance FIXTURE invalid, not the conversion: the harness authored its own ventilation
 design by ascending space guid instead of reading the one the model states, so the accepted document
