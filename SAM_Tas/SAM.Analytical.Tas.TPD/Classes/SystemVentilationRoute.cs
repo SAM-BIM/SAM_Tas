@@ -44,6 +44,9 @@ namespace SAM.Analytical.Tas.TPD
         private readonly SystemZoneTemperatureResults systemZoneTemperatureResults;
         private readonly string path_TPD;
 
+        /// <summary>Built on first use by <see cref="Binding"/>. The route is immutable once built.</summary>
+        private Dictionary<Guid, SystemVentilationBinding> binding_By_Space;
+
         public SystemVentilationRoute(
             NoIzamThermalSource noIzamThermalSource,
             string path_TPD,
@@ -174,18 +177,26 @@ namespace SAM.Analytical.Tas.TPD
         /// </summary>
         public bool IsComplete { get; }
 
-        /// <summary>One room's binding, by analytical room guid. Null on a refused route.</summary>
+        /// <summary>
+        /// One room's binding, by analytical room guid. Null on a refused route.
+        /// <para>
+        /// Indexed, not scanned: this is how a later stage walks its rooms, and a linear scan here
+        /// would make that walk quadratic on the room count.
+        /// </para>
+        /// </summary>
         public SystemVentilationBinding Binding(Guid guid_Space)
         {
-            foreach (SystemVentilationBinding systemVentilationBinding in bindings)
+            if (binding_By_Space == null)
             {
-                if (systemVentilationBinding.Guid_Space == guid_Space)
+                binding_By_Space = new Dictionary<Guid, SystemVentilationBinding>();
+
+                foreach (SystemVentilationBinding systemVentilationBinding in bindings)
                 {
-                    return systemVentilationBinding;
+                    binding_By_Space[systemVentilationBinding.Guid_Space] = systemVentilationBinding;
                 }
             }
 
-            return null;
+            return binding_By_Space.TryGetValue(guid_Space, out SystemVentilationBinding result) ? result : null;
         }
 
         public override string ToString()

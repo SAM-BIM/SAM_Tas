@@ -58,13 +58,10 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
-            foreach (SystemVentilationLegIntent systemVentilationLegIntent in systemVentilationConversionContext.LegIntents)
+            //Indexed by air system rather than filtered out of the whole collection: this runs once per
+            //unit, and a filter would make it systems x legs.
+            foreach (SystemVentilationLegIntent systemVentilationLegIntent in systemVentilationConversionContext.LegIntents_AirSystem(guid_AirSystem))
             {
-                if (systemVentilationLegIntent.Guid_AirSystem != guid_AirSystem)
-                {
-                    continue;
-                }
-
                 double? designFlowRate_Lps;
                 string reference_FlowController;
 

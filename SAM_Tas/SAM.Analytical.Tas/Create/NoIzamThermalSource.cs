@@ -102,6 +102,18 @@ namespace SAM.Analytical.Tas
             {
                 simulationEvidence.RecordCallFailed(string.Format("{0}: {1}", exception.GetType().Name, exception.Message));
 
+                refusals.Add(string.Format(
+                    "The thermal source workflow threw {0}: {1}",
+                    exception.GetType().Name,
+                    exception.Message));
+
+                //The notes the workflow had already produced are the diagnosis of where it got to, so
+                //they are kept on the failure path as well as the success one.
+                if (workflowCalculator.Notes != null)
+                {
+                    notes.AddRange(workflowCalculator.Notes);
+                }
+
                 return new NoIzamThermalSource(
                     path_TBD,
                     path_TSD,

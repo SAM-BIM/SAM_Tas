@@ -57,6 +57,12 @@ namespace SAM.Analytical.Tas.TPD
         private readonly List<string> refusals = new List<string>();
         private readonly List<string> notes = new List<string>();
 
+        /// <summary>
+        /// Built on first use by <see cref="LegIntents_AirSystem"/>, and dropped whenever a leg is added
+        /// or its duty carrier is set, so it can never answer from a graph that has since changed.
+        /// </summary>
+        private Dictionary<Guid, List<SystemVentilationLegIntent>> legIntents_By_AirSystem;
+
         private int lookupCount;
         private int count_NativeSystems;
         private bool reconciled;
@@ -159,6 +165,7 @@ namespace SAM.Analytical.Tas.TPD
             }
 
             legIntents[systemVentilationLegIntent.Guid_SystemConnection] = systemVentilationLegIntent;
+            legIntents_By_AirSystem = null;
 
             if (systemVentilationLegIntent.Guid_DutyCarrier != Guid.Empty)
             {
@@ -198,8 +205,43 @@ namespace SAM.Analytical.Tas.TPD
 
             legIntents[guid_SystemConnection] = systemVentilationLegIntent.WithDutyCarrier(guid_DutyCarrier);
             connection_By_DutyCarrier[guid_DutyCarrier] = guid_SystemConnection;
+            legIntents_By_AirSystem = null;
 
             return true;
+        }
+
+        /// <summary>
+        /// The intended legs of one air system, ordered by type then connection guid.
+        /// <para>
+        /// Indexed rather than filtered. The conversion asks this once per air system, and a filter
+        /// over the whole leg collection would make that <c>systems x legs</c> - a quarter of a
+        /// million passes over eight thousand legs on a five thousand room scheme, for an answer a
+        /// dictionary gives directly.
+        /// </para>
+        /// </summary>
+        public List<SystemVentilationLegIntent> LegIntents_AirSystem(Guid guid_AirSystem)
+        {
+            lookupCount++;
+
+            if (legIntents_By_AirSystem == null)
+            {
+                legIntents_By_AirSystem = new Dictionary<Guid, List<SystemVentilationLegIntent>>();
+
+                foreach (SystemVentilationLegIntent systemVentilationLegIntent in LegIntents)
+                {
+                    if (!legIntents_By_AirSystem.TryGetValue(systemVentilationLegIntent.Guid_AirSystem, out List<SystemVentilationLegIntent> systemVentilationLegIntents))
+                    {
+                        systemVentilationLegIntents = new List<SystemVentilationLegIntent>();
+                        legIntents_By_AirSystem[systemVentilationLegIntent.Guid_AirSystem] = systemVentilationLegIntents;
+                    }
+
+                    systemVentilationLegIntents.Add(systemVentilationLegIntent);
+                }
+            }
+
+            return legIntents_By_AirSystem.TryGetValue(guid_AirSystem, out List<SystemVentilationLegIntent> result)
+                ? new List<SystemVentilationLegIntent>(result)
+                : new List<SystemVentilationLegIntent>();
         }
 
         /// <summary>The intended room for a materialised <c>SystemSpace</c>, or null.</summary>
