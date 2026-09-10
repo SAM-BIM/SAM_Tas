@@ -84,6 +84,51 @@ namespace SAM.Analytical.Tas.TPD
             return result;
         }
 
+        /// <summary>
+        /// The same read against <b>one</b> air system the caller already holds.
+        /// <para>
+        /// This is the overload the simulation loop uses. Licensed TAS replaces the previous air
+        /// system's in-memory result surface when <c>ISystem.Simulate</c> is called for the next one, so
+        /// each system's series has to be taken before the loop advances - and taking them through the
+        /// document overload would re-index every air system in the document once per system, which is
+        /// quadratic in the unit count. Here the system is passed in, so the read is linear in the rooms
+        /// it serves and nothing is walked twice.
+        /// </para>
+        /// </summary>
+        public static SystemZoneTemperatureResults ToSAM_SystemZoneTemperatureResults(
+            this global::TPD.System system,
+            IEnumerable<SystemVentilationBinding> systemVentilationBindings,
+            int startHour,
+            int endHour)
+        {
+            SystemZoneTemperatureResults result = new SystemZoneTemperatureResults(startHour, endHour);
+
+            if (system == null)
+            {
+                result.Refuse("No air system to read zone temperatures from.");
+                return result;
+            }
+
+            if (systemVentilationBindings == null)
+            {
+                result.Refuse("No room bindings were supplied, so no series could be resolved by identity.");
+                return result;
+            }
+
+            Dictionary<string, global::TPD.System> dictionary_System = new Dictionary<string, global::TPD.System>(StringComparer.OrdinalIgnoreCase);
+
+            string reference_System = Query.NativeReference(system);
+
+            if (!string.IsNullOrWhiteSpace(reference_System))
+            {
+                dictionary_System[reference_System] = system;
+            }
+
+            Read(dictionary_System, systemVentilationBindings, result);
+
+            return result;
+        }
+
         private static void ToSAM_SystemZoneTemperatureResults(
             TPDDoc tPDDoc,
             IEnumerable<SystemVentilationBinding> systemVentilationBindings,
@@ -130,6 +175,18 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            Read(dictionary_System, systemVentilationBindings, systemZoneTemperatureResults);
+        }
+
+        /// <summary>
+        /// Reads one series per binding, in ascending room guid so the answer never depends on the
+        /// order the bindings arrived in.
+        /// </summary>
+        private static void Read(
+            Dictionary<string, global::TPD.System> dictionary_System,
+            IEnumerable<SystemVentilationBinding> systemVentilationBindings,
+            SystemZoneTemperatureResults systemZoneTemperatureResults)
+        {
             List<SystemVentilationBinding> bindings = new List<SystemVentilationBinding>(systemVentilationBindings);
             bindings.Sort((x, y) => x.Guid_Space.CompareTo(y.Guid_Space));
 

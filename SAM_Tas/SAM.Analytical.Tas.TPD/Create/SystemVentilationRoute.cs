@@ -130,7 +130,15 @@ namespace SAM.Analytical.Tas.TPD
             //-------------------------------------------------------------------------------------------
             //4. The simulation - the AIR SYSTEMS, not the document.
             //-------------------------------------------------------------------------------------------
-            Modify.SimulateSystems(path_TPD, startHour, endHour, out SimulationEvidence simulationEvidence);
+            List<SystemVentilationBinding> systemVentilationBindings = systemVentilationConversionContext.Bindings;
+
+            Modify.SimulateSystems(
+                path_TPD,
+                systemVentilationBindings,
+                startHour,
+                endHour,
+                out SimulationEvidence simulationEvidence,
+                out SystemZoneTemperatureResults systemZoneTemperatureResults);
 
             notes.AddRange(simulationEvidence.Notes);
 
@@ -144,14 +152,6 @@ namespace SAM.Analytical.Tas.TPD
             //-------------------------------------------------------------------------------------------
             //5. The results, and the gate.
             //-------------------------------------------------------------------------------------------
-            List<SystemVentilationBinding> systemVentilationBindings = systemVentilationConversionContext.Bindings;
-
-            SystemZoneTemperatureResults systemZoneTemperatureResults = Convert.ToSAM_SystemZoneTemperatureResults(
-                path_TPD,
-                systemVentilationBindings,
-                startHour,
-                endHour);
-
             systemZoneTemperatureResults.Validate(systemVentilationBindings);
 
             notes.AddRange(systemZoneTemperatureResults.Notes);

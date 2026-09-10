@@ -371,6 +371,46 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void OneHourIsReadableWithoutCopyingTheSeries()
+        {
+            SystemVentilationBinding systemVentilationBinding = Binding(1);
+
+            IndexedDoubles indexedDoubles = Series(StartHour, 24);
+            indexedDoubles[5] = 19.5;
+
+            SystemZoneTemperatureResult systemZoneTemperatureResult = Result(systemVentilationBinding, indexedDoubles);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(systemZoneTemperatureResult.TryGetValue(5, out double value), Is.True);
+                Assert.That(value, Is.EqualTo(19.5));
+
+                Assert.That(systemZoneTemperatureResult.TryGetValue(99, out double value_Absent), Is.False);
+                Assert.That(double.IsNaN(value_Absent), Is.True, "an absent hour answers NaN, not a silent zero");
+            });
+        }
+
+        [Test]
+        public void TheSeriesHandedOutIsACopy_SoAPublishedResultCannotBeEdited()
+        {
+            SystemVentilationBinding systemVentilationBinding = Binding(1);
+
+            SystemZoneTemperatureResult systemZoneTemperatureResult = Result(systemVentilationBinding, Series(StartHour, 24));
+
+            IndexedDoubles taken = systemZoneTemperatureResult.Values;
+            taken[3] = -999.0;
+
+            //Values is defensive on every access, which is why walking a period must go through
+            //TryGetValue: copying an annual series per hour is what turns a comparison into minutes.
+            Assert.Multiple(() =>
+            {
+                Assert.That(systemZoneTemperatureResult.TryGetValue(3, out double value), Is.True);
+                Assert.That(value, Is.EqualTo(21.0), "editing the copy must not reach the result");
+                Assert.That(systemZoneTemperatureResult.IsComplete, Is.True);
+            });
+        }
+
+        [Test]
         public void TheSeriesIsFoundByRoomGuid()
         {
             SystemZoneTemperatureResults systemZoneTemperatureResults = Complete(3, out List<SystemVentilationBinding> bindings);

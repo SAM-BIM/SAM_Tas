@@ -74,10 +74,42 @@ namespace SAM.Analytical.Tas.TPD
         /// </summary>
         public string Diagnostic { get; }
 
-        /// <summary>The series, or null where none came back.</summary>
+        /// <summary>
+        /// The series, or null where none came back.
+        /// <para>
+        /// <b>This is a defensive COPY, taken on every access.</b> The record is immutable and handing
+        /// out its own collection would let a caller edit a published result. A copy of an annual series
+        /// is eight thousand seven hundred and sixty entries, so <b>never call this inside a loop over
+        /// the hours</b> - use <see cref="TryGetValue"/>, or take the copy once and walk that. Reading
+        /// it per hour is quadratic in the period and turns an instant comparison into minutes.
+        /// </para>
+        /// </summary>
         public IndexedDoubles Values
         {
             get { return indexedDoubles == null ? null : new IndexedDoubles(indexedDoubles); }
+        }
+
+        /// <summary>
+        /// One hour's value, without copying the series. This is the accessor to use when walking a
+        /// period - see the remarks on <see cref="Values"/> for why that matters.
+        /// </summary>
+        /// <param name="hour">The 0-based hour.</param>
+        public bool TryGetValue(int hour, out double value)
+        {
+            value = double.NaN;
+
+            //IndexedDoubles.TryGetValue writes default(double) - zero - into its out parameter when the
+            //index is absent, so it cannot be passed this one directly: a caller that ignored the bool
+            //would read a missing hour as 0 degrees, which is a plausible temperature. An absent hour
+            //answers NaN here, which is not.
+            if (indexedDoubles == null || !indexedDoubles.TryGetValue(hour, out double value_Temp))
+            {
+                return false;
+            }
+
+            value = value_Temp;
+
+            return true;
         }
 
         /// <summary>

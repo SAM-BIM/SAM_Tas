@@ -76,7 +76,52 @@ namespace SAM.Analytical.Tas.TPD
         /// <param name="simulationEvidence">What the run left behind. Never null.</param>
         public static bool SimulateSystems(string path_TPD, int startHour, int endHour, out SimulationEvidence simulationEvidence)
         {
+            return SimulateSystems(path_TPD, null, startHour, endHour, out simulationEvidence, out _);
+        }
+
+        /// <summary>
+        /// Simulates every air system and, when room bindings are supplied, captures that system's
+        /// zone-temperature results before simulating the next one.
+        /// <para>
+        /// Licensed TAS replaces the previous air system's in-memory result surface when
+        /// <c>ISystem.Simulate</c> is called for another system in the same document. Reading all zones
+        /// only after the loop therefore loses every system except the last. The result arrays copied
+        /// here are ordinary managed values, so they remain valid after the next native call.
+        /// </para>
+        /// </summary>
+        public static bool SimulateSystems(
+            string path_TPD,
+            IEnumerable<SystemVentilationBinding> systemVentilationBindings,
+            int startHour,
+            int endHour,
+            out SimulationEvidence simulationEvidence,
+            out SystemZoneTemperatureResults systemZoneTemperatureResults)
+        {
             simulationEvidence = new SimulationEvidence(SimulationOutputShape.InPlaceDocument, path_TPD, null);
+            systemZoneTemperatureResults = systemVentilationBindings == null
+                ? null
+                : new SystemZoneTemperatureResults(startHour, endHour);
+
+            Dictionary<string, List<SystemVentilationBinding>> bindings_By_System = null;
+            if (systemVentilationBindings != null)
+            {
+                bindings_By_System = new Dictionary<string, List<SystemVentilationBinding>>(StringComparer.OrdinalIgnoreCase);
+                foreach (SystemVentilationBinding binding in systemVentilationBindings)
+                {
+                    if (binding == null || string.IsNullOrWhiteSpace(binding.Reference_System))
+                    {
+                        continue;
+                    }
+
+                    if (!bindings_By_System.TryGetValue(binding.Reference_System, out List<SystemVentilationBinding> bindings))
+                    {
+                        bindings = new List<SystemVentilationBinding>();
+                        bindings_By_System[binding.Reference_System] = bindings;
+                    }
+
+                    bindings.Add(binding);
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(path_TPD))
             {
@@ -162,6 +207,29 @@ namespace SAM.Analytical.Tas.TPD
                             {
                                 simulationEvidence.RecordCallReturned(diagnostic_Last);
                                 return false;
+                            }
+
+                            if (bindings_By_System != null)
+                            {
+                                string reference_System = Query.NativeReference(system);
+                                if (reference_System != null
+                                    && bindings_By_System.TryGetValue(reference_System, out List<SystemVentilationBinding> bindings))
+                                {
+                                    //The per-SYSTEM overload: passing the system that has just been
+                                    //simulated keeps this linear in the rooms it serves. Going through
+                                    //the document would re-index every air system once per system,
+                                    //which is quadratic in the unit count.
+                                    SystemZoneTemperatureResults captured = Convert.ToSAM_SystemZoneTemperatureResults(
+                                        system,
+                                        bindings,
+                                        startHour,
+                                        endHour);
+
+                                    foreach (SystemZoneTemperatureResult result in captured.Results)
+                                    {
+                                        systemZoneTemperatureResults.Add(result);
+                                    }
+                                }
                             }
                         }
                     }
