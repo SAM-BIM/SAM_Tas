@@ -574,15 +574,25 @@ namespace SAM.Analytical.Tas
                     Modify.RemoveIZAMs(tBDDocument.Building);
 
                     //Verified, not trusted: the sweep walks GetIZAM(0)/RemoveIZAM(0) to exhaustion, so an
-                    //IZAM surviving it means the building did not accept the removal.
-                    if (tBDDocument.Building?.GetIZAM(0) != null)
+                    //IZAM surviving it means the building did not accept the removal. A survivor breaks the
+                    //no-IZAM contract, so the run fails CLOSED - refusal, no save, no sizing, no
+                    //simulation - rather than reporting success on a building that still carries its own
+                    //mechanical ventilation. The decision is Query.IzamSurvivorRefusal; the return-null
+                    //convention is the same one the other refusals above use, and NoIzamThermalSource
+                    //already records a null return as a failed call, so the source cannot come back
+                    //accepted. The refusal happens BEFORE the save below on purpose: the surviving-IZAM
+                    //state is never persisted as this run's output.
+                    string refusal_IzamSurvivor = Query.IzamSurvivorRefusal(true, tBDDocument.Building?.GetIZAM(0) != null);
+                    if (refusal_IzamSurvivor != null)
                     {
-                        notes.Add("Removing IZAMs: an IZAM survived the sweep, so this TBD is NOT IZAM-free.");
+                        notes.Add(refusal_IzamSurvivor);
+
+                        Ended?.Invoke(this, new System.EventArgs());
+
+                        return null;
                     }
-                    else
-                    {
-                        notes.Add("Removing IZAMs: none remain.");
-                    }
+
+                    notes.Add("Removing IZAMs: none remain.");
                 }
 
                 if (WorkflowSettings.RemoveMechanicalVentilationGains)
