@@ -2,7 +2,6 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System;
-using System.Collections.Generic;
 using TPD;
 
 namespace SAM.Analytical.Tas.TPD
@@ -13,11 +12,28 @@ namespace SAM.Analytical.Tas.TPD
         /// Writes each leg's design airflow onto its native carrier, reads back what TAS then holds, and
         /// records one <see cref="SystemVentilationConnectionBinding"/> per PR1 connection.
         /// <para>
-        /// <b>Read back, never assumed.</b> Every duty here is reported from the native object after the
-        /// write, so the reconciliation compares two independent statements - what PR1 designed and what
-        /// TAS holds - rather than one statement with itself. That is what catches the silent drop:
-        /// <c>Convert.ToTPD(DisplaySystemDamper, …)</c> writes through <c>DesignFlowRate?.Update(…)</c>,
-        /// and a TPD that handed back a null carrier would leave the duty unwritten with nothing said.
+        /// <b>The two paths differ, and the difference matters when reading the reconciliation.</b>
+        /// </para>
+        /// <list type="bullet">
+        /// <item><description>A <b>supply</b> leg is a genuine read-back: the duty was written at the
+        /// zone pairing point in <c>Convert.ToTPD(DisplaySystemSpace, …)</c>, and what is reported here
+        /// is what TAS holds now. Intent and state are two independent
+        /// statements.</description></item>
+        /// <item><description>An <b>extract</b> or <b>transfer</b> leg is <b>written here</b>. This is
+        /// the authoritative write for the damper's absolute duty and for both of its type switches,
+        /// and the check that follows is a post-write read of TAS's own storage - it catches a native
+        /// object that <i>declined</i> what was just written, not a conversion that never wrote. The
+        /// reconciliation's independent statement for these legs is the acceptance's separate walk of
+        /// the saved document, not this method.</description></item>
+        /// </list>
+        /// <para>
+        /// The write is deliberate rather than an assertion because
+        /// <c>Modify.Update(SizedFlowVariable, SizedFlowValue, EnergyCentre)</c> writes <c>Type</c> and
+        /// <c>Method</c> only for a <c>DesignConditionSizedFlowValue</c>. A plain <c>SizedFlowValue</c>
+        /// reaching <c>Convert.ToTPD(DisplaySystemDamper, …)</c> would leave TAS's defaults -
+        /// <c>Type = tpdSizedVariableSize</c>, <c>Method = tpdSizeFlowACH</c> - and the litres per
+        /// second would be discarded in favour of sizing the leg by air changes per hour. Setting both
+        /// switches here makes that unreachable instead of merely reported.
         /// </para>
         /// <para>
         /// <b>Where each type's duty lives</b>, measured on licensed TAS and not inferred:
@@ -165,9 +181,11 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
-            //The duty was written through the ordinary damper conversion, from the working copy. Both the
-            //value and the two type switches are asserted here rather than rewritten, so a conversion
-            //that silently failed to carry them is reported instead of being papered over.
+            //The authoritative write for this leg's duty. The ordinary damper conversion has already
+            //run from the working copy, but it only carries Type and Method for a
+            //DesignConditionSizedFlowValue - so the value and both type switches are (re)written here
+            //unconditionally rather than checked, and the read-back below then reports a native object
+            //that declined them.
             try
             {
                 sizedFlowVariable.Value = systemVentilationLegIntent.DesignFlowRate_Lps;
@@ -191,8 +209,8 @@ namespace SAM.Analytical.Tas.TPD
             if (damper.DesignFlowRate == null || damper.DesignFlowRate.Type != tpdSizedVariable.tpdSizedVariableValue)
             {
                 systemVentilationConversionContext.Refuse(string.Format(
-                    "{0} leg {1}: native damper {2} did not keep the absolute flow type, so TAS would size the leg "
-                    + "rather than use the {3} l/s the design states.",
+                    "{0} leg {1}: native damper {2} declined the absolute flow type just written to it, so TAS "
+                    + "would size the leg rather than use the {3} l/s the design states.",
                     systemVentilationLegIntent.ConnectionType,
                     systemVentilationLegIntent.Guid_SystemConnection,
                     reference_FlowController,
@@ -204,8 +222,9 @@ namespace SAM.Analytical.Tas.TPD
             if (damper.DesignFlowType != tpdFlowRateType.tpdFlowRateValue)
             {
                 systemVentilationConversionContext.Refuse(string.Format(
-                    "{0} leg {1}: native damper {2} reports DesignFlowType {3}, so its duty would be derived from a "
-                    + "neighbouring zone rather than taken from the design.",
+                    "{0} leg {1}: native damper {2} declined the absolute flow type just written to it and still "
+                    + "reports DesignFlowType {3}, so its duty would be derived from a neighbouring zone rather "
+                    + "than taken from the design.",
                     systemVentilationLegIntent.ConnectionType,
                     systemVentilationLegIntent.Guid_SystemConnection,
                     reference_FlowController,
@@ -271,52 +290,6 @@ namespace SAM.Analytical.Tas.TPD
             designFlowRate_Lps = systemZone.FlowRate.Value;
 
             return true;
-        }
-
-        /// <summary>
-        /// Reports what every fan in a system derives its duty from, so a fan that was <b>authored</b>
-        /// rather than derived is visible.
-        /// <para>
-        /// Measured on a TAS-authored file: a fan set to
-        /// <c>tpdFlowRateAllAttachedZonesFreshAir</c> answered <c>37.9420166015625</c>, exactly its
-        /// zone's <c>FreshAir.Value</c>, and one set to <c>tpdFlowRateAllAttachedZonesFlowRate</c>
-        /// answered <c>3517.4283114346595</c>, exactly its zone's <c>FlowRate.Value</c>. So a fan's duty
-        /// follows the zones attached to it, and PR2 <b>reconciles</b> that rather than writing a fan
-        /// flow of its own - writing one would state a design the analytical model does not contain.
-        /// </para>
-        /// </summary>
-        public static List<string> FanDerivations(global::TPD.System system)
-        {
-            List<string> result = new List<string>();
-
-            if (system == null)
-            {
-                return result;
-            }
-
-            List<global::TPD.SystemComponent> systemComponents = Query.SystemComponents<global::TPD.SystemComponent>(system);
-            if (systemComponents == null)
-            {
-                return result;
-            }
-
-            foreach (global::TPD.SystemComponent systemComponent in systemComponents)
-            {
-                if (!(systemComponent is global::TPD.Fan fan))
-                {
-                    continue;
-                }
-
-                result.Add(string.Format(
-                    "Fan {0} derives its duty as {1} ({2} l/s).",
-                    Query.NativeReference(fan) ?? "<no identifier>",
-                    fan.DesignFlowType,
-                    fan.DesignFlowRate == null ? double.NaN : fan.DesignFlowRate.Value));
-            }
-
-            result.Sort(StringComparer.Ordinal);
-
-            return result;
         }
     }
 }

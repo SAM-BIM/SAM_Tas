@@ -1045,10 +1045,15 @@ namespace SAM.Analytical.Tas.TPD
                                 profiler?.Step("Plantroom: ventilation legs");
                                 Modify.BindVentilationLegs(systemVentilationConversionContext, airSystem.Guid, system);
 
-                                foreach (string note in Modify.FanDerivations(system))
-                                {
-                                    systemVentilationConversionContext.Note(note);
-                                }
+                                //What each fan contributes and when it runs. The heat gain factor is
+                                //cleared here rather than inherited from the template, and a fan
+                                //carrying an authored operating profile is refused.
+                                Modify.GroundVentilationFans(systemVentilationConversionContext, system);
+
+                                //What the route left on the zone flags, declared once per unit and read
+                                //off the native zones - and refused if the building model would state
+                                //the same air a second time.
+                                Modify.NoteVentilationZoneFlags(systemVentilationConversionContext, system);
                             }
                         }
 

@@ -80,15 +80,46 @@ namespace SAM.Analytical.Tas.TPD
 
             result.MinimumFlowFraction = displaySystemSpace.MinimumDesignFlowFraction;
 
+            //--------------------------------------------------------------------------------------------
+            //The three zone flags, and why the explicit route treats them asymmetrically. Stated here
+            //because the asymmetry is deliberate and was not obvious from the code that preceded it.
+            //
+            //DisplacementVent  - taken from the template on BOTH routes, unchanged. It is not a second
+            //                    ventilation model; it states how air is delivered within the room, and
+            //                    the shipped MV.json prototype sets it, which is why every zone this
+            //                    route produces reads Flags=1. The explicit route does NOT decide this
+            //                    and does not override it: it is inherited, and the note below says so
+            //                    in the workflow output so a reader is not left inferring it from a
+            //                    flag value.
+            //
+            //ModelVentFlow /   - suppressed on the explicit route only. The graph already carries every
+            //ModelInterzoneFlow  supply, extract and room-to-room transfer, so letting the building
+            //                    model state its own would be a second statement of the same air.
+            //
+            //How much that suppression is worth was MEASURED rather than assumed, and the honest answer
+            //is: on this route, nothing. Re-enabling both bits on the licensed acceptance document and
+            //re-simulating moved ZoneTemperature by at most 4.0e-05 K across 9 rooms x 8760 hours -
+            //exactly the bound two runs of the SAME document differ by, so it is the solver's noise
+            //floor and not a signal. The reason is that the route's thermal source is the no-IZAM TBD:
+            //ticV is zeroed on every internal condition and no interzone air movement is authored, so
+            //there is nothing for these bits to re-apply. Clearing them is therefore structural
+            //correctness - it makes double counting unreachable if a future source did carry those
+            //terms - and NOT a demonstrated numerical correction. Compare with the fan heat gain factor,
+            //which is worth up to 2.80 K on the same fixture.
+            //
+            //Legacy conversion keeps its existing flag behaviour on all three.
+            //
+            //What the flags end up as is declared in the workflow output by
+            //Modify.NoteVentilationZoneFlags, once per air system and read off the native zones rather
+            //than off these values - one note per unit rather than per room, so a large scheme does not
+            //produce one note per room.
+            //--------------------------------------------------------------------------------------------
             if (displaySystemSpace.DisplacementVentilation)
             {
                 result.DisplacementVent = displaySystemSpace.DisplacementVentilation.ToTPD();
                 result.Flags = result.Flags | (int)tpdSystemZoneFlags.tpdSystemZoneFlagDisplacementVent;
             }
 
-            //The explicit ventilation graph already carries every supply, extract and room-to-room
-            //transfer. Retaining the template zone's own ventilation/interzone models would apply the
-            //same air movement a second time. Legacy conversion keeps its existing flag behaviour.
             if (systemVentilationConversionContext == null && displaySystemSpace.ModelInterzoneFlow)
             {
                 result.Flags = result.Flags | (int)tpdSystemZoneFlags.tpdSystemZoneFlagModelInterzoneFlow;

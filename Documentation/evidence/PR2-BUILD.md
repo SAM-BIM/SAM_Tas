@@ -59,6 +59,17 @@ pair. Two consequences make a per-leg duty impossible:
 
 So the route materialises every room, every leg and every duty as an object of its own.
 
+Both statements above were subsequently **measured** on TAS-authored files rather than left as
+reasoning, and a manual GUI inspection of a generated `.tpd` raised the question a second time. The
+native evidence - what a `ComponentGroup` is, what it does to the connector graph, and what it does to
+the results - is in `PR2-NATIVE-TOPOLOGY.md`. In short: the authored grouped MV template does use the
+idiom and reaches it through `multiplicity = 3` over `baseComponents = 2`, with all three replicated
+zones inheriting the base name `"System Zone 1"`; and applying the group idiom at multiplicity 1 to a
+working generated document leaves the canonical flow network **byte-identical**, every duty and guid
+unchanged, and `ZoneTemperature` different only by the amount two runs of the *same* document differ
+by. The construct is topology-neutral, so its absence is a layout difference and not a connectivity
+defect.
+
 ### 2a. `AddDuct` accepting a duct is not TAS accepting the graph
 
 The first measurement of the explicit shape, `inv.exe fanout`, showed every duct being accepted:
@@ -133,23 +144,32 @@ per-system overload of `Convert.ToSAM_SystemZoneTemperatureResults` so the captu
 rooms of that unit rather than re-indexing the whole document per system. The arrays it keeps are
 ordinary managed values and remain valid after the next native call.
 
-### 2c. TAS will not simulate an unbalanced design, and production does not repair one
+### 2c. TAS will not simulate a design whose rooms do not conserve air, and production does not repair one
 
-The acceptance design as first written stated 44 l/s of supply against 34 l/s of extract on one unit.
-It converts and reconciles **completely** - and then:
+The acceptance design as first written converts and reconciles **completely** - and then:
 
 ```
 note: Conversion reconciled against the source graph: 2 air system(s), 9 room(s),
       4 supply / 5 extract / 7 transfer leg(s), every design flow matched on its native carrier.
 refusal: TAS reported a failure: "Sizing Flow Failed".
 IsComplete: False
+NativeDiagnostic: [Sizing Flow Failed]  kind=KnownFailure
 ```
 
-That is the correct outcome twice over: an unbalanced MVHR design is a defect in the design, and the
-route refuses rather than producing a payload. **Nothing in production rebalances, repairs or completes
-a design** - PR1 refuses to, and PR2 does not either. The acceptance fixture is corrected in the
-harness so that items 10-15, which need a simulated document, have one to work on; that correction is
-in the licensed harness and in no production path. See `PR2-ACCEPTANCE.md` for both runs.
+**What TAS objects to is per-zone air continuity, not unit-level balance.** An earlier version of this
+note attributed the refusal to one unit stating 44 l/s of supply against 34 l/s of extract; three
+licensed runs show that is wrong. One unit of the fixture balanced at 44/44 from the start and was
+refused anyway; balancing *both* units changed nothing (8 of 9 rooms still discontinuous, still
+refused); restating every transfer duty for exact per-zone continuity took the failure count to 1 room
+and was *still* refused for that room alone. Only with every room conserving air does TAS simulate.
+The table and the per-room arithmetic are in `PR2-ACCEPTANCE.md`.
+
+Either way the outcome is correct twice over: a design whose rooms do not conserve air is a defect in
+the design, and the route refuses rather than producing a payload. **Nothing in production rebalances,
+repairs or completes a design** - PR1 refuses to, and PR2 does not either. The acceptance fixture is
+corrected in the harness so that items 10-15, which need a simulated document, have one to work on;
+that correction is in the licensed harness and in no production path, and the duties it produces are
+persisted in `PR2-ACCEPTANCE.md` rather than left implied by a mode string.
 
 ---
 
@@ -202,9 +222,28 @@ indexed lookups per room: 2.20 / 2.20 / 2.20
 milliseconds per room: 1.7837 at 100, 1.4728 at 5000, ratio 0.83
 ```
 
-Lookups per room are **exactly constant** across a fifty-fold size increase, and the per-room wall
-clock falls slightly rather than rising. A per-room scan of the rooms, the legs, the connections or
-the document would show as a fifty-fold growth in the first row.
+Lookups per room are **exactly constant** across a fifty-fold size increase. A per-room scan of the
+rooms, the legs, the connections or the document would show as a fifty-fold growth in the first row.
+
+### What this measurement does and does not cover
+
+Stated narrowly, because the numbers above invite a wider reading than they support.
+
+* **It is COM-free.** No TAS document exists at 100, 1,000 or 5,000 rooms. What is bounded is
+  `SystemVentilationConversionContext`'s own lookup behaviour: the intent recording, the duty-carrier
+  pairing and the reconciliation. **Nothing here is evidence about native TAS at any size.**
+* **The counter counts the context's indexed lookups only.** Not counted, and not measured at scale:
+  the native calls (`AddSystemZone`, `AddDamper`, `AddJunction`, `AddDuct`, `GetComponentByGUID`),
+  `SystemPlantRoom.GetRelatedObjects` in `Create.Ducts`, and the branch-junction pass in
+  `Create.DuctsWithBranchJunctions`.
+* **The wall clock is not a scaling claim.** It is one run of one harness on one machine, with no
+  repeats and no variance, and it is recorded only so the constant lookup count is not mistaken for a
+  measurement taken on a toy. The earlier phrasing - that the per-room wall clock "falls slightly
+  rather than rising" - read as a scaling result and is withdrawn: a 0.83 ratio across two single runs
+  is not distinguishable from noise. **The claim that carries is the constant 2.20 lookups per
+  room.**
+* **The licensed evidence is at 9 rooms and 2 units,** and nowhere above it. Nothing in
+  `PR2-ACCEPTANCE.md` was produced at 100 rooms or more.
 
 Two quadratic paths were found by this review and removed before the measurement was recorded:
 `Modify.BindVentilationLegs` filtered the whole leg collection once per air system (250 x 8000 on a
