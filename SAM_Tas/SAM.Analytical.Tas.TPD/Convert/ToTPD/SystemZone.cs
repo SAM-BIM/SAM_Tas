@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Systems;
@@ -11,6 +11,44 @@ namespace SAM.Analytical.Tas.TPD
     public static partial class Convert
     {
         public static SystemZone ToTPD(this DisplaySystemSpace displaySystemSpace, SystemPlantRoom systemPlantRoom, global::TPD.System system, SystemZone systemZone = null, bool addSystemSpaceComponents = true)
+        {
+            return ToTPD(displaySystemSpace, systemPlantRoom, system, null, systemZone, addSystemSpaceComponents);
+        }
+
+        /// <summary>
+        /// Converts one materialised room to a TAS <c>SystemZone</c>.
+        /// <para>
+        /// <b>This is the pairing point.</b> When a
+        /// <see cref="SystemVentilationConversionContext"/> is supplied, three things happen here that
+        /// cannot correctly happen anywhere else, because this is the only moment at which the
+        /// analytical room, the native zone and the TSD are all in hand:
+        /// </para>
+        /// <list type="number">
+        /// <item><description>the intended <c>ZoneLoad</c> is bound by <b>identity</b> -
+        /// <c>TSDData.GetZoneLoadForGuid(SpaceParameter.ZoneGuid)</c> then
+        /// <c>SystemComponent.AddZoneLoad</c>. Measured on licensed TAS, a TSD zone load's
+        /// <c>GUID</c> <i>is</i> the TBD zone guid SAM stamps onto the analytical space, so no name is
+        /// involved at any step. The code this replaces compared
+        /// <c>SystemSpaceParameter.SpaceName</c> with <c>ZoneLoad.Name</c>, which on the shipped
+        /// template compared "System Zone 1" with "Cell 1" and bound nothing at all - and which, when
+        /// it did match, would alias two rooms sharing a display
+        /// name;</description></item>
+        /// <item><description>the room's <b>supply</b> duty is written absolutely -
+        /// <c>FlowRate</c> and <c>FreshAir</c>, <c>Value</c> in l/s with
+        /// <c>Type = tpdSizedVariableValue</c> - from the duty PR1's supply connection states, not from
+        /// the template prototype's sizing rule. Leaving <c>Type</c> alone would let TAS size the zone
+        /// by air changes per hour and discard the litres per second
+        /// entirely;</description></item>
+        /// <item><description>the native identities are recorded against the room, read back off the
+        /// objects rather than assumed, so the reconciliation has something independent to compare the
+        /// intent with.</description></item>
+        /// </list>
+        /// <para>
+        /// With no context supplied the method behaves exactly as it always has, so no existing caller
+        /// changes.
+        /// </para>
+        /// </summary>
+        public static SystemZone ToTPD(this DisplaySystemSpace displaySystemSpace, SystemPlantRoom systemPlantRoom, global::TPD.System system, SystemVentilationConversionContext systemVentilationConversionContext, SystemZone systemZone = null, bool addSystemSpaceComponents = true)
         {
             if(displaySystemSpace == null || system == null)
             {
@@ -90,16 +128,51 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            SystemVentilationRoomIntent systemVentilationRoomIntent = systemVentilationConversionContext?.RoomIntent(displaySystemSpace.Guid);
 
-            if (energyCentre != null)
+            if (systemVentilationRoomIntent == null)
             {
-                List<ZoneLoad> zoneLoads = Query.ZoneLoads(energyCentre.GetTSDData(1), new DisplaySystemSpace[] { displaySystemSpace });
-                if (zoneLoads != null)
+                //----------------------------------------------------------------------------------------
+                //No explicit intent for this room. This is every caller that predates the Part O
+                //ventilation route, and it keeps the behaviour it had - including the name match, which
+                //is why the route above never relies on it.
+                //----------------------------------------------------------------------------------------
+                if (energyCentre != null)
                 {
-                    foreach(ZoneLoad zoneLoad in zoneLoads)
+                    List<ZoneLoad> zoneLoads = Query.ZoneLoads(energyCentre.GetTSDData(1), new DisplaySystemSpace[] { displaySystemSpace });
+                    if (zoneLoads != null)
                     {
-                        @dynamic.AddZoneLoad(zoneLoad);
+                        foreach (ZoneLoad zoneLoad in zoneLoads)
+                        {
+                            @dynamic.AddZoneLoad(zoneLoad);
+                        }
                     }
+                }
+            }
+            else
+            {
+                Modify.BindZoneLoad(result, energyCentre, systemVentilationRoomIntent, systemVentilationConversionContext);
+                Modify.SetSupplyDesignFlowRate(result, systemVentilationRoomIntent, systemVentilationConversionContext, out double? designFlowRate_Supply_Lps);
+
+                systemVentilationConversionContext.RecordPairing(displaySystemSpace.Guid, Query.NativeReference(result));
+
+                systemVentilationConversionContext.RecordRoomPairing(
+                    displaySystemSpace.Guid,
+                    Query.NativeReference(result),
+                    Query.NativeReference_ZoneLoad(result),
+                    Query.NativeReference(system),
+                    designFlowRate_Supply_Lps);
+
+                //An identity that does not round-trip through the system it was captured from is not an
+                //identity, and PR3 must not be handed one.
+                string reference_SystemZone = Query.NativeReference(result);
+                if (!Query.RoundTrips(system, reference_SystemZone))
+                {
+                    systemVentilationConversionContext.Refuse(string.Format(
+                        "Room {0} was materialised as native zone {1}, which does not resolve back through its own "
+                        + "TAS system.",
+                        systemVentilationRoomIntent.Guid_Space,
+                        reference_SystemZone ?? "<no identifier>"));
                 }
             }
 
