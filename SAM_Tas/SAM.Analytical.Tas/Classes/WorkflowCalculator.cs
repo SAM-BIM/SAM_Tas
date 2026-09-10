@@ -286,6 +286,16 @@ namespace SAM.Analytical.Tas
                 count++;
             }
 
+            if (WorkflowSettings.RemoveIZAMs)
+            {
+                count++;
+            }
+
+            if (WorkflowSettings.RemoveMechanicalVentilationGains)
+            {
+                count++;
+            }
+
             //Count the step that actually runs: "Adding Design Days" is gated on the RESOLVED design days,
             //not on the settings, so a run whose design days came from the weather or the model counted one
             //step short of what it reported.
@@ -545,6 +555,61 @@ namespace SAM.Analytical.Tas
                 {
                     Step("Add IZAMs");
                     Modify.UpdateIZAMs(tBDDocument, adjacencyCluster);
+                }
+
+                //----------------------------------------------------------------------------------------
+                //The no-IZAM thermal source. Both steps are default-off, so no existing caller moves.
+                //
+                //They run HERE, inside the document session that is already open, and not as a separate
+                //pass: that adds no COM document cycle (SAMTBDDocument.Dispose tears down the shared Tas
+                //session after a handful of them), it is after "Updating Zones" - which is what writes the
+                //ticV profile in the first place - and it is before the save, the sizing and the
+                //simulation, so what those see is the cleaned building.
+                //----------------------------------------------------------------------------------------
+
+                if (WorkflowSettings.RemoveIZAMs)
+                {
+                    Step("Removing IZAMs");
+
+                    Modify.RemoveIZAMs(tBDDocument.Building);
+
+                    //Verified, not trusted: the sweep walks GetIZAM(0)/RemoveIZAM(0) to exhaustion, so an
+                    //IZAM surviving it means the building did not accept the removal. A survivor breaks the
+                    //no-IZAM contract, so the run fails CLOSED - refusal, no save, no sizing, no
+                    //simulation - rather than reporting success on a building that still carries its own
+                    //mechanical ventilation. The decision is Query.IzamSurvivorRefusal; the return-null
+                    //convention is the same one the other refusals above use, and NoIzamThermalSource
+                    //already records a null return as a failed call, so the source cannot come back
+                    //accepted. The refusal happens BEFORE the save below on purpose: the surviving-IZAM
+                    //state is never persisted as this run's output.
+                    string refusal_IzamSurvivor = Query.IzamSurvivorRefusal(true, tBDDocument.Building?.GetIZAM(0) != null);
+                    if (refusal_IzamSurvivor != null)
+                    {
+                        notes.Add(refusal_IzamSurvivor);
+
+                        Ended?.Invoke(this, new System.EventArgs());
+
+                        return null;
+                    }
+
+                    notes.Add("Removing IZAMs: none remain.");
+                }
+
+                if (WorkflowSettings.RemoveMechanicalVentilationGains)
+                {
+                    Step("Removing Mechanical Ventilation Gains");
+
+                    List<string> internalConditionNames = Modify.RemoveVentilationGains(tBDDocument, adjacencyCluster);
+
+                    notes.Add(
+                        string.Format(
+                            "Removing Mechanical Ventilation Gains: ticV zeroed on {0} internal condition(s){1}. "
+                            + "Infiltration (ticI) and natural ventilation (aperture types and opening schedules) "
+                            + "are untouched - they are separate carriers.",
+                            internalConditionNames == null ? 0 : internalConditionNames.Count,
+                            internalConditionNames == null || internalConditionNames.Count == 0
+                                ? string.Empty
+                                : string.Concat(": ", string.Join(", ", internalConditionNames))));
                 }
 
                 sAMTBDDocument.Save();

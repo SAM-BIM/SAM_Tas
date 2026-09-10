@@ -16,6 +16,23 @@ namespace SAM.Analytical.Tas.TPD
     {
         public static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, string path_TPD, string path_TSD, SystemEnergyCentreConversionSettings systemEnergyCentreConversionSettings = null)
         {
+            return ToTPD(systemEnergyCentre, path_TPD, path_TSD, systemEnergyCentreConversionSettings, null);
+        }
+
+        /// <summary>
+        /// Converts a systems graph to a TPD, optionally under an explicit ventilation
+        /// <see cref="SystemVentilationConversionContext"/>.
+        /// <para>
+        /// <b>With a context the answer changes meaning.</b> Without one this returns whether the
+        /// conversion ran, which is what every existing caller expects. With one it returns whether the
+        /// converted document <b>is the graph the context intended</b> - every air handling unit its own
+        /// TAS system, every room bound once to the right zone and the right zone load, every leg's
+        /// design airflow present on its own native carrier. A mismatch refuses, and the context carries
+        /// the reasons.
+        /// </para>
+        /// </summary>
+        public static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, string path_TPD, string path_TSD, SystemEnergyCentreConversionSettings systemEnergyCentreConversionSettings, SystemVentilationConversionContext systemVentilationConversionContext)
+        {
             if (systemEnergyCentre == null)
             {
                 return false;
@@ -36,6 +53,8 @@ namespace SAM.Analytical.Tas.TPD
                 System.IO.File.Delete(path_TPD);
             }
 
+            bool result = true;
+
             TPDProfiler profiler = new TPDProfiler();
             try
             {
@@ -54,7 +73,7 @@ namespace SAM.Analytical.Tas.TPD
 
                     TSDData tSDData = energyCentre.GetTSDData(1);
 
-                    ToTPD(systemEnergyCentre, tPDDoc, profiler);
+                    result = ToTPD(systemEnergyCentre, tPDDoc, profiler, systemVentilationConversionContext);
 
                     if (systemEnergyCentreConversionSettings == null)
                     {
@@ -85,18 +104,23 @@ namespace SAM.Analytical.Tas.TPD
                 profiler.WriteCsv(path_TPD);
             }
 
-            return true;
+            return result;
         }
 
         public static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc)
         {
-            return ToTPD(systemEnergyCentre, tPDDoc, null);
+            return ToTPD(systemEnergyCentre, tPDDoc, null, null);
         }
 
         // The profiler param threads per-section timing through the build. Null = no-op; otherwise
         // each Step("name") accumulates against that bucket so plantroom-loop work shows up as a
         // single summed row in the CSV.
-        internal static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc, TPDProfiler profiler)
+        //
+        // systemVentilationConversionContext is the explicit Part O ventilation route's intent, and its
+        // presence changes two things: rooms are materialised one native zone each rather than through a
+        // replicated ComponentGroup (see the group block below for why a group cannot carry a per-room
+        // duty), and the return value becomes the reconciliation's verdict rather than "it ran".
+        internal static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, TPDDoc tPDDoc, TPDProfiler profiler, SystemVentilationConversionContext systemVentilationConversionContext)
         {
             EnergyCentre energyCentre = tPDDoc.EnergyCentre;
 
@@ -453,8 +477,18 @@ namespace SAM.Analytical.Tas.TPD
                             global::TPD.System system = airSystem.ToTPD(plantRoom);
                             if (system == null)
                             {
+                                systemVentilationConversionContext?.Refuse(string.Format(
+                                    "Air system {0} produced no native TAS system.",
+                                    airSystem.Guid));
+
                                 continue;
                             }
+
+                            //Counted whether or not the source graph intended it, so an extra TAS system
+                            //standing for nothing shows up in the reconciliation rather than silently
+                            //joining the document.
+                            systemVentilationConversionContext?.RecordNativeSystem();
+                            systemVentilationConversionContext?.RecordAirSystem(airSystem.Guid, Query.NativeReference(system));
 
                             Modify.SetReference(airSystem, system.Reference());
                             systemPlantRoom.Add(airSystem);
@@ -466,7 +500,30 @@ namespace SAM.Analytical.Tas.TPD
 
                                 foreach (Core.Systems.SystemComponent systemComponent_Temp in systemComponents_AirSystem)
                                 {
-                                    AirSystemGroup airSystemGroup = systemPlantRoom.GetRelatedObjects<AirSystemGroup>(systemComponent_Temp)?.FirstOrDefault();
+                                    //Disabling ComponentGroup replication exposes the group's unused
+                                    //prototype components as ordinary members of the air system. They
+                                    //have no connection in the PR1 graph and materialising them creates
+                                    //a native component with no ducts, which TAS rejects as an invalid
+                                    //air system. The explicit route therefore converts only components
+                                    //that participate in the graph (rooms are retained defensively so
+                                    //a missing room connection is caught by reconciliation, not hidden
+                                    //here). This does not affect the legacy replicated conversion.
+                                    if (systemVentilationConversionContext != null
+                                        && !(systemComponent_Temp is DisplaySystemSpace)
+                                        && (systemPlantRoom.GetRelatedObjects<Core.Systems.ISystemConnection>(systemComponent_Temp)?.Count ?? 0) == 0)
+                                    {
+                                        continue;
+                                    }
+
+                                    //----------------------------------------------------------------------
+                                    //Under the explicit ventilation route every component is materialised in
+                                    //its own right. Otherwise only the first component of each group index is
+                                    //converted here and the rest are produced by SetMultiplicity below.
+                                    //----------------------------------------------------------------------
+                                    AirSystemGroup airSystemGroup = systemVentilationConversionContext != null
+                                        ? null
+                                        : systemPlantRoom.GetRelatedObjects<AirSystemGroup>(systemComponent_Temp)?.FirstOrDefault();
+
                                     if (airSystemGroup != null)
                                     {
                                         if (!dictionary_AirSystemGroup.TryGetValue(airSystemGroup.Guid, out HashSet<int> groupIndexes))
@@ -516,7 +573,7 @@ namespace SAM.Analytical.Tas.TPD
                                     }
                                     else if (systemComponent_Temp is DisplaySystemSpace)
                                     {
-                                        systemComponent_TPD = ToTPD((DisplaySystemSpace)systemComponent_Temp, systemPlantRoom, system, null, airSystemGroup == null) as global::TPD.ISystemComponent;
+                                        systemComponent_TPD = ToTPD((DisplaySystemSpace)systemComponent_Temp, systemPlantRoom, system, systemVentilationConversionContext, null, airSystemGroup == null) as global::TPD.ISystemComponent;
                                     }
                                     else if (systemComponent_Temp is DisplaySystemEconomiser)
                                     {
@@ -556,12 +613,38 @@ namespace SAM.Analytical.Tas.TPD
                                         continue;
                                     }
 
+                                    //The template's supply damper used the nearest-zone rule because a
+                                    //replicated group put exactly one zone behind each copy. The explicit
+                                    //route has one real damper in front of a branch junction, so "nearest"
+                                    //is ambiguous. It remains a derived topology component: the rooms'
+                                    //SystemZone values are still the supply design-flow authority. The
+                                    //absolute PR2 dampers are excluded by their leg-carrier identity.
+                                    if (systemVentilationConversionContext != null
+                                        && systemComponent_Temp is DisplaySystemDamper
+                                        && systemComponent_TPD is Damper damper_TPD
+                                        && systemVentilationConversionContext.LegIntentByDutyCarrier(systemComponent_Temp.Guid) == null)
+                                    {
+                                        damper_TPD.DesignFlowType = tpdFlowRateType.tpdFlowRateAllAttachedZonesFlowRate;
+                                    }
+
                                     dictionary_SystemComponent[systemComponent_Temp.Guid] = systemComponent_TPD;
                                     systemComponent_Temp.SetReference(Query.Reference(systemComponent_TPD));
                                     systemPlantRoom.Add(systemComponent_Temp);
+
+                                    //The pairing point for every non-zone component. The zone records its
+                                    //own, with the zone load and the system alongside it.
+                                    systemVentilationConversionContext?.RecordPairing(systemComponent_Temp.Guid, Query.NativeReference(systemComponent_TPD));
                                 }
 
-                                Create.Ducts(systemPlantRoom, system, dictionary_SystemComponent, out Dictionary<Guid, Duct> dictionary_Ducts);
+                                //Presentation only: where the explicit route draws its rooms and duty
+                                //carriers. Before the ducts, because a duct's bend nodes can only be given
+                                //when the duct is created.
+                                if (systemVentilationConversionContext != null)
+                                {
+                                    Modify.LayOutVentilationSystem(systemVentilationConversionContext, airSystem.Guid, dictionary_SystemComponent);
+                                }
+
+                                Create.Ducts(systemPlantRoom, system, dictionary_SystemComponent, out Dictionary<Guid, Duct> dictionary_Ducts, systemVentilationConversionContext);
                                 dictionary_Controller = Create.Controllers(systemPlantRoom, system, airSystem, dictionary_SystemComponent, dictionary_Ducts, false);
 
                                 if(systemLabels != null)
@@ -591,7 +674,29 @@ namespace SAM.Analytical.Tas.TPD
                                 }
                             }
 
-                            List<AirSystemGroup> airSystemGroups = systemPlantRoom.GetSystemGroups<AirSystemGroup>(airSystem);
+                            //-------------------------------------------------------------------------------
+                            //Replication is deliberately NOT used by the explicit ventilation route, and the
+                            //reason is structural rather than stylistic.
+                            //
+                            //ComponentGroup.SetMultiplicity(n) copies ONE base subgraph n times. PR1 gives
+                            //every room of a unit the same group index, so the base holds one zone and one of
+                            //the template's dampers and TAS replicates the pair. Every replica therefore
+                            //carries the SAME damper properties: there is nowhere to put room 2's extract
+                            //duty that is not also room 1's. Worse, a room-to-room transfer runs BETWEEN two
+                            //replicas, and a duct inside a replicated base cannot express that at all - the
+                            //ducts are built before replication, when only the base zone exists, so the two
+                            //ends collapse onto the same component and the leg is silently lost.
+                            //
+                            //Measured on licensed TAS, the explicit shape all this is traded for is accepted:
+                            //one damper output port took ducts to three separate zones, one junction input
+                            //port took ducts from three, and a damper inserted in a room's extract leg and a
+                            //second in a room-to-room transfer both connected. So every room, every leg and
+                            //every duty becomes an object of its own, which is what "explicit" means here.
+                            //-------------------------------------------------------------------------------
+                            List<AirSystemGroup> airSystemGroups = systemVentilationConversionContext == null
+                                ? systemPlantRoom.GetSystemGroups<AirSystemGroup>(airSystem)
+                                : null;
+
                             if (airSystemGroups != null)
                             {
                                 foreach (AirSystemGroup airSystemGroup in airSystemGroups)
@@ -655,6 +760,25 @@ namespace SAM.Analytical.Tas.TPD
                                             tuples.Add(new Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>(systemComponent_SAM_Temp, systemComponent_TPD_Temp));
 
                                             systemComponents_SAM.RemoveAt(i);
+                                        }
+
+                                        //--------------------------------------------------------------------------------
+                                        //Order independence. Both loops above walk BACKWARDS and RemoveAt(i), so each
+                                        //bucket ends up in reverse caller-enumeration order; the replica walk below then
+                                        //claims from it with tuples[0]/RemoveAt(0). That made "which analytical room owns
+                                        //which replicated TAS zone" a function of the order the caller's collection
+                                        //happened to be in.
+                                        //
+                                        //Sorting each bucket by the SOURCE component's own guid replaces that with a
+                                        //stated rule - ascending source guid, the same rule PR1 materialises by - so the
+                                        //same graph supplied in any order produces the same room-to-zone mapping. The
+                                        //ordering is total and deterministic: guid first, and the group index is already
+                                        //the bucket key, so no two entries can compare equal unless they are the same
+                                        //source object.
+                                        //--------------------------------------------------------------------------------
+                                        foreach (List<Tuple<Core.Systems.ISystemComponent, global::TPD.ISystemComponent>> tuples in sortedDictionary_SystemComponent.Values)
+                                        {
+                                            tuples?.Sort((x, y) => Query.SourceOrderKey(x?.Item1).CompareTo(Query.SourceOrderKey(y?.Item1)));
                                         }
                                     }
 
@@ -921,6 +1045,24 @@ namespace SAM.Analytical.Tas.TPD
                                     }
                                 }
                             }
+
+                            if (systemVentilationConversionContext != null)
+                            {
+                                //Every leg of this unit, now that every component it could hang on has been
+                                //materialised and its native identity recorded.
+                                profiler?.Step("Plantroom: ventilation legs");
+                                Modify.BindVentilationLegs(systemVentilationConversionContext, airSystem.Guid, system);
+
+                                //What each fan contributes and when it runs. The heat gain factor is
+                                //cleared here rather than inherited from the template, and a fan
+                                //carrying an authored operating profile is refused.
+                                Modify.GroundVentilationFans(systemVentilationConversionContext, system);
+
+                                //What the route left on the zone flags, declared once per unit and read
+                                //off the native zones - and refused if the building model would state
+                                //the same air a second time.
+                                Modify.NoteVentilationZoneFlags(systemVentilationConversionContext, system);
+                            }
                         }
 
                         systemEnergyCentre.Add(systemPlantRoom);
@@ -929,7 +1071,21 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
-            return true;
+            if (systemVentilationConversionContext == null)
+            {
+                return true;
+            }
+
+            //-----------------------------------------------------------------------------------------------
+            //The explicit route does not answer "it ran". It answers whether what TAS now holds is the graph
+            //PR1 designed, and a mismatch is a refusal rather than a note - so no caller can be handed a
+            //partial payload that nothing checked.
+            //-----------------------------------------------------------------------------------------------
+            profiler?.Step("Reconciling the conversion");
+
+            systemVentilationConversionContext.CompleteRoomBindings();
+
+            return systemVentilationConversionContext.Reconcile();
         }
 
         public static bool ToTPD(this SystemEnergyCentre systemEnergyCentre, string path_TPD)

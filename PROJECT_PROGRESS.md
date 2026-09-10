@@ -1,64 +1,339 @@
 # Project Progress
 
 ## Branch
-`docs/large-model-lookup-closeout`, off `sow/2026-Q3` at **`7946479`** (the merge of PR #48).
+`part-o/iteration3-tas-systems-route`, off `sow/2026-Q3` at **`ec7f505`**. The corrective
+re-acceptance delta sits on top of **`fc32261`**, the previously pushed head.
 
-This branch is **SAM-BIM/SAM_Tas#49**, and it is **documentation only** - no SAM_Tas source file changes.
-
-The large-model lookup closeout is **SAM-BIM/SAM#101** and **SAM-BIM/SAM_UI#88**. It touches no SAM_Tas
-source, but it does change `SAM.Analytical` code this repository builds against and exercises heavily -
-`TMOverheatingCalculator`, `TM59AssessmentCalculator` and `OverheatingScenarioMap`. This branch records the
-checkpoint and the evidence that the TAS-side behaviour did not move. `SAM_Systems` is unchanged.
-
-Everything below the entry dated 2026-09-05 (large-model lookups) is superseded history retained for
-context.
+This is **PR2 of SAM-BIM/SAM #111** (Part O Iteration 3 - explicit Systems/TPD ventilation route).
+Open as **SAM-BIM/SAM_Tas PR #50**, head **`8485cf6`**, CI green (build PASS, spdx PASS), mergeable,
+**not merged**. A final PR-level sanity review passed; a Codex P2 finding found after it is fixed.
 
 ## Last updated
-2026-09-05 (later) - the checkpoint after the large-model lookup closeout, and the TM59 suite result that
-shows it changed nothing on this side.
+2026-09-10 (evening) - **CODEX P2 FIXED: the no-IZAM workflow now fails closed on a surviving IZAM.**
+`WorkflowCalculator`'s `RemoveIZAMs` step verified the sweep but only NOTED a survivor and continued
+to save/size/simulate - a building that refused removal would have reached the Systems route as its
+"no-IZAM" source with its ventilation double-counted. Fixed on the calculator's established refusal
+convention: the COM-free decision is `Query.IzamSurvivorRefusal` (new, `Query.CancelNote` precedent);
+the calculator adds the refusal and returns `null` BEFORE the save, and `Create.NoIzamThermalSource`
+already records a null return as a failed call. Zero-IZAM path unchanged; `RemoveIZAMs = false`
+callers untouched. Regression: `NoIzamSurvivorRefusalTests` (3 tests). Evidence:
+`Documentation/evidence/PR2-NOIZAM-FAILCLOSED.md`; Codex thread answered on the PR. Release build
+clean; TM59 tests 861/861; benchmark tests 16/16. Earlier the same day: SPDX headers added to the
+four files CI named (`76d95e8`), header check green.
 
-## Latest (2026-09-05, later): large-model lookup closeout - what it means here
+2026-09-10 - **PR2 CORRECTIVE RE-ACCEPTANCE.** A manual inspection of the previously accepted `.tpd`
+found the acceptance FIXTURE invalid, not the conversion: the harness authored its own ventilation
+design by ascending space guid instead of reading the one the model states, so the accepted document
+carried transfers running the opposite way round to Iteration 1a's real design
+(`Kitchen_4 -> Bedroom 2_3` where the design states `Bedroom 2_3 -> Kitchen_4`). The whole acceptance
+has been re-run on a real SAM_UI model prepared by the production route.
 
-**Status: no SAM_Tas source change. Validated against the rebuilt `SAM.Analytical.dll`.**
+**`Documentation/evidence/PR2-REACCEPTANCE.md` is the valid PR2 acceptance.** The `f2.sam` engineering
+acceptance in `PR2-ACCEPTANCE.md` is marked SUPERSEDED, with its independently-true TAS API findings
+explicitly kept.
 
-`SAM-BIM/SAM#101` replaced the whole-model lookups that sat inside per-room and per-zone traversals in
-`SAM.Analytical` with request-scoped indexes and with the cluster's own `GetObject<T>(guid)` authority. Three
-of the classes it changed are ones this repository builds on:
+What the corrective run establishes, on
+`SAM_zoningAM-CIBSEfutureZ1.sam` (`A7E09A25…368D7E4B`) - three flats, three MVHR systems, 8 rooms:
 
-- `TMOverheatingCalculator.Calculate_TM59` / `Calculate_TM52` - reached through
-  `SAM.Analytical.Tas.OverheatingCalculator`, which is a thin wrapper over it. Every room used to be resolved
-  with `GetSpaces().Find(...)` inside the loop over the rooms; it is now one `Dictionary<Guid, Space>` per
-  call. The resolution rule is unchanged - a caller's stale instance still resolves to the instance the model
-  holds, which is what carries the restored design internal condition.
-- `TM59AssessmentCalculator.Spaces` - reached through `Create.TM59AssessmentCalculator`. The design zone is
-  now resolved through one index and the design cluster is read once for the whole traversal, instead of the
-  zone list being rebuilt and the cluster being copied per requested zone.
-- `OverheatingScenarioMap` - one zone index and one cluster for the whole map, instead of one of each per
-  scenario.
+1. **Phase A - the fixture is a valid real-design reference.** Reproduced with the production calls
+   SAM_UI makes: `PartFCalculator.Calculate("Flats")`, `Query.PartFDwellingZones`,
+   `Modify.PreparePartOIteration(BasePassive, zones, {zone -> "MVHR"}, null, false)`.
+   `Successful = True`, no refusal, **0 of 8 rooms discontinuous**, 0 cross-dwelling transfers. Run
+   twice - reading the model's carried `PartFSpaceData` and re-running the sizing - and the two intent
+   tables are byte-identical.
+2. **Phase B - PR1 refuses a real model, and three staged runs say exactly why.**
+   `Create.MechanicalVentilation` walks EVERY `VentilationSystem` the cluster carries and requires each
+   to name a resolvable unit, while production `PreparePartOIteration` deliberately PRESERVES the
+   model's authored `NV` / `UV` / `MV` systems. Recorded as PR1 debt; **`SAM_Systems` untouched**. The
+   harness scopes by the design itself - a system with no design terminal materialises no duty - and
+   the run asserts the intent table is byte-identical before and after that step.
+3. **Phase C - one fresh no-IZAM source** from this fixture, full year, hashed before and after every
+   run and `UNCHANGED`. Items 1-3 PASS: 0 IZAMs, 0 non-zero `ticV` of 30 internal conditions, `ticI`
+   present on 30 of 30 and non-zero on 9.
+4. **Phase D - items 4 to 15 all PASS** over hours 0..8759: 3 native systems, 8 of 8 rooms with 8760
+   finite `ZoneTemperature` values, every duty on its frozen native carrier, `"Done"` per air system.
+5. **Directed topology - 14 legs, 14 PASS, 0 FAIL**, every edge from `IDuct.GetUpstreamComponent` /
+   `GetDownstreamComponent` and no screen coordinate read. `Bedroom 2_3 -> Kitchen_4` and
+   `Bedroom 2_6 -> Kitchen_7` are native in the design's own direction. No reversal, no cross-dwelling
+   edge, no invented `Corridor_1` path, no missing or extra transfer.
+6. **Fan operation re-proved** - 6 of 6 fans at their derived duty in 8760 of 8760 hours,
+   `HeatGainFactor = 0`. **SAM #113's flow-sizing order sensitivity was not encountered** on this
+   fixture; neither fixed nor hidden.
+7. **One production correction, presentation only.** The layout classified a room by its duties alone,
+   so a kitchen that extracts 55 l/s AND transfers 8 l/s on to an ensuite went to the terminal
+   extract-only column past the transfer column - forcing its own outgoing duct back through its own
+   box, 2 passes on the first real-design run. The extract-only column is now for a room the air path
+   ENDS at; 0 overlaps and 0 passes. Positions are measured inert: every component moved, all 8 zones'
+   8760-hour series byte-identical.
+8. **Regression.** `SystemVentilationDesignDirectionTests` - COM-free, real PR1 graph, transfer stated
+   deliberately AGAINST ascending guid order - pins direction and roles against the class of defect.
+   The synthetic `Design()`/`Unit()` harness path is removed, not merely unused.
 
-**None of it changes an engineering result**, and nothing in this repository needed to change.
+The earlier closeout of `0fefca76` (below) stands as the record of the four API/configuration items it
+fixed; its `f2.sam` engineering verdicts do not.
 
-### Validation
+---
 
-| suite | result |
+## Previous - 2026-09-10, PR2 CLOSEOUT after the independent re-review of `0fefca76`. Four items, and
+what they found:
+
+1. **whitespace gate** - `.gitattributes` exempts end-of-line blanks in committed
+   `Documentation/evidence/*.log` transcripts only, so they stay byte-faithful; `git diff --check` is
+   clean.
+2. **this file** - the per-zone continuity diagnosis and the `BindVentilationLegs` read-back wording
+   corrected (below).
+3. **fan operation - a real defect, fixed.** The reviewed configuration's fans ran on the template's
+   demand-driven occupancy function schedule, and production refused the frozen constant 1.0 yearly
+   schedule. Now only a yearly schedule operable 8760 of 8760 hours is accepted; the accepted run's
+   four fans deliver 44 l/s in 8760 of 8760 hours, read from TAS's own hourly fan Load.
+   `Documentation/evidence/PR2-FAN-OPERATION.md`.
+4. **item 10 and provenance** - one regenerated, hashed thermal source under every check; item 10
+   grounded on no IZAM, zero `ticV` and explicit Systems ventilation, flags as corroboration only.
+
+Plus, after manual inspection of the accepted TPD: a **presentation-only layout** of the explicit
+route's schematic (no connectivity, duty, schedule or creation-order change; 45 overlaps and 225
+duct-through-box passes down to 0 and 0), and a native **flow-sizing order sensitivity** found and
+filed separately as SAM-BIM/SAM#113.
+
+### FINAL ACCEPTED PR2 artifacts (licensed machine)
+
+The canonical acceptance fixture is **`SAM_zoningAM-CIBSEfutureZ1.sam`**, a real SAM_UI model, prepared
+by the production Approved Document O Iteration 1a route. Manual inspection of the document below in the
+TAS GUI: **PASS** - one MVHR per dwelling, bedroom/living supply, transfer toward kitchen / ensuite /
+bathroom extract, no cross-dwelling ventilation, `Corridor_1` outside every dwelling system.
+
+| purpose | path | SHA-256 |
+| --- | --- | --- |
+| the acceptance fixture, as found | `C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-07-15 PartO\SAM_zoningAM-CIBSEfutureZ1.sam` | `A7E09A25AE29C7DBB4C690D747A96FCD9F110CA27FB4DC2ABE816755368D7E4B` |
+| the prepared model Iteration 1a produced | `C:\TasOut\pr2r\a2\prepared.sam` | `5D4756F45956D5F91D01B1EA55CCC3D516762D54756231F8884F928F3332CE18` |
+| **FINAL ACCEPTED PR2 TPD** | `C:\TasOut\pr2r\final\acc.tpd` | `553C9E1C364E6F528417247DCE0FE1D31B8884939EDA8A5217B46BDBF5B755FE` |
+| its thermal source (TBD), no-IZAM | `C:\TasOut\pr2r\c1\src.tbd`, read as a hashed copy at `C:\TasOut\pr2r\final\src.tbd` | `A01CFBB6B8CD9EB6F7B103696A1DE2A1697C4396708C70561D45C0A18D3C9654` |
+| its paired TSD | `C:\TasOut\pr2r\c1\src.tsd`, read as a hashed copy at `C:\TasOut\pr2r\final\src.tsd` | `7239B8D139F7703F6EDDA4B13EDD9D86FACBB039E470EA243A61C44BDE5A5277` |
+| hashes before/after the run | `C:\TasOut\pr2r\final\provenance.txt` - both `UNCHANGED` | committed as `PR2-reacc-provenance.txt` |
+
+The full artifact manifest is section 10 of `Documentation/evidence/PR2-REACCEPTANCE.md`.
+
+**SUPERSEDED.** The previous artifacts - `C:\TasOut\pr2z\final-layout2\acc.tpd` and the
+`C:\TasOut\pr2z\src\acc.tbd` / `acc.tsd` lineage, produced from `f2.sam` on a different licensed
+machine - are **not** the accepted PR2 artifacts, and their engineering network was never Iteration 1a
+parity. They are listed in `Documentation/evidence/PR2-ACCEPTANCE.md`, under that document's SUPERSEDED
+banner, as the record of the investigation that produced the still-valid TAS API findings.
+
+## Baselines
+
+| repository | SHA | note |
+| --- | --- | --- |
+| SAM-BIM/SAM | `413215cca722a70b660c4ef367f6faab1d6d9357` | read-only, **untouched and clean** |
+| SAM-BIM/SAM_Systems | `89cf139966f4fe426459851d09f052834551792f` | the PR1 merge (#20), read-only, **untouched and clean** |
+| SAM-BIM/SAM_Tas | `ec7f50543e123f8a734b6e27b2b16c0cf1f1edde` | this repo's base |
+
+Build order SAM -> SAM_Mollier -> SAM_Systems -> SAM_Tas. The solution needs .NET Framework MSBuild
+with **Restore and Build as separate invocations**.
+
+## THE NATIVE FACTS THE ROUTE RESTS ON
+
+Full transcripts: `Documentation/evidence/PR2-BUILD.md` (this session's findings and the acceptance),
+`PR2-CHECKPOINT-1B.md`, `PR2-NATIVE-TAS-FINDINGS.md`. Harness at `C:\TasOut\inv`, argv modes,
+**one operation per process**, TAS GUI closed.
+
+1. **A TSD `ZoneLoad.GUID` IS the TBD `zone.GUID`.** Measured with `inv.exe zoneload-identity`: 2 of 2
+   load guids on fixture 1 are also TBD zone guids, and `GetZoneLoadForGuid` resolves them braced or
+   bare. SAM stamps that same guid onto the analytical space as `SpaceParameter.ZoneGuid`, so the whole
+   room chain is identity with no display name anywhere.
+2. **Simulate the AIR SYSTEMS, not the document.** `ITPD.Simulate` / `IPlantRoom.Simulate` simulate the
+   plant too, and the shipped `MV.json` plant cannot size a flow. `ISystem.Simulate` answers `"Done"`.
+   **Do not "simplify" `Modify.SimulateSystems` back to the document-level call.**
+3. **ABSOLUTE FLOW UNIT = l/s**, proven by TAS's own ACH arithmetic (200 m3 at 8 ACH -> 444.444).
+   Applies to `SystemZone.FlowRate`, `.FreshAir` and `Damper.DesignFlowRate` alike.
+4. **Read every native identifier late-bound.** The typed `ISystemComponent.GUID`/`.Name` accessors
+   **throw** on a `SystemZone`. `Query.NativeIdentity` encapsulates it - do not convert to a typed read.
+5. **`SystemZone.GUID` and `ZoneLoad.GUID` are DISTINCT.** `AddZoneLoad` is the pairing point;
+   `GetSystemZoneZoneLoad` is zone->load; `GetZoneLoadForGuid` is load->result.
+6. **`AddDuct` accepts several ducts on one ordinary component port, but TAS rejects that air system
+   when it is simulated** - `"<system name> Has Errors"`. A `Junction` is the native branch carrier.
+   Measured both ways this session (`inv.exe fanout` accepted the ducts; the simulation refused them).
+7. **A `Damper` on `tpdFlowRateNearestZoneFlowRate` is ambiguous once more than one zone sits behind
+   it**, and TAS says so. The template's supply damper is switched to
+   `tpdFlowRateAllAttachedZonesFlowRate` on the explicit route; it is a derived topology component and
+   the rooms' own zones remain the supply authority.
+8. **TAS replaces an air system's in-memory result surface when `ISystem.Simulate` is called for the
+   next system in the same document.** Reading all zones after the loop returns results for the last
+   system only. `Modify.SimulateSystems` therefore captures each system's series before advancing.
+9. **TAS will only simulate a design whose air is continuous in every zone** - each room's inflow
+   equals its outflow. **Unit-level balance is not the decisive condition**: in the as-designed
+   fixture one unit already balanced at 44/44 l/s and TAS still answered `"Sizing Flow Failed"`, and
+   balancing both units left 8 of 9 rooms discontinuous and still refused. The refusal comes from
+   per-zone airflow discontinuity. The licensed *simulable control* corrected the transfer duties to
+   satisfy exact per-zone continuity (which, as a consequence, raised one extract terminal) - in the
+   harness only. **Production never repairs or rebalances the analytical design** - the route
+   refuses, which is correct: a design whose rooms do not conserve air is a defect in the design.
+   The three refusal runs are tabled in `PR2-ACCEPTANCE.md`. **On a real design there is nothing to
+   correct**: production `Modify.PreparePartOIteration` routes the dwelling's transfer air and then
+   refuses an unbalanced node itself, so the accepted fixture arrives with 0 of 8 rooms discontinuous
+   and simulates as stated - `PR2-REACCEPTANCE.md` section 3. The `balanced` and `continuity` harness
+   modes are gone.
+10. **`GetResultsData` returns an array that `GetValue(int)` indexes out of bounds.** Walk it with
+    `foreach`.
+11. **The TBD workflow needs a full-year simulation on this route.** `SimulateTo = 1` produced a
+    one-day TSD and the workflow then died in its post-simulation results step with
+    `COMException: The RPC server is unavailable`. `SimulateTo = 365` completes. **Root cause measured
+    2026-09-10:** `TSD.exe` genuinely crashes on a one-day TSD - Windows Application Error
+    `0xc0000005` in `TSD.exe 2.0.0.1` - inside `Modify.AddResults`; the results have already been read
+    and it is `SAMTSDDocument.Dispose`'s `close()` that surfaces the RPC message. Reproduces on both
+    fixtures, so it is not design-specific. Tracked separately; the full-year acceptance route is
+    unaffected. `PR2-reacc-oneday-tsd-crash.log`.
+12. **A fan answers one hourly series: `GetResultsData` variable 9, its Load = Q x dp / eta.** Every
+    other variable `0..24` fails. Delivered flow is `Load x eta / dp`. A yearly plant schedule is an
+    on/off table; factor 1.0 is `GetNumOperableHours() == 8760`. `GetNumOperableHours()` throws
+    `"Not a Yearly Schedule"` on a function schedule, and `GetYearlyValue(hour)` answers 0 always.
+13. **Native component GUIDs are per document.** Two documents from identical code and settings differ
+    in every native guid (118 lines) and in nothing else. Compare regenerated documents by the
+    canonical network with guids masked, and results by `ZoneLoad` guid (the TBD zone guid).
+14. **Position and direction are presentation only.** Moving all 42 components of an accepted document
+    left all 9 zones x 8760 hours of ZoneTemperature bit-identical (0 K). Re-measured on the accepted
+    real-design document: every top-level component of all three air systems moved, and all 8 zones x
+    8760 hours came back **byte-identical** - `PR2-reacc-layout-inert.txt`. A duct's bend nodes can
+    only be given at creation (`IDuct.AddNode`; no removal exists).
+15. **TAS flow sizing is sensitive to creation order** - the identical network sized or answered
+    `"Flow Sizing Failed"` depending on PR1's guid-derived order. Fails closed. SAM-BIM/SAM#113,
+    which stays **open**. **Not encountered on the accepted real-design route**: all three air systems
+    completed on the first canonical run with no sizing refusal. One fixture passing is not a fix.
+
+## What IS done - the complete PR2 build
+
+### The conversion, by identity
+
+* `Create.SystemVentilationConversionContext` reads PR1's lineage and the thermal source's
+  room-to-TAS-zone map and states, by identity alone, what TAS is to build: every room, every leg,
+  every duty. Legs are classified from PR1's **topology** - a `SystemSpace`'s connector 0 is its supply
+  inlet and connector 1 its extract outlet - and cross-checked against PR1's own lineage rows.
+* `Convert/ToTPD/SystemZone.cs` is the pairing point. It binds the intended `ZoneLoad` by
+  `TSDData.GetZoneLoadForGuid` + `AddZoneLoad`, writes the room's supply absolutely onto `FlowRate` and
+  `FreshAir` with `Type = tpdSizedVariableValue`, and records the native identities read back off the
+  objects. **The `SpaceName`-to-`ZoneLoad.Name` match is gone.**
+* `Modify.MaterialiseVentilationDutyCarriers` puts one `SystemDamper` into every extract and transfer
+  leg of a **working copy**, with a derived guid. PR1's graph is never touched - pinned by a
+  byte-for-byte JSON comparison.
+* `Modify.BindVentilationLegs` records one `SystemVentilationConnectionBinding` per PR1 connection,
+  and its two paths differ. A **supply** leg is a genuine read-back of the native carrier - the
+  zone's `FlowRate`, written earlier at the pairing point. An **extract or transfer** leg is
+  **written here**: the intended absolute duty, `DesignFlowRate.Type = tpdSizedVariableValue` and
+  `DesignFlowType = tpdFlowRateValue` go onto its damper, and are then read back off TAS's own
+  storage for storage verification - a native object that declined the write is refused. That
+  read-back is not an independent statement; the acceptance's walk of the saved document is.
+* `Create.Ducts` inserts a native `Junction` at every connector end carrying more than one leg, on the
+  explicit route only.
+* `Convert.ToTPD` returns the **reconciliation's verdict** when a context is supplied, and behaves
+  exactly as before when one is not.
+
+### The results, and the gate
+
+* `SystemZoneTemperatureResults` / `SystemZoneTemperatureResult` request only
+  `SpaceDataType.ZoneTemperature`, keyed by `.ToString()`, and refuse a missing room, a short series, a
+  hole in the period, a non-finite value, a series off the wrong zone or load, two rooms sharing a
+  zone, and a series for a room nobody asked about. The period is `EndHour - StartHour + 1`, never a
+  hardcoded 8760.
+* `Modify.SimulateSystems` captures each air system's series **before** simulating the next.
+* `Create.IndexedDoubles` reports the reason TAS gave instead of swallowing it, on all four overloads.
+* `ToSAM_SpaceSystemResult` uses `GetSystemZoneZoneLoad` rather than the first load in the collection;
+  `ToSAM_SpaceSystemResults` no longer adds a null element per resultless zone.
+
+### The route
+
+* `NoIzamThermalSource` (in `SAM.Core.Tas`, so both assemblies can see it) states both paths, both
+  cleanups and the room-to-zone map. `Create.NoIzamThermalSource` forces both cleanups on.
+* `SystemVentilationRoute` carries the thermal source, the document, the evidence, the room bindings,
+  the leg bindings and the zone temperatures. **There is no partial route**: on any refusal the payload
+  is empty, including the document path, enforced in the constructor.
+* The path guard refuses to write the TPD over the thermal source's own TBD or TSD, before anything
+  runs.
+
+### The closeout
+
+* `Query.ContinuousOperationRefusal` + `Modify.GroundVentilationFans`: a fan's operation carrier must
+  be a yearly schedule operable 8760 of 8760 hours - the frozen #111 factor 1.0, supplied by the
+  caller through PR1's `MechanicalVentilationSettings.Schedule`. Function (demand-driven), hourly,
+  absent or partial schedules are refused with the reason. `HeatGainFactor = 0` kept.
+* `Query.VentilationLayout` / `VentilationDuctRoute` / `VentilationJunctionRectangle` +
+  `Modify.LayOutVentilationSystem` + a hook before `Create.Ducts`: each room its own row in air-path
+  order, transfer dampers beneath the room they leave, extract-only rooms and then extract dampers in
+  columns to the right, junctions beside what they branch, ducts routed orthogonally in the lanes
+  between rows. Explicit route only; positions and bend nodes only; the replicated conversion is
+  untouched.
+* Tests: `ContinuousOperationRefusalTests` (9), `VentilationLayoutTests` (6).
+
+### Hardening carried out during this build
+
+* `SimulationDiagnostic` matches a success answer **whole** and only when the text carries no measured
+  failure fragment, so `"Done, but Sizing Flow Failed"` refuses. A vocabulary self-check test keeps the
+  two lists disjoint.
+* `SimulateSystems` keeps every air system's answer rather than only the last.
+* Three quadratic paths removed: `BindVentilationLegs` filtered all legs per air system,
+  `SystemVentilationRoute.Binding` scanned linearly, and the per-system result capture re-indexed the
+  whole document per system.
+* `SystemZoneTemperatureResult.TryGetValue` added, because `Values` is a defensive copy on every
+  access and reading it per hour is quadratic in the period - which cost one acceptance run.
+
+## Validation performed
+
+| check | result |
 | --- | --- |
-| `SAM.Analytical.Tas.TM59.Tests` | **690 passed, 0 failed**, built and run against the rebuilt `SAM.Analytical.dll` |
+| `SAM.Analytical.Tas.TM59.Tests` | **858 passed, 0 failed** (855 at the closeout + 1 layout + 2 design direction) |
+| `SAM.Analytical.Tas.Benchmark.Tests` | **16 passed, 0 failed** |
+| Release build, `SAM_Tas.sln`, .NET Framework MSBuild, Restore and Build separate | **0 errors** |
+| `git diff --check` | clean, including the committed `.log` transcripts |
+| SAM-BIM/SAM | untouched by this branch, working tree clean |
+| SAM-BIM/SAM_Systems | untouched, clean, at `89cf139` |
+| Phase A, production Iteration 1a on the real fixture | **PASS** - `Successful = True`, 0 of 8 rooms discontinuous, 0 cross-dwelling transfers |
+| licensed acceptance items 1-3, no-IZAM source | **PASS** on the hashed source - `Documentation/evidence/PR2-REACCEPTANCE.md` |
+| licensed acceptance items 4-15 | **PASS**, individually, on the candidate FINAL document |
+| directed topology, native ports only | **14 legs PASS, 0 FAIL** - `PR2-reacc-topology.txt` |
+| fan operation, frozen factor 1.0 | 6 of 6 fans at their derived duty in 8760 of 8760 hours - `PR2-reacc-fan-operation.txt` |
+| layout | 0 overlapping boxes, 0 duct passes through a box; 8760-hour ZoneTemperature byte-identical after moving every component |
+| licensed full-period route | 3 air systems `"Done"`, 8 of 8 rooms with 8760 finite values |
+| scaling | 2.20 indexed lookups per room at 100, 1,000 **and** 5,000 rooms |
+| SUPERSEDED, kept as record | the `f2.sam` engineering acceptance - `Documentation/evidence/PR2-ACCEPTANCE.md` |
 
-That is the evidence that matters here: the TAS-side TM59 suite is the closest thing to an acceptance test
-for the changed calculators, and it is unchanged. `SAM.Tests` is 1974 passing and
-`SAM.Analytical.UI.WPF.Tests` 528 passing on the same assemblies. `git diff --check` clean.
+**One caveat, stated plainly.** The test project's copy of a referenced assembly can go stale after a
+solution build: `dotnet build` the test project before `dotnet test --no-build`, or a run will silently
+exercise the previous DLL. That cost one confusing failure in this session.
 
-No licensed TAS run was made and none is owed: no engineering behaviour changes.
+## What is NOT done
 
-### Remaining risks and next task
+* **The branch-junction topology, the orphan-component skip and the nearest-zone damper switch are
+  covered by the licensed acceptance only**, not by unit tests: they are decisions about native TAS
+  behaviour taken inside COM-touching code.
+* **No licensed run at 1,000 or 5,000 rooms.** The scaling evidence is structural, by design - a
+  licensed annual simulation at that size would measure TAS, not this code.
+* **PR3 and PR4** are not started. `SystemVentilationRoute` is the seam they consume.
+* **PR1 has no system scope** - **SAM-BIM/SAM#114**. It cannot be told which of a model's authored
+  ventilation systems is the design under assessment, and it refuses any real model that carries the
+  `NV` / `UV` / `MV` systems production `PreparePartOIteration` deliberately preserves. Diagnosed with
+  three staged licensed runs in `PR2-REACCEPTANCE.md` section 4 and worked around in the acceptance
+  harness only, with byte-identity of the intent table asserted across the scoping step.
+  **Not fixed here**: `SAM_Systems` is frozen and untouched. #114 states both candidate ownerships -
+  a `SAM_Systems` filtering API, or PR4 / SAM_UI caller scoping - and prescribes neither.
+  **#114 must be considered before PR4 is declared complete.**
+* **A 1-day TAS simulation period crashes `TSD.exe`** natively (`0xc0000005`) inside
+  `Modify.AddResults` - **SAM-BIM/SAM#115**. Reproduces on the old fixture too, so it is not this
+  design; the full-year runs the acceptance uses are unaffected. Transcript
+  `PR2-reacc-oneday-tsd-crash.log`. No production change in this closeout.
+* **TAS flow sizing order sensitivity** - **SAM-BIM/SAM#113**, still **open** and unchanged. Not
+  encountered on the accepted real-design route; commented there, not closed.
+* **The flow-sizing order sensitivity (SAM-BIM/SAM#113)** is recorded, not fixed: fixing it touches
+  creation order, which the closeout forbade. The route fails closed on it.
+* **The caller must supply the frozen schedule.** PR2 verifies it and refuses without it; supplying
+  the constant 1.0 `YearlySchedule` through `MechanicalVentilationSettings.Schedule` is PR4's job.
 
-- `SAM.Weather.Query.RunningMeanDryBulbTemperatures` still throws on a weather year shorter than the one the
-  running mean needs, so a TSD with a damaged weather record fails loudly rather than being refused with a
-  diagnostic. Pre-existing, characterised by test, and a fix reaches wider than Part O.
-- Next: PF3-PF7 and `SetSpaceDesignFlowRate` are **done** (SAM#101, SAM_UI#88). What remains before
-  Iteration 3 is the Part O Sizing / Simulation defaults and minimum-click workflow, the weather / range /
-  output restoration UX, resume 2B from a restored run, re-isolation and re-cutting, the Grasshopper
-  variable-output updater, catalogue identity drift, final UI acceptance, then freeze Iterations 1-2.
+## Exact recommended next step
+
+Review this branch's diff, then start PR3 against `SystemVentilationRoute`. It already carries
+everything PR3 needs - the thermal source with both paths, the room bindings with the full identity
+chain, the leg bindings with each design airflow, and the zone temperatures - so PR3 should never need
+to open the TPD, guess a basename, match a display name or reconstruct topology. If it finds itself
+doing any of those, the seam is wrong and should be widened rather than worked around.
+
+---
 
 ## Previous (2026-09-05): the workflow's working model - ownership, and only one copy of it
 
