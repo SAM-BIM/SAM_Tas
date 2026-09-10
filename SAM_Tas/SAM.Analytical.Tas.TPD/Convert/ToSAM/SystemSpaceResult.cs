@@ -19,7 +19,12 @@ namespace SAM.Analytical.Tas.TPD
 
             string reference = (systemZone as dynamic).GUID;
 
-            ZoneLoad zoneLoad = systemZone.ZoneLoads()?.FirstOrDefault();
+            // GetSystemZoneZoneLoad is TAS's own explicit zone-to-load accessor and answers the load the
+            // zone is actually bound to. The previous FirstOrDefault() over the zone's load collection
+            // answered whichever load happened to be enumerated first, which is only the same thing when
+            // a zone carries exactly one - and a zone that carries two would silently report one room's
+            // results under another room's identity.
+            ZoneLoad zoneLoad = systemZone.GetSystemZoneZoneLoad();
             if (zoneLoad == null)
             {
                 return null;
