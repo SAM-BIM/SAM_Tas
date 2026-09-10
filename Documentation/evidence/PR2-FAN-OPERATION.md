@@ -1,5 +1,19 @@
 # PR2 fan operation - the frozen continuous factor 1.0, measured, fixed and re-accepted
 
+> **Re-proved on a real design, 2026-09-10.** The correction this document records - the frozen
+> constant 1.0 supplied through PR1's settings, `HeatGainFactor = 0`, and the native hourly proof that
+> the fan actually runs - was re-established from scratch on
+> `SAM_zoningAM-CIBSEfutureZ1.sam`'s real Iteration 1a design: **6 of 6 fans across 3 air systems
+> delivered their derived design duty in 8760 of 8760 hours**, `GetNumOperableHours = 8760`,
+> `HeatGainFactor = 0` on all six. Transcript `PR2-reacc-fan-operation.txt`; verdict in section 8 of
+> `PR2-REACCEPTANCE.md`.
+>
+> The mechanism, the measurements and the diagnosis below are unchanged - they are facts about TAS, not
+> about the design that was under test. The **flow-sizing order sensitivity** of section 7
+> (SAM-BIM/SAM #113) was **not encountered** on the real fixture: the canonical route completed on the
+> first attempt, on all three systems, with no sizing refusal. It is neither fixed nor hidden.
+
+
 SAM-BIM/SAM #111 freezes the PR2 parity operating configuration at **continuous operation factor
 1.0** and **fan Heat Gain Factor 0**. The independent re-review found the fans exposing
 `tpdScheduleFunctionAllZonesLoad` and challenged the claim that they run continuously. This is the
@@ -54,10 +68,11 @@ Expected period 8760 hours (0..8759) on every run; hours available 8760 on every
 | control `gap` - yearly table off hours 0..23 | yearly, `GetNumOperableHours = 8736` | 4 | **8736** each - off exactly hours 0..23 | 0..44 l/s | `PR2-fanop-control-gap.txt` |
 | control `funcload 4` - same function, heating load only | function AllZonesLoad, heating | 4 | **0** each | 0..0 l/s | `PR2-fanop-control-funcload4.txt` |
 | control `funcload 8` - same function, cooling load only | function AllZonesLoad, cooling | 4 | **356** (AHU One), **470** (AHU Two) | 0..44 l/s | `PR2-fanop-control-funcload8.txt` |
-| **FINAL ACCEPTED** - frozen constant 1.0 | yearly "PartO Constant 1.0", `GetNumOperableHours = 8760` | 4 | **8760** each | 44.0..44.0 l/s | `PR2-fanop-final-accepted.txt` |
+| **the corrected configuration** - frozen constant 1.0 | yearly "PartO Constant 1.0", `GetNumOperableHours = 8760` | 4 | **8760** each | 44.0..44.0 l/s | `PR2-fanop-final-accepted.txt` |
 
-Per fan on the FINAL ACCEPTED document - fan, schedule/function, expected duty, hours available,
-hours running, delivered flow:
+Per fan on that `f2.sam` document - fan, schedule/function, expected duty, hours available,
+hours running, delivered flow. **These four fans are not the accepted PR2 fans**: the accepted run has
+six, across three MVHR systems, at 63 / 63 / 63 / 63 / 30 / 30 l/s - `PR2-reacc-fan-operation.txt`.
 
 | system | fan | schedule | expected duty | available | running | min..max l/s |
 | --- | --- | --- | --- | --- | --- | --- |

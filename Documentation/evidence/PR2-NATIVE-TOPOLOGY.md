@@ -1,5 +1,17 @@
 # PR2 native topology - is the generated connector graph the TAS-native one?
 
+> **Re-grounded on a real design, 2026-09-10.** Sections 1 to 6 were established on `f2.sam`, whose
+> design the acceptance harness authored rather than read. Everything they measure about **TAS** -
+> what a `ComponentGroup` is, that the grouping experiment changes nothing a simulation can see, the
+> two native limits, and that positions are inert - is independent of which design was under test and
+> stands unchanged. What does **not** stand is any claim that the *engineering* in those tables is the
+> engineering Approved Document O Iteration 1a produces.
+>
+> The **directed topology acceptance on the real design** - every leg's upstream and downstream port
+> compared with the analytical intent, 14 of 14 PASS - is section 7 of `PR2-REACCEPTANCE.md`, with the
+> transcript in `PR2-reacc-topology.txt`. Read that for the engineering; read this for the API.
+
+
 A manual inspection of a generated `.tpd` in the TAS GUI raised a specific finding: native TAS
 templates represent a room terminal as a **`ComponentGroup`** holding the `SystemZone` and its
 damper, connect the *group* into the main duct, and use **`Junction`** components for the branch
@@ -228,9 +240,10 @@ The first layout was inspected in the TAS GUI and approved (`PR2-layout-approved
 refinement then moved the extract-only rooms into their own column (x 820 -> 1060) and the extract
 dampers further right (x 1100 -> 1200), coordinates only.
 
-**Result on the FINAL ACCEPTED document** (`PR2-layout-after-fix.txt`):
+**Result on that `f2.sam` run's final document** (`PR2-layout-after-fix.txt`). The accepted PR2 layout is
+the real-design one in section 9 of `PR2-REACCEPTANCE.md` - 3 systems, 0 overlaps, 0 duct passes:
 
-| | before | first layout (approved) | FINAL (refined) |
+| | before | first layout (approved) | that run's refined layout |
 | --- | --- | --- | --- |
 | overlapping box pairs | 45 | 0 | **0** |
 | duct passes through a non-endpoint box | 225 | 0 | **0** |

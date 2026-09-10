@@ -146,9 +146,11 @@ namespace SAM.Analytical.Tas.TPD
         /// <item><description>a room's transfer dampers stack beneath its row in one column, its extract
         /// dampers level with it in a column further right - so supply arrives from the left, extract
         /// leaves to the right and transfers sit between the rooms they join;</description></item>
-        /// <item><description>extract-only rooms stand in their own column, past the transfer dampers and
-        /// clear of the occupied rooms, so the extract and return side reads separately and a transfer
-        /// into an extract-only room drops straight down to it;</description></item>
+        /// <item><description>a room the air path ENDS at - extract with nothing passed on - stands in its
+        /// own column, past the transfer dampers and clear of the occupied rooms, so the extract and
+        /// return side reads separately and a transfer into it drops straight down. A room that extracts
+        /// and still passes air on stays in the room column: it is in the middle of the path, not at the
+        /// end of it;</description></item>
         /// <item><description>each row is tall enough for its own stack plus a free lane beneath it, which
         /// is where <see cref="VentilationDuctRoute"/> runs the ducts that travel back
         /// leftward.</description></item>
@@ -176,12 +178,6 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
-            rooms.Sort((room_1, room_2) =>
-            {
-                int compare = VentilationLayoutOrder(room_1).CompareTo(VentilationLayoutOrder(room_2));
-                return compare != 0 ? compare : room_1.Guid_SystemSpace.CompareTo(room_2.Guid_SystemSpace);
-            });
-
             Dictionary<Guid, List<SystemVentilationLegIntent>> transfers = new Dictionary<Guid, List<SystemVentilationLegIntent>>();
             Dictionary<Guid, List<SystemVentilationLegIntent>> extracts = new Dictionary<Guid, List<SystemVentilationLegIntent>>();
 
@@ -202,6 +198,16 @@ namespace SAM.Analytical.Tas.TPD
                 list.Add(legIntent);
             }
 
+            //Built BEFORE the sort, because whether a room passes air ON decides which column it stands
+            //in - and therefore its row order too.
+            rooms.Sort((room_1, room_2) =>
+            {
+                int compare = VentilationLayoutOrder(room_1, transfers.ContainsKey(room_1.Guid_SystemSpace))
+                    .CompareTo(VentilationLayoutOrder(room_2, transfers.ContainsKey(room_2.Guid_SystemSpace)));
+
+                return compare != 0 ? compare : room_1.Guid_SystemSpace.CompareTo(room_2.Guid_SystemSpace);
+            });
+
             //Columns, left to right: the occupied rooms, the transfer dampers beneath them, the extract-only
             //rooms the transfers feed, then the extract dampers - so the extract and return side stands
             //clear of the occupied rooms and a transfer into an extract-only room drops straight down.
@@ -213,7 +219,7 @@ namespace SAM.Analytical.Tas.TPD
 
             foreach (SystemVentilationRoomIntent room in rooms)
             {
-                int x_Room = VentilationLayoutOrder(room) == 3 ? x_ExtractOnly : x_Zone;
+                int x_Room = VentilationLayoutOrder(room, transfers.ContainsKey(room.Guid_SystemSpace)) == 3 ? x_ExtractOnly : x_Zone;
 
                 result.AddRoom(room.Guid_SystemSpace, new VentilationLayoutRectangle(x_Room, y, zoneWidth, zoneHeight));
 
@@ -251,10 +257,23 @@ namespace SAM.Analytical.Tas.TPD
             return result;
         }
 
-        private static int VentilationLayoutOrder(SystemVentilationRoomIntent roomIntent)
+        private static int VentilationLayoutOrder(SystemVentilationRoomIntent roomIntent, bool sendsTransfer)
         {
             bool supply = roomIntent.DesignFlowRate_Supply_Lps.HasValue;
             bool extract = roomIntent.DesignFlowRate_Extract_Lps.HasValue;
+
+            //Order 3 - the extract-only column - is for a room the air path ENDS at. A room that extracts
+            //and also passes air on to another room is not that, whatever its duties say: it is a room in
+            //the middle of the path, and it belongs in the room column with its transfer damper to its
+            //right, so the duct out of it runs forward.
+            //
+            //Real dwellings are full of them - a kitchen that extracts 55 l/s and still transfers 8 l/s on
+            //to an ensuite - and standing one in the extract-only column, PAST the transfer column, forces
+            //its own outgoing duct to double back through the room's own box.
+            if (extract && !supply && sendsTransfer)
+            {
+                return 2;
+            }
 
             return supply && !extract ? 0 : supply ? 1 : !extract ? 2 : 3;
         }

@@ -1,5 +1,34 @@
 # PR2 licensed TAS acceptance - items 1 to 15, individually
 
+> ## SUPERSEDED - the engineering acceptance in this document is not valid
+>
+> **The `f2.sam` engineering acceptance below is SUPERSEDED.** A manual inspection of the document it
+> accepted found transfer relationships running the opposite way round to the design Approved
+> Document O Iteration 1a actually produces - `Kitchen_4 -> Bedroom 2_3` where the real design states
+> `Bedroom 2_3 -> Kitchen_4`.
+>
+> That was **not** a conversion defect. The acceptance harness authored its own ventilation design: it
+> cleared the model's inherited ventilation objects and handed out supply / extract / transfer roles by
+> ascending space guid, then corrected the duties it had authored through its `balanced` and
+> `continuity` modes. The route converted that synthetic design faithfully, so every native check
+> passed - a true answer to the wrong question. None of that logic was ever in a production path.
+>
+> **The valid PR2 acceptance is `PR2-REACCEPTANCE.md`**, run on a real SAM_UI model
+> (`SAM_zoningAM-CIBSEfutureZ1.sam`) prepared by the production `Modify.PreparePartOIteration` route.
+>
+> **What still stands from this document**, because it was measured on TAS and does not depend on which
+> design was under test: the TAS API semantics, the native carrier rules (supply on `SystemZone`
+> `FlowRate`/`FreshAir`, extract and transfer on a typed `Damper.DesignFlowRate`), the `AddGroup`
+> marshalling findings, `"Done"` as the native success word, the per-air-system simulate-then-capture
+> rule, the `ZoneLoad` identity chain, and the diagnosis in *"Why TAS refused the design as written"* -
+> that **per-zone airflow continuity** is what TAS gates on and unit-level balance is neither necessary
+> nor sufficient. That last finding is why the real design needs no correction at all: production
+> `PrepareBaseMVHR` refuses an unbalanced node itself.
+>
+> **What does not stand**: every engineering verdict about rooms, roles, duties, membership and
+> transfer directions, and the `f2.sam` design tables and item verdicts below.
+
+
 Run on the licensed machine, `route-source` then `route-acceptance`, one COM document cycle per
 process. Model `C:\TasOut\po2\f2.sam` (9 spaces), weather `CIBSE Weather 2021.twd`, full-year TBD
 simulation (days 1..365), Systems simulation over hours **0..8759**.
@@ -304,14 +333,18 @@ validate - they come back **identical**, room for room. A name-keyed lookup woul
 ## Artifact register (closeout, licensed machine)
 
 Everything under `C:\TasOut` is generated and **not tracked in git**; the transcripts and harness copied
-into this folder **are**. Every run folder holds a byte-identical copy of the one thermal source and a
-`provenance.txt` with its hashes before and after the run.
+into this folder **are**. Every run folder holds a byte-identical copy of that run's one thermal source
+and a `provenance.txt` with its hashes before and after the run.
+
+**None of the paths below is a PR2 acceptance artifact.** The accepted TPD, TBD and TSD are the ones in
+section 10 of `PR2-REACCEPTANCE.md`, under `C:\TasOut\pr2r`. The table is the record of the `f2.sam`
+investigation, and every "FINAL" in it means "final of that superseded run".
 
 | role | path | produced by | tracked |
 | --- | --- | --- | --- |
-| **FINAL ACCEPTED PR2 TPD** | `C:\TasOut\pr2z\final-layout2\acc.tpd` | `route-acceptance full balanced continuity const1`, schedule "PartO Constant 1.0", refined layout | no |
-| FINAL's source TBD | `C:\TasOut\pr2z\final-layout2\acc.tbd` (= `src\acc.tbd`) | copied from `src` | no |
-| FINAL's paired TSD | `C:\TasOut\pr2z\final-layout2\acc.tsd` (= `src\acc.tsd`) | copied from `src` | no |
+| **SUPERSEDED** - the final `f2.sam` run's TPD | `C:\TasOut\pr2z\final-layout2\acc.tpd` | `route-acceptance full balanced continuity const1`, schedule "PartO Constant 1.0", refined layout | no |
+| that run's source TBD | `C:\TasOut\pr2z\final-layout2\acc.tbd` (= `src\acc.tbd`) | copied from `src` | no |
+| that run's paired TSD | `C:\TasOut\pr2z\final-layout2\acc.tsd` (= `src\acc.tsd`) | copied from `src` | no |
 | the one thermal source | `C:\TasOut\pr2z\src\acc.tbd`, `acc.tsd`, `acc-design.sam`, `acc-zones.txt` | `route-source … full` (production `Create.NoIzamThermalSource`) | no |
 | manually inspected and approved layout (superseded only by the refinement) | `C:\TasOut\pr2z\final-layout\acc.tpd` | as FINAL, first layout | no |
 | diagnostic: accepted network before the layout fix | `C:\TasOut\pr2z\rename-n2\acc.tpd` | as FINAL, no layout | no |

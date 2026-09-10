@@ -271,6 +271,69 @@ namespace SAM.Analytical.Tas.TM59.Tests
             });
         }
 
+        /// <summary>
+        /// The real-design case the synthetic fixture never produced: a room that EXTRACTS and still
+        /// passes air on - a kitchen extracting 55 l/s that transfers 8 l/s to an ensuite. It is in the
+        /// middle of the air path, not at the end of it, so it must stand in the room column with its
+        /// transfer damper to its right; standing it in the extract-only column past the transfer column
+        /// forced its own outgoing duct to double back through its own box.
+        /// </summary>
+        [Test]
+        public void ARoomThatExtractsAndStillPassesAirOnStaysInTheRoomColumn()
+        {
+            Guid guid_Bedroom = new Guid("11111111-1111-1111-1111-111111111111");
+            Guid guid_Kitchen = new Guid("22222222-2222-2222-2222-222222222222");
+            Guid guid_Ensuite = new Guid("33333333-3333-3333-3333-333333333333");
+
+            List<SystemVentilationRoomIntent> rooms = new List<SystemVentilationRoomIntent>
+            {
+                Room(guid_Bedroom, 63, null),
+                Room(guid_Kitchen, null, 55),
+                Room(guid_Ensuite, null, 8),
+            };
+
+            List<SystemVentilationLegIntent> legs = new List<SystemVentilationLegIntent>
+            {
+                Leg(SystemVentilationConnectionType.Supply, 101, Guid.Empty, guid_Bedroom),
+                Leg(SystemVentilationConnectionType.Transfer, 102, guid_Bedroom, guid_Kitchen),
+                Leg(SystemVentilationConnectionType.Transfer, 103, guid_Kitchen, guid_Ensuite),
+                Leg(SystemVentilationConnectionType.Extract, 104, guid_Kitchen, Guid.Empty),
+                Leg(SystemVentilationConnectionType.Extract, 105, guid_Ensuite, Guid.Empty),
+            };
+
+            VentilationLayout layout = Plan(rooms, legs);
+
+            VentilationLayoutRectangle bedroom = layout.Room(guid_Bedroom);
+            VentilationLayoutRectangle kitchen = layout.Room(guid_Kitchen);
+            VentilationLayoutRectangle ensuite = layout.Room(guid_Ensuite);
+
+            VentilationLayoutRectangle damper_Kitchen = layout.Leg(legs[2].Guid_SystemConnection);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(kitchen.X, Is.EqualTo(bedroom.X), "a room that passes air on stands in the room column");
+                Assert.That(ensuite.X, Is.GreaterThan(kitchen.X), "the room the path ENDS at stands in the extract-only column");
+
+                //Air-path order down the drawing: supplied room, then the room it transfers into, then the
+                //room that one transfers into.
+                Assert.That(kitchen.Y, Is.GreaterThan(bedroom.Y));
+                Assert.That(ensuite.Y, Is.GreaterThan(kitchen.Y));
+
+                Assert.That(damper_Kitchen.X, Is.GreaterThan(kitchen.Right), "its transfer damper is to its right");
+            });
+
+            //And the duct out of the kitchen's own outlet junction into that damper is clear of every box
+            //that is not one of its two ends - which is exactly what it was not.
+            VentilationLayoutRectangle junction_Kitchen = SAM.Analytical.Tas.TPD.Query.VentilationJunctionRectangle(kitchen, true, true, 20, 20);
+
+            List<VentilationLayoutRectangle> others = new List<VentilationLayoutRectangle> { bedroom, kitchen, ensuite };
+
+            AssertClear(
+                "the kitchen's outgoing transfer",
+                Polyline(junction_Kitchen, true, damper_Kitchen, true, false),
+                others);
+        }
+
         [Test]
         public void AForwardDuctTurnsOnce_ABackwardDuctUsesTheLaneAboveItsTarget()
         {

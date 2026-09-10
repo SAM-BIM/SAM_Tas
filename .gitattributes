@@ -7,3 +7,8 @@ benchmark/**/*.json text eol=lf
 # the trailing space its fixed-width verdict lines end with. Only end-of-line blanks are exempted, and
 # only for these transcripts; every other whitespace check still applies to them and to all sources.
 Documentation/evidence/*.log whitespace=-blank-at-eol
+
+# The machine-readable acceptance tables are evidence too, and a constant column count is the point of
+# them: a row whose last field is empty ends in a tab, and stripping it would change the table's shape.
+# Only end-of-line blanks are exempted, and only for these tables.
+Documentation/evidence/*.tsv whitespace=-blank-at-eol

@@ -1,5 +1,17 @@
 # PR2 BUILD - the explicit Part O ventilation route through TAS Systems
 
+> **The acceptance figures in this document are SUPERSEDED, 2026-09-10.** Everything measured here about
+> **TAS** stands - the identity chain, the native API semantics, the per-zone continuity diagnosis, the
+> refusal modes and the scaling reasoning. What does not stand is any figure that describes the
+> ventilation network under test: this document's `2 air system(s), 9 room(s)` and its `balanced` /
+> `continuity` corrections come from `f2.sam`, whose design the acceptance harness **authored** by
+> ascending space guid rather than reading off the model.
+>
+> The accepted PR2 network is **3 air systems and 8 rooms**, from a real SAM_UI model prepared by
+> production `Modify.PreparePartOIteration`, and it needs no correction at all - production refuses an
+> unbalanced node itself. See `PR2-REACCEPTANCE.md`.
+
+
 What was built, what it rests on, and what was measured. Everything below that says "measured" was
 measured on the licensed machine through the harness at `C:\TasOut\inv`, one operation per process,
 TAS GUI closed. Everything that says "pinned" is a test in
