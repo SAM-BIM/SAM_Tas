@@ -6,8 +6,7 @@ fix). Branch `fix/tbd-yearly-profile-one-hour-shift` off `sow/2026-Q3`.
 ## The TAS convention
 
 `TBD.profile.SetYearlyValues(object)` given a `float[]` **ignores element 0**, stores element `i` in 1-based
-slot `i`, and repeats the last element into any slot the array does not reach
-([probe log](TBD-YEARLY-probe-yearly.log)):
+slot `i`, and repeats the last element into any slot the array does not reach:
 
 | array | slot 1 | slot 8759 | slot 8760 |
 |---|---|---|---|
@@ -18,7 +17,7 @@ slot `i`, and repeats the last element into any slot the array does not reach
 
 ## Confirmed in production
 
-Probe modes `samupdate` / `samacci` ([source](TBD-YEARLY-probe-Program.cs.txt)) call the real
+Licensed probes (`samupdate` / `samacci` modes) called the real
 `SAM.Analytical.Tas.dll` on copies of the PR3 source TBD. A SAM yearly `Profile` whose 0-based hour k carries
 1000+k is written through `Modify.Update` to a thermostat slot (ticUL) and a gain slot (ticOSG), saved,
 reopened read-only and read back. `UpdateACCI` is compared hour by hour against
@@ -29,9 +28,6 @@ reopened read-only and read back. `UpdateACCI` is compared hour by hour against
 | `Modify.Update`: slots != SAM hour h-1 | **8759 / 8760** (slot 1 = 1001, slot 8760 = 9759) | 0 / 8760 |
 | SAM import (`Core.Tas.Query.Values`) hour 0 | 1001 | 1000 |
 | `UpdateACCI` ticUL, slots != range(hour h-1), every IC | **4232** (0 against hour h, i.e. one hour early) | 0 |
-
-Logs: [samupdate before](TBD-YEARLY-probe-samupdate-before.log), [after](TBD-YEARLY-probe-samupdate-after.log);
-[samacci before](TBD-YEARLY-probe-samacci-before.log), [after](TBD-YEARLY-probe-samacci-after.log).
 
 The import is correct (slot k+1 -> hour k). Because the export was not, every export -> import generation
 moved a yearly profile one more hour earlier.
@@ -54,7 +50,7 @@ hours. `Modify.Update` (yearly branch) and both `UpdateACCI` paths (fast and spl
 
 ## TPD plant schedules follow a different convention and are correct as written
 
-`TPD.PlantSchedule.SetYearlyValues(int[])` is **0-based and exact** ([probe log](TBD-YEARLY-probe-tpdsched.log)).
+`TPD.PlantSchedule.SetYearlyValues(int[])` is **0-based and exact**.
 `GetYearlyValue(h)` answers 0, so the base was read through `GetNumMonthlyOperableHours`:
 
 | `int[8760]`, one element = 1 | operable hours | month counting it |
@@ -79,7 +75,9 @@ PR #51 touches none of this fix's files. Its only TBD yearly writes are the brid
 `yearlyValues[hour]` for hour = 1..8760, which aren't affected. After a clean MSBuild of `SAM_Tas.sln`:
 
 - `dotnet test SAM.Analytical.Tas.TM59.Tests`: 890/890 pass, including PR #51's `ThermostatBridgeTests`.
-- Licensed, same probes, fresh copies ([samupdate](TBD-YEARLY-probe-samupdate-rebased.log),
-  [samacci](TBD-YEARLY-probe-samacci-rebased.log), [tpdsched](TBD-YEARLY-probe-tpdsched-rebased.log)):
+- Licensed, same probes re-run on the rebased DLLs against fresh TBD copies:
   `Modify.Update` 0/8760 slots misaligned in both slots; `UpdateACCI` aligned in all 27 yearly ICs; TPD
   plant schedules still 0-based and exact.
+
+The raw probe console logs were distilled into the tables above and then removed; the regression tests are
+the long-term protection.

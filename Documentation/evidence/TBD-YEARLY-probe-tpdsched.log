@@ -1,7 +1,0 @@
-int[8760] only element 0 = 1: GetNumOperableHours=1; non-zero months [0:EX Month out of bounds 1:1]
-int[8760] only element 744 = 1: GetNumOperableHours=1; non-zero months [0:EX Month out of bounds 2:1]
-int[8760] only element 8759 = 1: GetNumOperableHours=1; non-zero months [0:EX Month out of bounds 12:1]
-int[8761] only element 0 = 1: GetNumOperableHours=1; non-zero months [0:EX Month out of bounds 1:1]
-int[8761] only element 744 = 1: GetNumOperableHours=1; non-zero months [0:EX Month out of bounds 2:1]
-int[8761] only element 8760 = 1: GetNumOperableHours=0; non-zero months [0:EX Month out of bounds]
-int[8760] all ones (production constant 1.0): GetNumOperableHours=8760

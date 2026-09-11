@@ -1,6 +1,23 @@
 # Project Progress
 
-## Current: PR3 of SAM-BIM/SAM #111 - the ResultantTemperature thermostat bridge
+## Current: TBD yearly profile one-hour-shift fix - SAM-BIM/SAM_Tas PR #52
+`fix/tbd-yearly-profile-one-hour-shift`, off `sow/2026-Q3` at **`81d78841`** (after PR #51, the PR3 bridge
+merge). SAM_Tas only; no SAM / SAM_Systems / SAM_UI change.
+
+2026-09-11 - **IMPLEMENTED, LICENSED BEFORE/AFTER CONFIRMED, NOT MERGED.** This is the follow-up the PR3
+section below raised ("`SetYearlyValues(float[])` ignores element 0 ... raised as a separate follow-up"):
+`Modify.Update` and `Modify.UpdateACCI` handed `SetYearlyValues` 0-based `float[8760]` arrays, so every
+yearly profile landed one hour early with hour 8760 duplicated. Fix: `Modify.UpdateYearlyValues`
+(`SAM.Analytical.Tas/Modify/Update.cs`) writes 0-based hour k into slot k+1 through an 8761-long array,
+element 0 unused, one COM call, refusing anything that isn't exactly 8760 hours; `Modify.Update`'s yearly
+branch and both `UpdateACCI` paths go through it. `TPD.PlantSchedule.SetYearlyValues(int[])` was measured
+0-based and exact and is deliberately unchanged. Regression: `YearlyProfileAlignmentTests`, with
+`TasProfileFakes.FakeProfile` corrected to the measured behaviour. Evidence:
+`Documentation/evidence/TBD-YEARLY-PROFILE-SHIFT.md`; the raw probe logs were distilled into it and
+removed in a hygiene pass on the review feedback. Tests: TM59 890/890 and benchmark 16/16, locally and in
+CI (build + spdx green). Awaiting human review (michaldengusiak, ZiolkowskiJakub requested).
+
+## Previous: PR3 of SAM-BIM/SAM #111 - the ResultantTemperature thermostat bridge
 `part-o/iteration3-resultant-temperature-bridge`, off `sow/2026-Q3` at **`5bec3a6d`** (the PR2 merge).
 SAM_Tas only; no SAM / SAM_Systems / SAM_UI change.
 
