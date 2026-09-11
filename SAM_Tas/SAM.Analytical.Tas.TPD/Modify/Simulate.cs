@@ -72,6 +72,17 @@ namespace SAM.Analytical.Tas.TPD
         /// So the route simulates what it actually needs. The document-level overload is unchanged for
         /// callers that do want plant results.
         /// </para>
+        /// <para>
+        /// <b>Which plant property, exactly.</b> Measured again after the foundation was frozen: TAS
+        /// cannot derive a design flow into <c>Multi Boiler 1</c>, the DHW circuit's boiler, because the
+        /// shipped template states a design flow delta-T of <b>zero</b> on both that boiler and its
+        /// <c>DHW Circuit Group</c>. Any non-zero delta-T on either makes the same document answer
+        /// <c>"Done"</c>; the multi-boiler's DHW duty flag changes nothing either way. It is template
+        /// data, not a conversion defect - this converts the zero faithfully - and it cannot reach a
+        /// Candidate B number, which was verified by comparing every room's <c>ZoneTemperature</c> with
+        /// and without the correction. See
+        /// <c>Documentation/evidence/PLANTROOM-SIZING-AND-DESIGN-CONDITIONS.md</c>.
+        /// </para>
         /// </summary>
         /// <param name="simulationEvidence">What the run left behind. Never null.</param>
         public static bool SimulateSystems(string path_TPD, int startHour, int endHour, out SimulationEvidence simulationEvidence)
