@@ -43,20 +43,40 @@ namespace SAM.Analytical.Tas
             profile_TBD.type = ProfileTypes.ticYearlyProfile;
             profile_TBD.factor = System.Convert.ToSingle(factor);
 
-            //object yearlyValues_TBD = profile_TBD.GetYearlyValues();
-
-            //float[] array = Query.Array<float>(yearlyValues_TBD);
-
             double[] yearlyValues =  profile.GetYearlyValues();
             float[] yearlyValues_float = new float[yearlyValues.Length];
             for (int i = 0; i < yearlyValues_float.Length; i++)
                 yearlyValues_float[i] = System.Convert.ToSingle(yearlyValues[i]);
 
-            profile_TBD.SetYearlyValues(yearlyValues_float);
+            return UpdateYearlyValues(profile_TBD, yearlyValues_float);
+        }
 
-            //for (int i = 0; i < 8759; i++)
-            //    profile_TBD.yearlyValues[i] = System.Convert.ToSingle(profile[i]);
+        /// <summary>
+        /// Writes one year of hourly values onto a TBD yearly profile: 0-based hour <c>k</c> of
+        /// <paramref name="values"/> lands in the profile's 1-based slot <c>k + 1</c>.
+        /// <para>
+        /// <b>Never hand <c>profile.SetYearlyValues</c> a 0-based array directly.</b> Measured on licensed
+        /// TAS (2026-09-10/11): <c>SetYearlyValues(float[])</c> ignores element 0, stores element <c>i</c> in
+        /// slot <c>i</c> and repeats the last element into any slot the array does not reach. A 0-based
+        /// <c>float[8760]</c> is therefore written one hour early with hour 8760 duplicated - silently, with
+        /// no error - and since the import (<c>Core.Tas.Query.Values</c>) reads slot <c>k + 1</c> back as hour
+        /// <c>k</c>, every export/import generation moved a yearly profile one more hour earlier. Here the
+        /// array is 8761 long with element 0 unused, which TAS maps exactly; one COM call, as before.
+        /// </para>
+        /// </summary>
+        /// <returns>False where nothing was written - <paramref name="values"/> must hold exactly 8760 hours.</returns>
+        public static bool UpdateYearlyValues(this profile profile_TBD, IList<float> values)
+        {
+            const int hoursPerYear = 8760;
 
+            if (profile_TBD == null || values == null || values.Count != hoursPerYear)
+                return false;
+
+            float[] slots = new float[hoursPerYear + 1];
+            for (int k = 0; k < hoursPerYear; k++)
+                slots[k + 1] = values[k];
+
+            profile_TBD.SetYearlyValues(slots);
             return true;
         }
 
