@@ -1,0 +1,38 @@
+UpdateACCI -> True
+weather dry bulb hours 8760
+IC 'Studio 1_0' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Studio 1_0 - HDD': not yearly, skipped
+IC 'Corridor_1' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Corridor_1 - HDD': not yearly, skipped
+IC 'Bathroom_2' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Bathroom_2 - HDD': not yearly, skipped
+IC 'Bedroom 2_3' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Bedroom 2_3 - HDD': not yearly, skipped
+IC 'Kitchen_4' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Kitchen_4 - HDD': not yearly, skipped
+IC 'Ensuite_5' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Ensuite_5 - HDD': not yearly, skipped
+IC 'Bedroom 2_6' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Bedroom 2_6 - HDD': not yearly, skipped
+IC 'Kitchen_7' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Kitchen_7 - HDD': not yearly, skipped
+IC 'Ensuite_8' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Ensuite_8 - HDD': not yearly, skipped
+IC 'Studio' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '1 Bed Apt. Living Room/Kitchen' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '1 Bed Apt. Living Room' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '1 Bed Apt. Kitchen' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '2 Bed Apt. Living Room/Kitchen' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '2 Bed Apt. Living Room' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '2 Bed Apt. Kitchen' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '3 Bed Apt. Living Room/Kitchen' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '3 Bed Apt. Living Room' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC '3 Bed Apt. Kitchen' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Double Bedroom' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'Single Bedroom' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'TM59_Bathroom/internal corridors' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'TM59_Communal Corridor (including pipework gains)' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'TM59_Stairs' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'TM59_Cupboard/riser/lift/void' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'TM59_Cupboard with HIU' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232
+IC 'TM59_Riser Communal pipework' ticUL: slots != range(hour h-1) [aligned]: 0; != range(hour h) [one hour early]: 4232; != range(hour h-2): 4232

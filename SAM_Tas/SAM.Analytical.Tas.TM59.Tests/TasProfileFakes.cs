@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System.Collections.Generic;
@@ -21,12 +21,24 @@ namespace SAM.Analytical.Tas.TM59.Tests
     /// instead, so they are implemented as <c>get_hourlyValues(int)</c> / <c>set_hourlyValues(int, float)</c>.
     /// Both are 1-BASED, matching TAS - <c>Modify.Update</c> writes <c>hourlyValues[i + 1]</c>.
     /// </para>
+    /// <para>
+    /// The bulk yearly pair behaves as licensed TAS was <b>measured</b> to (2026-09-10 <c>yearly</c> probe,
+    /// re-confirmed through the production writer 2026-09-11): <c>SetYearlyValues</c> ignores element 0,
+    /// stores element <c>i</c> in slot <c>i</c> and repeats the last element into any slot the array does not
+    /// reach; <c>GetYearlyValues</c> answers a <c>Single[*]</c> bounded 1..8760. The previous fake copied from
+    /// element 0 into a 0-based array, which is the one convention TAS does not have - it made a writer that
+    /// shifts every hour look exact.
+    /// </para>
     /// </summary>
     internal class FakeProfile : TBD.profile
     {
+        private const int HoursPerYear = 8760;
+
         // 1-based, 25 slots so index 24 is addressable.
         private readonly float[] hourly = new float[25];
-        private float[] yearly = new float[8760];
+
+        // 1-based, 8761 slots so index 8760 is addressable. Slot 0 is never read.
+        private readonly float[] yearly = new float[HoursPerYear + 1];
 
         public float factor { get; set; }
         public float value { get; set; }
@@ -52,31 +64,36 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
         public float get_yearlyValues(int index)
         {
-            return yearly[index - 1];
+            return yearly[index];
         }
 
         public void set_yearlyValues(int index, float value)
         {
-            yearly[index - 1] = value;
+            yearly[index] = value;
         }
 
         public object GetYearlyValues()
         {
-            return (float[])yearly.Clone();
+            System.Array result = System.Array.CreateInstance(typeof(float), new[] { HoursPerYear }, new[] { 1 });
+            for (int i = 1; i <= HoursPerYear; i++)
+            {
+                result.SetValue(yearly[i], i);
+            }
+
+            return result;
         }
 
         public void SetYearlyValues(object values)
         {
             float[] values_Float = values as float[];
-            if (values_Float == null)
+            if (values_Float == null || values_Float.Length == 0)
             {
                 return;
             }
 
-            yearly = new float[8760];
-            for (int i = 0; i < System.Math.Min(8760, values_Float.Length); i++)
+            for (int i = 1; i <= HoursPerYear; i++)
             {
-                yearly[i] = values_Float[i];
+                yearly[i] = i < values_Float.Length ? values_Float[i] : values_Float[values_Float.Length - 1];
             }
         }
 
@@ -122,7 +139,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
                     break;
 
                 case TBD.ProfileTypes.ticYearlyProfile:
-                    for (int i = 0; i < 8760; i++)
+                    for (int i = 1; i <= HoursPerYear; i++)
                     {
                         result.Add(yearly[i]);
                     }
