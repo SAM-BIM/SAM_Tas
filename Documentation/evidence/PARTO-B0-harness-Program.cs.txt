@@ -26,6 +26,7 @@ namespace B0P
                     case "topo": Steps.Topo(args); return 0;
                     case "simsys": Steps.SimSys(args); return 0;
                     case "ducts": Steps.Ducts(args); return 0;
+                    case "zonecomp": Steps.ZoneComp(args); return 0;
                 }
                 Console.WriteLine("verbs: map tsdzones extract tpdzt tbdstat tpddump");
                 return 2;

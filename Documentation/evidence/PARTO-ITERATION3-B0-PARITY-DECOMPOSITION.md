@@ -265,12 +265,18 @@ Read natively off the fresh-air duct after `SimulateEx`, over all 8 760 h:
 | MVHR-02 | **0.000000000 K** |
 | MVHR-03 | **0.000000000 K** |
 
-Ruled out individually: no `Exchanger` component exists in any of the three systems (so no
-exchanger effect and nothing for `ExchCalcType`/`SetpointMethod`/`BypassFactor` to act on); both
-fans state `HeatGainFactor = 0` so no fan heat; no `HeatingCoil` or `CoolingCoil` component
-exists; no zone setpoint is active (`FlowRate`/`FreshAir` are the design values, no
-`TemperatureSetpoint` profile drives anything); the plant room couples only through the DHW and
-heating/cooling circuits, which touch no air system here. `PARTO-B0-duct-results.txt`.
+Ruled out individually, each read back natively
+(`PARTO-B0-duct-results.txt`, `PARTO-B0-zone-components-and-setpoints.txt`):
+
+| candidate | measurement |
+| --- | --- |
+| exchanger effect | **no `Exchanger` component exists** in any of the three systems, so there is nothing for `ExchCalcType` / `SetpointMethod` / `BypassFactor` to act on |
+| fan heat | both fans state `HeatGainFactor = 0`, `OverallEfficiency = 1` |
+| heating coil / cooling coil | **no `HeatingCoil` or `CoolingCoil` component exists** in any system |
+| zone-level heating/cooling equipment | **`GetZoneComponentCount() = 0` on all 8 system zones** — no radiator, fan-coil unit, chilled beam or DX coil unit |
+| hidden setpoint | **`TemperatureSetpoint = 0`, `RHSetpoint = 0`, `PollutantSetpoint = 0` on all 8 system zones** |
+| plant coupling | the plant room's 19 plant components, 5 controllers and its heating / cooling / DHW groups reach no room: **`ZoneLoad.GetPlantComponentCount() = 0` on all 9 zone loads** |
+| default component behaviour | every component in the three systems is a Junction, a Fan, a Damper or a SystemZone — there is nothing else that could condition air |
 
 **Reference A's supply is *not* outdoor air.** It is the air in the 18 m³ `MVHR-0n` plant zone:
 
@@ -572,6 +578,7 @@ No production change was made for this, and nothing in PR #117 was touched.
 | `PARTO-B0-refA-izam-topology.txt` | Reference A's 12 zones and 17 IZAMs, read natively |
 | `PARTO-B0-noizam-source-topology.txt` | B0's 9 zones, `IZAM count = 0` |
 | `PARTO-B0-tpd-topology.txt` | B0's full TPD component and duct graph with every stated property |
+| `PARTO-B0-zone-components-and-setpoints.txt` | zone-component counts, all three setpoints, and zone-load plant-component counts, read natively |
 | `PARTO-B0-duct-results.txt` | native per-duct hourly flow/temperature/humidity/enthalpy after `SimulateEx` |
 | `PARTO-B0-duct-results-displacement-off.txt` | the same with `DisplacementVent = 0` |
 | `PARTO-B0-analysis-an1…an8.log` | the measured output of every analysis step |
