@@ -1053,10 +1053,16 @@ namespace SAM.Analytical.Tas.TPD
                                 profiler?.Step("Plantroom: ventilation legs");
                                 Modify.BindVentilationLegs(systemVentilationConversionContext, airSystem.Guid, system);
 
-                                //What each fan contributes and when it runs. The heat gain factor is
-                                //cleared here rather than inherited from the template, and a fan
+                                //What each fan contributes and when it runs. The heat gain factor
+                                //follows systemVentilationConversionContext.FanHeatGainPolicy (PR5A,
+                                //SAM#111 plan §D) rather than being unconditionally cleared, and a fan
                                 //carrying an authored operating profile is refused.
                                 Modify.GroundVentilationFans(systemVentilationConversionContext, system);
+
+                                //PR5A (SAM#111 plan §D): reads back the exchanger calculation method
+                                //Convert.ToTPD(DisplaySystemExchanger, …) now writes explicitly. A no-op
+                                //wherever no exchanger exists, which includes every B0 system.
+                                Modify.GroundVentilationExchangers(systemVentilationConversionContext, system);
 
                                 //What the route left on the zone flags, declared once per unit and read
                                 //off the native zones - and refused if the building model would state

@@ -73,6 +73,14 @@ namespace SAM.Analytical.Tas.TPD
         {
         }
 
+        /// <summary>
+        /// What <see cref="Modify.GroundVentilationFans"/> does with a fan's native <c>HeatGainFactor</c> -
+        /// PR5A (SAM#111 plan §D/§K.3). <c>ClearToZero</c> (the B0 control) by default; set from
+        /// <c>Create.SystemVentilationConversionContext</c>'s own parameter, which
+        /// <c>Create.SystemVentilationRoute</c> exposes to its caller.
+        /// </summary>
+        public SystemVentilationFanHeatGainPolicy FanHeatGainPolicy { get; set; } = SystemVentilationFanHeatGainPolicy.ClearToZero;
+
         // ------------------------------------------------------------------------------- the intent
 
         /// <summary>Every intended room, ordered by <c>SystemSpace.Guid</c>.</summary>
