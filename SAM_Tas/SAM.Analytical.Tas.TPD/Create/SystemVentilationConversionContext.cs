@@ -49,12 +49,20 @@ namespace SAM.Analytical.Tas.TPD
         /// Analytical <c>Space.Guid</c> to TAS zone guid, from <c>SpaceParameter.ZoneGuid</c>. A room
         /// missing from here is refused rather than resolved by name.
         /// </param>
+        /// <param name="fanHeatGainPolicy">
+        /// PR5A (SAM#111 plan §D/§K.3): what <c>Modify.GroundVentilationFans</c> does with a fan's native
+        /// <c>HeatGainFactor</c>. <c>ClearToZero</c>, the B0 control, by default.
+        /// </param>
         public static SystemVentilationConversionContext SystemVentilationConversionContext(
             this Core.Systems.SystemEnergyCentre systemEnergyCentre,
             IEnumerable<MechanicalVentilationBinding> mechanicalVentilationBindings,
-            IDictionary<Guid, string> dictionary_ZoneReference)
+            IDictionary<Guid, string> dictionary_ZoneReference,
+            SystemVentilationFanHeatGainPolicy fanHeatGainPolicy = SystemVentilationFanHeatGainPolicy.ClearToZero)
         {
-            SystemVentilationConversionContext result = new SystemVentilationConversionContext();
+            SystemVentilationConversionContext result = new SystemVentilationConversionContext
+            {
+                FanHeatGainPolicy = fanHeatGainPolicy
+            };
 
             if (systemEnergyCentre == null)
             {

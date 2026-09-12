@@ -1,6 +1,59 @@
 # Project Progress
 
-## Current: TBD yearly profile one-hour-shift fix - SAM-BIM/SAM_Tas PR #52
+## Current: Part O Iteration 3 PR5A - SAM_Tas slice (SAM#111)
+
+Branch off `sow/2026-Q3` `6c622309` (after PR #55, the B0/A parity decomposition). PR against
+`sow/2026-Q3`, **not merged**. PR5A merge order is SAM -> SAM_Systems -> SAM_Tas -> SAM_UI; SAM's
+slice (#117) and SAM_Systems' slice (#23) are both merged, and this branch is built against them.
+
+**What changes** (all in `SAM.Analytical.Tas.TPD`):
+- `Convert/ToTPD/Exchanger.cs`: writes `ExchCalcType` explicitly (previously never written - it only
+  ever applied as `Simple` because that happens to be TAS's own default for a new exchanger,
+  measured in Phase 0 X1-D) and drops the duplicate `ExchLatType` write (the same line appeared
+  twice, verbatim).
+- `Enums/SystemVentilationFanHeatGainPolicy.cs` (new): `ClearToZero` (the B0 control, the default,
+  unchanged behaviour) / `FromSystemsGraph` (leaves a fan's `HeatGainFactor` exactly as SAM_Systems'
+  PR5A settings wrote it, read back but never forced). Threaded through
+  `Create.SystemVentilationConversionContext` (new optional parameter) ->
+  `SystemVentilationConversionContext.FanHeatGainPolicy` (new property) ->
+  `Create.SystemVentilationRoute` (new optional parameter, defaults preserve the exact prior
+  signature's behaviour) -> `Modify.GroundVentilationFans` (branches on the policy instead of
+  unconditionally clearing).
+- `Modify/GroundVentilationExchangers.cs` (new): reads back `ExchCalcType` the same way
+  `GroundVentilationFans` reads back `HeatGainFactor`, refusing if TAS did not keep `Simple` - a
+  no-op wherever no exchanger exists, which includes every B0 system. Called from `Convert/ToTPD/TPD.cs`
+  immediately after `GroundVentilationFans`.
+
+**Licensed verification** (not the full A-D operating-point matrix - see the evidence doc for
+scope): a purpose-built harness (`C:\TasOut\pr5a_h`, outside any repository) drove the real
+`Create.MechanicalVentilation` -> `Create.SystemVentilationConversionContext` ->
+`Convert.ToTPD` production path against real TAS, using the shipped `MVRE.json` and PR5A
+`MechanicalVentilationUnitSettings` with two deliberately different fan heat gain factors (0.5/1.0).
+Confirmed: `ExchCalcType` writes and reads back as `tpdExchangerCalcSimple`; `FromSystemsGraph`
+preserves both figures distinctly; `ClearToZero` still forces both to 0 even when the source
+settings state otherwise - the regression check that matters, since every existing caller gets
+`ClearToZero` with no code change of their own. Full detail, including the exact native notes:
+`Documentation/evidence/PARTO-PR5A-SAMTAS-CONVERSION-EVIDENCE.md`.
+
+**Not in this slice** (frozen plan, deliberately deferred): the licensed operating-point evidence
+A-D (needs a zone-identity-matched model and the full-year canonical TSD/TPD route - SAM_UI/Phase 5
+territory), the B3 supply-limit setpoint (`HeatRecoverySupplyLimit_C` is carried on the SAM_Systems
+settings type but nothing here interprets it), and E1/E2 (still unsourced - no real MRXBOX figure
+appears anywhere).
+
+**Validation:** `SAM.Analytical.Tas.TM59.Tests` **890/890**, unchanged from baseline (this slice adds
+no COM-free test coverage - no `Fan`/`Exchanger` COM fakes exist in this repository to test against,
+and building one from scratch for a single native property was judged higher-risk than the direct
+licensed check above, which exercises the real interop rather than a hand-built approximation of
+it). `SAM_Tas.sln` Release (VS MSBuild, .NET Framework - `dotnet build` cannot build the COM interop
+projects): 0 errors.
+
+**Next step:** independent review and merge of this PR. Then the **SAM_UI PR5A slice** (Phase 5):
+orchestration/behaviour-mode, per-AHU resolution from the catalogue, paired B0/selected-product
+ledger and evidence, and only then the licensed operating-point evidence A-D and any annual
+acceptance.
+
+## Previous: TBD yearly profile one-hour-shift fix - SAM-BIM/SAM_Tas PR #52
 `fix/tbd-yearly-profile-one-hour-shift`, off `sow/2026-Q3` at **`81d78841`** (after PR #51, the PR3 bridge
 merge). SAM_Tas only; no SAM / SAM_Systems / SAM_UI change.
 

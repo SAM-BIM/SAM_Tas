@@ -43,12 +43,18 @@ namespace SAM.Analytical.Tas.TPD
         /// <param name="path_TPD">Where to write the TAS Systems document.</param>
         /// <param name="startHour">0-based first hour of the Systems simulation.</param>
         /// <param name="endHour">0-based last hour, inclusive.</param>
+        /// <param name="fanHeatGainPolicy">
+        /// PR5A (SAM#111 plan §D/§K.3): what the route does with a fan's native <c>HeatGainFactor</c>.
+        /// <c>ClearToZero</c>, the B0 control, by default - a caller states <c>FromSystemsGraph</c> only
+        /// for a manufacturer-aware run, where SAM_Systems has already resolved the figure onto the graph.
+        /// </param>
         public static SystemVentilationRoute SystemVentilationRoute(
             NoIzamThermalSource noIzamThermalSource,
             MechanicalVentilationMaterialisation mechanicalVentilationMaterialisation,
             string path_TPD,
             int startHour,
-            int endHour)
+            int endHour,
+            SystemVentilationFanHeatGainPolicy fanHeatGainPolicy = SystemVentilationFanHeatGainPolicy.ClearToZero)
         {
             List<string> refusals = new List<string>();
             List<string> notes = new List<string>();
@@ -66,7 +72,8 @@ namespace SAM.Analytical.Tas.TPD
             SystemVentilationConversionContext systemVentilationConversionContext = SystemVentilationConversionContext(
                 systemEnergyCentre,
                 mechanicalVentilationMaterialisation.Bindings,
-                noIzamThermalSource.ZoneReferences);
+                noIzamThermalSource.ZoneReferences,
+                fanHeatGainPolicy);
 
             //-------------------------------------------------------------------------------------------
             //2. The duty carriers, in a working copy. PR1's graph is an input and stays one: the caller

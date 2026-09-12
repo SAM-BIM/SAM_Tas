@@ -13,17 +13,22 @@ namespace SAM.Analytical.Tas.TPD
         /// Settles what every fan of an explicit ventilation system contributes and when it runs, and
         /// refuses rather than carrying an operating profile the analytical model does not state.
         /// <para>
-        /// <b>Fan heat gain is removed.</b> <c>HeatGainFactor = 0</c>: no part of the fan's motor power
-        /// is added to the air stream. The shipped <c>MV.json</c> prototype states <c>1.0</c>, and
-        /// carrying that through is a real thermal statement, not a formality - measured on the
-        /// acceptance fixture, zeroing it moved <c>ZoneTemperature</c> by up to <b>2.80 K</b> (worst
-        /// hour, the transfer-fed corridor) and 0.13 K in the annual mean. So it is set here
-        /// deliberately and read back, not left to whatever the template happened to say.
+        /// <b>Fan heat gain follows <see cref="SystemVentilationConversionContext.FanHeatGainPolicy"/></b>
+        /// (PR5A, SAM#111 plan §D/§K.3). <b><c>ClearToZero</c>, the default:</b> <c>HeatGainFactor = 0</c>,
+        /// no part of the fan's motor power is added to the air stream. The shipped <c>MV.json</c>
+        /// prototype states <c>1.0</c>, and carrying that through is a real thermal statement, not a
+        /// formality - measured on the acceptance fixture, zeroing it moved <c>ZoneTemperature</c> by up
+        /// to <b>2.80 K</b> (worst hour, the transfer-fed corridor) and 0.13 K in the annual mean. So it is
+        /// set here deliberately and read back, not left to whatever the template happened to say. This is
+        /// B0's control, and every B-variant is paired against a B0 run using it. <b><c>FromSystemsGraph</c>,
+        /// the manufacturer-aware route:</b> nothing is written - the value SAM_Systems already resolved
+        /// onto the graph (a declared fan-heat fraction, plan §C/§F) is left exactly as
+        /// <c>Convert.ToTPD(SystemFan, …)</c> stated it, and only read back.
         /// </para>
         /// <para>
         /// SAM's own replicated routes are split on this: <c>TPD_CAV</c>, <c>TPD_EOL</c> and
         /// <c>TPD_EOC</c> zero it, while <c>TPD_MV</c>, <c>TPD_VAV</c> and <c>TPD_MVRE</c> leave it at 1.
-        /// This route follows the former. <b>It is a deviation from <c>TPD_MV</c>, stated as one.</b>
+        /// <c>ClearToZero</c> follows the former. <b>It is a deviation from <c>TPD_MV</c>, stated as one.</b>
         /// </para>
         /// <para>
         /// <b>The duty itself is never authored.</b> Measured on a TAS-authored file, a fan set to
@@ -105,7 +110,7 @@ namespace SAM.Analytical.Tas.TPD
 
                 string reference_Fan = Query.NativeReference(fan) ?? "<no identifier>";
 
-                if (!TryClearHeatGain(systemVentilationConversionContext, fan, reference_Fan))
+                if (!TryGroundHeatGain(systemVentilationConversionContext, fan, reference_Fan, out string heatGainNote))
                 {
                     continue;
                 }
@@ -121,11 +126,11 @@ namespace SAM.Analytical.Tas.TPD
                 //fixture, against the 44 l/s the saved document answers). Reporting that number would
                 //state a duty this route neither authored nor believes.
                 notes.Add(string.Format(
-                    "Fan {0} derives its duty from the attached zones ({1}), adds no heat to the air "
-                    + "stream (HeatGainFactor {2}) and runs continuously at factor 1.0 - {3}.",
+                    "Fan {0} derives its duty from the attached zones ({1}), {2} and runs continuously at "
+                    + "factor 1.0 - {3}.",
                     reference_Fan,
                     fan.DesignFlowType,
-                    fan.HeatGainFactor,
+                    heatGainNote,
                     operation));
             }
 
@@ -139,38 +144,65 @@ namespace SAM.Analytical.Tas.TPD
             return systemVentilationConversionContext.Refusals.Count == 0;
         }
 
-        private static bool TryClearHeatGain(
+        /// <summary>
+        /// Grounds a fan's native <c>HeatGainFactor</c> according to
+        /// <see cref="SystemVentilationConversionContext.FanHeatGainPolicy"/> - PR5A (SAM#111 plan
+        /// §D/§K.3) - and always reads it back.
+        /// <para>
+        /// <c>ClearToZero</c> (the B0 control, and the default) behaves exactly as this method always has:
+        /// it forces 0 and refuses if TAS did not keep it. <c>FromSystemsGraph</c> writes nothing - the
+        /// value is whatever <c>Convert.ToTPD(SystemFan, …)</c> already stated, which may be a resolved
+        /// manufacturer figure - and only reads it back, so a silent native change of a value this route
+        /// never touched is still caught.
+        /// </para>
+        /// </summary>
+        private static bool TryGroundHeatGain(
             SystemVentilationConversionContext systemVentilationConversionContext,
             global::TPD.Fan fan,
-            string reference_Fan)
+            string reference_Fan,
+            out string note)
         {
-            try
-            {
-                fan.HeatGainFactor = 0;
-            }
-            catch (Exception exception)
-            {
-                systemVentilationConversionContext.Refuse(string.Format(
-                    "Fan {0}: clearing its heat gain factor threw {1}: {2}.",
-                    reference_Fan,
-                    exception.GetType().Name,
-                    exception.Message));
+            note = null;
 
-                return false;
+            bool clearToZero = systemVentilationConversionContext.FanHeatGainPolicy == SystemVentilationFanHeatGainPolicy.ClearToZero;
+
+            if (clearToZero)
+            {
+                try
+                {
+                    fan.HeatGainFactor = 0;
+                }
+                catch (Exception exception)
+                {
+                    systemVentilationConversionContext.Refuse(string.Format(
+                        "Fan {0}: clearing its heat gain factor threw {1}: {2}.",
+                        reference_Fan,
+                        exception.GetType().Name,
+                        exception.Message));
+
+                    return false;
+                }
             }
 
-            //Read back off the native object. A write TAS silently declined would otherwise leave the
-            //template's 1.0 in place and put the fan's motor power into the air stream unannounced.
-            if (fan.HeatGainFactor != 0)
+            //Read back off the native object either way. A write TAS silently declined would otherwise
+            //leave the template's 1.0 in place and put the fan's motor power into the air stream
+            //unannounced; a FromSystemsGraph value TAS silently changed would otherwise go unnoticed too.
+            double heatGainFactor = fan.HeatGainFactor;
+
+            if (clearToZero && heatGainFactor != 0)
             {
                 systemVentilationConversionContext.Refuse(string.Format(
                     "Fan {0}: TAS did not keep the cleared heat gain factor - it reports {1}, so the fan "
                     + "would still add its motor power to the air stream.",
                     reference_Fan,
-                    fan.HeatGainFactor));
+                    heatGainFactor));
 
                 return false;
             }
+
+            note = clearToZero
+                ? string.Format("adds no heat to the air stream (HeatGainFactor {0})", heatGainFactor)
+                : string.Format("carries the systems graph's own heat gain factor (HeatGainFactor {0})", heatGainFactor);
 
             return true;
         }
