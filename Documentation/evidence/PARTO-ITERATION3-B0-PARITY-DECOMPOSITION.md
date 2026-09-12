@@ -389,9 +389,11 @@ At that hour A's plant zones are still discharging the heating season while outd
 | MVHR-01 | 21.10 | 17.43 | **−3.67 K** |
 | MVHR-02 / 03 | 21.10 | 19.05 | **−2.05 K** |
 
-So Reference A is supplying its bedrooms with 19.05 °C air at 63 l/s while B0 correctly supplies
-21.10 °C outdoor air — into rooms sitting at 17.5 – 17.7 °C. The supply is *warming* both rooms,
-and 2 K more so in B0. The four rooms on the 63 l/s legs (Bedroom 2_3, Bedroom 2_6, Kitchen_4,
+So Reference A supplies its bedrooms with 19.05 °C air at 63 l/s while B0 correctly supplies
+21.10 °C outdoor air — into rooms that in Reference A sit at 17.5 – 17.7 °C. At 0.54 air changes
+per hour the supply dominates the balance and is *warming* the room in both routes, so B0's
+2.05 K warmer inlet turns into a 3.07 / 3.24 K warmer bedroom (A 17.74 / 17.54 °C versus B0
+20.81 / 20.78 °C). The four rooms on the 63 l/s legs (Bedroom 2_3, Bedroom 2_6, Kitchen_4,
 Kitchen_7) therefore all record their annual maximum at exactly this hour, as the frozen record
 states. `fig3-critical-windows.png`, `PARTO-B0-critical-hours.csv`.
 
