@@ -4,6 +4,18 @@ Licensed TAS, 2026-09-11, post-freeze follow-up to SAM#111. No production change
 findings are properties of the **shipped `SystemEnergyCentre` template data in `SAM_Systems`**, faithfully
 carried into TAS, and neither touches anything the Approved Document O Iteration 3 route reads.
 
+> **Resolved 2026-09-12.** This investigation reproduced the pre-fix behaviour recorded below. A
+> template-data correction in `SAM_Systems`
+> ([#22](https://github.com/SAM-BIM/SAM_Systems/pull/22), merged as `a0395dc9`) subsequently resolved it by
+> stating a non-zero `DesignTemperatureDifference`/`MinimumReturnTemperature` on the DHW Circuit Group of
+> `CAV.json`, `DISP.json`, `EOC.json`, `EOL.json`, `MV.json`, `NV.json`, `UV.json` and `VAV.json`, matching
+> the values already shipped on `MVRE.json`/`Plantroom-Only.json`. Native `PlantRoom.Simulate(1,24,0)` on the
+> corrected `Flat-It3B.tpd` now answers `Done`. Conversion/materialisation itself was never defective — the
+> finding below stands as the forensic record of *why* the unfixed template produced this failure, and
+> section 1's "It cannot affect Candidate B" conclusion is now independently confirmed by a full before/after
+> Systems-route comparison (168 h room sums identical to 6 decimals; annual TM59 statistics reproduce the
+> pre-fix acceptance record exactly).
+
 Document under test: `Flat-It3B.tpd`, the Candidate B TPD the merged-state Iteration 3 acceptance produced.
 Every variant below is a fresh copy of that same file, driven through `Interop.TPD` out of process.
 
