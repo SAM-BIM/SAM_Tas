@@ -488,7 +488,8 @@ By outdoor condition:
 
 1. **Reference A's MVHR plant zone** (§ gate 5). A conditions its supply air by passing it
    through an 18 m³ thermal zone; B0 supplies genuine outdoor air. Annual-mean effect ≈ 0, but
-   ±1.5 K RMS hourly and a clear seasonal swing, and it is the whole story at hour 2968.
+   1.47 K RMS hourly on MVHR-01 and 0.85 K on MVHR-02/03, with a clear seasonal swing, and it is
+   the whole story at hour 2968.
 2. **TAS displacement zones on the transfer legs** (§ gate 8/9). B0's five transfer legs hand on
    stratified upper-layer air, 0.67 – 2.54 K warmer in the mean than A's fully-mixed transfer.
    This is the wet-room and kitchen signature and the Bathroom_2 threshold hours.
@@ -531,7 +532,7 @@ Contribution estimated against the pooled resultant RMSE of 0.8335 K.
 
 | # | cause | evidence for | evidence against | est. contribution | classification | confidence |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | Two-pass load evaluation: B0's zone loads come from a free-running no-IZAM TBD and are replayed into the Systems zone solver | supply rooms with identical inlet air, flow, fabric, gains and weather still differ by +0.29…+0.55 K; monthly (source − achieved) vs (B0 − A) correlate at r = 0.932; the whole seasonal signature follows it | TAS internals are not observable, so the coupling is inferred from its signature, not read | **≈ 0.4–0.5 K of the bias; most of the seasonal RMSE** | expected difference (route-defining) | high on the signature, medium on the exact mechanism |
+| 1 | Two-pass load evaluation: B0's zone loads come from a free-running no-IZAM TBD and are replayed into the Systems zone solver | supply rooms with identical inlet air, flow, fabric, gains and weather still differ by +0.29…+0.55 K; monthly (source − achieved) vs (B0 − A) correlate at r = 0.932; the whole seasonal signature follows it | TAS internals are not observable, so the coupling is inferred from its signature, not read | **+0.29…+0.55 K per room, isolated on the supply legs; the dominant term in the seasonal RMSE** | expected difference (route-defining) | high on the signature, medium on the exact mechanism |
 | 2 | TAS displacement zones hand on stratified air on the five transfer legs | inlet Δ +0.67…+2.54 K measured on the native ducts; leaving air up to 79.8 °C at 8 l/s; clearing the flag makes leaving air ≡ zone temperature exactly | clearing it makes pooled parity *worse* (bias +0.386 → +0.986, RMSE 0.984 → 1.282), so it is not a correctable error | **most of the wet-room/kitchen per-room spread; all 12 Bathroom_2 hours** | expected difference (inherited template prototype) | high |
 | 3 | Reference A's 18 m³ MVHR plant zone conditions A's supply air; B0 supplies true outdoor air | A plant zone − ODB: RMSE 1.468/0.848 K, max 6.32 K, +1.0 K Jan / −1.2 K Aug; B0 fresh-air duct = ODB to 0.000000000 K | annual-mean offset is only −0.002 K, so it adds no annual bias | **dominant at the annual worst hour (2968); ≈ 0.1–0.2 K of pooled RMSE** | expected difference (legacy route artefact) | high |
 | 4 | Temporary ResultantTemperature bridge | — | achieved air ≡ ZoneTemperature to ≤0.001001 K; `res = (air+MRT)/2` to 1e-6 in all three documents; RMSE *falls* 0.984 → 0.834 across it | **≤ 0.001 K; net negative** | not a contributor | high |
