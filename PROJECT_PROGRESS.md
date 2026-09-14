@@ -1,6 +1,69 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5A - SAM_Tas slice (SAM#111)
+## Current: Part O Iteration 3 PR5B - generic table round trip proven; cooling PoC in progress
+
+2026-09-14 - **NARROW GENERIC `ProfileData` / `TableModifier` FIX IMPLEMENTED AND VERIFIED** on
+branch `codex/pr5b-generic-table-roundtrip`. The user explicitly superseded the earlier evidence hold
+for this narrow fix: Duncan's TPD is aggregate cooling-behaviour evidence only; its missing full-MVHR
+components are not a blocker and its source topology must not be copied into the reusable design.
+
+**Production changes:** `Convert/ToSAM/Modifier.cs` now preserves native axis order, rejects gaps,
+duplicate or invalid axes, and maps any non-zero TAS boolean (including native `-1`) to `true`.
+`Modify/AddModifier.cs` validates finite rectangular 1D/2D/3D grids before native allocation,
+preserves variable and encounter order, reconstructs real axis sizes/coordinates, writes every cell
+to its correct coordinate, and writes extrapolation as TAS `-1`/`0`. Equality remains the established
+SAM `ArithmeticOperator.Modulus` sentinel and the base `ProfileData.Value` path is unchanged.
+
+**COM-free validation:** VS MSBuild Release solution build completed with 0 errors; focused
+`TableModifierRoundTripTests` 9/9; full `SAM.Analytical.Tas.TM59.Tests` 899/899. Coverage includes TAS
+`-1/0` booleans, ordered 3D import, duplicate rejection, JSON save/reload, 3 x 4 x 8 export, smaller
+2D export, equality/extrapolation, all values, and incomplete-grid refusal.
+
+**Licensed close/reopen validation:** production TPD -> SAM JSON -> reloaded SAM -> fresh TPD now
+succeeds. Fresh artifacts are
+`C:\TasOut\pr5b-roundtrip-fixed\PR5B-MVHR-DXCooling-Reference-Fixed.json` (SHA-256
+`8730E8A96ACC2A1F8D46AC5BB9A5694B3EC67DB6B3A307DE9DE89936698D3015`) and
+`PR5B-MVHR-DXCooling-RoundTrip-Fixed.tpd` (SHA-256
+`6E5A093A225C9CA408EE5F5B87C0BC9AFFD5C49A1737CC962A60F6F01D310E7E`). Fresh native reopen found
+one DX cooling equality table, extrapolation `-1`, ordered ODB/EDB/EFlow axes 3 x 4 x 8, 96/96
+non-zero values and 0/96 mismatches. The earlier failed round-trip report remains historical evidence,
+not current status.
+
+**Exact next step:** extract only the sanitized aggregate cooling behaviour, compose it with the
+existing canonical `MVRE.json` graph at the physically justified supply-side position, generate a
+fresh TPD, and test the representative approximately 63 l/s operating point. Run annual B4/TM59 only
+if that point passes. Do not copy Duncan's room/project references or four-component loop.
+
+## Previous: Part O Iteration 3 PR5B - completed native cooling-table fixture
+
+2026-09-14 - **ARTIFACT POPULATED AND NATIVE READBACK VERIFIED; NO PRODUCTION CODE CHANGED.**
+Using the `Sheet2` values from `Nuaire IZAM Vent Rates v1.xlsm`, a copy of Duncan's
+`OneLevel08-Ventilation_SysMD.tpd` was populated through the TAS COM API at:
+`C:\Users\michal.dengusiak\OneDrive - Tetra Tech, Inc\Documents\SAM_daily\2026-04-16-MVHR_TPD\OneLevel08-Ventilation_SysMD-FullTable.tpd`.
+The source TPD was left untouched.
+
+The native DX-coil cooling-setpoint modifier was preserved as an equality table with extrapolation
+enabled and axes `ODB = 29,32,34 C`, `EDB = 23,24,25,26 C`, and
+`EFlow = 50,60,70,80,90,100,110,120 l/s`. All 96 supply-temperature values were written. A fresh
+close/reopen readback found 96/96 non-zero values and 0/96 mismatches. Completed-file SHA-256:
+`C3FFA2931324E7006AA98B2F08A2C30C73424266D3238BE4A08867C6CAB29F7C`. Original-file SHA-256:
+`E2A946504B6F2379F0D8983A91D8FFAA811F7B5A5B1E3BE16E891EAE9677F0D1`.
+
+**Files changed:** `PROJECT_PROGRESS.md` only in the repository. The completed `.tpd`, a pre-write
+backup, the read/write harness, and the rendered Sheet2 preview are outside the repository under
+`C:\TasOut\pr5b-sheet2`; the completed `.tpd` is also in the OneDrive source folder above.
+
+**Validation:** helper harness Release build succeeded with 0 warnings/0 errors; native TPD readback
+confirmed one table on `Fancoil - 1503 Studio / DX Coil 1`, base setpoint 24 C, normal cooling
+control, axis identity/order/values unchanged, extrapolation enabled, and exact agreement for all
+96 cells. No simulation or operating-point experiment was run.
+
+**Unresolved / next step:** open the completed copy in TAS Systems for an optional visual grid check,
+then use it for the PR5B forensic topology and controlled operating-point experiment. Table
+population alone is not the PR5B architecture verdict and must not be treated as production
+implementation evidence.
+
+## Previous: Part O Iteration 3 PR5A - SAM_Tas slice (SAM#111)
 
 Branch off `sow/2026-Q3` `6c622309` (after PR #55, the B0/A parity decomposition). PR against
 `sow/2026-Q3`, **not merged**. PR5A merge order is SAM -> SAM_Systems -> SAM_Tas -> SAM_UI; SAM's
