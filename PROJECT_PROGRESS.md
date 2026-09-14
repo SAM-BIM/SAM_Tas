@@ -1,6 +1,44 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5B - operating-point mechanism proven; annual B4 BLOCKED on control state
+## Current: Part O Iteration 3 PR5B - control semantics measured; MVRE-path internal-temperature axis NOT representable
+
+2026-09-14 (second laptop, later) - **NO PRODUCTION CODE CHANGED; ANNUAL B4/TM59 NOT RUN.** Branch
+`codex/pr5b-generic-table-roundtrip`. Evidence (outside the repository): `C:\TasOut\pr5b-continuation\`
+`DUNCAN-NATIVE-CONTROL.md` and `CONTROL-SEMANTICS.md`; harness mode `ctl` in `h\Ctl.cs`.
+
+**Duncan's native control, reconstructed** from the production import of his TPD
+(`C:\TasOut\pr5b-roundtrip\PR5B-MVHR-DXCooling-Reference.json`) plus his emails/screenshots and VBA: a
+separate recirculating air system zone -> junction -> DX -> fan -> zone, so DX EDB = zone temperature; one
+Normal/DryBulb controller (limit Lower) sensing the zone return duct and driving the fan only, profile
+(22 C, 0.09) -> (26 C, 1.0); fan 80 l/s design, 24 l/s minimum, scheduled by an occupancy function schedule;
+DX cooling table ODB x EDB x EFlow AND heating setpoint 18 C with an ODB x EDB table, duties unlimited (not
+cooling-only); no DX controller.
+
+**Native facts measured (licensed probes on copies of the B4 TPD):**
+1. Any control arc on the DX coil, and a ControlSignal axis on its setpoint table (even with no DX
+   controller), is refused: "Main PlantRoom Has Errors". TAS has no zone-temperature table variable. So at the
+   canonical MVRE supply position the manufacturer's "Internal Temp" axis cannot be room temperature.
+2. Fan flow / fan design flow = sqrt(controller signal). Duncan's (22, 0.09) -> (26, 1) law on both MVRE fans
+   gives exactly 30 % (<= 22 C) to 100 % (>= 26 C), max error 0.010 l/s, zone FlowRate (DesignAirFlow)
+   unchanged; Duncan's 0.09 is 0.3^2.
+3. Raising the MVRE fans' 100 % above the zone-sized DesignAirFlow (150 l/s capacity) fails: "Sizing Flow
+   Failed". The 30 l/s dwelling cannot reach the table's 50 l/s floor on the MVRE path.
+4. HeatingDuty := Value 0 removes the native heating (13 h -> 0 h on MVHR-01); inlet below the native 18 C
+   heating setpoint then leaves the coil idle.
+5. Extrapolation off = per-axis clamp to the published edge (177/180 h exact); on = linear, floored at the
+   0 C minimum off-coil.
+
+**Blocker (Task 2 stop rule): the DX cannot stay on the MVRE supply path AND see room temperature.** Smallest
+evidence-driven alternative, not implemented: Duncan's recirculating cooling loop per dwelling beside the
+unchanged MVRE in the same Systems TPD (zone -> DX with the sanitized table, heating duty 0 -> fan on the
+(22, 0.09) -> (26, 1) zone law -> zone), its 100 % bounded by SelectedEquipmentCapacity.
+
+**Exact next step:** decisions for that alternative - the controlling zone of a multi-room dwelling, what
+100 % flow is (Duncan's entered 80 l/s vs the catalogue's 150 l/s free-air capacity), occupancy gating, the
+extrapolation flag (clamp is Duncan-consistent) - then implement it generically, rerun the `ctl`/`op`
+operating-point gate, and only then annual B4/TM59 against B0.
+
+## Previous: Part O Iteration 3 PR5B - operating-point mechanism proven; annual B4 BLOCKED on control state
 
 2026-09-14 (second licensed laptop) - **TAS REPRODUCES THE MANUFACTURER TABLE EXACTLY AT THE DX OUTLET; ANNUAL
 B4/TM59 DELIBERATELY NOT RUN.** Branch still at `495000a1`; **no production code changed**; B0 untouched.
