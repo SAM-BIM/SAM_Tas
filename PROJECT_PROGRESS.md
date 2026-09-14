@@ -1,6 +1,49 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5B - generic table round trip proven; cooling PoC in progress
+## Current: Part O Iteration 3 PR5B - operating-point mechanism proven; annual B4 BLOCKED on control state
+
+2026-09-14 (second licensed laptop) - **TAS REPRODUCES THE MANUFACTURER TABLE EXACTLY AT THE DX OUTLET; ANNUAL
+B4/TM59 DELIBERATELY NOT RUN.** Branch still at `495000a1`; **no production code changed**; B0 untouched.
+Evidence and harness (outside the repository): `C:\TasOut\pr5b-continuation\README.md`.
+
+**Setup.** No fixture regeneration was needed: the PR5A pairing on this laptop (`C:\TasOut\pr5a`, fixture
+`A7E09A25...7E4B`) matches every recorded hash. The 96-cell table was re-extracted from
+`02_Nuaire_Performance_Interpolation.xlsm` sheet "Nuaire" (same axes; the earlier `Nuaire IZAM Vent Rates
+v1.xlsm` is not on this laptop, so the values were not cell-compared with it) into a sanitized
+`dx-table.json` (`481B37BE...2119`). The harness splices one `DisplaySystemDXCoil` into the canonical MVRE
+template by graph position (exchanger connector 1 -> DX -> supply fan connector 0), carrying only
+CoolingSetpoint 24 + the equality/extrapolation ODB x EDB x EFlow table; the PRODUCTION PR1 materialisation
+re-keys it into all 3 units and the PRODUCTION route completes (`Done`). TPD `26E4CDEE...72B5`.
+
+**Operating point (plant-room SimulateEx, simdata 47; DX inlet/outlet ducts by native graph position).**
+Target 0-based hour 5104 (slot 5105), Jun-Aug warm start: ODB 30.3 C (fresh-air duct = TSD); EDB (DX inlet)
+28.87 / 28.92 / 29.10 C; EFlow 63 / 63 / 30 l/s; table 18.8512 / 18.8769 / 16.8836 C; TAS DX outlet identical
+(< 1e-5 K). Native table re-imported by production `Convert.ToSAM`: 96/96 cells, 0 mismatches, all units.
+OperatingAirFlow = DesignAirFlow (sum of SystemZone FlowRate) 63/63/30 l/s, DesignAirFlow never modified.
+Controlled in-domain interpolation (outdoor forced 31 C, June week): 286 in-domain system-hours on the two
+63 l/s units, max |diff| 0 K. Tolerance 0.05 K. MVHR-01's 30 l/s design flow is below the 50 l/s axis, so
+it is never in domain.
+
+**Why annual B4 is blocked (control state / out-of-domain operation).**
+1. The target hour is not in domain: at the MVRE supply position the DX-inlet EDB is post-exchanger air, and
+   the only 3 summer hours with ODB 29-34 C have EDB 28.9-32.5 C. The workbook labels the axis "Internal
+   Temp"; TAS has no zone-temperature table variable for a one-port DX coil.
+2. No enable/control is evidenced: the coil runs about 85 % of Jun-Aug hours, mostly with ODB < 20 C,
+   cooling supply to 12-15 C on extrapolated values (MVHR-01: mean 7.1 C, down to 0 C).
+3. Untouched native defaults govern out-of-domain behaviour: MinimumOffcoil 0 C (0.0 C outputs) and
+   HeatingSetpoint 18 C (the coil heats 17.4 C inlet air to 18.0 C).
+An annual TM59 on this would measure extrapolation and native defaults, not manufacturer data.
+
+**Validation on this laptop.** SAM_Tas.sln Release rebuilt at `495000a1`, 0 errors; TM59 tests focused 9/9,
+full 899/899.
+
+**Exact next step:** an engineering decision, not code: what evidenced control bounds the aggregate
+treatment (cooling enable, e.g. only within the table's ODB domain or on room demand; heating disabled;
+extrapolation limits), and which temperature the manufacturer's second axis means at the supply position.
+Encode the decision generically, re-run `op` (`C:\TasOut\pr5b-continuation\h`, mode `op`), then annual B4/TM59
+against B0.
+
+## Previous: Part O Iteration 3 PR5B - generic table round trip proven
 
 2026-09-14 - **NARROW GENERIC `ProfileData` / `TableModifier` FIX IMPLEMENTED AND VERIFIED** on
 branch `codex/pr5b-generic-table-roundtrip`. The user explicitly superseded the earlier evidence hold
@@ -29,7 +72,7 @@ one DX cooling equality table, extrapolation `-1`, ordered ODB/EDB/EFlow axes 3 
 non-zero values and 0/96 mismatches. The earlier failed round-trip report remains historical evidence,
 not current status.
 
-**Exact next step:** extract only the sanitized aggregate cooling behaviour, compose it with the
+**Next step at that time (done 2026-09-14, see Current above):** extract only the sanitized aggregate cooling behaviour, compose it with the
 existing canonical `MVRE.json` graph at the physically justified supply-side position, generate a
 fresh TPD, and test the representative approximately 63 l/s operating point. Run annual B4/TM59 only
 if that point passes. Do not copy Duncan's room/project references or four-component loop.
