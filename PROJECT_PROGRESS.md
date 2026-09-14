@@ -1,6 +1,36 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5B - control semantics measured; MVRE-path internal-temperature axis NOT representable
+## Current: Part O Iteration 3 PR5B - recirculating cooling surrogate built natively; BLOCKED on zone coupling
+
+2026-09-14 (second laptop, night) - **NO PRODUCTION CODE CHANGED; TM59 NOT RUN.** From `50146990`. Evidence:
+`C:\TasOut\pr5b-continuation\RECIRC-SURROGATE.md`; harness modes `recirc` (`h\Recirc.cs`) and `variants`
+(`h\Variants.cs`) on copies of an unchanged canonical-MVRE base TPD (`b4base\out.tpd`, `C4BA060C...F37C`).
+
+**Built and measured:** one separate recirculating cooling AirSystem per dwelling, serving all its TM59
+rooms: room -> Value damper -> mixing junction -> DX (sanitized table, Extrapolate false, HeatingDuty 0) ->
+variable-speed fan (Normal/temperature controller on the mixed return duct, (22, 0.09) -> (26, 1), 100 % =
+120 l/s split by floor area, AllZonesLoad/OccupancySensible schedule) -> split junction -> Value damper ->
+room. Warm week: mixed return = flow-weighted room returns (8e-5 K), fan law exact (MVHR-01: one-hour lag at
+band edges), DX = clamped table (0 K), 0 heating hours, MVRE fresh air and DesignAirFlow unchanged.
+
+**Native facts found on the way:** a COM-created Fan defaults to Pressure 0 / OverallEfficiency 0 and TAS
+refuses its system ("Has Errors"; 19-variant isolation - production never hits it because it always writes
+both); a multi-room loop branching straight off junctions fails "Flow Sizing Failed", fixed by one Value
+damper per branch leg (the MVRE's own representation); a new native zone defaults to Flags 4 (ModelVentFlow).
+
+**Blocker:** TAS Systems computes each SystemZone from its own air system only. With the loops present every
+room's MVRE-reported ZoneTemperature is identical to the no-loop run (0.0000 K) and the loop-reported one
+differs by up to 3.8 K. Two systems on one room load are two independent room models, so B4 through the
+unchanged ZoneTemperature -> bridge -> TM59 route would equal B0. (Also: on this fixture Reference A and B0
+already PASS TM59, so no pass-turnaround is available to demonstrate.)
+
+**Exact next step:** decide the coupling carrier. Candidates: (a) route the cooled recirculation through
+each room's SAME SystemZone inside the canonical MVRE system (junctions around the room zone; ventilation
+flows unchanged but the MVRE graph changes); (b) Duncan's own TBD route - the loop's leaving temperature and
+flow imposed on the room as an AHU-zone IZAM/thermostat; (c) accept per-room loops only as a surrogate
+reported separately. Then rerun `recirc`, and only then Tasks 7-9.
+
+## Previous: Part O Iteration 3 PR5B - control semantics measured; MVRE-path internal-temperature axis NOT representable
 
 2026-09-14 (second laptop, later) - **NO PRODUCTION CODE CHANGED; ANNUAL B4/TM59 NOT RUN.** Branch
 `codex/pr5b-generic-table-roundtrip`. Evidence (outside the repository): `C:\TasOut\pr5b-continuation\`
