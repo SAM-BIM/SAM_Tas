@@ -61,7 +61,8 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Dictionary<Guid, int> rank = systemPlantRoom.VentilationCreationRank(components, systemVentilationConversionContext);
                 Assert.That(rank.Count, Is.EqualTo(components.Count), "Every connected component has a rank.");
 
-                List<string> identities = components.OrderBy(x => rank[x.Guid]).Select(x => Identity(x, systemVentilationConversionContext)).ToList();
+                Dictionary<Guid, string> identity_Base = components.ToDictionary(x => x.Guid, x => Identity(x, systemVentilationConversionContext));
+                List<string> identities = components.OrderBy(x => rank[x.Guid]).Select(x => Label(systemPlantRoom, x, identity_Base)).ToList();
                 string key = string.Join(",", identities.Where(x => x.StartsWith("space:", StringComparison.Ordinal)).OrderBy(x => x, StringComparer.Ordinal));
                 result[key] = identities;
 
@@ -89,6 +90,40 @@ namespace SAM.Analytical.Tas.TM59.Tests
             }
 
             return component.GetType().Name;
+        }
+
+        /// <summary>
+        /// A room or duty carrier as the analytical object it stands for; any other component as its kind plus what it
+        /// is connected to, connector by connector - so two components of one kind (a supply and a return fan) cannot
+        /// swap places without the sequence changing.
+        /// </summary>
+        private static string Label(SystemPlantRoom systemPlantRoom, Core.Systems.SystemComponent component, Dictionary<Guid, string> identity_Base)
+        {
+            string result = identity_Base[component.Guid];
+            if (result.StartsWith("space:", StringComparison.Ordinal) || result.StartsWith("leg:", StringComparison.Ordinal))
+            {
+                return result;
+            }
+
+            List<string> neighbours = new List<string>();
+            foreach (ISystemConnection systemConnection in systemPlantRoom.GetRelatedObjects<ISystemConnection>(component) ?? new List<ISystemConnection>())
+            {
+                if (!systemConnection.TryGetIndex(component, out int index))
+                {
+                    continue;
+                }
+
+                foreach (Core.Systems.SystemComponent other in systemPlantRoom.GetRelatedObjects<Core.Systems.SystemComponent>(systemConnection) ?? new List<Core.Systems.SystemComponent>())
+                {
+                    if (other.Guid != component.Guid)
+                    {
+                        neighbours.Add(index + ">" + (identity_Base.TryGetValue(other.Guid, out string identity) ? identity : other.GetType().Name));
+                    }
+                }
+            }
+
+            neighbours.Sort(StringComparer.Ordinal);
+            return string.Concat(result, "[", string.Join(",", neighbours), "]");
         }
 
         [Test]

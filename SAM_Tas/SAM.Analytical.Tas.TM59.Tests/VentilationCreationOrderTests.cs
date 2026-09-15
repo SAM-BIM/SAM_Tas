@@ -128,16 +128,39 @@ namespace SAM.Analytical.Tas.TM59.Tests
         [Test]
         public void CreationOrder_RoomsAreRankedByWhatTheyServe_NotByGuid()
         {
-            //Swapping the analytical identities of the two rooms must swap them in the order (the key is the
-            //room, not its guid); the rest of the network is symmetric in A and B only through them.
-            List<string> order = Order(3, false);
-            int a = order.IndexOf("roomA"), b = order.IndexOf("roomB");
-            Assert.That(a, Is.Not.EqualTo(b));
+            //Two structurally identical rooms (source -> split -> room 1 | room 2 -> mix -> sink): only the analytical
+            //identity each room stands for can tell them apart. Whichever room carries identity X must take the same
+            //position under every identity set and whichever way round X and Y are assigned - the tie is broken by
+            //what the room serves, never by its guid.
+            int? position_X = null;
 
-            for (int seed = 4; seed < 50; seed++)
+            for (int seed = 1; seed < 100; seed++)
             {
-                List<string> other = Order(seed, true);
-                Assert.That(other.IndexOf("roomA") < other.IndexOf("roomB"), Is.EqualTo(a < b));
+                foreach (bool swap in new[] { false, true })
+                {
+                    Random random = new Random(seed);
+                    Guid source = NewGuid(random), split = NewGuid(random), room_1 = NewGuid(random), room_2 = NewGuid(random), mix = NewGuid(random), sink = NewGuid(random);
+                    Guid room_X = swap ? room_2 : room_1;
+
+                    Dictionary<Guid, string> identity = new Dictionary<Guid, string>
+                    {
+                        [source] = "Junction", [split] = "Junction", [mix] = "Junction", [sink] = "Junction",
+                        [room_1] = swap ? "Space|analytical-Y" : "Space|analytical-X",
+                        [room_2] = swap ? "Space|analytical-X" : "Space|analytical-Y",
+                    };
+
+                    List<CreationOrderEdge> edges = new List<CreationOrderEdge>
+                    {
+                        new CreationOrderEdge(source, 1, split, 0), new CreationOrderEdge(split, 1, room_1, 0), new CreationOrderEdge(split, 1, room_2, 0),
+                        new CreationOrderEdge(room_1, 1, mix, 0), new CreationOrderEdge(room_2, 1, mix, 0), new CreationOrderEdge(mix, 1, sink, 0),
+                    };
+
+                    List<Guid> order = TPD.Query.CreationOrder(identity.Keys.OrderBy(x => random.Next()), edges.OrderBy(x => random.Next()), x => identity[x]);
+                    int position = order.IndexOf(room_X);
+
+                    position_X = position_X ?? position;
+                    Assert.That(position, Is.EqualTo(position_X.Value), "The room serving X moved with its guid (seed " + seed + ", swap " + swap + ").");
+                }
             }
         }
 
