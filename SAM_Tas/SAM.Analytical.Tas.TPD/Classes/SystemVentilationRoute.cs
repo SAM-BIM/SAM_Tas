@@ -36,6 +36,38 @@ namespace SAM.Analytical.Tas.TPD
     /// </summary>
     public class SystemVentilationRoute
     {
+        private readonly RecirculationCoolingResults recirculationCoolingResults;
+
+        /// <summary>
+        /// PR5B (SAM#111): a complete route whose document carries recirculation cooling branches, with
+        /// the evidence of what each branch did hour by hour - read off a separate plant-room pass on a
+        /// copy of the same document, and already checked (no heating, no cooling below the gate,
+        /// recirculation within its law's range, ventilation at design). Null for a route with none.
+        /// </summary>
+        public SystemVentilationRoute(
+            NoIzamThermalSource noIzamThermalSource,
+            string path_TPD,
+            SimulationEvidence simulationEvidence,
+            IEnumerable<SystemVentilationBinding> bindings,
+            IEnumerable<SystemVentilationConnectionBinding> connectionBindings,
+            SystemZoneTemperatureResults systemZoneTemperatureResults,
+            RecirculationCoolingResults recirculationCoolingResults,
+            IEnumerable<string> refusals,
+            IEnumerable<string> notes)
+            : this(noIzamThermalSource, path_TPD, simulationEvidence, bindings, connectionBindings, systemZoneTemperatureResults, refusals, notes)
+        {
+            if (IsComplete)
+            {
+                this.recirculationCoolingResults = recirculationCoolingResults;
+            }
+        }
+
+        /// <summary>The recirculation cooling evidence, or null where the document carries no branch.</summary>
+        public RecirculationCoolingResults RecirculationCoolingResults
+        {
+            get { return recirculationCoolingResults; }
+        }
+
         private readonly List<SystemVentilationBinding> bindings = new List<SystemVentilationBinding>();
         private readonly List<SystemVentilationConnectionBinding> connectionBindings = new List<SystemVentilationConnectionBinding>();
         private readonly List<string> refusals = new List<string>();

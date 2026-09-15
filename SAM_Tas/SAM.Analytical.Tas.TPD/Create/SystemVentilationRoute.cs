@@ -73,7 +73,8 @@ namespace SAM.Analytical.Tas.TPD
                 systemEnergyCentre,
                 mechanicalVentilationMaterialisation.Bindings,
                 noIzamThermalSource.ZoneReferences,
-                fanHeatGainPolicy);
+                fanHeatGainPolicy,
+                mechanicalVentilationMaterialisation.RecirculationCoolings);
 
             //-------------------------------------------------------------------------------------------
             //2. The duty carriers, in a working copy. PR1's graph is an input and stays one: the caller
@@ -179,6 +180,39 @@ namespace SAM.Analytical.Tas.TPD
 
             simulationEvidence.RecordResultsReconciled(systemVentilationBindings.Count, startHour, endHour);
 
+            //-------------------------------------------------------------------------------------------
+            //6. PR5B (SAM#111): a document carrying recirculation cooling branches is complete only once
+            //   every branch is evidenced to have behaved as built - no heating, no cooling below its gate,
+            //   recirculation within its law's range, the published table at the coil, the ventilation at
+            //   design. A document without branches (every B0) does not run this at all.
+            //-------------------------------------------------------------------------------------------
+            RecirculationCoolingResults recirculationCoolingResults = null;
+
+            if (systemVentilationConversionContext.RecirculationCoolings.Count != 0)
+            {
+                recirculationCoolingResults = Modify.RecirculationCoolingResults(
+                    path_TPD,
+                    noIzamThermalSource.Path_TSD,
+                    systemVentilationConversionContext,
+                    systemZoneTemperatureResults,
+                    startHour,
+                    endHour);
+
+                notes.AddRange(recirculationCoolingResults.Notes);
+
+                if (!recirculationCoolingResults.IsComplete)
+                {
+                    refusals.AddRange(recirculationCoolingResults.Refusals);
+
+                    if (refusals.Count == 0)
+                    {
+                        refusals.Add("The recirculation cooling evidence did not complete, and said nothing about why.");
+                    }
+
+                    return new SystemVentilationRoute(noIzamThermalSource, path_TPD, simulationEvidence, null, null, null, refusals, notes);
+                }
+            }
+
             return new SystemVentilationRoute(
                 noIzamThermalSource,
                 path_TPD,
@@ -186,6 +220,7 @@ namespace SAM.Analytical.Tas.TPD
                 systemVentilationBindings,
                 systemVentilationConversionContext.ConnectionBindings,
                 systemZoneTemperatureResults,
+                recirculationCoolingResults,
                 refusals,
                 notes);
         }
