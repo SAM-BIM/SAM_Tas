@@ -185,6 +185,7 @@ namespace SAM.Analytical.Tas.TPD
             dictionary_Ducts = new Dictionary<Guid, Duct>();
 
             List<BranchDuctEdge> edges = new List<BranchDuctEdge>();
+            Dictionary<Guid, Core.Systems.SystemComponent> components_Ranked = new Dictionary<Guid, Core.Systems.SystemComponent>();
             SystemType systemType = new SystemType(typeof(AirSystem));
 
             systemConnections.Sort((x, y) => x.Guid.CompareTo(y.Guid));
@@ -215,6 +216,9 @@ namespace SAM.Analytical.Tas.TPD
                         {
                             continue;
                         }
+
+                        components_Ranked[components[i].Guid] = components[i];
+                        components_Ranked[components[j].Guid] = components[j];
 
                         if (end_1.Direction == Direction.In)
                         {
@@ -248,7 +252,32 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
-            branchKeys.Sort(StringComparer.Ordinal);
+            //SAM #113: TAS sizing and simulation depend on creation order, so junctions and ducts are
+            //created along the air path (Query.CreationOrder), never in guid order - the same network
+            //under any identities is materialised identically.
+            Dictionary<Guid, int> rank = systemPlantRoom.VentilationCreationRank(components_Ranked.Values, systemVentilationConversionContext);
+            Func<Guid, int> Rank = guid => rank.TryGetValue(guid, out int value) ? value : int.MaxValue;
+
+            branchKeys.Sort((x, y) =>
+            {
+                BranchDuctEnd end_x = end_By_Key[x], end_y = end_By_Key[y];
+                int compare = Rank(end_x.Guid_Component).CompareTo(Rank(end_y.Guid_Component));
+                if (compare != 0) { return compare; }
+                compare = end_x.Index_Connector.CompareTo(end_y.Index_Connector);
+                return compare != 0 ? compare : string.CompareOrdinal(x, y);
+            });
+
+            edges.Sort((x, y) =>
+            {
+                int compare = Rank(x.Upstream.Guid_Component).CompareTo(Rank(y.Upstream.Guid_Component));
+                if (compare != 0) { return compare; }
+                compare = x.Upstream.Index_Connector.CompareTo(y.Upstream.Index_Connector);
+                if (compare != 0) { return compare; }
+                compare = Rank(x.Downstream.Guid_Component).CompareTo(Rank(y.Downstream.Guid_Component));
+                if (compare != 0) { return compare; }
+                compare = x.Downstream.Index_Connector.CompareTo(y.Downstream.Index_Connector);
+                return compare != 0 ? compare : x.Connection.Guid.CompareTo(y.Connection.Guid);
+            });
 
             List<Duct> result = new List<Duct>();
 

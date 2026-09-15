@@ -498,6 +498,17 @@ namespace SAM.Analytical.Tas.TPD
                             {
                                 systemComponents_AirSystem.RemoveAll(x => x is ISystemController || x is ISystemConnection);
 
+                                //SAM #113: on the explicit route native creation order follows the air path
+                                //(Query.CreationOrder), not the relation store's enumeration or the guids.
+                                if (systemVentilationConversionContext != null)
+                                {
+                                    Dictionary<Guid, int> rank = systemPlantRoom.VentilationCreationRank(systemComponents_AirSystem, systemVentilationConversionContext);
+                                    systemComponents_AirSystem = systemComponents_AirSystem
+                                        .OrderBy(x => rank.TryGetValue(x.Guid, out int value) ? value : int.MaxValue)
+                                        .ThenBy(x => x.Guid)
+                                        .ToList();
+                                }
+
                                 foreach (Core.Systems.SystemComponent systemComponent_Temp in systemComponents_AirSystem)
                                 {
                                     //Disabling ComponentGroup replication exposes the group's unused
