@@ -1,6 +1,70 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5B - SAME-ZONE recirculation inside the canonical MVRE AirSystem (in progress)
+## Current: PR5B / SAM#113 - native creation order proven and fixed; first valid annual B4 (not merged)
+
+2026-09-15 (second laptop, afternoon). From `e9052cb5`. SAM#113 is the PR5B prerequisite (the all-dwelling B4 document failed
+flow sizing or never terminated depending on generation). 22 C gate / cooling semantics UNCHANGED (HeatingSetpoint 22,
+HeatingDuty 0, no calendar, recirc 36..120 l/s, DesignAirFlow and table untouched). Evidence: `C:\TasOut\pr5b-continuation\ord\`
+(`cmp.py` GUID-free native-order comparator on `p0 graph` dumps, `ana.py` result comparisons, `runs\<tag>\run.txt`).
+
+**Task 1 - the ordering difference.** Per AirSystem the logical graph (role-labelled edge multiset) of the passing single-branch
+documents (`sz\p2|p3|p4`) equals that of the failing `B4`, never-terminating `B4r1` and hanging `B4s1` (hashes MVHR-01 88485f4b,
+MVHR-02 8235960a, MVHR-03 f3609613); native component and duct creation order differs in EVERY generation. Source: explicit-route
+components were created in SAM relation-store order (type buckets, HashSet/insertion order), branch junctions sorted by guid-string
+key and ducts by connection guid (`Create\Ducts.cs DuctsWithBranchJunctions`). Unbranched systems keep one order (PR1 guids).
+
+**Rule (Tasks 2/3):** `Query.CreationOrder` - air-path BFS from sources (in-degree 0), outlets in connector order; siblings ranked
+by a Weisfeiler-Lehman-refined structural key seeded with component type + connector count + analytical identity (room `Space`
+guid via `RoomIntent`; duty carrier = leg type + from/to Space + SpaceAirMovement); guid only for true automorphisms.
+Components (Convert.ToTPD explicit route), branch junctions and ducts are created in that rank. Legacy route untouched.
+
+**Task 4 - harness A/B, same experimental binary** (worktree `SAM-BIM\SAM_Tas-ord`, toggle `SAM_TAS_NATIVE_ORDER=legacy`,
+harness copy `h-ord`), all-dwelling B4, warm week 4944..5111, production SimulateSystems, watchdog 900 s:
+canonical s1/s2/s3/s4/random -> ONE native sequence per system, all 3 MVHRs "Done", ZoneTemperature complete, gen ~18 s, sim 95-108 s;
+legacy s2, s3 -> Done; **legacy s1 -> hang (killed 900 s), reproducing `sz\b4\B4s1`**. Canonical s1 vs s2 warm-week ZoneTemperature
+bit-identical (1344/1344). Legacy-toggle s1 order == `B4s1` order exactly (A/B valid).
+
+**Task 5 - B0 regression (annual, full frozen route):** legacy B0 on the experimental binary is bit-identical to production
+`sz\b4\B0`. Canonical B0: same logical topology per system, reconciled (8 room / 14 leg bindings, "every design flow matched on
+its native carrier"), TM59 identical in all 8 rooms (Studio 18, Bathroom 2, Bedrooms 3/3, Kitchens 4/4, Ensuites 0/0 h > 26 C).
+ZoneTemperature: MVHR-01 rooms bit-identical; MVHR-02/03 rooms mean <= 0.0013 K, RMSE <= 0.082 K, **single hours up to 2.07 K
+(Ensuite_8), 1.99 K (Ensuite_5)** - larger than the 0.234 K floor recorded earlier. So creation order itself moves TAS hourly
+results (displacement-vent zones); canonical B0 is the new B0 lineage and B4 is judged against it only.
+
+**Task 6 - production fix** `SAM_Tas fix/sam113-canonical-native-creation-order` @ `d8d7acc5` (from `origin/sow/2026-Q3`
+`0f7f59e0`; pushed, NO PR, NOT merged): `Query\VentilationCreationOrder.cs` (+ `CreationOrderEdge`), `Convert\ToTPD\TPD.cs`,
+`Create\Ducts.cs`; tests `VentilationCreationOrderTests` (5: identity-set and enumeration independence, air-path order, null input)
+and `VentilationCreationRankTests` (2: real fixture, schedule rename re-keys EVERY PR1 guid -> identical rank). Release build 0
+errors; `SAM.Analytical.Tas.TM59.Tests` 897/897.
+
+**Task 7 - first valid annual PR5B result** (canonical order, B0 `a-B0c` vs B4 `a-B4c-s1`, full year, production SimulateSystems ->
+SystemVentilationRoute -> ThermostatBridge ResultantTemperature -> unchanged SAM_UI TM59; B4 gen 17.5 s, annual sim 167 s, total
+271 s). B4 s1 vs s2 annual ZoneTemperature AND ResultantTemperature bit-identical (8 x 8760), TM59 identical. TM59 all PASS:
+
+| room | B0 h > 26 C | B4 h > 26 C | ResultantT mean delta | RMSE | max hourly |
+| --- | --- | --- | --- | --- | --- |
+| Studio 1_0 | 18 | 8 | -0.183 | 0.347 | -1.26 |
+| Bathroom_2 | 2 | 0 | +0.066 | 0.447 | -3.44 |
+| Bedroom 2_3 | 3 | 3 | -0.107 | 0.166 | -0.85 |
+| Kitchen_4 | 4 | 3 | -0.001 | 0.159 | -0.72 |
+| Ensuite_5 | 0 | 0 | +0.144 | 0.357 | -2.55 |
+| Bedroom 2_6 | 3 | 2 | -0.103 | 0.176 | -0.85 |
+| Kitchen_7 | 4 | 3 | +0.023 | 0.166 | +0.80 |
+| Ensuite_8 | 0 | 0 | +0.118 | 0.343 | -2.78 |
+
+Wet rooms warm on average (+0.07..+0.14 K): the 30 % recirculation floor mixes each dwelling's rooms year-round (heat moved, none
+added - as measured in the gate weeks). **Annual Systems check on the same document PASS** (plant-room SimulateEx "Done", 219 s,
+`ord\flows\B4c_s1_y.*`): per unit (MVHR-02 / MVHR-01 / MVHR-03) mixed return < 22 C 7790 / 7126 / 7904 h -> **DX cooling 0 h**;
+>= 22 C 970 / 1634 / 856 h cooled; heating 0 h; DX = clamped table (max 0 K); cooling 582 / 1003 / 529 kWh; OperatingAirFlow
+36..120 l/s (mean 39.0 / 41.4 / 38.9; floor 7801 / 7062 / 7862 h); canonical legs max dev 0.024 / 0.002 / 0.027 l/s; outdoor air
+63 / 30 / 63 l/s; zone FlowRate/FreshAir = B0 design. Flow off the 22->26 C law > 0.5 l/s in 148 / 323 / 238 h (native within-hour
+artefact, as in the single-unit gate runs).
+
+**Exact next step:** review the fix branch (open a PR only when asked), then decide whether PR5B B4 proceeds on the canonical-order
+lineage; the failing real-project matrix (1a/1b/2/2B/B0/B4) after that. `sz\b4\B4s1\out.tpd` (SHA-256 99AB92CA...5CD8637D) is kept as
+the reproducible TAS hang artefact; no EDSL report was needed.
+
+## Previous: Part O Iteration 3 PR5B - SAME-ZONE recirculation inside the canonical MVRE AirSystem
 
 2026-09-15 (second laptop) - **NO PRODUCTION CODE CHANGED; TM59 NOT RUN.** From `ef02e23f`. Harness modes `szgen` / `szsim`
 (`C:\TasOut\pr5b-continuation\h\SameZone.cs`; Gen.cs helpers made internal), outputs `...\sz\`, consoles
