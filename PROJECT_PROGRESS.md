@@ -1,6 +1,31 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5A - SAM_Tas slice (SAM#111)
+## Current: generic TAS multidimensional TableModifier round trip (branch `fix/generic-tas-multidimensional-table-roundtrip`)
+
+2026-09-15. Branch off `sow/2026-Q3` `5d8cfad0` (the SAM#113 creation-order merge, PR #57). PR against `sow/2026-Q3`,
+**not merged**. Replays only the four functional files of `495000a1` (found during SAM#111 PR5B work, previously only on
+`codex/pr5b-generic-table-roundtrip`); no PR5B code or manufacturer data.
+
+**What changes** (`SAM.Analytical.Tas.TPD`):
+- `Convert/ToSAM/Modifier.cs` (TPD -> SAM): native axis order kept; gaps, duplicate or invalid axes and a missing
+  multiplier operator are refused (null) instead of silently collapsed or thrown; TAS booleans read as non-zero = true
+  (native `-1`).
+- `Modify/AddModifier.cs` (SAM -> TPD): a 1D/2D/3D grid is validated (finite values, complete rectangular grid, unique
+  coordinates, unique parseable axes) BEFORE any native modifier is allocated; real axis sizes and coordinates are
+  written, each cell to its own coordinate; `Extrapolate` is written as TAS `-1`/`0`.
+
+**Validation:** Release build 0 errors; `TableModifierRoundTripTests` 9/9; creation-order tests 7/7;
+`SAM.Analytical.Tas.TM59.Tests` 906/906. Licensed (harness `C:\TasOut\pr5b-continuation\h-table`, evidence
+`...\ord\table\`): 3-axis equality table (3 x 4 x 8) -> SAM JSON save/reload -> production AddModifier -> save/close/reopen
+-> production ToSAM: sizes 3x4x8, axis order ODB/EDB/EFlow, equality, raw Extrapolate 0 / -1 for false / true, 96/96 cells,
+max |diff| 0. TAS's own default Extrapolate for a fresh table is 0. Existing 1D behaviour: the canonical B0 conversion's 14
+native modifier tables (fan/pump/heat-pump/PV, all 1D) are identical before and after the fix (flag, multiplier, sizes,
+variables, values). The PR5B B4 document now generates on the integration line (it faulted `RPC_E_SERVERFAULT` at
+generation without this fix) and its native creation order equals the SAM#113 canonical order.
+
+**Exact next step:** review / CI, then merge; only then regenerate Iteration 3 B0 and B4 together on `sow/2026-Q3`.
+
+## Previous: Part O Iteration 3 PR5A - SAM_Tas slice (SAM#111)
 
 Branch off `sow/2026-Q3` `6c622309` (after PR #55, the B0/A parity decomposition). PR against
 `sow/2026-Q3`, **not merged**. PR5A merge order is SAM -> SAM_Systems -> SAM_Tas -> SAM_UI; SAM's
