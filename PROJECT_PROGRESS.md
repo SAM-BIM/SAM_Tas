@@ -1,6 +1,140 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5B - recirculating cooling surrogate built natively; BLOCKED on zone coupling
+## Current: Part O Iteration 3 PR5B - SAME-ZONE recirculation inside the canonical MVRE AirSystem (in progress)
+
+2026-09-15 (second laptop) - **NO PRODUCTION CODE CHANGED; TM59 NOT RUN.** From `ef02e23f`. Harness modes `szgen` / `szsim`
+(`C:\TasOut\pr5b-continuation\h\SameZone.cs`; Gen.cs helpers made internal), outputs `...\sz\`, consoles
+`...\console-szgen_*.txt` / `console-szsim_*.txt`. The separate-AirSystem architecture is abandoned (see Previous).
+
+**Why not COM:** the TPD interop has no duct/component removal or re-route (only `IPlantRoom.RemoveSystem`), and every port of a
+canonical room SystemZone already carries its duct, so a COM splice around an existing zone is impossible.
+**How it is built instead (production stages, harness-driven):** `Create.SystemVentilationConversionContext` on the UNMODIFIED
+PR1 graph (canonical rooms/legs/duties exactly as B0) -> `Modify.MaterialiseVentilationDutyCarriers` (working copy) -> SAM branch
+added to the working copy (DX with the sanitized table, Extrapolate false; fan = `Duplicate` of the unit's canonical supply fan, so
+Pressure 1000 / eta 1 / continuous schedule come with it; per-room Value dampers) -> production `Convert.ToTPD(..., context)`.
+Production `DuctsWithBranchJunctions` puts native junctions at the room's own inlet/outlet; `BindVentilationLegs` works from the
+intent only, so reconciliation stays clean. COM then sets properties only (recirc damper/fan Value flows, HGF 0, HeatingDuty 0,
+fan-law controller on the mixed-return duct). Both documents converted and **reconciled** (8 room / 14 leg bindings).
+
+**Phase 1 PASS (MVHR-02, Bedroom 2_3's own SystemZone, warm week 0-based 4944..5111, plant-room SimulateEx "Done"):** one
+SystemZone per ZoneLoad document-wide; MVHR-02 still 3 zones; every canonical leg at design every hour (supply 63, transfers
+63/8, extracts 55/8, fans 63); recirc 36..120 l/s purely additional (bedroom throughput 63+Q); Bedroom 2_3 vs B0 mean
+-0.611 K, max 1.123 K; outdoor air 63 l/s unchanged; DX = clamped table 0 K; 0 heating h; fan law 0.0105 l/s.
+The old V17 same-system failure was the COM-default fan (Pressure/eta 0), not a same-system limitation.
+
+**Phase 2 (all 3 rooms of MVHR-02, `sz\p2`) - valid ONLY with the controller on the recirc dampers.** Six property-only
+variants on the same document, warm week (`console-szsim_p2_*.txt`):
+
+| variant | canonical legs max dev | recirc legs max dev | flow |
+| --- | --- | --- | --- |
+| controller -> fan (as the separate loop) | 23.2 l/s (transfer 63 -> 39.8, one leg -2.35) | 23.3 | 35.9..120 |
+| controller -> fan + 6 dampers | 10.3 | 10.3 | 21.1..120 |
+| controller -> dampers, fan FIXED speed | 34.5 | 34.6 | 70.8..120 |
+| controller -> dampers, fan variable, signal = fraction^2 | 0.018 | 0.018 | 10.8..120 |
+| **controller -> dampers, fan variable, signal = fraction (22 C 0.3 -> 26 C 1)** | **0.014** | **0.014** | **36..120** |
+
+Native fact: a controlled Value damper passes design x signal (LINEAR), unlike the fan's design x sqrt(signal); on this route the
+brief's "signal = fraction^2" becomes "signal = fraction" to keep 22 C -> 30 %, 26 C -> 100 %. The uncontrolled variable-speed
+fan follows the dampers' demand. With it: every canonical leg at design, recirc additional only, one SystemZone per ZoneLoad,
+outdoor air 63, DX = clamped table 0 K, 0 heating h. Law holds <= 0.5 l/s in 164/168 h; in 4 h (5010-11, 5058-59) the
+mixed-return sensor reads ~1.1 K below the flow-weighted returns and Q (~67) lies between the law at either temperature - a
+native within-hour convergence artefact, reported not hidden.
+
+**Phase 3 coupling PROVEN (`p2_damp_lin`):** same bound SystemZones, changed ZoneTemperature. Week means B0 -> cooled: Bedroom 2_3
+20.012 -> 19.439 (-0.573 K), Kitchen_4 20.020 -> 19.627 (-0.392), Ensuite_5 20.346 -> 20.128 (-0.218). Hour 5105 (ODB 30.6):
+mixed return 28.698 C, signal 1, 120 l/s, table 20.013 = DX out (0 K); Bedroom 28.989 -> 28.647, Kitchen 29.177 -> 28.940.
+Ensuite_5 hot spell 5104-5110: -1.4..-3.8 K sustained, B0 control regeneration 0 K there. **Phase 4 warning already visible:**
+with ODB 13-15 C and rooms ~22 C the DX leaves at 14.3-15.1 C (table clamped at its lowest edges; 0/168 h in the published
+domain) - annual runs `sz\annual\b0ctl_y` / `p2lin_y` (P0_NODUMP=1) quantify it by ODB band.
+
+**Noise floor:** regenerating the no-branch document (`sz\b0`) is not bit-stable against `recirc\base_w` - up to 0.0073 K
+(MVHR-02) and 0.234 K single-hour (MVHR-01), means <= 0.0005 K; plausibly creation order (SAM#113) x displacement-vent zones
+(Flags=1). A Phase 1 Ensuite_5 one-hour +1.5 K jump (hour 5082, back to +0.009 K next hour) has the same signature.
+
+**Phase 4 FAILS - unjustified cooling (STOP per brief; annual B4 / TM59 NOT run).** Annual, same lineage: `sz\annual\b0ctl_y`
+(no branch, "Done") vs `p2lin_y` (damper route, "Done", 2 min). Structure holds all year: canonical legs at design (<= 0.028 l/s),
+recirc legs proportional, one SystemZone per ZoneLoad, outdoor air 63/63/30, 0 heating h, DX = clamped table 0 K. But the DX cools
+5149 h / 1676.6 kWh, of which **3818 h / 959.7 kWh (57.2 %) with the mixed return below 22 C** (the evidenced fan-law demand edge),
+3404 cooling h with ODB < 15 C; ODB < 10 C: Bedroom 2_3 mean 14.351 -> 14.201 C. Table in its published domain 0/8760 h (ODB >= 29 C
+only 3 h). The only gate present is incidental: HeatingDuty 0 leaves the coil idle below the native 18 C HeatingSetpoint (0 cooling h
+below 18 C). Annual artefact frequency: mixed-return sensor vs weighted returns > 0.05 K in 505/8760 h (max 2.0 K); flow off the law
+> 0.5 l/s in 165/8760 h. Room annual means B0 -> cooled: Bedroom 16.744 -> 16.421, Kitchen 17.086 -> 16.869, Ensuite 17.562 -> 17.339.
+
+**Enable-rule candidates (identified, NOT implemented - engineering decision required):**
+1. **Recommended, smallest native carrier:** DX HeatingSetpoint 18 -> 22 C with HeatingDuty 0 kept - the measured idle-below-heating-
+   setpoint mechanism, property-only, threshold = the evidenced fan-law lower edge (22 C), no product conditional. Unmeasured at 22.
+2. Strict manufacturer domain (ODB >= 29 and EDB >= 23): fully evidenced but ~3 h/yr here, so B4 ~= B0; no native ODB gate found
+   (control arcs on a DX coil are refused, measured 2026-09-14).
+Also note: Duncan's own model has no cooling enable either (no DX controller, heating unlimited), so neither source evidences one.
+
+**Decision (user, 2026-09-15): candidate 1.** DX HeatingSetpoint 22 C + HeatingDuty 0 = the native cooling-enable threshold found
+by the licensed experiments, NOT a heating control (22 C = evidenced lower edge of Duncan's room-temperature law; no calendar).
+
+**22 C gate - ACCEPTANCE PASSED** (`szsim ... hsp=22 arcs=dampers sig=lin`, B0 = same-lineage `b0ctl_y`; `sz\gate\g22_*`).
+Read back: HeatingSetpoint 22 (0 modifiers), HeatingDuty 0. Gate judged strictly (DX outlet = inlet to 1e-6 K) on TAS's mixed-return
+duct (= DX inlet, what the gate and controller see):
+
+| run (0-based hours) | mixed < 22 C | DX cooling there | >= 22 C | cooling there | heating | canonical legs | recirc |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| warm 4944..5111 | 136 | **0 h / 0.000 kWh** | 32 | 32 | 0 | <= 0.018 l/s | 36..120 |
+| cold 8249..8416 (mean ODB 0.28 C) | 168 | **0** | 0 | - | 0 | 0 | 36 |
+| mild 7064..7231 (155 h at 18-22 C ungated) | 168 | **0** | 0 | - | 0 | 0 | 36 |
+| annual | 7890 | **0 h / 0.000 kWh, max drop 0 K** | 870 | 870 | 0 | <= 0.030 l/s | 36..120 |
+
+Annual cooling 533.4 kWh (ungated 1676.6). Cooling only May-Oct (54/135/315/262/90/14 h), 0 h Nov-Apr; only 7 cooling h with ODB
+5-10 C, all with mixed return >= 22 C (demand by the law). **CoolingAvailableProfile: not needed** - the 22 C gate already confines
+cooling to the warm season; a calendar would only duplicate it (at most removing ~14 October hours of genuine >= 22 C demand) and
+would be an arbitrary season. Residual native artefact (reported, not hidden): against the independently reconstructed flow-weighted
+room returns, 17 cooling h have that reconstruction < 22 C and 39 h are idle with it >= 22 C (sensor vs reconstruction > 0.05 K in
+423 h); flow off the 22->26 C law > 0.5 l/s in 238 h (max 38 l/s). Side effect of the evidenced 30 % floor: when the DX is idle the
+recirculation still mixes the dwelling's rooms (cold week Ensuite +0.27 K, mild +0.38 K; Bedroom ~0) - heat moved, none added.
+
+**Phase 5 in progress:** harness mode `szb4` (`h\SameZoneB4.cs`): branch in EVERY unit -> COM properties -> save -> production
+`Modify.SimulateSystems` -> `SystemVentilationRoute` -> unchanged `ThermostatBridgeResultantTemperatureProvider` -> unchanged SAM_UI
+`PartOTM59Assessment.Assess` (referenced from `SAM_UI\build`, unchanged since that build) with the pairing's Candidate B model and
+scenarios, as `ReviewPartOIteration3`. Runs `sz\b4\B0` (no branch) and `sz\b4\B4`.
+
+**Phase 5 first run:** B0 (`sz\b4\B0`) completes the whole frozen route - reconciled, production SimulateSystems "Done", 8/8
+ZoneTemperature, route complete, bridge complete, TM59 PASS. **B4 (`sz\b4\B4`, branch in all 3 units) is REFUSED by TAS: "Flow Sizing
+Failed"** - first in MVHR-03 (per-system and plant-room alike; the other systems then cascade "unrecoverable error"), although
+MVHR-03's topology equals MVHR-02's, which sized alone (`sz\p2`). Being isolated: single-unit MVHR-03 (`sz\p3`) and MVHR-01 (`sz\p4`)
+branches, and two B4 regenerations with fresh random branch guids (`B4r1`, `B4r2`) to test creation-order sensitivity (SAM#113).
+**B4 regeneration `B4r1` (fresh random branch guids) passed conversion/configuration, then HUNG in production SimulateSystems:**
+TPD.exe 65 min at a full core (3855 CPU-s), no results written (B0's whole run incl. bridge + TM59: 2.5 min); killed at 11:23
+together with `B4r2`. So the all-units B4 document either fails sizing (first B4) or does not terminate (`B4r1`) depending on
+generation - consistent with creation-order sensitivity (SAM#113), not yet proven. Every TAS run is now under a watchdog
+(generation 300 s, warm week 600 s, annual 1200 s). Harness fixes: `MathNet.Numerics` now referenced (the first single-unit
+p3/p4 attempts died in SAM `Transform2D.Inverse` on a plant-junction placement - a harness packaging defect, not TAS);
+`szb4 seed=<s>` derives every branch guid (components and connections) deterministically, so creation order is reproducible.
+**Isolation (guarded, 2026-09-15 ~11:30):** each dwelling's branch ALONE passes the warm-week plant-room check with the 22 C gate -
+MVHR-03 (`sz\p3`): "Done", canonical legs <= 0.015 l/s, recirc proportional, below 22 C 132 h -> 0 cooling h, >= 22 C 36 h cooled;
+MVHR-01 (`sz\p4`): "Done", canonical <= 0.006 l/s, below 105 h -> 0, >= 63 h cooled (MVHR-02 = `sz\p2`, proven earlier). The
+all-units document with deterministic guids (`sz\b4\B4s1`, `seed=s1`) converts, reconciles, configures and saves, then production
+SimulateSystems does not return - killed at 1200 s. Non-termination is therefore reproducible, not a random-guid accident. Being
+separated on that same configured document, warm week, 600 s watchdog: plant-room call (`szflows`) - does not return (killed);
+production per-system call (`exp`) - MVHR-03 "Done", MVHR-02 "Done", **MVHR-01 does not return** (killed). MVHR-01's branch alone
+(`sz\p4`, a different generation) simulated in 73 s. **Conclusion: the all-dwelling same-zone B4 document is not reliably
+simulable in TAS Systems - depending on generation it fails flow sizing (first B4: MVHR-03) or never terminates (B4r1, B4s1:
+MVHR-01), though every dwelling's branch simulates alone. Annual B0 vs B4 -> bridge -> TM59 NOT obtained.** Suspected (unproven)
+native causes: creation-order sensitivity (SAM#113) and/or the MVHR-01 network (Studio 1_0 recirc share 90 l/s against its
+30 l/s ventilation supply - the largest recirc/ventilation ratio of the three units).
+
+**Exact next step (decision needed):** (a) deterministic seed sweep on the all-units document, warm week per-system, 300 s
+watchdog each, to map pass/fail/hang vs creation order - if some orders always pass, the production design must fix the order
+rather than rely on luck; (b) MVHR-01 ceiling sensitivity: all-units document with the MVHR-01 recirc ceiling scaled to its
+ventilation scale (e.g. 60 l/s) to test the flow-ratio hypothesis; (c) report the limitation to EDSL with `sz\b4\B4s1\out.tpd`
+(reproducible hang) and pursue IZAM only if a native route cannot be made robust. Only after a reliably simulable B4 document:
+annual B0 vs B4 (`szb4`, B0 already complete in `sz\b4\B0`, TM59 PASS), then the failing real-project matrix.
+**B0 regeneration vs the recorded pairing TM59:** 6/8 rooms identical; MVHR-01 differs - Bathroom_2 16 -> 2 h, Studio 1_0 12 -> 18 h
+(>26 C, all PASS). Same MVHR-01 instability as the 0.234 K noise floor (displacement-vent zones). B4 must be judged against
+same-lineage B0 only, and MVHR-01 hour counts carry that band.
+
+**Exact next step (superseded if the isolation resolves it):** read `console-szb4_B0/B4.txt`, `sz\b4\*\tm59.txt`, `series.csv`; report room TM59, exceedance hours, mean
+delta/RMSE/max of ResultantTemperature, recirc flows, DesignAirFlow unchanged; cross-check B0 against the recorded pairing report
+(`C:\TasOut\pr5a\...-It3B-Bridge-TM59.txt`: all PASS; Bedroom 2_3 3 h, Kitchen_4 4 h, Ensuite_5 0 h). Then the failing real
+project matrix (1a/1b/2/2B/B0/B4).
+
+## Previous: Part O Iteration 3 PR5B - recirculating cooling surrogate built natively; BLOCKED on zone coupling
 
 2026-09-14 (second laptop, night) - **NO PRODUCTION CODE CHANGED; TM59 NOT RUN.** From `50146990`. Evidence:
 `C:\TasOut\pr5b-continuation\RECIRC-SURROGATE.md`; harness modes `recirc` (`h\Recirc.cs`) and `variants`
