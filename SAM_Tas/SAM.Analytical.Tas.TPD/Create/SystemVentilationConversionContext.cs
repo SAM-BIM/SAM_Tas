@@ -53,16 +53,31 @@ namespace SAM.Analytical.Tas.TPD
         /// PR5A (SAM#111 plan §D/§K.3): what <c>Modify.GroundVentilationFans</c> does with a fan's native
         /// <c>HeatGainFactor</c>. <c>ClearToZero</c>, the B0 control, by default.
         /// </param>
+        /// <param name="mechanicalVentilationRecirculationCoolings">
+        /// PR5B (SAM#111): the recirculation cooling branches SAM_Systems materialised into the graph, or
+        /// null for none (B0). Their connections touch the rooms' own connectors, so without them each would
+        /// read as a second supply or extract leg of its room; they are left out of the leg intent by
+        /// identity, and the ventilation intent is exactly the one the same graph states without them.
+        /// </param>
         public static SystemVentilationConversionContext SystemVentilationConversionContext(
             this Core.Systems.SystemEnergyCentre systemEnergyCentre,
             IEnumerable<MechanicalVentilationBinding> mechanicalVentilationBindings,
             IDictionary<Guid, string> dictionary_ZoneReference,
-            SystemVentilationFanHeatGainPolicy fanHeatGainPolicy = SystemVentilationFanHeatGainPolicy.ClearToZero)
+            SystemVentilationFanHeatGainPolicy fanHeatGainPolicy = SystemVentilationFanHeatGainPolicy.ClearToZero,
+            IEnumerable<MechanicalVentilationRecirculationCooling> mechanicalVentilationRecirculationCoolings = null)
         {
             SystemVentilationConversionContext result = new SystemVentilationConversionContext
             {
                 FanHeatGainPolicy = fanHeatGainPolicy
             };
+
+            if (mechanicalVentilationRecirculationCoolings != null)
+            {
+                foreach (MechanicalVentilationRecirculationCooling mechanicalVentilationRecirculationCooling in mechanicalVentilationRecirculationCoolings)
+                {
+                    result.Add(mechanicalVentilationRecirculationCooling);
+                }
+            }
 
             if (systemEnergyCentre == null)
             {
@@ -207,6 +222,13 @@ namespace SAM.Analytical.Tas.TPD
 
                     foreach (ISystemConnection systemConnection in systemConnections)
                     {
+                        //PR5B: the cooling loop's own connections reach the rooms' connectors too, and are
+                        //not ventilation legs - left out by identity, never by what they look like.
+                        if (result.IsRecirculationConnection(systemConnection.Guid))
+                        {
+                            continue;
+                        }
+
                         SystemVentilationLegIntent systemVentilationLegIntent = LegIntent(
                             result,
                             systemConnection,
@@ -295,6 +317,38 @@ namespace SAM.Analytical.Tas.TPD
                     reference_ZoneLoad,
                     supply_By_SystemSpace.TryGetValue(guid_SystemSpace, out double supply_Lps) ? (double?)supply_Lps : null,
                     extract_By_SystemSpace.TryGetValue(guid_SystemSpace, out double extract_Lps) ? (double?)extract_Lps : null));
+            }
+
+            //PR5B: a recirculation cooling branch has to sit inside its own unit's one air system and serve
+            //only that air system's existing rooms - never a second system, never a room of another unit.
+            Dictionary<Guid, Guid> airSystem_By_AirHandlingUnit = result.AirSystemByAirHandlingUnit;
+            foreach (MechanicalVentilationRecirculationCooling mechanicalVentilationRecirculationCooling in result.RecirculationCoolings)
+            {
+                if (!airSystem_By_AirHandlingUnit.TryGetValue(mechanicalVentilationRecirculationCooling.Guid_AirHandlingUnit, out Guid guid_AirSystem_Unit)
+                    || guid_AirSystem_Unit != mechanicalVentilationRecirculationCooling.Guid_AirSystem)
+                {
+                    result.Refuse(string.Format(
+                        "The recirculation cooling branch of air handling unit {0} names air system {1}, which is not that unit's own air system.",
+                        mechanicalVentilationRecirculationCooling.Guid_AirHandlingUnit,
+                        mechanicalVentilationRecirculationCooling.Guid_AirSystem));
+
+                    continue;
+                }
+
+                foreach (MechanicalVentilationRecirculationRoom mechanicalVentilationRecirculationRoom in mechanicalVentilationRecirculationCooling.Rooms)
+                {
+                    SystemVentilationRoomIntent systemVentilationRoomIntent = result.RoomIntent(mechanicalVentilationRecirculationRoom.Guid_SystemSpace);
+
+                    if (systemVentilationRoomIntent == null
+                        || systemVentilationRoomIntent.Guid_Space != mechanicalVentilationRecirculationRoom.Guid_Space
+                        || systemVentilationRoomIntent.Guid_AirSystem != mechanicalVentilationRecirculationCooling.Guid_AirSystem)
+                    {
+                        result.Refuse(string.Format(
+                            "The recirculation cooling branch of air system {0} serves system space {1}, which is not an existing room of that air system.",
+                            mechanicalVentilationRecirculationCooling.Guid_AirSystem,
+                            mechanicalVentilationRecirculationRoom.Guid_SystemSpace));
+                    }
+                }
             }
 
             //A leg whose endpoint is not one of PR1's materialised rooms is a leg into somewhere the

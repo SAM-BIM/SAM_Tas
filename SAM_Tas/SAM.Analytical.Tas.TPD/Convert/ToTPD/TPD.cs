@@ -629,11 +629,14 @@ namespace SAM.Analytical.Tas.TPD
                                     //route has one real damper in front of a branch junction, so "nearest"
                                     //is ambiguous. It remains a derived topology component: the rooms'
                                     //SystemZone values are still the supply design-flow authority. The
-                                    //absolute PR2 dampers are excluded by their leg-carrier identity.
+                                    //absolute PR2 dampers are excluded by their leg-carrier identity, and
+                                    //PR5B's recirculation dampers - absolute shares of the cooling loop's
+                                    //ceiling - by their branch identity.
                                     if (systemVentilationConversionContext != null
                                         && systemComponent_Temp is DisplaySystemDamper
                                         && systemComponent_TPD is Damper damper_TPD
-                                        && systemVentilationConversionContext.LegIntentByDutyCarrier(systemComponent_Temp.Guid) == null)
+                                        && systemVentilationConversionContext.LegIntentByDutyCarrier(systemComponent_Temp.Guid) == null
+                                        && !systemVentilationConversionContext.IsRecirculationComponent(systemComponent_Temp.Guid))
                                     {
                                         damper_TPD.DesignFlowType = tpdFlowRateType.tpdFlowRateAllAttachedZonesFlowRate;
                                     }
@@ -1079,6 +1082,11 @@ namespace SAM.Analytical.Tas.TPD
                                 //off the native zones - and refused if the building model would state
                                 //the same air a second time.
                                 Modify.NoteVentilationZoneFlags(systemVentilationConversionContext, system);
+
+                                //PR5B (SAM#111): the unit's recirculation cooling branch, if it has one -
+                                //read back against the graph, then the controller that turns its law into
+                                //flow, on the native mixed-return duct no SAM connection names.
+                                Modify.GroundRecirculationCooling(systemVentilationConversionContext, airSystem.Guid, system, dictionary_SystemComponent);
                             }
                         }
 

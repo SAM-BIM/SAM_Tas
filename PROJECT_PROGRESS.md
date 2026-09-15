@@ -1,6 +1,50 @@
 # Project Progress
 
-## Current: generic TAS multidimensional TableModifier round trip (branch `fix/generic-tas-multidimensional-table-roundtrip`)
+## Current: Part O Iteration 3 PR5B - recirculation cooling branch grounded natively and evidenced (branch `feature/parto-pr5b-recirculation-cooling`)
+
+2026-09-15. Branch off `sow/2026-Q3` `00f51520` (#57 creation order + #58 table round trip merged). Commit `220ea11f`
+(+ this docs commit), PR against `sow/2026-Q3`, **not merged**. It needs the SAM_Systems PR5B slice (same branch
+name). Merge order is SAM_Systems -> SAM_Tas -> SAM_UI.
+
+**What changes** (`SAM.Analytical.Tas.TPD`):
+- **Conversion context.** `Create.SystemVentilationConversionContext` takes the materialised
+  `RecirculationCoolings`.
+  - Branch connections are excluded from leg intent by identity.
+  - A branch outside its unit's own air system or rooms is refused.
+- **Dampers.** The duty-carrier damper prototype excludes branch dampers, and `Convert.ToTPD` keeps branch
+  dampers Value-typed.
+- **`Modify.GroundRecirculationCooling`.** Native read-back of:
+  - the 96-cell table, extrapolation off;
+  - gate = `HeatingSetpoint` with no modifier; `HeatingDuty` an absolute 0;
+  - fan HGF 0, variable speed, absolute ceiling;
+  - absolute damper shares.
+  - Then the normal controller on the coil's single mixed-return inlet duct, acting on the recirculation
+    dampers on every plant day type.
+- **`AddModifier`** accepts `CurveModifierVariableType` header names.
+- **`Modify.RecirculationCoolingResults`** runs a plant-room `SimulateEx` (duct data) on a disposable TPD
+  copy. COM-free `Create.RecirculationCoolingResult` refuses any of:
+  - heating;
+  - cooling below the gate;
+  - flow out of the law's range;
+  - table error;
+  - ventilation deviation.
+  - Off-law hours are counted only.
+- **`SystemVentilationRoute.RecirculationCoolingResults`**: a branched document is complete only with
+  complete evidence.
+
+**Validation:**
+- `SAM.Analytical.Tas.TM59.Tests` 922/922 (+16).
+- Licensed paired annual B0/B4 (all 3 dwellings, canonical order), full numbers in
+  `SAM_UI/documentation/evidence/PR5B-PRODUCTION-ACCEPTANCE.md`:
+  - every branch grounded;
+  - 0 h DX cooling below 22 C, 0 h heating;
+  - DX = clamped table to 2e-6 K;
+  - canonical legs within 0.027 l/s of design;
+  - evidence pass reproduces route room temperatures to 0 K;
+  - B4 vs re-keyed B4 bit-identical;
+  - TM59 8/8 Pass both sides.
+
+## Previous: generic TAS multidimensional TableModifier round trip (branch `fix/generic-tas-multidimensional-table-roundtrip`)
 
 2026-09-15. Branch off `sow/2026-Q3` `5d8cfad0` (the SAM#113 creation-order merge, PR #57). PR against `sow/2026-Q3`,
 **not merged**. Replays only the four functional files of `495000a1` (found during SAM#111 PR5B work, previously only on

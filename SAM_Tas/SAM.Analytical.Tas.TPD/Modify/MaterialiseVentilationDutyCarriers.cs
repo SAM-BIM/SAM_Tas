@@ -120,6 +120,12 @@ namespace SAM.Analytical.Tas.TPD
 
                 DisplaySystemDamper displaySystemDamper_Prototype = null;
                 List<DisplaySystemDamper> displaySystemDampers = systemPlantRoom.GetSystemComponents<DisplaySystemDamper>();
+
+                //PR5B: a recirculation cooling branch's dampers are the cooling loop's, not the template's,
+                //so they are never the prototype a ventilation duty carrier is copied from - B0's carriers
+                //come out exactly as they would with no branch at all.
+                displaySystemDampers?.RemoveAll(x => systemVentilationConversionContext.IsRecirculationComponent(x.Guid));
+
                 if (displaySystemDampers != null && displaySystemDampers.Count != 0)
                 {
                     //Ascending guid, so which damper is the prototype does not depend on enumeration order.

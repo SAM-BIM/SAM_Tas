@@ -185,6 +185,36 @@ namespace SAM.Analytical.Tas.TPD
             public List<Dictionary<int, double>> Rows { get; } = new List<Dictionary<int, double>>();
         }
 
+        /// <summary>
+        /// A table axis header as a TAS profile variable: either the TAS name itself - what
+        /// <c>Convert.ToSAM(ProfileDataModifier)</c> writes on a round trip - or SAM's own
+        /// <see cref="CurveModifierVariableType"/> name, which is how a SAM_Systems graph states a variable
+        /// without naming anything of TAS's (PR5B, SAM#111).
+        /// </summary>
+        private static bool TryGetVariableType(string header, out tpdProfileDataVariableType variableType)
+        {
+            if (Enum.TryParse(header, true, out variableType) && Enum.IsDefined(typeof(tpdProfileDataVariableType), variableType))
+            {
+                return true;
+            }
+
+            if (Enum.TryParse(header, false, out CurveModifierVariableType curveModifierVariableType) && Enum.IsDefined(typeof(CurveModifierVariableType), curveModifierVariableType))
+            {
+                try
+                {
+                    variableType = curveModifierVariableType.ToTPD();
+                    return true;
+                }
+                catch (NotImplementedException)
+                {
+                    //A SAM variable TAS has no counterpart for: not a table TAS can be given.
+                }
+            }
+
+            variableType = default;
+            return false;
+        }
+
         private static bool TryGetTableData(TableModifier tableModifier, out TableData tableData)
         {
             tableData = null;
@@ -201,7 +231,7 @@ namespace SAM.Analytical.Tas.TPD
             for (int axis = 0; axis < axisCount; axis++)
             {
                 if (string.IsNullOrWhiteSpace(headers[axis])
-                    || !Enum.TryParse(headers[axis], true, out tpdProfileDataVariableType variableType)
+                    || !TryGetVariableType(headers[axis], out tpdProfileDataVariableType variableType)
                     || variableType == tpdProfileDataVariableType.tpdProfileDataVariableLAST
                     || !variableTypes.Add(variableType))
                 {

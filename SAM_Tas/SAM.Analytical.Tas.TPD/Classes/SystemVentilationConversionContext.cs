@@ -73,6 +73,90 @@ namespace SAM.Analytical.Tas.TPD
         {
         }
 
+        // ------------------------------------------------------- PR5B: recirculation cooling branches
+
+        private readonly Dictionary<Guid, Analytical.Systems.MechanicalVentilationRecirculationCooling> recirculationCooling_By_AirSystem = new Dictionary<Guid, Analytical.Systems.MechanicalVentilationRecirculationCooling>();
+        private readonly HashSet<Guid> recirculationConnections = new HashSet<Guid>();
+        private readonly HashSet<Guid> recirculationComponents = new HashSet<Guid>();
+
+        /// <summary>
+        /// PR5B (SAM#111): one air system's internal recirculation cooling branch, as SAM_Systems
+        /// materialised it. Its connections are never ventilation legs and its dampers never carry a
+        /// ventilation duty - both are told apart from the ventilation by these identities alone.
+        /// </summary>
+        public bool Add(Analytical.Systems.MechanicalVentilationRecirculationCooling mechanicalVentilationRecirculationCooling)
+        {
+            if (mechanicalVentilationRecirculationCooling == null)
+            {
+                return false;
+            }
+
+            if (recirculationCooling_By_AirSystem.ContainsKey(mechanicalVentilationRecirculationCooling.Guid_AirSystem))
+            {
+                Refuse(string.Format(
+                    "Air system {0} is stated to carry two recirculation cooling branches.",
+                    mechanicalVentilationRecirculationCooling.Guid_AirSystem));
+
+                return false;
+            }
+
+            recirculationCooling_By_AirSystem[mechanicalVentilationRecirculationCooling.Guid_AirSystem] = mechanicalVentilationRecirculationCooling;
+
+            foreach (Guid guid in mechanicalVentilationRecirculationCooling.Guids_Connection)
+            {
+                recirculationConnections.Add(guid);
+            }
+
+            foreach (Guid guid in mechanicalVentilationRecirculationCooling.Guids_Component)
+            {
+                recirculationComponents.Add(guid);
+            }
+
+            return true;
+        }
+
+        /// <summary>Every recirculation cooling branch, ordered by air system guid.</summary>
+        public List<Analytical.Systems.MechanicalVentilationRecirculationCooling> RecirculationCoolings
+        {
+            get
+            {
+                List<Guid> guids = new List<Guid>(recirculationCooling_By_AirSystem.Keys);
+                guids.Sort();
+
+                List<Analytical.Systems.MechanicalVentilationRecirculationCooling> result = new List<Analytical.Systems.MechanicalVentilationRecirculationCooling>();
+                foreach (Guid guid in guids)
+                {
+                    result.Add(recirculationCooling_By_AirSystem[guid]);
+                }
+
+                return result;
+            }
+        }
+
+        /// <summary>The recirculation cooling branch of one air system, or null where it has none.</summary>
+        public Analytical.Systems.MechanicalVentilationRecirculationCooling RecirculationCooling(Guid guid_AirSystem)
+        {
+            lookupCount++;
+
+            return recirculationCooling_By_AirSystem.TryGetValue(guid_AirSystem, out Analytical.Systems.MechanicalVentilationRecirculationCooling result) ? result : null;
+        }
+
+        /// <summary>Whether a connection belongs to a recirculation cooling branch - and is therefore not a ventilation leg.</summary>
+        public bool IsRecirculationConnection(Guid guid_SystemConnection)
+        {
+            lookupCount++;
+
+            return recirculationConnections.Contains(guid_SystemConnection);
+        }
+
+        /// <summary>Whether a component belongs to a recirculation cooling branch.</summary>
+        public bool IsRecirculationComponent(Guid guid_SystemComponent)
+        {
+            lookupCount++;
+
+            return recirculationComponents.Contains(guid_SystemComponent);
+        }
+
         /// <summary>
         /// What <see cref="Modify.GroundVentilationFans"/> does with a fan's native <c>HeatGainFactor</c> -
         /// PR5A (SAM#111 plan §D/§K.3). <c>ClearToZero</c> (the B0 control) by default; set from
