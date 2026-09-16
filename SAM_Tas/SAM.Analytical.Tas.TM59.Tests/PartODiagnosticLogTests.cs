@@ -541,17 +541,27 @@ namespace SAM.Analytical.Tas.TM59.Tests
         {
             // Deliberately built with occupiedHourIndices split across HourOfYear's summer window
             // (2880-6551 inclusive) and outside it, so a bug that summed ALL occupied hours instead of
-            // filtering to summer would be caught rather than coincidentally matching.
+            // filtering to summer would be caught rather than coincidentally matching. One non-summer hour
+            // (index 0) and one summer hour (index 3000) are made to exceed the comfort range, so the annual
+            // exceedance count (2) and the summer-only exceedance count (1) can never be confused for one
+            // another - see SAM#120 (SAM.Analytical.Tas.TM59.PartODiagnosticLog.SetCriterionSpecificFields):
+            // this record's "hoursExceedingComfortRange" must be the summer-only figure, matching the already
+            // summer-scoped "summerOccupiedHours"/"maxExceedableSummerHours" fields beside it, not the annual
+            // GetOccupiedHoursExceedingComfortRange().
             HashSet<int> occupiedHourIndices = new HashSet<int> { 0, 1, 2, 3, 4, 3000, 3100, 3200, 3300 };
+            IndexedDoubles minAcceptableTemperatures = ComfortRangeFixture(occupiedHourIndices, out IndexedDoubles maxAcceptableTemperatures, out IndexedDoubles operativeTemperatures, 0, 3000);
 
             TM59NaturalVentilationBedroomExtendedResult tM59NaturalVentilationBedroomExtendedResult = new TM59NaturalVentilationBedroomExtendedResult(
                 "Studio", "Test", Guid.NewGuid().ToString(), TM52BuildingCategory.CategoryII,
-                occupiedHourIndices, null, null, null);
+                occupiedHourIndices, minAcceptableTemperatures, maxAcceptableTemperatures, operativeTemperatures);
 
             int summerOccupiedHours_Expected = tM59NaturalVentilationBedroomExtendedResult.GetSummerOccupiedHours();
             int maxExceedableSummerHours_Expected = tM59NaturalVentilationBedroomExtendedResult.GetSummerMaxExceedableHours();
+            int hoursExceedingComfortRange_Expected = tM59NaturalVentilationBedroomExtendedResult.GetSummerOccupiedHoursExceedingComfortRange();
 
             Assert.That(summerOccupiedHours_Expected, Is.EqualTo(4), "4 of the 9 occupied hours fall inside the summer window - a pre-condition of this test, not the thing under test.");
+            Assert.That(tM59NaturalVentilationBedroomExtendedResult.GetOccupiedHoursExceedingComfortRange(), Is.EqualTo(2), "Precondition: the annual figure this fix moves away from - both exceeding hours, summer and non-summer alike.");
+            Assert.That(hoursExceedingComfortRange_Expected, Is.EqualTo(1), "Precondition: only the summer hour (index 3000) counts on the summer-restricted basis.");
 
             AnalyticalModel analyticalModel_Design = SingleSpaceModel("Studio", stampZoneGuid: true);
             Space space_Simulated = new Space("Studio");
@@ -565,7 +575,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             tM59NaturalVentilationBedroomExtendedResult = new TM59NaturalVentilationBedroomExtendedResult(
                 "Studio", "Test", space_Simulated.Guid.ToString(), TM52BuildingCategory.CategoryII,
-                occupiedHourIndices, null, null, null);
+                occupiedHourIndices, minAcceptableTemperatures, maxAcceptableTemperatures, operativeTemperatures);
 
             PartODiagnosticLogInput input = Input(analyticalModel_Design, new List<Space> { space_Simulated }, scenarios,
                 natural: new List<TMResult> { tM59NaturalVentilationBedroomExtendedResult });
@@ -576,6 +586,69 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(row["criterion"]?.GetValue<string>(), Is.EqualTo("naturalBedroom"));
             Assert.That(row["summerOccupiedHours"]?.GetValue<int>(), Is.EqualTo(summerOccupiedHours_Expected));
             Assert.That(row["maxExceedableSummerHours"]?.GetValue<int>(), Is.EqualTo(maxExceedableSummerHours_Expected));
+            Assert.That(row["hoursExceedingComfortRange"]?.GetValue<int>(), Is.EqualTo(hoursExceedingComfortRange_Expected), "Must be the summer-only exceedance count, not the annual GetOccupiedHoursExceedingComfortRange() this fix moves away from.");
+        }
+
+        /// <summary>
+        /// Same discriminating shape as the bedroom test above, on the plain (non-bedroom) natural-ventilation
+        /// branch (<c>TM59NaturalVentilationExtendedResult</c>, "natural" criterion) - the diagnostic log's
+        /// other affected call site (<c>PartODiagnosticLog.SetCriterionSpecificFields</c>).
+        /// </summary>
+        [Test]
+        public void ExtendedNaturalResult_NonBedroom_LogsSummerHoursExceedingComfortRangeNotAnnual()
+        {
+            HashSet<int> occupiedHourIndices = new HashSet<int> { 0, 1, 2, 3, 4, 3000, 3100, 3200, 3300 };
+            IndexedDoubles minAcceptableTemperatures = ComfortRangeFixture(occupiedHourIndices, out IndexedDoubles maxAcceptableTemperatures, out IndexedDoubles operativeTemperatures, 0, 3000);
+
+            AnalyticalModel analyticalModel_Design = SingleSpaceModel("Living Room", stampZoneGuid: true);
+            Space space_Simulated = new Space("Living Room");
+            space_Simulated.SetValue(SAM.Analytical.Tas.SpaceParameter.ZoneGuid, "tas-zone-Living Room");
+
+            SAM.Analytical.Zone zone = analyticalModel_Design.GetZones().Find(x => x.Name == "Living Room");
+            List<OverheatingScenario> scenarios = new List<OverheatingScenario>
+            {
+                new OverheatingScenario(PartOAssessmentScope.Dwelling, zone.Guid, PartOIteration.BasePassive, new SystemTemplate("NV", null, null, null, null, null)),
+            };
+
+            TM59NaturalVentilationExtendedResult tM59NaturalVentilationExtendedResult = new TM59NaturalVentilationExtendedResult(
+                "Living Room", "Test", space_Simulated.Guid.ToString(), TM52BuildingCategory.CategoryII,
+                occupiedHourIndices, minAcceptableTemperatures, maxAcceptableTemperatures, operativeTemperatures, TM59SpaceApplication.Living);
+
+            int hoursExceedingComfortRange_Expected = tM59NaturalVentilationExtendedResult.GetSummerOccupiedHoursExceedingComfortRange();
+            Assert.That(tM59NaturalVentilationExtendedResult.GetOccupiedHoursExceedingComfortRange(), Is.EqualTo(2), "Precondition: the annual figure this fix moves away from.");
+            Assert.That(hoursExceedingComfortRange_Expected, Is.EqualTo(1), "Precondition: only the summer hour (index 3000) counts on the summer-restricted basis.");
+
+            PartODiagnosticLogInput input = Input(analyticalModel_Design, new List<Space> { space_Simulated }, scenarios,
+                natural: new List<TMResult> { tM59NaturalVentilationExtendedResult });
+
+            PartODiagnosticLogBuildResult result = PartODiagnosticLog.Build(input, Guid.NewGuid(), DateTime.UtcNow, false);
+
+            JsonObject row = RecordsOf(result, "space").Single();
+            Assert.That(row["criterion"]?.GetValue<string>(), Is.EqualTo("natural"));
+            Assert.That(row["hoursExceedingComfortRange"]?.GetValue<int>(), Is.EqualTo(hoursExceedingComfortRange_Expected), "Must be the summer-only exceedance count, not the annual GetOccupiedHoursExceedingComfortRange() this fix moves away from.");
+        }
+
+        /// <summary>
+        /// Builds a comfort-range series for exactly the given occupied hours: min/max acceptable at 23/25
+        /// throughout, operative at 26 (a difference of exactly 1, the implementation's own exceedance
+        /// threshold) for <paramref name="exceedingIndices"/> and 25 (the boundary, not counted) everywhere
+        /// else - mirroring <c>SAM.Tests.TM59NaturalVentilationCriterion1SeasonalBasisTests</c>'s fixture.
+        /// </summary>
+        private static IndexedDoubles ComfortRangeFixture(HashSet<int> occupiedHourIndices, out IndexedDoubles maxAcceptableTemperatures, out IndexedDoubles operativeTemperatures, params int[] exceedingIndices)
+        {
+            IndexedDoubles minAcceptableTemperatures = new IndexedDoubles();
+            maxAcceptableTemperatures = new IndexedDoubles();
+            operativeTemperatures = new IndexedDoubles();
+
+            HashSet<int> exceeding = new HashSet<int>(exceedingIndices);
+            foreach (int index in occupiedHourIndices)
+            {
+                minAcceptableTemperatures.Add(index, 23);
+                maxAcceptableTemperatures.Add(index, 25);
+                operativeTemperatures.Add(index, exceeding.Contains(index) ? 26 : 25);
+            }
+
+            return minAcceptableTemperatures;
         }
 
         // -----------------------------------------------------------------------------------------------

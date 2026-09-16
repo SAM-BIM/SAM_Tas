@@ -1,6 +1,59 @@
 # Project Progress
 
-## Current: the merged clamp verified on the real project - refusal gone, one unrelated anomaly recorded (2026-09-16)
+## Current: diagnostic-log Criterion 1 aligned to the same summer basis as SAM#120 (2026-09-16)
+
+**Status.** Branch `fix/tm59-diagnostic-log-criterion1-summer-basis` off `sow/2026-Q3` (post SAM_Tas#61,
+`ff862201`), PR TBD. Diagnostic-log-only follow-up to [SAM#120](https://github.com/SAM-BIM/SAM/pull/120)
+(merged into SAM `sow/2026-Q3` as `e2c0e2c0`), which fixed the same annual-vs-summer basis defect in the
+production TM59 Criterion 1 compliance decision. This entry does not touch, and is not gated by, PR5B's
+recirculation clamp or the 3-B4 rerun below - it is a separate, narrower diagnostic-evidence fix.
+
+**The defect, confirmed by direct source inspection.**
+`SAM.Analytical.Tas.TM59.PartODiagnosticLog.SetCriterionSpecificFields`
+(`SAM.Analytical.Tas.TM59/Classes/PartODiagnosticLog.cs:646,655`) wrote the extended natural/bedroom branches'
+`hoursExceedingComfortRange` field from `GetOccupiedHoursExceedingComfortRange()` - the full-year basis
+SAM#120 moved production TM59 Criterion 1 away from - while the adjacent `summerOccupiedHours` /
+`maxExceedableSummerHours` fields on the same record were already summer-scoped. A reader comparing this
+diagnostic JSON against TAS's own summer-based TM59 report would see a `hoursExceedingComfortRange` that
+does not match the summer basis the other two fields on the same record describe. **This never fed a
+Pass/Fail decision** - it is diagnostic evidence only, logged beside (not consumed by) the actual TM59
+result's own verdict.
+
+**The fix.** Both call sites now read the new `GetSummerOccupiedHoursExceedingComfortRange()`
+(`TM59NaturalVentilationExtendedResult`, added by SAM#120 and inherited by
+`TM59NaturalVentilationBedroomExtendedResult`) instead of the annual getter - the same summer-restricted
+figure `summerOccupiedHours`/`maxExceedableSummerHours` already use, wrapped in the same `NonNegative()`
+sentinel handling already in place. No other branch (`mechanical`, `corridor`) is touched.
+
+**Regression** (`SAM.Analytical.Tas.TM59.Tests/PartODiagnosticLogTests.cs`): the existing
+`ExtendedNaturalResult_DerivesSummerOccupiedHoursFromTheHourlySeriesInsteadOfTheAnnualBasis` (bedroom branch)
+extended with a comfort-range series carrying one non-summer and one summer exceeding hour (annual count 2,
+summer count 1 - the two bases can never coincide), asserting the logged `hoursExceedingComfortRange` is the
+summer figure; plus a new sibling test,
+`ExtendedNaturalResult_NonBedroom_LogsSummerHoursExceedingComfortRangeNotAnnual`, covering the plain
+(non-bedroom) `TM59NaturalVentilationExtendedResult` branch with the same discriminating shape. Both fail
+against the pre-fix annual getter and pass against the fix.
+
+**Verified not a compliance change.** `hoursExceedingComfortRange` is a diagnostic-log field only; the TM59
+result object's own `Pass`/`Criterion1` (fixed in SAM#120) is unaffected by this change. **No licensed TAS
+rerun was performed or required.**
+
+**Test results.** `SAM.Analytical.dll` rebuilt from SAM `sow/2026-Q3` at `e2c0e2c0` (confirmed to expose
+`GetSummerOccupiedHoursExceedingComfortRange`), then `SAM.Analytical.Tas.TM59` and
+`SAM.Analytical.Tas.TM59.Tests` rebuilt explicitly (VS MSBuild, not `--no-build` against stale binaries):
+focused `PartODiagnosticLogTests` **17/17**, full `SAM.Analytical.Tas.TM59.Tests` **931/931** (930 + 1 net
+new test).
+
+**Files changed:**
+- `SAM_Tas/SAM.Analytical.Tas.TM59/Classes/PartODiagnosticLog.cs` (2 call sites)
+- `SAM_Tas/SAM.Analytical.Tas.TM59.Tests/PartODiagnosticLogTests.cs` (1 test extended, 1 new)
+- `PROJECT_PROGRESS.md` (this entry)
+
+**This closes the last known Criterion 1 inconsistency relevant to SAM#111 closeout** - production compliance
+(SAM#120) and this repo's diagnostic evidence now share the same May-September authority. No other blocker
+introduced by this change.
+
+## Previous: the merged clamp verified on the real project - refusal gone, one unrelated anomaly recorded (2026-09-16)
 
 **Status.** [SAM_Tas#60](https://github.com/SAM-BIM/SAM_Tas/pull/60) (below) is **MERGED** as `96f8ba79` onto
 `sow/2026-Q3`. This entry is the follow-up: rebuild at the merged tip and rerun Iteration 3-B4 on the real
@@ -42,17 +95,20 @@ stale relative to its own source and was rebuilt).
 but not traced to a source line; negligible in magnitude and without result impact, so not blocking, but
 worth a focused look before relying on `Count_Clamped` alone as a proxy for genuine near-boundary events.
 
-**A separate, unrelated defect was found in `SAM` (not this repo) during the same session's review, and
-blocks closing SAM #111 as fully verified** - not this PR's evidence gate, which stands on its own. Natural-
-ventilation Criterion 1 Pass/Fail is computed from the full-year occupied-hours basis rather than the
-May-September basis TM59:2017 requires (`SAM.Analytical\Classes\Result\TM\TMExtendedResult.cs:240-263`, vs.
-the report's already-correct display at `TM59AssessmentReport.cs:266-285`). Nothing in SAM_Tas is implicated
-or affected - see `SAM\documentation\PartO-TAS-VALIDATION.md` § *Known open defect* for the full trace.
+**A separate, unrelated defect was found in `SAM` (not this repo) during the same session's review** - at the
+time this entry was written, it blocked closing SAM #111 as fully verified (not this PR's evidence gate,
+which stands on its own). Natural-ventilation Criterion 1 Pass/Fail was computed from the full-year
+occupied-hours basis rather than the May-September basis TM59:2017 requires
+(`SAM.Analytical\Classes\Result\TM\TMExtendedResult.cs:240-263`, vs. the report's already-correct display at
+`TM59AssessmentReport.cs:266-285`). **Update: fixed in [SAM#120](https://github.com/SAM-BIM/SAM/pull/120)
+the same day**, and a related diagnostic-only instance in this repo's `PartODiagnosticLog` fixed above - see
+`SAM\documentation\PartO-TAS-VALIDATION.md` § *Known open defect* (historical) and § *TM59 Criterion 1 ...
+found and fixed* (current) for the full trace. Nothing in SAM_Tas's production TM59 logic was ever
+implicated.
 
-**Exact recommended next step.** None required in this repo for SAM_Tas#60 itself - the fix is merged and
-now verified end-to-end on the real project that originally exposed the refusal. If the MVHR-03 anomaly is
-to be investigated, that is a new, separate task. The Criterion 1 defect above is a `SAM` repo task, not a
-`SAM_Tas` one.
+**Exact recommended next step (as originally written; superseded - see the entry above).** None required in
+this repo for SAM_Tas#60 itself - the fix is merged and now verified end-to-end on the real project that
+originally exposed the refusal. If the MVHR-03 anomaly is to be investigated, that is a new, separate task.
 
 ## Previous: the recirculation flow is reported at its law's range, not refused for a ramp overshoot (2026-09-16, MERGED as `96f8ba79`)
 
