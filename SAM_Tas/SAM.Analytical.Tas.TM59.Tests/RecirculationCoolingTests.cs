@@ -354,20 +354,26 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
-        public void AClampedHour_IsJudgedAndCharged_AtTheClampedFlow()
+        public void AClampedHour_IsChargedAtTheClampedFlow_ButJudgedAtTheMeasuredOne()
         {
-            //Not cosmetic: the clamp runs before the hour's duty, range, law and table coordinates are
-            //taken, so a clamped hour is charged at the flow the control could actually have commanded.
-            RecirculationCoolingResult result = Reduce((odb, tMix, q, tOut, deviation) => q[1] = 100 + 0.05);
+            //The hour TAS answered: it ran at 100.05 l/s and produced the published temperature FOR that
+            //flow, which is what a real solver does. The clamp must not change that reading.
+            RecirculationCoolingResult result = Reduce((odb, tMix, q, tOut, deviation) =>
+            {
+                q[1] = 100 + 0.05;
+                tOut[1] = Published(30, 25, 100 + 0.05);
+            });
 
+            Assert.That(result.Refusals, Is.Empty);
             Assert.That(result.Count_Clamped, Is.EqualTo(1));
-            Assert.That(result.Cooling_kWh, Is.EqualTo(
-                100 / 1000.0 * TPD.Create.RecirculationCoolingRhoCp * (25 - Published(30, 25, 100)) / 1000.0).Within(1e-9));
 
-            //and identical to the unclamped run, which is what "reported at the range" has to mean
-            Assert.That(result.Cooling_kWh, Is.EqualTo(Reduce().Cooling_kWh).Within(1e-12));
-            Assert.That(result.Count_OffLaw, Is.Zero);
+            //Charged at the flow the control could have commanded - the clamped one...
+            Assert.That(result.Cooling_kWh, Is.EqualTo(
+                100 / 1000.0 * TPD.Create.RecirculationCoolingRhoCp * (25 - Published(30, 25, 100 + 0.05)) / 1000.0).Within(1e-9));
+
+            //...but the table is judged at the flow TAS used, so a coil that followed it exactly is clean.
             Assert.That(result.MaximumTableError_K, Is.LessThan(1e-9));
+            Assert.That(result.Count_OffLaw, Is.Zero);
         }
 
         [Test]
@@ -377,6 +383,62 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(result.Count_Clamped, Is.Zero);
             Assert.That(result.MaximumClampedExcursion_Lps, Is.Zero);
+        }
+
+        /// <summary>
+        /// The published-table check asks whether TAS followed its table at the flow TAS used, so it must be
+        /// judged at the measured flow, not the clamped one. Production always takes the ceiling FROM the
+        /// table's airflow axis (`SAM_UI Query.PartOIteration3CoolingResolution`), so the two coincide there;
+        /// this pins the behaviour for a ceiling that sits below the axis, where judging the clamped flow
+        /// would refuse a coil that followed the table exactly.
+        /// </summary>
+        [Test]
+        public void TheTableCheck_UsesTheMeasuredFlow_NotTheClampedOne()
+        {
+            //Airflow axis 40 / 100 / 101 with a deliberately steep last step, and a 100 l/s ceiling that is
+            //BELOW the axis maximum - so a clamp from 100.05 to 100 moves the lookup by a visible amount.
+            VentilationUnitPerformanceTable table = new(
+                new[]
+                {
+                    new VentilationUnitPerformanceAxis(VentilationUnitPerformanceAxis.Name_ExternalDryBulbTemperature, "degC", new double[] { 20, 30 }),
+                    new VentilationUnitPerformanceAxis(VentilationUnitPerformanceAxis.Name_EnteringDryBulbTemperature, "degC", new double[] { 22, 26 }),
+                    new VentilationUnitPerformanceAxis(VentilationUnitPerformanceAxis.Name_AirFlowRate, "l/s", new double[] { 40, 100, 101 }),
+                },
+                new[] { new VentilationUnitPerformanceOutput(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature, "degC", new double[] { 14, 15, 20, 16, 17, 22, 15, 16, 21, 17, 18, 23 }) });
+
+            MechanicalVentilationCoolingSettings settings = new()
+            {
+                SupplyAirTemperatureTable = table,
+                FlowFractionByControlTemperature = new FlowFractionControlCurve(new double[] { 21, 25 }, new double[] { 0.4, 1.0 }),
+                MaximumOperatingAirFlow_Lps = 100,
+                CoolingEnableTemperature_C = 21,
+            };
+
+            double measured = 100.05;
+            double published_Measured = table.Value(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature, new[] { 30.0, 25.0, measured }, Enums.PerformanceDomainPolicy.ClampToDomain);
+            double published_Clamped = table.Value(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature, new[] { 30.0, 25.0, 100.0 }, Enums.PerformanceDomainPolicy.ClampToDomain);
+
+            //The fixture only demonstrates anything if the clamp would visibly move the lookup.
+            Assert.That(System.Math.Abs(published_Measured - published_Clamped), Is.GreaterThan(TPD.Create.RecirculationCoolingTolerance_Table_K),
+                "fixture is not steep enough to distinguish the measured flow from the clamped one");
+
+            RecirculationCoolingResult result = TPD.Create.RecirculationCoolingResult(
+                new MechanicalVentilationRecirculationCooling(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, settings),
+                0,
+                new[] { 30.0 },
+                new[] { 25.0 },
+                new[] { measured },
+                new[] { published_Measured },
+                new[] { 0.01 });
+
+            //TAS followed its table exactly at the flow it used, so nothing is refused...
+            Assert.That(result.Refusals, Is.Empty);
+            Assert.That(result.MaximumTableError_K, Is.LessThan(1e-9));
+
+            //...while the hour is still reported, and charged, at the range.
+            Assert.That(result.Count_Clamped, Is.EqualTo(1));
+            Assert.That(result.OperatingAirFlowMaximum_Lps, Is.EqualTo(100));
+            Assert.That(result.Count_OutOfRange, Is.Zero);
         }
     }
 }

@@ -36,9 +36,27 @@ a model ever approaches 0.1, revisit the constant with a fresh licensed measurem
 Beyond the bound the flow is left exactly as TAS answered it and **still refuses**, so a solver genuinely
 running the branch outside its envelope is never clamped into silence.
 
-**Validation.** `SAM.Analytical.Tas.TM59.Tests` **929 / 929** (was 922; +7, pinning the bound *and* the
-reason - including the exact excursion the real project measured, that a clamped hour is charged at the
-clamped flow, and that `0.1 + 1e-6` still refuses). `SAM.Analytical.UI.WPF.Tests` 1027 / 1027.
+**Two flows, and the split matters.** `q[h]` is the flow the declared control could have commanded: it is
+what the result REPORTS and what the hour's duty and range are judged on. `qMeasured` is what TAS actually
+answered, and it is what the checks of TAS's own fidelity use - the published-table comparison, the domain
+observation and the off-law count - because those ask "did TAS follow its table at the flow it used?", a
+question about TAS rather than about the design. Judging the table at a flow TAS did not use can refuse a
+coil that followed the table exactly, wherever the ceiling sits below the table's airflow axis. Production
+always derives the ceiling FROM that axis (`SAM_UI Query.PartOIteration3CoolingResolution`:
+`ceiling_Lps = axis_AirFlow.Maximum`), so the two agree there today; the split keeps them right if that ever
+stops being true.
+
+**Validation.** `SAM.Analytical.Tas.TM59.Tests` **930 / 930** (was 922; +8, pinning the bound *and* the
+reason - the exact excursion the real project measured, that a clamped hour is charged at the clamped flow
+but judged at the measured one, and that `0.1 + 1e-6` still refuses). The table-check test was confirmed to
+FAIL without the split, with the spurious refusal it exists to prevent ("the coil outlet departs from the
+published table by up to 0.25 K"). `SAM.Analytical.UI.WPF.Tests` 1027 / 1027.
+
+**Build trap, hit while verifying this.** `SAM.Analytical.Tas.TM59.Tests` consumes `SAM.Analytical.Tas.TPD`
+as a prebuilt DLL. Changing only TPD source and rebuilding the solution leaves the test project's own copy
+**stale**, because its own inputs did not change and its copy step is skipped - so `dotnet test --no-build`
+silently runs the old TPD. Rebuild the test project itself
+(`MSBuild ...SAM.Analytical.Tas.TM59.Tests.csproj -t:Rebuild`) before trusting a result.
 `SAM_Tas.sln` and `SAM_UI.sln` Release (VS MSBuild 18): 0 errors.
 
 

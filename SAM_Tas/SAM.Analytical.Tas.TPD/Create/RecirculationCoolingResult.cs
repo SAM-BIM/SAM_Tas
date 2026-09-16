@@ -147,9 +147,19 @@ namespace SAM.Analytical.Tas.TPD
                     continue;
                 }
 
-                //Just outside the range is reported AT the range - see RecirculationCoolingClamp_Lps. Done
-                //before the hour's duty, range, law and table coordinates are taken, so every one of them
-                //sees the flow the control could actually have commanded. Recorded, never swallowed.
+                //Just outside the range is reported AT the range - see RecirculationCoolingClamp_Lps.
+                //
+                //Two flows from here on, and the split matters. q[h] is the flow the declared control could
+                //have commanded: it is what this result REPORTS and what the hour's duty and range are
+                //judged on. qMeasured is what TAS actually answered, and it is what the checks of TAS's own
+                //fidelity use - the published-table comparison and the domain and off-law observations -
+                //because those ask "did TAS follow its table at the flow it used?", which is a question
+                //about TAS, not about the design. Judging the table at a flow TAS did not use could refuse
+                //a coil that followed the table exactly, wherever the ceiling sits below the table's
+                //airflow axis. Production always derives the ceiling FROM that axis
+                //(SAM_UI Query.PartOIteration3CoolingResolution: ceiling_Lps = axis_AirFlow.Maximum), so
+                //the two agree there today; this keeps them right if that ever stops being true.
+                double qMeasured = q[h];
                 double excursion = q[h] > ceiling ? q[h] - ceiling : (q[h] < minimum ? minimum - q[h] : 0);
                 if (excursion > 0 && excursion <= RecirculationCoolingClamp_Lps)
                 {
@@ -187,7 +197,7 @@ namespace SAM.Analytical.Tas.TPD
                 }
 
                 double law = ceiling * settings.FlowFractionByControlTemperature.FlowFraction(tMix[h]);
-                if (System.Math.Abs(q[h] - law) > RecirculationCoolingOffLaw_Lps)
+                if (System.Math.Abs(qMeasured - law) > RecirculationCoolingOffLaw_Lps)
                 {
                     count_OffLaw++;
                 }
@@ -195,7 +205,7 @@ namespace SAM.Analytical.Tas.TPD
                 double[] coordinates = new double[table.AxisCount];
                 coordinates[axisIndexes[0]] = odb[h];
                 coordinates[axisIndexes[1]] = tMix[h];
-                coordinates[axisIndexes[2]] = q[h];
+                coordinates[axisIndexes[2]] = qMeasured;
 
                 if (table.InDomain(coordinates))
                 {
