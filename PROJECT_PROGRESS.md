@@ -1,9 +1,63 @@
 # Project Progress
 
-## Current: the recirculation flow is reported at its law's range, not refused for a ramp overshoot (2026-09-16)
+## Current: the merged clamp verified on the real project - refusal gone, one unrelated anomaly recorded (2026-09-16)
+
+**Status.** [SAM_Tas#60](https://github.com/SAM-BIM/SAM_Tas/pull/60) (below) is **MERGED** as `96f8ba79` onto
+`sow/2026-Q3`. This entry is the follow-up: rebuild at the merged tip and rerun Iteration 3-B4 on the real
+project that originally refused, to confirm the clamp actually closes the gap.
+
+**Work completed.** SAM/SAM_Systems/SAM_Tas/SAM_UI rebuilt Release in dependency order at their merged tips
+(SAM `192d069a`, SAM_Systems `05ca0c18`, SAM_Tas `96f8ba79`, SAM_UI `9f515c4c`); confirmed
+`SAM_UI\build\SAM.Analytical.Tas.TPD.dll` refreshed and containing `RecirculationCoolingClamp`. Iteration
+3-B4 rerun on `SAM_zoningAM-CIBSEfutureZ1.sam` (SHA-256 `a7e09a25...`) through the preserved UI-automation
+harness: the recirculation-flow refusal named below is **gone**, all 15 ledger stages COMPLETED, and
+Candidate B TM59 now exists (**FAIL**, 3 of 8 rooms - `Studio 1_0`, `Kitchen_4`, `Kitchen_7`). Full detail
+and deltas in `SAM\documentation\PartO-TAS-VALIDATION.md` § *3-B4 rerun on the merged clamp*.
+
+**Important decisions and assumptions.**
+- The FAIL is expected and accepted - 3-B0 already failed 4 of 8 rooms on this weather; the clamp fixes a
+  reporting refusal, not the building's overheating. No further SAM_Tas change was made or is intended.
+- **A genuine, unrelated observation from the coil replay, recorded but not acted on.** Re-running
+  `prod B4 resolve=model stop=gen coolev=1` on the same static no-IZAM fixture: the historically-refusing
+  unit (MVHR-02, `dd8a4594-...`) now measures `Count_Clamped = 2`, `MaximumClampedExcursion_Lps = 0.050278`
+  - matching the PR below's own `~0.0503` measurement. A *different* unit (MVHR-03, `10fda386-...`) measured
+  `Count_Clamped = 6015` at `MaximumClampedExcursion_Lps = 0.000587` - about 170x smaller than the `0.1` l/s
+  clamp bound, and consistent with floating-point-scale noise at the `36` l/s floor rather than the
+  ramp-overshoot mechanism this clamp targets (thousands of hours legitimately sit at-or-near that floor on
+  every unit; this branch's specific arithmetic evidently lands fractionally under `36.0`). Does not change
+  any TM59 result. **No production code was changed** - per this session's stop-condition, this is reported
+  rather than fixed forward, and is a candidate for a future investigation into why `Count_Clamped` fires at
+  this magnitude on this one branch.
+
+**Files changed.** None in `SAM_Tas` production code or tests this session - documentation only
+(`PROJECT_PROGRESS.md`, this entry), plus a machine-path repair to the preserved (non-production) evidence
+harness under `C:\TasOut\parto-final-real-project\h\` and `tool\` (hardcoded `C:\Users\Virtual Machine\...`
+paths from the original acceptance machine, repointed to this one; the harness's prebuilt `p0.exe` was also
+stale relative to its own source and was rebuilt).
+
+**Validation.** Unchanged from the PR below at the merged tip: `SAM.Analytical.Tas.TM59.Tests` 930/930,
+`SAM.Analytical.UI.WPF.Tests` 1027/1027.
+
+**Unresolved issues, risks, blockers.** The MVHR-03 `Count_Clamped` anomaly above is observed and measured
+but not traced to a source line; negligible in magnitude and without result impact, so not blocking, but
+worth a focused look before relying on `Count_Clamped` alone as a proxy for genuine near-boundary events.
+
+**A separate, unrelated defect was found in `SAM` (not this repo) during the same session's review, and
+blocks closing SAM #111 as fully verified** - not this PR's evidence gate, which stands on its own. Natural-
+ventilation Criterion 1 Pass/Fail is computed from the full-year occupied-hours basis rather than the
+May-September basis TM59:2017 requires (`SAM.Analytical\Classes\Result\TM\TMExtendedResult.cs:240-263`, vs.
+the report's already-correct display at `TM59AssessmentReport.cs:266-285`). Nothing in SAM_Tas is implicated
+or affected - see `SAM\documentation\PartO-TAS-VALIDATION.md` § *Known open defect* for the full trace.
+
+**Exact recommended next step.** None required in this repo for SAM_Tas#60 itself - the fix is merged and
+now verified end-to-end on the real project that originally exposed the refusal. If the MVHR-03 anomaly is
+to be investigated, that is a new, separate task. The Criterion 1 defect above is a `SAM` repo task, not a
+`SAM_Tas` one.
+
+## Previous: the recirculation flow is reported at its law's range, not refused for a ramp overshoot (2026-09-16, MERGED as `96f8ba79`)
 
 Branch `fix/parto-pr5b-recirculation-flow-clamp` off `sow/2026-Q3` `ac85b5c3`, commit `602703a1`, PR
-[SAM_Tas#60](https://github.com/SAM-BIM/SAM_Tas/pull/60) against `sow/2026-Q3`, **not merged**. SAM_Tas only -
+[SAM_Tas#60](https://github.com/SAM-BIM/SAM_Tas/pull/60) against `sow/2026-Q3`, **merged as `96f8ba79`**. SAM_Tas only -
 no other repo has a production change from it. Evidence and the investigation it closes:
 [SAM#118](https://github.com/SAM-BIM/SAM/pull/118), `documentation/PartO-TAS-VALIDATION.md`.
 
