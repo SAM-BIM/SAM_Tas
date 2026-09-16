@@ -1,10 +1,53 @@
 # Project Progress
 
-## Current: Part O Iteration 3 PR5B - recirculation cooling branch grounded natively and evidenced (branch `feature/parto-pr5b-recirculation-cooling`)
+## Current: the recirculation flow is reported at its law's range, not refused for a ramp overshoot (2026-09-16)
+
+Branch `fix/parto-pr5b-recirculation-flow-clamp` off `sow/2026-Q3` `ac85b5c3`, commit `602703a1`, PR
+[SAM_Tas#60](https://github.com/SAM-BIM/SAM_Tas/pull/60) against `sow/2026-Q3`, **not merged**. SAM_Tas only -
+no other repo has a production change from it. Evidence and the investigation it closes:
+[SAM#118](https://github.com/SAM-BIM/SAM/pull/118), `documentation/PartO-TAS-VALIDATION.md`.
+
+**Why.** The SAM#111 real-project licensed acceptance (2026-09-15) refused Iteration 3-B4 on MVHR-02 hour 4927:
+`Q = 120.05027770996094` l/s against a 120 l/s ceiling + 0.05 tolerance - over by **0.00028 l/s**, with zero
+heating, zero cooling below the 22 C gate, the coil at the clamped table to 2e-6 K and ventilation within
+0.03 l/s of design. Nothing else departed from the PR5B contract.
+
+**What the hourly series showed.** Of 3 units x 8760 h, only **5 hours** stood above the ceiling. Every one is
+the FIRST hour the control law saturates, each followed by an hour at exactly `120.000000`, and the overshoot
+rises monotonically with the size of the approach jump - 1.3 / 13.6 / 20.5 / 27.2 / 43.9 l/s of approach gave
+0.00014 / 0.00037 / 0.00059 / 0.0267 / 0.0503 l/s of overshoot. A controller overshoot, not single-precision
+noise.
+
+**What changed.**
+- A flow just outside the law's range is now **reported AT the range and counted**, not refused: the declared
+  control cannot command a flow outside its own range (flow fraction <= 1), so the excursion is the solver's.
+  The clamp runs **before** the hour's duty, range, law and table coordinates are taken.
+- New `Create.RecirculationCoolingClamp_Lps = 0.1` - about twice the largest measured excursion.
+- `RecirculationCoolingResult.Count_Clamped` and `MaximumClampedExcursion_Lps` carry every clamped hour.
+- `RecirculationCoolingTolerance_Flow_Lps` keeps only the ventilation-deviation duty it was measured for. It
+  had served the range boundary too, on one canonical Leeds TRY run (ventilation deviation 0.0263, range
+  excursion 0.013); the two do not move together - on this weather the ventilation quantity was unchanged
+  (0.0023 / 0.0261 / 0.0299) while the range excursion grew ~4x and exhausted the margin.
+
+**The risk this carries, stated.** 0.1 is a **measured and reviewable** bound, not a derived one. Nothing
+structural bounds a controller overshoot, so a steeper model can use more of it - which is exactly why
+widening the tolerance was the wrong instrument, and why clamped hours are recorded rather than swallowed. If
+a model ever approaches 0.1, revisit the constant with a fresh licensed measurement rather than raise it.
+Beyond the bound the flow is left exactly as TAS answered it and **still refuses**, so a solver genuinely
+running the branch outside its envelope is never clamped into silence.
+
+**Validation.** `SAM.Analytical.Tas.TM59.Tests` **929 / 929** (was 922; +7, pinning the bound *and* the
+reason - including the exact excursion the real project measured, that a clamped hour is charged at the
+clamped flow, and that `0.1 + 1e-6` still refuses). `SAM.Analytical.UI.WPF.Tests` 1027 / 1027.
+`SAM_Tas.sln` and `SAM_UI.sln` Release (VS MSBuild 18): 0 errors.
+
+
+## Part O Iteration 3 PR5B - recirculation cooling branch grounded natively and evidenced (**MERGED** as `ac85b5c3`)
 
 2026-09-15. Branch off `sow/2026-Q3` `00f51520` (#57 creation order + #58 table round trip merged). Commit `220ea11f`
-(+ this docs commit), PR against `sow/2026-Q3`, **not merged**. It needs the SAM_Systems PR5B slice (same branch
-name). Merge order is SAM_Systems -> SAM_Tas -> SAM_UI.
+(+ this docs commit). **Merged into `sow/2026-Q3` as `ac85b5c3`** - the tip the Part O real-project licensed
+acceptance was built from. It needed the SAM_Systems PR5B slice (same branch name); merge order was
+SAM_Systems -> SAM_Tas -> SAM_UI, and all four repos have since merged.
 
 **What changes** (`SAM.Analytical.Tas.TPD`):
 - **Conversion context.** `Create.SystemVentilationConversionContext` takes the materialised
