@@ -643,7 +643,7 @@ namespace SAM.Analytical.Tas.TM59
             }
             else if (tMResult is TM59NaturalVentilationBedroomExtendedResult bedroomExtended)
             {
-                SetNullableInt(record, "hoursExceedingComfortRange", NonNegative(bedroomExtended.GetOccupiedHoursExceedingComfortRange()));
+                SetNullableInt(record, "hoursExceedingComfortRange", NonNegative(bedroomExtended.GetSummerOccupiedHoursExceedingComfortRange()));
                 SetNullableInt(record, "summerOccupiedHours", NonNegative(bedroomExtended.GetSummerOccupiedHours()));
                 SetNullableInt(record, "maxExceedableSummerHours", NonNegative(bedroomExtended.GetSummerMaxExceedableHours()));
                 SetNullableInt(record, "annualNightOccupiedHours", NonNegative(bedroomExtended.GetAnnualNightOccupiedHours()));
@@ -652,7 +652,7 @@ namespace SAM.Analytical.Tas.TM59
             }
             else if (tMResult is TM59NaturalVentilationExtendedResult naturalExtended)
             {
-                SetNullableInt(record, "hoursExceedingComfortRange", NonNegative(naturalExtended.GetOccupiedHoursExceedingComfortRange()));
+                SetNullableInt(record, "hoursExceedingComfortRange", NonNegative(naturalExtended.GetSummerOccupiedHoursExceedingComfortRange()));
                 SetNullableInt(record, "summerOccupiedHours", NonNegative(naturalExtended.GetSummerOccupiedHours()));
                 SetNullableInt(record, "maxExceedableSummerHours", NonNegative(naturalExtended.GetSummerMaxExceedableHours()));
             }
