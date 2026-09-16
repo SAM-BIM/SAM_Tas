@@ -10,9 +10,18 @@ namespace SAM.Analytical.Tas.TPD
     public static partial class Create
     {
         /// <summary>
-        /// How far a recirculation airflow may stand outside its law's range, and how far a ventilation flow
-        /// may depart from its design, and still be the same flow [l/s]. Licensed evidence (SAM#111 PR5B):
-        /// the native solver holds both to within 0.03 l/s over a full year.
+        /// How far a ventilation flow may depart from its design and still be the same flow [l/s]. Licensed
+        /// evidence (SAM#111 PR5B, canonical Leeds TRY acceptance): the native solver holds it to within
+        /// 0.0263 l/s over a full year, and the real-project acceptance measured 0.0023 / 0.0261 / 0.0299.
+        /// <para>
+        /// <b>This no longer sets the recirculation range boundary.</b> It once served that second purpose
+        /// too, on the strength of the same canonical run - which held the range excursion to 0.013 l/s. The
+        /// two quantities turned out not to move together: on a harsher weather file the ventilation
+        /// deviation was unchanged while the range excursion grew about fourfold and exhausted this margin
+        /// (SAM#111 real-project acceptance, 2026-09-15). The range boundary is now
+        /// <see cref="RecirculationCoolingClamp_Lps"/>, which addresses that excursion's actual mechanism;
+        /// this constant keeps only the ventilation-deviation duty it was measured for.
+        /// </para>
         /// </summary>
         public const double RecirculationCoolingTolerance_Flow_Lps = 0.05;
 
@@ -28,6 +37,30 @@ namespace SAM.Analytical.Tas.TPD
         /// <summary>The departure [l/s] from the ideal law that is counted - and only counted - as off-law.</summary>
         public const double RecirculationCoolingOffLaw_Lps = 0.5;
 
+        /// <summary>
+        /// How far outside the law's range a flow may stand and still be reported AT the range rather than
+        /// refused [l/s]. <b>The declared control cannot command a flow outside its own range</b> - the flow
+        /// fraction is at most 1 - so a small excursion is the native solver's, not the design's, and
+        /// reporting it as a commanded flow is the error.
+        /// <para>
+        /// <b>Where 0.1 comes from, and what would change it.</b> Licensed evidence, SAM#111 real-project
+        /// acceptance 2026-09-15 (3 units x 8760 h): only 5 hours of 26 280 stood above the 120 l/s ceiling,
+        /// every one of them the FIRST hour the control law saturates, and the excursion rose monotonically
+        /// with the size of the approach jump - 1.3 / 13.6 / 20.5 / 27.2 / 43.9 l/s of approach gave
+        /// 0.00014 / 0.00037 / 0.00059 / 0.0267 / 0.0503 l/s of overshoot. 0.1 is about twice the largest
+        /// measured. It is a <b>measured and reviewable</b> bound, not a derived one: nothing structural
+        /// bounds a controller overshoot, so a steeper model can use more of it. That is why every clamped
+        /// hour is recorded on the result (<c>Count_Clamped</c>, <c>MaximumClampedExcursion_Lps</c>) instead
+        /// of being swallowed - if a model ever approaches 0.1, this constant is the thing to revisit, with
+        /// a fresh measurement, rather than to raise.
+        /// </para>
+        /// <para>
+        /// Beyond this, the flow is left as TAS answered it and still refuses: a solver genuinely running
+        /// the branch outside its envelope is never clamped into silence.
+        /// </para>
+        /// </summary>
+        public const double RecirculationCoolingClamp_Lps = 0.1;
+
         /// <summary>Air rho.cp [J/(m3.K)] as TAS Systems uses it (measured, SAM#111 PR5A Phase 0).</summary>
         public const double RecirculationCoolingRhoCp = 1214.4;
 
@@ -36,7 +69,9 @@ namespace SAM.Analytical.Tas.TPD
         /// native reading is <c>Modify.RecirculationCoolingResults</c>'s; this only judges the numbers.
         /// <para>
         /// <b>What is refused.</b> Any heating hour; any hour the coil cooled with its mixed return below the
-        /// cooling-enable temperature; any recirculation airflow outside the law's range; a coil outlet off
+        /// cooling-enable temperature; any recirculation airflow outside the law's range by more than
+        /// <see cref="RecirculationCoolingClamp_Lps"/> (just outside is reported AT the range, and counted);
+        /// a coil outlet off
         /// the published table held at its edges; any ventilation flow off its design; any missing or
         /// non-finite value. <b>What is only counted</b> is the native within-hour departure from the ideal
         /// law - measured, and not a property of the declared control.
@@ -88,7 +123,8 @@ namespace SAM.Analytical.Tas.TPD
             double[] tOut = new double[count];
             double[] odb = new double[count];
 
-            int count_Cooling = 0, count_Heating = 0, count_BelowGate = 0, count_GateViolation = 0, count_OutOfRange = 0, count_OffLaw = 0, count_InDomain = 0, count_NonFinite = 0;
+            int count_Cooling = 0, count_Heating = 0, count_BelowGate = 0, count_GateViolation = 0, count_OutOfRange = 0, count_Clamped = 0, count_OffLaw = 0, count_InDomain = 0, count_NonFinite = 0;
+            double maximumClampedExcursion = 0;
             double maximumTableError = 0, maximumCanonicalDeviation = 0, cooling_Wh = 0;
 
             VentilationUnitPerformanceTable table = settings?.SupplyAirTemperatureTable;
@@ -109,6 +145,27 @@ namespace SAM.Analytical.Tas.TPD
                 {
                     count_NonFinite++;
                     continue;
+                }
+
+                //Just outside the range is reported AT the range - see RecirculationCoolingClamp_Lps.
+                //
+                //Two flows from here on, and the split matters. q[h] is the flow the declared control could
+                //have commanded: it is what this result REPORTS and what the hour's duty and range are
+                //judged on. qMeasured is what TAS actually answered, and it is what the checks of TAS's own
+                //fidelity use - the published-table comparison and the domain and off-law observations -
+                //because those ask "did TAS follow its table at the flow it used?", which is a question
+                //about TAS, not about the design. Judging the table at a flow TAS did not use could refuse
+                //a coil that followed the table exactly, wherever the ceiling sits below the table's
+                //airflow axis. Production always derives the ceiling FROM that axis
+                //(SAM_UI Query.PartOIteration3CoolingResolution: ceiling_Lps = axis_AirFlow.Maximum), so
+                //the two agree there today; this keeps them right if that ever stops being true.
+                double qMeasured = q[h];
+                double excursion = q[h] > ceiling ? q[h] - ceiling : (q[h] < minimum ? minimum - q[h] : 0);
+                if (excursion > 0 && excursion <= RecirculationCoolingClamp_Lps)
+                {
+                    q[h] = q[h] > ceiling ? ceiling : minimum;
+                    count_Clamped++;
+                    maximumClampedExcursion = System.Math.Max(maximumClampedExcursion, excursion);
                 }
 
                 bool cooling = tOut[h] < tMix[h] - RecirculationCoolingTolerance_Idle_K;
@@ -140,7 +197,7 @@ namespace SAM.Analytical.Tas.TPD
                 }
 
                 double law = ceiling * settings.FlowFractionByControlTemperature.FlowFraction(tMix[h]);
-                if (System.Math.Abs(q[h] - law) > RecirculationCoolingOffLaw_Lps)
+                if (System.Math.Abs(qMeasured - law) > RecirculationCoolingOffLaw_Lps)
                 {
                     count_OffLaw++;
                 }
@@ -148,7 +205,7 @@ namespace SAM.Analytical.Tas.TPD
                 double[] coordinates = new double[table.AxisCount];
                 coordinates[axisIndexes[0]] = odb[h];
                 coordinates[axisIndexes[1]] = tMix[h];
-                coordinates[axisIndexes[2]] = q[h];
+                coordinates[axisIndexes[2]] = qMeasured;
 
                 if (table.InDomain(coordinates))
                 {
@@ -213,6 +270,8 @@ namespace SAM.Analytical.Tas.TPD
                 count_BelowGate,
                 count_GateViolation,
                 count_OutOfRange,
+                count_Clamped,
+                maximumClampedExcursion,
                 count_OffLaw,
                 count_InDomain,
                 maximumTableError,
