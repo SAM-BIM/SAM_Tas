@@ -47,6 +47,8 @@ namespace SAM.Analytical.Tas.TPD
             int count_BelowGate,
             int count_GateViolation,
             int count_OutOfRange,
+            int count_Clamped,
+            double maximumClampedExcursion_Lps,
             int count_OffLaw,
             int count_InPublishedDomain,
             double maximumTableError_K,
@@ -69,6 +71,8 @@ namespace SAM.Analytical.Tas.TPD
             Count_BelowGate = count_BelowGate;
             Count_GateViolation = count_GateViolation;
             Count_OutOfRange = count_OutOfRange;
+            Count_Clamped = count_Clamped;
+            MaximumClampedExcursion_Lps = maximumClampedExcursion_Lps;
             Count_OffLaw = count_OffLaw;
             Count_InPublishedDomain = count_InPublishedDomain;
             MaximumTableError_K = maximumTableError_K;
@@ -134,8 +138,31 @@ namespace SAM.Analytical.Tas.TPD
         /// <summary>Of <see cref="Count_BelowGate"/>, the hours the coil cooled anyway. Anything but zero refuses.</summary>
         public int Count_GateViolation { get; }
 
-        /// <summary>Hours the recirculation airflow left the law's range. Anything but zero refuses.</summary>
+        /// <summary>
+        /// Hours the recirculation airflow left the law's range by more than it can be clamped back into
+        /// it - see <see cref="Count_Clamped"/>. Anything but zero refuses.
+        /// </summary>
         public int Count_OutOfRange { get; }
+
+        /// <summary>
+        /// Hours whose airflow stood just outside the law's range and was reported AT the range instead -
+        /// see <c>Create.RecirculationCoolingClamp_Lps</c> for what "just" means and why. Reported, not
+        /// refused: the declared control cannot command a flow outside its own range, so an excursion this
+        /// small is the native solver's within-hour ramp rather than the design's behaviour.
+        /// <para>
+        /// <b>Watch it.</b> This is the number that says how much of the clamp's margin the model is using.
+        /// It is recorded rather than swallowed precisely because the excursion grows with the size of the
+        /// controller's approach jump, so a steeper model can use more of it than the one it was
+        /// calibrated on.
+        /// </para>
+        /// </summary>
+        public int Count_Clamped { get; }
+
+        /// <summary>
+        /// The largest amount [l/s] by which any clamped hour stood outside the law's range, or 0 where no
+        /// hour was clamped. Compare against <c>Create.RecirculationCoolingClamp_Lps</c>.
+        /// </summary>
+        public double MaximumClampedExcursion_Lps { get; }
 
         /// <summary>
         /// Hours the airflow was more than half a litre per second off the ideal linear law at that hour's

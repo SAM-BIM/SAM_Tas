@@ -299,5 +299,84 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(result.Refusals, Is.Empty);
             Assert.That(result.Count_OffLaw, Is.EqualTo(1));
         }
+
+        /// <summary>
+        /// SAM#111 real-project acceptance (2026-09-15): the declared control cannot command a flow outside
+        /// its own range, so a small excursion is the native solver's within-hour ramp, not the design's
+        /// behaviour. It is reported AT the range and counted, never refused.
+        /// </summary>
+        [TestCase(0.05, TestName = "Clamp_JustAboveTheCeiling")]
+        [TestCase(0.050278, TestName = "Clamp_TheExcursionTheRealProjectMeasured")]
+        [TestCase(0.1, TestName = "Clamp_ExactlyAtTheBound")]
+        public void AFlowJustOutsideTheRange_IsReportedAtTheRange_AndCounted_NotRefused(double excursion)
+        {
+            RecirculationCoolingResult result = Reduce((odb, tMix, q, tOut, deviation) => q[1] = 100 + excursion);
+
+            Assert.That(result.Refusals, Is.Empty);
+            Assert.That(result.Count_OutOfRange, Is.Zero);
+            Assert.That(result.Count_Clamped, Is.EqualTo(1));
+            Assert.That(result.MaximumClampedExcursion_Lps, Is.EqualTo(excursion).Within(1e-12));
+
+            //Reported AT the ceiling - the whole point of the change is what the reader is told.
+            Assert.That(result.OperatingAirFlowMaximum_Lps, Is.EqualTo(100));
+        }
+
+        [Test]
+        public void AFlowJustBelowTheMinimum_IsReportedAtTheMinimum()
+        {
+            //The range has two ends and the same argument holds at both: the law's lowest flow fraction
+            //cannot command less than the minimum either.
+            RecirculationCoolingResult result = Reduce((odb, tMix, q, tOut, deviation) => q[0] = 40 - 0.05);
+
+            Assert.That(result.Refusals, Is.Empty);
+            Assert.That(result.Count_Clamped, Is.EqualTo(1));
+            Assert.That(result.OperatingAirFlowMinimum_Lps, Is.EqualTo(40));
+        }
+
+        /// <summary>
+        /// The bound itself. Beyond <c>RecirculationCoolingClamp_Lps</c> the flow is left exactly as TAS
+        /// answered it and still refuses - a solver genuinely running the branch outside its envelope is
+        /// never clamped into silence. This is the assertion that stops the constant being raised quietly.
+        /// </summary>
+        [Test]
+        public void AFlowFurtherOutsideTheRangeThanTheClamp_StillRefuses()
+        {
+            Assert.That(TPD.Create.RecirculationCoolingClamp_Lps, Is.EqualTo(0.1),
+                "The clamp is a measured bound (SAM#111, largest excursion 0.0503 l/s of 26 280 hours), not a derived one. "
+                + "Raising it needs a fresh licensed measurement and this test's reason updated with it.");
+
+            RecirculationCoolingResult result = Reduce((odb, tMix, q, tOut, deviation) => q[1] = 100 + 0.1 + 1e-6);
+
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(result.Refusals, Has.Some.Contains("outside"));
+            Assert.That(result.Count_OutOfRange, Is.EqualTo(1));
+            Assert.That(result.Count_Clamped, Is.Zero);
+        }
+
+        [Test]
+        public void AClampedHour_IsJudgedAndCharged_AtTheClampedFlow()
+        {
+            //Not cosmetic: the clamp runs before the hour's duty, range, law and table coordinates are
+            //taken, so a clamped hour is charged at the flow the control could actually have commanded.
+            RecirculationCoolingResult result = Reduce((odb, tMix, q, tOut, deviation) => q[1] = 100 + 0.05);
+
+            Assert.That(result.Count_Clamped, Is.EqualTo(1));
+            Assert.That(result.Cooling_kWh, Is.EqualTo(
+                100 / 1000.0 * TPD.Create.RecirculationCoolingRhoCp * (25 - Published(30, 25, 100)) / 1000.0).Within(1e-9));
+
+            //and identical to the unclamped run, which is what "reported at the range" has to mean
+            Assert.That(result.Cooling_kWh, Is.EqualTo(Reduce().Cooling_kWh).Within(1e-12));
+            Assert.That(result.Count_OffLaw, Is.Zero);
+            Assert.That(result.MaximumTableError_K, Is.LessThan(1e-9));
+        }
+
+        [Test]
+        public void NoExcursion_ClampsNothing()
+        {
+            RecirculationCoolingResult result = Reduce();
+
+            Assert.That(result.Count_Clamped, Is.Zero);
+            Assert.That(result.MaximumClampedExcursion_Lps, Is.Zero);
+        }
     }
 }
