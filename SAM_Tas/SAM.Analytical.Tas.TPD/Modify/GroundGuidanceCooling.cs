@@ -473,6 +473,14 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
+            //The coil carries no heating duty, so a law that asks it to heat could not be held natively. The rule's own
+            //refusal already prevents this at every stated airflow; this guards the grounding on its own terms.
+            if (coilNetDrop_K < 0)
+            {
+                refusal = string.Format(CultureInfo.InvariantCulture, "states a net coil drop of {0} K at {1} l/s; the coil carries no heating duty, so it cannot deliver a fan rise larger than its drop.", coilNetDrop_K, elevated_Lps);
+                return false;
+            }
+
             //Stage 12 (2026-09-24) proved the floor natively as a kink in the off-coil table over the coil's entering
             //temperature; any finite floor below the table's upper bound is carried the same way.
             double minimumSupply_C = rule_Cooling.MinimumSupplyTemperature_C;
