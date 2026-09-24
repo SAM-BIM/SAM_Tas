@@ -24,7 +24,9 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out string refusal), Is.True, refusal);
 
             Assert.That(recipe.Elevated_Lps, Is.EqualTo(80.0));
-            Assert.That(recipe.IntakeOffset_K, Is.EqualTo(14.0).Within(1e-9));
+            Assert.That(recipe.CoolingExtractFraction, Is.EqualTo(0.8576).Within(1e-9));
+            Assert.That(recipe.CoilNetDrop_K, Is.EqualTo(8.245).Within(1e-9));
+            Assert.That(recipe.MinimumSupply_C, Is.EqualTo(13.0));
             Assert.That(recipe.DesignSupply_Lps, Is.EqualTo(25.0));
             Assert.That(recipe.DesignExtract_Lps, Is.EqualTo(25.0));
             Assert.That(recipe.CoolingDuty_W, Is.EqualTo(2000.0).Within(1e-9));
@@ -36,16 +38,41 @@ namespace SAM.Analytical.Tas.TM59.Tests
         {
             TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
 
-            //Background: bypass needs extract <= activation, intake > 12, extract > intake and extract > 18.
+            //Background: the unit's own bypass - intake > 12, extract > intake and extract > 19, independent of the
+            //cooling-stat (a warm extract with the stat satisfied still bypasses) - else the background fraction.
             Assert.That(recipe.BackgroundEfficiency(14.0, 20.0), Is.EqualTo(0.0));
             Assert.That(recipe.BackgroundEfficiency(12.0, 20.0), Is.EqualTo(0.8));
-            Assert.That(recipe.BackgroundEfficiency(14.0, 22.01), Is.EqualTo(0.8));
-            Assert.That(recipe.BackgroundEfficiency(14.0, 18.0), Is.EqualTo(0.8));
+            Assert.That(recipe.BackgroundEfficiency(14.0, 22.01), Is.EqualTo(0.0));
+            Assert.That(recipe.BackgroundEfficiency(14.0, 19.0), Is.EqualTo(0.8));
+            Assert.That(recipe.BackgroundEfficiency(14.0, 19.01), Is.EqualTo(0.0));
             Assert.That(recipe.BackgroundEfficiency(-2.0, 17.0), Is.EqualTo(0.8));
 
-            //Cooling: coolth recovery where the intake is warmer than the extract, otherwise bypass.
-            Assert.That(recipe.CoolingEfficiency(30.0, 25.0), Is.EqualTo(0.8));
+            //Cooling: the same bypass decision, otherwise heat/coolth recovery at the elevated-airflow fraction.
+            Assert.That(recipe.CoolingEfficiency(30.0, 25.0), Is.EqualTo(0.8576).Within(1e-9));
             Assert.That(recipe.CoolingEfficiency(18.0, 25.0), Is.EqualTo(0.0));
+            Assert.That(recipe.CoolingEfficiency(10.0, 25.0), Is.EqualTo(0.8576).Within(1e-9));
+        }
+
+        [Test]
+        public void TheSupplyLaw_IsTheNetDropFloored_WithTheKinkOnTheGrid()
+        {
+            TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
+
+            Assert.That(recipe.SupplyLaw_C(30.0), Is.EqualTo(30.0 - 8.245).Within(1e-9));
+            Assert.That(recipe.SupplyLaw_C(13.0 + 8.245), Is.EqualTo(13.0).Within(1e-9));
+            Assert.That(recipe.SupplyLaw_C(13.0 + 8.245 + 0.1), Is.EqualTo(13.1).Within(1e-9));
+            Assert.That(recipe.SupplyLaw_C(15.0), Is.EqualTo(13.0));
+            Assert.That(recipe.SupplyLawEntering_C, Is.EqualTo(new[] { -50.0, 13.0 + 8.245, 60.0 }));
+        }
+
+        [Test]
+        public void NoStatedMinimum_IsAStraightLineTable()
+        {
+            MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(strategy => strategy.CoolingSupplyTemperatureRule = CoolingRule(double.NaN));
+
+            Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out TPD.Modify.GuidanceRecipe recipe, out string refusal), Is.True, refusal);
+            Assert.That(recipe.SupplyLawEntering_C, Is.EqualTo(new[] { -50.0, 60.0 }));
+            Assert.That(recipe.SupplyLaw_C(15.0), Is.EqualTo(15.0 - 8.245).Within(1e-9));
         }
 
         [Test]
@@ -58,7 +85,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Assert.That(recipe.Intakes_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "intake " + value);
             }
 
-            foreach (double value in new[] { 18.0, 18.01, 22.0, 22.01, 30.0 })
+            foreach (double value in new[] { 19.0, 19.01, 22.0, 30.0 })
             {
                 Assert.That(recipe.Extracts_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "extract " + value);
             }
@@ -84,16 +111,28 @@ namespace SAM.Analytical.Tas.TM59.Tests
             MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(strategy => strategy.CoolingSupplyTemperatureRule = SupplyTemperatureRule.PerformanceTable());
 
             Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out _, out string refusal), Is.False);
-            Assert.That(refusal, Does.Contain("intake offset"));
+            Assert.That(refusal, Does.Contain("exchanger then coil"));
         }
 
         [Test]
-        public void AnElevatedAirflowOutsideTheStatedOffsets_IsRefused()
+        public void TheSupersededIntakeOffsetRule_IsRefused()
         {
-            MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(strategy => strategy.CoolingSupplyTemperatureRule = SupplyTemperatureRule.IntakeOffset(new[] { 90.0, 100.0 }, new[] { 14.0, 13.0 }));
+            MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(strategy => strategy.CoolingSupplyTemperatureRule = SupplyTemperatureRule.IntakeOffset(new[] { 70.0, 80.0, 90.0 }, new[] { 15.0, 14.0, 13.0 }));
 
             Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out _, out string refusal), Is.False);
-            Assert.That(refusal, Does.Contain("no intake offset"));
+            Assert.That(refusal, Does.Contain("exchanger then coil"));
+        }
+
+        [Test]
+        public void AnElevatedAirflowOutsideTheStatedFigures_IsRefused()
+        {
+            MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(strategy =>
+            {
+                strategy.CoolingSupplyTemperatureRule = SupplyTemperatureRule.ExchangerThenCoil(new[] { 90.0, 100.0 }, new[] { 0.85, 0.84 }, new[] { 8.5, 8.2 }, new[] { 0.6, 0.8 }, 13.0);
+            });
+
+            Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out _, out string refusal), Is.False);
+            Assert.That(refusal, Does.Contain("no exchanger and coil figures"));
         }
 
         [Test]
@@ -103,6 +142,11 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out _, out string refusal), Is.False);
             Assert.That(refusal, Does.Contain("capacity"));
+        }
+
+        private static SupplyTemperatureRule CoolingRule(double minimum_C)
+        {
+            return SupplyTemperatureRule.ExchangerThenCoil(new[] { 60.0, 80.0, 100.0, 120.0 }, new[] { 0.8796, 0.8576, 0.8356, 0.8136 }, new[] { 9.265, 8.745, 8.225, 7.705 }, new[] { 0.3, 0.5, 0.8, 1.1 }, minimum_C);
         }
 
         private static MechanicalVentilationGuidanceCooling GuidanceCooling(Action<VentilationUnitOperatingStrategy> edit = null, bool withCapacity = true)
@@ -115,13 +159,13 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 MinimumCoolingActivationTemperature_C = 22.0,
                 MaximumCoolingActivationTemperature_C = 25.0,
                 BypassMinimumIntakeTemperature_C = 12.0,
-                BypassMinimumExtractTemperature_C = 18.0,
+                BypassMinimumExtractTemperature_C = 19.0,
                 ElevatedAirFlow_Lps = 80.0,
-                MinimumElevatedAirFlow_Lps = 70.0,
-                MaximumElevatedAirFlow_Lps = 90.0,
+                MinimumElevatedAirFlow_Lps = 60.0,
+                MaximumElevatedAirFlow_Lps = 120.0,
                 SummerBypassSupplyTemperatureRule = SupplyTemperatureRule.OutdoorAir(),
                 HeatCoolthRecoverySupplyTemperatureRule = SupplyTemperatureRule.LinearBlend(0.8),
-                CoolingSupplyTemperatureRule = SupplyTemperatureRule.IntakeOffset(new[] { 70.0, 80.0, 90.0 }, new[] { 15.0, 14.0, 13.0 }),
+                CoolingSupplyTemperatureRule = CoolingRule(13.0),
             };
 
             edit?.Invoke(strategy);

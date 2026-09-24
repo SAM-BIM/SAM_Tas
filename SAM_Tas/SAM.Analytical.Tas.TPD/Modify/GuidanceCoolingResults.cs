@@ -169,7 +169,11 @@ namespace SAM.Analytical.Tas.TPD
                             recipe.DesignSupply_Lps,
                             recipe.DesignExtract_Lps,
                             recipe.Elevated_Lps,
-                            recipe.IntakeOffset_K,
+                            recipe.CoolingExtractFraction,
+                            recipe.CoilNetDrop_K,
+                            recipe.MinimumSupply_C,
+                            recipe.BypassMinimumIntake_C,
+                            recipe.BypassMinimumExtract_C,
                             recipe.CoolingDuty_W,
                             recipe.ActivationTemperature_C,
                             series[0], series[1], series[2], series[3], series[4], series[5], series[6], series[7], series[8]);

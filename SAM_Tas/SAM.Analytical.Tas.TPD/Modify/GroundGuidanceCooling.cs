@@ -33,15 +33,18 @@ namespace SAM.Analytical.Tas.TPD
         /// proportions: controlling the dampers instead does not converge where a supplied room's only outlet is
         /// a transfer (Stage 11b).</description></item>
         /// <item><description><b>Exchanger.</b> Uncontrolled - a control arc would scale its efficiency by the
-        /// signal. Efficiency = the stated blend fraction x an equality table over (intake, extract, own
-        /// airflow): at the design airflow the background rule (bypass 0 where its conditions hold, else the
-        /// fraction), at the elevated airflow the cooling state (the fraction where intake &gt; extract - coolth
-        /// recovery - else 0). The exchanger's own airflow carries the controller signal because TAS refuses
-        /// a <c>ControlSignal</c> axis on <c>SensibleEfficiency</c>.</description></item>
-        /// <item><description><b>DX coil.</b> A finite cooling duty - the largest combined cooling capacity the
-        /// product's table publishes, an upper bound that TAS applies to the total (sensible + latent) duty -
-        /// no enable gates, and <c>MinimumOffcoil = intake - X(elevated airflow)</c>, which a controlled coil
-        /// holds as its leaving temperature.</description></item>
+        /// signal. Efficiency = an equality table over (intake, extract, own airflow): the unit's own bypass
+        /// decision at both airflows (0 where its conditions hold - independent of the cooling-stat), otherwise
+        /// the background recovery fraction at the design airflow and the cooling rule's fraction at the
+        /// elevated airflow. The exchanger's own airflow carries the controller signal because TAS refuses a
+        /// <c>ControlSignal</c> axis on <c>SensibleEfficiency</c>.</description></item>
+        /// <item><description><b>DX coil.</b> No enable gates, and <c>MinimumOffcoil</c> = a table over the
+        /// coil's own entering temperature: <c>max(minimum, entering - (coil drop - fan rise)(elevated))</c>,
+        /// which a controlled coil holds as its leaving temperature. The fans' own heat stays cleared - the
+        /// stated fan rise is carried in the net drop instead. A finite cooling duty is required by TAS: the
+        /// product's largest combined (coolth recovery + sensible) figure, which TAS applies to the total
+        /// (sensible + latent) duty. It is an upper bound, not a DX rating - the coil's stated sensible duty at
+        /// the elevated airflow is well below it, so it binds only on a large latent load.</description></item>
         /// </list>
         /// <para>
         /// <b>Manufacturer guidance, not certified performance.</b> Nothing here is written as a certified
@@ -310,7 +313,7 @@ namespace SAM.Analytical.Tas.TPD
 
             systemVentilationConversionContext.Note(string.Format(
                 CultureInfo.InvariantCulture,
-                "{0} grounded (MANUFACTURER GUIDANCE, not certified performance): cooling-stat in zone {1} at {2:0.###} C (+{3:0.###} K band); supply {4:0.###} -> {5:0.###} l/s and extract {6:0.###} -> {5:0.###} l/s while cooling ({7} extract/transfer damper(s)); exchanger {8:0.###} blend / bypass by table; DX supply = intake - {9:0.###} K at {5:0.###} l/s, duty bound {10:0} W (total); read back.",
+                "{0} grounded (MANUFACTURER GUIDANCE, not certified performance): cooling-stat in zone {1} at {2:0.###} C (+{3:0.###} K band); supply {4:0.###} -> {5:0.###} l/s and extract {6:0.###} -> {5:0.###} l/s while cooling ({7} extract/transfer damper(s)); exchanger bypass (intake > {11:0.###} C, extract > intake and > {12:0.###} C) else recovery {8:0.###} at design / {13:0.####} at {5:0.###} l/s; DX supply = coil entering - {9:0.###} K, not below {14:0.###} C; duty bound {10:0} W total (the product's largest combined figure, not a DX rating); read back.",
                 label,
                 Query.NativeReference(systemZone_Stat),
                 recipe.ActivationTemperature_C,
@@ -320,8 +323,12 @@ namespace SAM.Analytical.Tas.TPD
                 recipe.DesignExtract_Lps,
                 dampers_Extract.Count,
                 recipe.ExtractFraction,
-                recipe.IntakeOffset_K,
-                recipe.CoolingDuty_W));
+                recipe.CoilNetDrop_K,
+                recipe.CoolingDuty_W,
+                recipe.BypassMinimumIntake_C,
+                recipe.BypassMinimumExtract_C,
+                recipe.CoolingExtractFraction,
+                recipe.MinimumSupply_C));
 
             return true;
         }
@@ -335,8 +342,19 @@ namespace SAM.Analytical.Tas.TPD
             public double ActivationTemperature_C;
             public double BypassMinimumIntake_C;
             public double BypassMinimumExtract_C;
+
+            /// <summary>The background (design-airflow) recovery fraction.</summary>
             public double ExtractFraction;
-            public double IntakeOffset_K;
+
+            /// <summary>The exchanger's recovery fraction at the elevated airflow, from the cooling rule.</summary>
+            public double CoolingExtractFraction;
+
+            /// <summary>What the coil takes off the air at the elevated airflow [K]: its drop less the fan motor heat's rise.</summary>
+            public double CoilNetDrop_K;
+
+            /// <summary>The lowest temperature the coil delivers [&#176;C], or NaN where the rule states none.</summary>
+            public double MinimumSupply_C;
+
             public double Elevated_Lps;
             public double DesignSupply_Lps;
             public double DesignExtract_Lps;
@@ -344,19 +362,55 @@ namespace SAM.Analytical.Tas.TPD
             public double[] Intakes_C;
             public double[] Extracts_C;
 
-            /// <summary>The background (design-airflow) exchanger state: 0 in bypass, the blend fraction otherwise.</summary>
-            public double BackgroundEfficiency(double intake_C, double extract_C)
+            /// <summary>
+            /// The unit's own bypass decision - the same at every airflow, independent of the cooling-stat, strict at
+            /// every threshold, exactly as <see cref="VentilationUnitOperatingStrategy.ExchangerBypassed"/> states it.
+            /// </summary>
+            public bool Bypass(double intake_C, double extract_C)
             {
-                bool bypass = extract_C <= ActivationTemperature_C && intake_C > BypassMinimumIntake_C && extract_C > intake_C && extract_C > BypassMinimumExtract_C;
-                return bypass ? 0.0 : ExtractFraction;
+                return intake_C > BypassMinimumIntake_C && extract_C > intake_C && extract_C > BypassMinimumExtract_C;
             }
 
-            /// <summary>The cooling (elevated-airflow) exchanger state: coolth recovery where intake is warmer than extract, else bypass.</summary>
+            /// <summary>The background (design-airflow) exchanger state: 0 in bypass, the recovery fraction otherwise.</summary>
+            public double BackgroundEfficiency(double intake_C, double extract_C)
+            {
+                return Bypass(intake_C, extract_C) ? 0.0 : ExtractFraction;
+            }
+
+            /// <summary>
+            /// The cooling (elevated-airflow) exchanger state: 0 in bypass, otherwise heat/coolth recovery at the
+            /// fraction the cooling rule states for the elevated airflow.
+            /// </summary>
             public double CoolingEfficiency(double intake_C, double extract_C)
             {
-                return intake_C > extract_C ? ExtractFraction : 0.0;
+                return Bypass(intake_C, extract_C) ? 0.0 : CoolingExtractFraction;
+            }
+
+            /// <summary>
+            /// The coil's leaving-temperature floor for an entering temperature: the entering temperature less the net
+            /// drop, never below the stated minimum. A coil only cools, so where the entering air is already below the
+            /// minimum TAS simply passes it through (the heating duty is zero).
+            /// </summary>
+            public double SupplyLaw_C(double entering_C)
+            {
+                double result = entering_C - CoilNetDrop_K;
+                return double.IsNaN(MinimumSupply_C) ? result : System.Math.Max(result, MinimumSupply_C);
+            }
+
+            /// <summary>The coil entering-temperature breakpoints of the supply-law table, with the floor's kink on the grid.</summary>
+            public double[] SupplyLawEntering_C
+            {
+                get
+                {
+                    return double.IsNaN(MinimumSupply_C)
+                        ? new double[] { SupplyLawBound_C[0], SupplyLawBound_C[1] }
+                        : new double[] { SupplyLawBound_C[0], MinimumSupply_C + CoilNetDrop_K, SupplyLawBound_C[1] };
+                }
             }
         }
+
+        /// <summary>The coil entering temperatures [&#176;C] the supply-law table spans; TAS never extrapolates beyond them.</summary>
+        private static readonly double[] SupplyLawBound_C = { -50.0, 60.0 };
 
         /// <summary>
         /// Resolves and checks the unit's strategy into what the grounding writes, or says why it cannot be.
@@ -381,9 +435,9 @@ namespace SAM.Analytical.Tas.TPD
 
             if (strategy.SummerBypassSupplyTemperatureRule?.SupplyTemperatureRuleType != SupplyTemperatureRuleType.OutdoorAir
                 || strategy.HeatCoolthRecoverySupplyTemperatureRule?.SupplyTemperatureRuleType != SupplyTemperatureRuleType.LinearBlend
-                || strategy.CoolingSupplyTemperatureRule?.SupplyTemperatureRuleType != SupplyTemperatureRuleType.IntakeOffset)
+                || strategy.CoolingSupplyTemperatureRule?.SupplyTemperatureRuleType != SupplyTemperatureRuleType.ExchangerThenCoil)
             {
-                refusal = "states supply rules other than intake air (bypass), a linear blend (recovery) and an intake offset (cooling) - the only carriers proven in native TAS.";
+                refusal = "states supply rules other than intake air (bypass), a linear blend (recovery) and an exchanger then coil (cooling) - the only carriers proven in native TAS.";
                 return false;
             }
 
@@ -394,17 +448,22 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
-            if (!double.IsNaN(strategy.CoolingSupplyTemperatureRule.MinimumSupplyTemperature_C))
+            SupplyTemperatureRule rule_Cooling = strategy.CoolingSupplyTemperatureRule;
+            double elevated_Lps = strategy.ElevatedAirFlow_Lps;
+            double coolingExtractFraction = rule_Cooling.ExchangerExtractFraction(elevated_Lps);
+            double coilNetDrop_K = rule_Cooling.CoilNetTemperatureDrop_K(elevated_Lps);
+            if (!(coolingExtractFraction >= 0 && coolingExtractFraction <= 1) || double.IsNaN(coilNetDrop_K) || double.IsInfinity(coilNetDrop_K))
             {
-                refusal = "states a minimum cooling supply temperature; a floor on the supply law has not been proven in native TAS.";
+                refusal = string.Format(CultureInfo.InvariantCulture, "states no exchanger and coil figures at the elevated airflow of {0} l/s ({1})", elevated_Lps, rule_Cooling.AirFlowDomainCondition(elevated_Lps) ?? "the rule refuses");
                 return false;
             }
 
-            double elevated_Lps = strategy.ElevatedAirFlow_Lps;
-            double intakeOffset_K = strategy.CoolingSupplyTemperatureRule.IntakeOffset_K(elevated_Lps);
-            if (double.IsNaN(intakeOffset_K) || double.IsInfinity(intakeOffset_K))
+            //Stage 12 (2026-09-24) proved the floor natively as a kink in the off-coil table over the coil's entering
+            //temperature; any finite floor below the table's upper bound is carried the same way.
+            double minimumSupply_C = rule_Cooling.MinimumSupplyTemperature_C;
+            if (!double.IsNaN(minimumSupply_C) && !(minimumSupply_C + coilNetDrop_K > SupplyLawBound_C[0] && minimumSupply_C + coilNetDrop_K < SupplyLawBound_C[1]))
             {
-                refusal = string.Format(CultureInfo.InvariantCulture, "states no intake offset at the elevated airflow of {0} l/s ({1})", elevated_Lps, strategy.CoolingSupplyTemperatureRule.AirFlowDomainCondition(elevated_Lps) ?? "the rule refuses");
+                refusal = string.Format(CultureInfo.InvariantCulture, "states a minimum cooling supply temperature of {0} degC, outside what the off-coil table spans.", minimumSupply_C);
                 return false;
             }
 
@@ -441,7 +500,9 @@ namespace SAM.Analytical.Tas.TPD
                 BypassMinimumIntake_C = strategy.BypassMinimumIntakeTemperature_C,
                 BypassMinimumExtract_C = strategy.BypassMinimumExtractTemperature_C,
                 ExtractFraction = extractFraction,
-                IntakeOffset_K = intakeOffset_K,
+                CoolingExtractFraction = coolingExtractFraction,
+                CoilNetDrop_K = coilNetDrop_K,
+                MinimumSupply_C = minimumSupply_C,
                 Elevated_Lps = elevated_Lps,
                 DesignSupply_Lps = designSupply_Lps,
                 DesignExtract_Lps = designExtract_Lps,
@@ -542,7 +603,7 @@ namespace SAM.Analytical.Tas.TPD
 
         private static void WriteExchangerStateTable(dynamic table, GuidanceRecipe recipe)
         {
-            table.Name = "Manufacturer guidance exchanger state: design airflow = background (bypass 0 / blend), elevated airflow = cooling (coolth recovery / bypass)";
+            table.Name = "Manufacturer guidance exchanger state: bypass 0 at both airflows, else recovery at the design-airflow / elevated-airflow fraction";
             table.SetVariable(1, tpdProfileDataVariableType.tpdProfileDataVariableODB);
             table.SetVariable(2, tpdProfileDataVariableType.tpdProfileDataVariableEDB2);
             table.SetVariable(3, tpdProfileDataVariableType.tpdProfileDataVariableEFlow);
@@ -623,20 +684,27 @@ namespace SAM.Analytical.Tas.TPD
             return true;
         }
 
-        private static readonly double[] supplyLawIntakes_C = { -50.0, 60.0 };
-
+        /// <summary>
+        /// The coil's off-coil floor as a table over its OWN entering dry bulb (<c>EDB</c>), so the coil takes the
+        /// stated net drop off whatever the explicit exchanger delivers - bypass, heat or coolth recovery - and never
+        /// goes below the stated minimum. Proven natively at Stage 12 (2026-09-24): exact in every full-flow hour.
+        /// </summary>
         private static void WriteSupplyLawTable(dynamic table, GuidanceRecipe recipe)
         {
-            table.Name = string.Format(CultureInfo.InvariantCulture, "Manufacturer guidance cooling supply = intake - {0:0.###} K (at the elevated airflow); no floor", recipe.IntakeOffset_K);
-            table.SetVariable(1, tpdProfileDataVariableType.tpdProfileDataVariableODB);
-            table.SetSize(supplyLawIntakes_C.Length, 0, 0);
+            table.Name = double.IsNaN(recipe.MinimumSupply_C)
+                ? string.Format(CultureInfo.InvariantCulture, "Manufacturer guidance cooling supply = coil entering - {0:0.###} K (at the elevated airflow)", recipe.CoilNetDrop_K)
+                : string.Format(CultureInfo.InvariantCulture, "Manufacturer guidance cooling supply = max({1:0.###}, coil entering - {0:0.###} K) (at the elevated airflow)", recipe.CoilNetDrop_K, recipe.MinimumSupply_C);
+            table.SetVariable(1, tpdProfileDataVariableType.tpdProfileDataVariableEDB);
+
+            double[] entering_C = recipe.SupplyLawEntering_C;
+            table.SetSize(entering_C.Length, 0, 0);
             table.Extrapolate = false;
             table.Multiplier = tpdProfileDataModifierMultiplier.tpdProfileDataModifierEqual;
 
-            for (int i = 0; i < supplyLawIntakes_C.Length; i++)
+            for (int i = 0; i < entering_C.Length; i++)
             {
-                table.SetAxisValue(1, i + 1, supplyLawIntakes_C[i]);
-                table.SetDataValue(i + 1, 1, 1, supplyLawIntakes_C[i] - recipe.IntakeOffset_K);
+                table.SetAxisValue(1, i + 1, entering_C[i]);
+                table.SetDataValue(i + 1, 1, 1, recipe.SupplyLaw_C(entering_C[i]));
             }
         }
 
@@ -679,17 +747,18 @@ namespace SAM.Analytical.Tas.TPD
             }
 
             dynamic table = minimumOffcoil.GetModifier(1);
-            if ((bool)table.Extrapolate || (int)table.GetAxisSize(1) != supplyLawIntakes_C.Length)
+            double[] entering_C = recipe.SupplyLawEntering_C;
+            if ((bool)table.Extrapolate || (int)table.GetAxisSize(1) != entering_C.Length || (int)table.GetVariable(1) != (int)tpdProfileDataVariableType.tpdProfileDataVariableEDB)
             {
-                disagreement = "supply-law table has the wrong size or extrapolates";
+                disagreement = "supply-law table has the wrong size or variable, or extrapolates";
                 return false;
             }
 
-            for (int i = 0; i < supplyLawIntakes_C.Length; i++)
+            for (int i = 0; i < entering_C.Length; i++)
             {
-                if (System.Math.Abs((double)table.GetAxisValue(1, i + 1) - supplyLawIntakes_C[i]) > 1e-9 || System.Math.Abs((double)table.GetDataValue(i + 1, 1, 1) - (supplyLawIntakes_C[i] - recipe.IntakeOffset_K)) > 1e-9)
+                if (System.Math.Abs((double)table.GetAxisValue(1, i + 1) - entering_C[i]) > 1e-9 || System.Math.Abs((double)table.GetDataValue(i + 1, 1, 1) - recipe.SupplyLaw_C(entering_C[i])) > 1e-9)
                 {
-                    disagreement = "supply-law table is not intake - X";
+                    disagreement = "supply-law table is not the coil entering temperature less the net drop, floored";
                     return false;
                 }
             }
