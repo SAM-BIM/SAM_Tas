@@ -25,11 +25,13 @@ namespace SAM.Analytical.Tas.TPD
         /// <c>SystemZone</c> (<c>SensorArc1</c> assigned), proportional over
         /// <see cref="GuidanceCoolingStatBand_K"/> above the activation temperature, drives the supply DX
         /// coil.</description></item>
-        /// <item><description><b>Elevated airflow.</b> Two more controllers on the same sensor and band raise the
-        /// supply (the shared supply damper) and the extract (every extract and transfer duty carrier) from the
-        /// design total to the elevated total: each damper states its elevated flow as an absolute value and
-        /// the controller's minimum is design / elevated, because a controlled Value damper passes design x
-        /// signal. Both fans run at variable speed with the elevated total as their design flow.</description></item>
+        /// <item><description><b>Elevated airflow.</b> Two more controllers on the same sensor and band drive the
+        /// variable-speed supply and extract fans (design = the elevated total) with a minimum signal of
+        /// (design / elevated)^2 - a controlled fan's airflow goes as the square root of its signal - so the unit
+        /// moves its design airflow with the stat satisfied and the elevated airflow calling. Every damper states
+        /// its elevated share as an absolute value and stays uncontrolled, so the airflow keeps the design
+        /// proportions: controlling the dampers instead does not converge where a supplied room's only outlet is
+        /// a transfer (Stage 11b).</description></item>
         /// <item><description><b>Exchanger.</b> Uncontrolled - a control arc would scale its efficiency by the
         /// signal. Efficiency = the stated blend fraction x an equality table over (intake, extract, own
         /// airflow): at the design airflow the background rule (bypass 0 where its conditions hold, else the
@@ -240,8 +242,8 @@ namespace SAM.Analytical.Tas.TPD
                 }
 
                 AddStatController(system, systemZone_Stat, recipe, 0.0, plantDayTypes, "Manufacturer guidance cooling-stat (room) - DX", new ISystemComponent[] { (ISystemComponent)dXCoil });
-                AddStatController(system, systemZone_Stat, recipe, recipe.DesignSupply_Lps / recipe.Elevated_Lps, plantDayTypes, "Manufacturer guidance elevated supply (room)", new ISystemComponent[] { (ISystemComponent)damper_Supply });
-                AddStatController(system, systemZone_Stat, recipe, recipe.DesignExtract_Lps / recipe.Elevated_Lps, plantDayTypes, "Manufacturer guidance elevated extract (room)", dampers_Extract.ConvertAll(x => (ISystemComponent)x).ToArray());
+                AddStatController(system, systemZone_Stat, recipe, FanSignal(recipe.DesignSupply_Lps, recipe.Elevated_Lps), plantDayTypes, "Manufacturer guidance elevated supply fan (room)", new ISystemComponent[] { (ISystemComponent)fan_Supply });
+                AddStatController(system, systemZone_Stat, recipe, FanSignal(recipe.DesignExtract_Lps, recipe.Elevated_Lps), plantDayTypes, "Manufacturer guidance elevated extract fan (room)", new ISystemComponent[] { (ISystemComponent)fan_Extract });
             }
             catch (Exception exception)
             {
@@ -290,7 +292,7 @@ namespace SAM.Analytical.Tas.TPD
                 disagreements.Add("the DX coil " + coilDisagreement);
             }
 
-            if (!ReadBackControllers(system, systemZone_Stat, recipe, dXCoil, damper_Supply, dampers_Extract, out string controllerDisagreement))
+            if (!ReadBackControllers(system, systemZone_Stat, recipe, dXCoil, fan_Supply, fan_Extract, dampers_Extract, damper_Supply, out string controllerDisagreement))
             {
                 disagreements.Add(controllerDisagreement);
             }
@@ -721,7 +723,18 @@ namespace SAM.Analytical.Tas.TPD
             }
         }
 
-        private static bool ReadBackControllers(global::TPD.System system, SystemZone systemZone_Stat, GuidanceRecipe recipe, DXCoil dXCoil, Damper damper_Supply, List<Damper> dampers_Extract, out string disagreement)
+        /// <summary>
+        /// The fan controller's minimum signal for a design airflow: a controlled variable-speed fan's airflow goes
+        /// as the square root of its signal (measured, SAM#123 Stage 11b: signal 0.7875 gave 71.0 of 80 l/s, 0.375
+        /// gave 49.0), so the signal that holds the design airflow is (design / elevated)^2.
+        /// </summary>
+        public static double FanSignal(double design_Lps, double elevated_Lps)
+        {
+            double ratio = design_Lps / elevated_Lps;
+            return ratio * ratio;
+        }
+
+        private static bool ReadBackControllers(global::TPD.System system, SystemZone systemZone_Stat, GuidanceRecipe recipe, DXCoil dXCoil, global::TPD.Fan fan_Supply, global::TPD.Fan fan_Extract, List<Damper> dampers_Uncontrolled, Damper damper_Supply, out string disagreement)
         {
             disagreement = null;
 
@@ -730,13 +743,14 @@ namespace SAM.Analytical.Tas.TPD
             Dictionary<string, double> minimum_By_Target = new Dictionary<string, double>
             {
                 [Query.NativeReference(dXCoil)] = 0.0,
-                [Query.NativeReference(damper_Supply)] = recipe.DesignSupply_Lps / recipe.Elevated_Lps,
+                [Query.NativeReference(fan_Supply)] = FanSignal(recipe.DesignSupply_Lps, recipe.Elevated_Lps),
+                [Query.NativeReference(fan_Extract)] = FanSignal(recipe.DesignExtract_Lps, recipe.Elevated_Lps),
             };
 
-            foreach (Damper damper in dampers_Extract)
-            {
-                minimum_By_Target[Query.NativeReference(damper)] = recipe.DesignExtract_Lps / recipe.Elevated_Lps;
-            }
+            //The dampers carry the elevated design proportions uncontrolled: a controlled damper in series with
+            //another (a supplied room whose only outlet is a transfer) never converges (Stage 11b).
+            HashSet<string> dampers_MustBeUncontrolled = new HashSet<string> { Query.NativeReference(damper_Supply) };
+            dampers_Uncontrolled.ForEach(x => dampers_MustBeUncontrolled.Add(Query.NativeReference(x)));
 
             HashSet<string> targets_Found = new HashSet<string>();
 
@@ -766,6 +780,12 @@ namespace SAM.Analytical.Tas.TPD
                 for (int j = 1; j <= controller.GetControlArcCount(); j++)
                 {
                     string reference_Target = Query.NativeReference(controller.GetControlArc(j).GetComponent());
+                    if (dampers_MustBeUncontrolled.Contains(reference_Target))
+                    {
+                        disagreement = string.Format("damper {0} is controlled; the elevated flow is carried by the fans with the dampers uncontrolled", reference_Target);
+                        return false;
+                    }
+
                     if (!minimum_By_Target.TryGetValue(reference_Target, out double minimum))
                     {
                         continue;
