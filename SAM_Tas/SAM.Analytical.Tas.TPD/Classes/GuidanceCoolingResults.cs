@@ -109,7 +109,11 @@ namespace SAM.Analytical.Tas.TPD
             double designSupply_Lps,
             double designExtract_Lps,
             double elevated_Lps,
-            double intakeOffset_K,
+            double coolingExtractFraction,
+            double coilNetDrop_K,
+            double minimumSupply_C,
+            double bypassMinimumIntake_C,
+            double bypassMinimumExtract_C,
             double coolingDuty_W,
             double activationTemperature_C,
             List<double> intake_C,
@@ -127,7 +131,11 @@ namespace SAM.Analytical.Tas.TPD
             DesignSupply_Lps = designSupply_Lps;
             DesignExtract_Lps = designExtract_Lps;
             Elevated_Lps = elevated_Lps;
-            IntakeOffset_K = intakeOffset_K;
+            CoolingExtractFraction = coolingExtractFraction;
+            CoilNetDrop_K = coilNetDrop_K;
+            MinimumSupply_C = minimumSupply_C;
+            BypassMinimumIntake_C = bypassMinimumIntake_C;
+            BypassMinimumExtract_C = bypassMinimumExtract_C;
             CoolingDuty_W = coolingDuty_W;
             ActivationTemperature_C = activationTemperature_C;
             Intake_C = intake_C;
@@ -151,7 +159,18 @@ namespace SAM.Analytical.Tas.TPD
 
         public double Elevated_Lps { get; }
 
-        public double IntakeOffset_K { get; }
+        /// <summary>The exchanger's recovery fraction at the elevated airflow.</summary>
+        public double CoolingExtractFraction { get; }
+
+        /// <summary>What the coil takes off the air at the elevated airflow [K].</summary>
+        public double CoilNetDrop_K { get; }
+
+        /// <summary>The lowest temperature the coil delivers [&#176;C], or NaN where none is stated.</summary>
+        public double MinimumSupply_C { get; }
+
+        public double BypassMinimumIntake_C { get; }
+
+        public double BypassMinimumExtract_C { get; }
 
         public double CoolingDuty_W { get; }
 
@@ -183,10 +202,29 @@ namespace SAM.Analytical.Tas.TPD
             return System.Math.Max(0.0, System.Math.Min(1.0, (Supply_Lps[index] - DesignSupply_Lps) / (Elevated_Lps - DesignSupply_Lps)));
         }
 
-        /// <summary>The supply law's target <c>intake - X</c> [&#176;C] for an hour the coil is cooling, else NaN.</summary>
+        /// <summary>
+        /// The supply law's target [&#176;C] for an hour the coil is cooling - the coil entering temperature less the
+        /// net drop, not below the minimum - else NaN.
+        /// </summary>
         public double SupplyTarget_C(int index)
         {
-            return IsCooling(index) ? Intake_C[index] - IntakeOffset_K : double.NaN;
+            if (!IsCooling(index))
+            {
+                return double.NaN;
+            }
+
+            double result = ExchangerLeaving_C[index] - CoilNetDrop_K;
+            return double.IsNaN(MinimumSupply_C) ? result : System.Math.Max(result, MinimumSupply_C);
+        }
+
+        /// <summary>
+        /// What the exchanger should deliver at the elevated airflow [&#176;C]: intake air where the unit's bypass
+        /// conditions hold, otherwise recovery at the elevated-airflow fraction.
+        /// </summary>
+        public double ExchangerTarget_C(int index)
+        {
+            bool bypass = Intake_C[index] >= BypassMinimumIntake_C && Extract_C[index] > Intake_C[index] && Extract_C[index] >= BypassMinimumExtract_C;
+            return bypass ? Intake_C[index] : (CoolingExtractFraction * Extract_C[index]) + ((1 - CoolingExtractFraction) * Intake_C[index]);
         }
 
         public bool IsCooling(int index)
@@ -210,6 +248,8 @@ namespace SAM.Analytical.Tas.TPD
         {
             int hours_Elevated = 0, hours_Modulating = 0, hours_Cooling = 0, hours_CoolingWithoutSignal = 0, hours_SignalWithoutCooling = 0;
             int hours_Full = 0, hours_FullExact = 0, hours_CapacityLimited = 0, hours_RoomAboveBand = 0;
+            int hours_ElevatedExchangerExact = 0, hours_AtMinimum = 0, hours_BelowMinimumCoilCooling = 0, hours_BelowMinimumEnteringCold = 0;
+            int hours_Part = 0, hours_PartExact = 0;
             double maximumError_K = 0, minimumSupply_C = double.PositiveInfinity, maximumRoom_C = double.NegativeInfinity;
 
             for (int i = 0; i < Count; i++)
@@ -220,10 +260,43 @@ namespace SAM.Analytical.Tas.TPD
                 if (IsFullyElevated(i))
                 {
                     hours_Elevated++;
+                    if (System.Math.Abs(ExchangerLeaving_C[i] - ExchangerTarget_C(i)) <= 0.05)
+                    {
+                        hours_ElevatedExchangerExact++;
+                    }
                 }
                 else if (signal > 0.01)
                 {
                     hours_Modulating++;
+                    if (cooling)
+                    {
+                        hours_Part++;
+                        if (System.Math.Abs(Supply_C[i] - SupplyTarget_C(i)) <= 0.05)
+                        {
+                            hours_PartExact++;
+                        }
+                    }
+                }
+
+                //Below the minimum: either the coil cooled it there (a defect) or the air reached the coil already
+                //below it and passed through (a coil does not heat).
+                if (!double.IsNaN(MinimumSupply_C) && signal > 0.01)
+                {
+                    if (Supply_C[i] < MinimumSupply_C - 0.05)
+                    {
+                        if (ExchangerLeaving_C[i] - Supply_C[i] > 0.05)
+                        {
+                            hours_BelowMinimumCoilCooling++;
+                        }
+                        else
+                        {
+                            hours_BelowMinimumEnteringCold++;
+                        }
+                    }
+                    else if (cooling && System.Math.Abs(Supply_C[i] - MinimumSupply_C) <= 0.05)
+                    {
+                        hours_AtMinimum++;
+                    }
                 }
 
                 if (cooling)
@@ -266,9 +339,17 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            //A rule that states no minimum has no floor to report against.
+            string law = double.IsNaN(MinimumSupply_C)
+                ? string.Format(CultureInfo.InvariantCulture, "coil entering - {0:0.###} K (no minimum stated)", CoilNetDrop_K)
+                : string.Format(CultureInfo.InvariantCulture, "max({0:0.###}, coil entering - {1:0.###} K)", MinimumSupply_C, CoilNetDrop_K);
+            string floor = double.IsNaN(MinimumSupply_C)
+                ? string.Empty
+                : string.Format(CultureInfo.InvariantCulture, "{0} cooling hour(s) at the limit; below the limit while the stat calls: {1} h cooled there by the coil, {2} h with the coil entering already below it; ", hours_AtMinimum, hours_BelowMinimumCoilCooling, hours_BelowMinimumEnteringCold);
+
             return string.Format(
                 CultureInfo.InvariantCulture,
-                "{0}: design {1:0.###}/{2:0.###} l/s supply/extract, elevated {3:0.###} l/s; {4} h fully elevated, {5} h modulating; DX cooling {6} h ({7} h without a stat signal, {8} h signal without cooling); supply law intake - {9:0.###} K met within 0.05 K in {10} of {11} fully elevated cooling hours not capacity-limited (max error {12:0.###} K); {13} fully elevated hour(s) at the {14:0} W total duty bound; minimum supply {15:0.##} C; stat room max {16:0.##} C, above {17:0.##} C in {18} h.",
+                "{0}: design {1:0.###}/{2:0.###} l/s supply/extract, elevated {3:0.###} l/s; {4} h fully elevated, {5} h modulating; exchanger state (bypass / recovery {19:0.####}) within 0.05 K in {20} of {4} fully elevated hours; DX cooling {6} h ({7} h without a stat signal, {8} h signal without cooling); supply law {27} met within 0.05 K in {10} of {11} fully elevated cooling hours not capacity-limited (max error {12:0.###} K) and in {25} of {26} part-flow cooling hours; {28}{13} fully elevated hour(s) at the {14:0} W total duty bound; minimum supply {15:0.##} C; stat room max {16:0.##} C, above {17:0.##} C in {18} h.",
                 Name,
                 DesignSupply_Lps,
                 DesignExtract_Lps,
@@ -278,7 +359,7 @@ namespace SAM.Analytical.Tas.TPD
                 hours_Cooling,
                 hours_CoolingWithoutSignal,
                 hours_SignalWithoutCooling,
-                IntakeOffset_K,
+                CoilNetDrop_K,
                 hours_FullExact,
                 hours_Full,
                 maximumError_K,
@@ -287,7 +368,17 @@ namespace SAM.Analytical.Tas.TPD
                 minimumSupply_C,
                 maximumRoom_C,
                 ActivationTemperature_C + 0.1,
-                hours_RoomAboveBand);
+                hours_RoomAboveBand,
+                CoolingExtractFraction,
+                hours_ElevatedExchangerExact,
+                MinimumSupply_C,
+                hours_AtMinimum,
+                hours_BelowMinimumCoilCooling,
+                hours_BelowMinimumEnteringCold,
+                hours_PartExact,
+                hours_Part,
+                law,
+                floor);
         }
     }
 }
