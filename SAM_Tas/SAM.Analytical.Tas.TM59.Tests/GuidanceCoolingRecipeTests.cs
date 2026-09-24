@@ -93,7 +93,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Assert.That(recipe.Intakes_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "intake " + value);
             }
 
-            foreach (double value in new[] { 18.99, 19.0, 22.0, 30.0, 37.8, 45.0, 50.0, 80.0, 100.0 })
+            foreach (double value in new[] { 18.99, 19.0, 22.0, 30.0, 37.8, 45.0, 45.1, 50.0, 80.0, 100.0 })
             {
                 Assert.That(recipe.Extracts_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "extract " + value);
             }
@@ -162,10 +162,10 @@ namespace SAM.Analytical.Tas.TM59.Tests
 
             //For any intake below 45 C, every extract cell beyond 45 C is on the same side of the bypass diagonal, so a
             //hot (displacement-vent) extract interpolates exactly between them.
-            //(At an intake of exactly 45 C the diagonal passes through the 45/45 cell itself.)
+            //(From 45.1 C: the 45/45 cell is the diagonal itself, and its 0.1 K smear is the same as everywhere else.)
             foreach (double intake in recipe.Intakes_C.Where(x => x < 45.0))
             {
-                double[] states = recipe.Extracts_C.Where(x => x >= 45.0).Select(x => recipe.CoolingEfficiency(intake, x)).Distinct().ToArray();
+                double[] states = recipe.Extracts_C.Where(x => x >= 45.1).Select(x => recipe.CoolingEfficiency(intake, x)).Distinct().ToArray();
                 Assert.That(states.Length, Is.EqualTo(1), "intake " + intake);
             }
         }
