@@ -196,7 +196,8 @@ namespace SAM.Analytical.Tas.TPD
 
         public bool IsFullyElevated(int index)
         {
-            return System.Math.Abs(Supply_Lps[index] - Elevated_Lps) < 0.01;
+            //TAS lands a fan-controlled flow within a few hundredths of a litre per second of its target.
+            return System.Math.Abs(Supply_Lps[index] - Elevated_Lps) <= 0.005 * Elevated_Lps;
         }
 
         public bool IsCapacityLimited(int index)
@@ -220,7 +221,7 @@ namespace SAM.Analytical.Tas.TPD
                 {
                     hours_Elevated++;
                 }
-                else if (signal > 0.001)
+                else if (signal > 0.01)
                 {
                     hours_Modulating++;
                 }
@@ -228,7 +229,7 @@ namespace SAM.Analytical.Tas.TPD
                 if (cooling)
                 {
                     hours_Cooling++;
-                    if (signal <= 0.001)
+                    if (signal <= 0.01)
                     {
                         hours_CoolingWithoutSignal++;
                     }
