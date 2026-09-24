@@ -64,7 +64,13 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(recipe.SupplyLaw_C(13.0 + 8.245), Is.EqualTo(13.0).Within(1e-9));
             Assert.That(recipe.SupplyLaw_C(13.0 + 8.245 + 0.1), Is.EqualTo(13.1).Within(1e-9));
             Assert.That(recipe.SupplyLaw_C(15.0), Is.EqualTo(13.0));
-            Assert.That(recipe.SupplyLawEntering_C, Is.EqualTo(new[] { -50.0, 13.0 + 8.245, 60.0 }));
+
+            //A hot recovered extract (intake 10 C, extract 80 C) puts about 70 C on the coil: the law still follows it.
+            double entering_C = (0.8576 * 80.0) + (0.1424 * 10.0);
+            Assert.That(entering_C, Is.GreaterThan(60.0));
+            Assert.That(recipe.SupplyLawEntering_C.Last(), Is.GreaterThan(entering_C));
+            Assert.That(recipe.SupplyLaw_C(entering_C), Is.EqualTo(entering_C - 8.245).Within(1e-9));
+            Assert.That(recipe.SupplyLawEntering_C, Is.EqualTo(new[] { -50.0, 13.0 + 8.245, 150.0 }));
         }
 
         [Test]
@@ -73,7 +79,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
             MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(strategy => strategy.CoolingSupplyTemperatureRule = CoolingRule(double.NaN));
 
             Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out TPD.Modify.GuidanceRecipe recipe, out string refusal), Is.True, refusal);
-            Assert.That(recipe.SupplyLawEntering_C, Is.EqualTo(new[] { -50.0, 60.0 }));
+            Assert.That(recipe.SupplyLawEntering_C, Is.EqualTo(new[] { -50.0, 150.0 }));
             Assert.That(recipe.SupplyLaw_C(15.0), Is.EqualTo(15.0 - 8.245).Within(1e-9));
         }
 

@@ -420,8 +420,12 @@ namespace SAM.Analytical.Tas.TPD
             }
         }
 
-        /// <summary>The coil entering temperatures [&#176;C] the supply-law table spans; TAS never extrapolates beyond them.</summary>
-        private static readonly double[] SupplyLawBound_C = { -50.0, 60.0 };
+        /// <summary>
+        /// The coil entering temperatures [&#176;C] the supply-law table spans; TAS never extrapolates beyond them. The law
+        /// is linear above the floor's kink, so the upper bound is set well above any coil inlet the exchanger table can
+        /// produce (its extract axis runs to 100 &#176;C) rather than holding the target at the edge.
+        /// </summary>
+        private static readonly double[] SupplyLawBound_C = { -50.0, 150.0 };
 
         /// <summary>
         /// Resolves and checks the unit's strategy into what the grounding writes, or says why it cannot be.
