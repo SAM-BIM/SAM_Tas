@@ -223,7 +223,7 @@ namespace SAM.Analytical.Tas.TPD
         /// </summary>
         public double ExchangerTarget_C(int index)
         {
-            bool bypass = Intake_C[index] > BypassMinimumIntake_C && Extract_C[index] > Intake_C[index] && Extract_C[index] > BypassMinimumExtract_C;
+            bool bypass = Intake_C[index] >= BypassMinimumIntake_C && Extract_C[index] > Intake_C[index] && Extract_C[index] >= BypassMinimumExtract_C;
             return bypass ? Intake_C[index] : (CoolingExtractFraction * Extract_C[index]) + ((1 - CoolingExtractFraction) * Intake_C[index]);
         }
 
@@ -339,9 +339,17 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            //A rule that states no minimum has no floor to report against.
+            string law = double.IsNaN(MinimumSupply_C)
+                ? string.Format(CultureInfo.InvariantCulture, "coil entering - {0:0.###} K (no minimum stated)", CoilNetDrop_K)
+                : string.Format(CultureInfo.InvariantCulture, "max({0:0.###}, coil entering - {1:0.###} K)", MinimumSupply_C, CoilNetDrop_K);
+            string floor = double.IsNaN(MinimumSupply_C)
+                ? string.Empty
+                : string.Format(CultureInfo.InvariantCulture, "{0} cooling hour(s) at the limit; below the limit while the stat calls: {1} h cooled there by the coil, {2} h with the coil entering already below it; ", hours_AtMinimum, hours_BelowMinimumCoilCooling, hours_BelowMinimumEnteringCold);
+
             return string.Format(
                 CultureInfo.InvariantCulture,
-                "{0}: design {1:0.###}/{2:0.###} l/s supply/extract, elevated {3:0.###} l/s; {4} h fully elevated, {5} h modulating; exchanger state (bypass / recovery {19:0.####}) within 0.05 K in {20} of {4} fully elevated hours; DX cooling {6} h ({7} h without a stat signal, {8} h signal without cooling); supply law max({21:0.###}, coil entering - {9:0.###} K) met within 0.05 K in {10} of {11} fully elevated cooling hours not capacity-limited (max error {12:0.###} K) and in {25} of {26} part-flow cooling hours; {22} cooling hour(s) at the limit; below the limit while the stat calls: {23} h cooled there by the coil, {24} h with the coil entering already below it; {13} fully elevated hour(s) at the {14:0} W total duty bound; minimum supply {15:0.##} C; stat room max {16:0.##} C, above {17:0.##} C in {18} h.",
+                "{0}: design {1:0.###}/{2:0.###} l/s supply/extract, elevated {3:0.###} l/s; {4} h fully elevated, {5} h modulating; exchanger state (bypass / recovery {19:0.####}) within 0.05 K in {20} of {4} fully elevated hours; DX cooling {6} h ({7} h without a stat signal, {8} h signal without cooling); supply law {27} met within 0.05 K in {10} of {11} fully elevated cooling hours not capacity-limited (max error {12:0.###} K) and in {25} of {26} part-flow cooling hours; {28}{13} fully elevated hour(s) at the {14:0} W total duty bound; minimum supply {15:0.##} C; stat room max {16:0.##} C, above {17:0.##} C in {18} h.",
                 Name,
                 DesignSupply_Lps,
                 DesignExtract_Lps,
@@ -368,7 +376,9 @@ namespace SAM.Analytical.Tas.TPD
                 hours_BelowMinimumCoilCooling,
                 hours_BelowMinimumEnteringCold,
                 hours_PartExact,
-                hours_Part);
+                hours_Part,
+                law,
+                floor);
         }
     }
 }

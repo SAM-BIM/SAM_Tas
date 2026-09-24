@@ -373,12 +373,13 @@ namespace SAM.Analytical.Tas.TPD
             public double[] Extracts_C;
 
             /// <summary>
-            /// The unit's own bypass decision - the same at every airflow, independent of the cooling-stat, strict at
-            /// every threshold, exactly as <see cref="VentilationUnitOperatingStrategy.ExchangerBypassed"/> states it.
+            /// The unit's own bypass decision - the same at every airflow, independent of the cooling-stat, inclusive at
+            /// both minimums and strict on extract above intake, exactly as
+            /// <see cref="VentilationUnitOperatingStrategy.ExchangerBypassed"/> states it.
             /// </summary>
             public bool Bypass(double intake_C, double extract_C)
             {
-                return intake_C > BypassMinimumIntake_C && extract_C > intake_C && extract_C > BypassMinimumExtract_C;
+                return intake_C >= BypassMinimumIntake_C && extract_C > intake_C && extract_C >= BypassMinimumExtract_C;
             }
 
             /// <summary>The background (design-airflow) exchanger state: 0 in bypass, the recovery fraction otherwise.</summary>
@@ -500,13 +501,15 @@ namespace SAM.Analytical.Tas.TPD
                 CoolingDuty_W = GuidanceCoolingDuty_W,
             };
 
-            //Breakpoints at 0.1 K through the thresholds up to 45 C on both axes, with the thresholds on the grid
-            //and a 0.01 K step just above each extract threshold, so neither switch smears (Stage 7 / Stage 11). The
-            //bypass diagonal (extract = intake) smears over at most 0.1 K anywhere up to 45 C; coarser breakpoints
-            //above 35 C left 17 heatwave hours partly recovering on the MG run (Stage 13). Beyond 45 C the table holds
-            //its edge, which keeps the state right there too.
-            recipe.Intakes_C = Axis(new double[] { -20, -5, 5 }, System.Math.Min(recipe.BypassMinimumIntake_C, 12.0), 45.0, new double[0], null);
-            recipe.Extracts_C = Axis(new double[] { 5, 12 }, System.Math.Min(recipe.BypassMinimumExtract_C, 18.0) - 0.1, 45.0, new double[0], new double[] { recipe.BypassMinimumExtract_C + 0.01, recipe.ActivationTemperature_C + 0.01 });
+            //Breakpoints at 0.1 K through the thresholds up to 45 C on both axes, with each (inclusive) bypass minimum on
+            //the grid and a 0.01 K step just below it, so neither switch smears (Stage 7 / Stage 11). The bypass diagonal
+            //(extract = intake) smears over at most 0.1 K anywhere up to 45 C; coarser breakpoints above 35 C left 17
+            //heatwave hours partly recovering on the MG run (Stage 13). Beyond 45 C the extract axis continues coarsely:
+            //for any intake below 45 C every such cell is on the same side of the diagonal, so a hot (e.g. displacement-
+            //vent) extract keeps the exact state. An intake above 45 C is held at 45 C - outside any design weather used
+            //here (the DSY1 2050s peak is 40.3 C) - where an extract between 45 C and the intake would read as bypass.
+            recipe.Intakes_C = Axis(new double[] { -20, -5, 5 }, System.Math.Min(recipe.BypassMinimumIntake_C, 12.0), 45.0, new double[0], new double[] { recipe.BypassMinimumIntake_C - 0.01 });
+            recipe.Extracts_C = Axis(new double[] { 5, 12 }, System.Math.Min(recipe.BypassMinimumExtract_C, 18.0) - 0.1, 45.0, new double[] { 50, 60, 80, 100 }, new double[] { recipe.BypassMinimumExtract_C - 0.01, recipe.ActivationTemperature_C + 0.01 });
 
             return true;
         }

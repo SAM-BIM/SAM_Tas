@@ -38,13 +38,15 @@ namespace SAM.Analytical.Tas.TM59.Tests
         {
             TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
 
-            //Background: the unit's own bypass - intake > 12, extract > intake and extract > 19, independent of the
+            //Background: the unit's own bypass - intake >= 12, extract > intake and extract >= 19, independent of the
             //cooling-stat (a warm extract with the stat satisfied still bypasses) - else the background fraction.
             Assert.That(recipe.BackgroundEfficiency(14.0, 20.0), Is.EqualTo(0.0));
-            Assert.That(recipe.BackgroundEfficiency(12.0, 20.0), Is.EqualTo(0.8));
+            Assert.That(recipe.BackgroundEfficiency(12.0, 20.0), Is.EqualTo(0.0));
+            Assert.That(recipe.BackgroundEfficiency(11.99, 20.0), Is.EqualTo(0.8));
             Assert.That(recipe.BackgroundEfficiency(14.0, 22.01), Is.EqualTo(0.0));
-            Assert.That(recipe.BackgroundEfficiency(14.0, 19.0), Is.EqualTo(0.8));
-            Assert.That(recipe.BackgroundEfficiency(14.0, 19.01), Is.EqualTo(0.0));
+            Assert.That(recipe.BackgroundEfficiency(14.0, 18.99), Is.EqualTo(0.8));
+            Assert.That(recipe.BackgroundEfficiency(14.0, 19.0), Is.EqualTo(0.0));
+            Assert.That(recipe.BackgroundEfficiency(20.0, 20.0), Is.EqualTo(0.8));
             Assert.That(recipe.BackgroundEfficiency(-2.0, 17.0), Is.EqualTo(0.8));
 
             //Cooling: the same bypass decision, otherwise heat/coolth recovery at the elevated-airflow fraction.
@@ -80,12 +82,12 @@ namespace SAM.Analytical.Tas.TM59.Tests
         {
             TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
 
-            foreach (double value in new[] { 12.0, 12.1, 22.0, 30.0, 37.4, 40.3, 45.0 })
+            foreach (double value in new[] { 11.99, 12.0, 12.1, 22.0, 30.0, 37.4, 40.3, 45.0 })
             {
                 Assert.That(recipe.Intakes_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "intake " + value);
             }
 
-            foreach (double value in new[] { 19.0, 19.01, 22.0, 30.0, 37.8, 45.0 })
+            foreach (double value in new[] { 18.99, 19.0, 22.0, 30.0, 37.8, 45.0, 50.0, 80.0, 100.0 })
             {
                 Assert.That(recipe.Extracts_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "extract " + value);
             }
@@ -148,12 +150,42 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void AHotExtractBeyond45C_KeepsTheExactState()
+        {
+            TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
+
+            //For any intake below 45 C, every extract cell beyond 45 C is on the same side of the bypass diagonal, so a
+            //hot (displacement-vent) extract interpolates exactly between them.
+            //(At an intake of exactly 45 C the diagonal passes through the 45/45 cell itself.)
+            foreach (double intake in recipe.Intakes_C.Where(x => x < 45.0))
+            {
+                double[] states = recipe.Extracts_C.Where(x => x >= 45.0).Select(x => recipe.CoolingEfficiency(intake, x)).Distinct().ToArray();
+                Assert.That(states.Length, Is.EqualTo(1), "intake " + intake);
+            }
+        }
+
+        [Test]
+        public void ARuleWithoutAMinimum_SummarisesWithoutAFloor()
+        {
+            TPD.GuidanceCoolingResult result = new TPD.GuidanceCoolingResult(Guid.NewGuid(), "U", 30.0, 30.0, 80.0, 0.8576, 8.245, double.NaN, 12.0, 19.0, TPD.Modify.GuidanceCoolingDuty_W, 22.0,
+                new System.Collections.Generic.List<double> { 30.0 }, new System.Collections.Generic.List<double> { 23.0 }, new System.Collections.Generic.List<double> { 24.0 },
+                new System.Collections.Generic.List<double> { 25.0 }, new System.Collections.Generic.List<double> { 16.755 }, new System.Collections.Generic.List<double> { 80.0 },
+                new System.Collections.Generic.List<double> { 80.0 }, new System.Collections.Generic.List<double> { 800.0 }, new System.Collections.Generic.List<double> { 0.0 });
+
+            string summary = result.Summary();
+            Assert.That(summary, Does.Not.Contain("NaN"));
+            Assert.That(summary, Does.Contain("no minimum stated"));
+            Assert.That(summary, Does.Not.Contain("at the limit"));
+            Assert.That(result.SupplyTarget_C(0), Is.EqualTo(25.0 - 8.245).Within(1e-9));
+        }
+
+        [Test]
         public void TheBypassDiagonal_IsOnTheGridUpTo45C()
         {
             TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
 
             //Every step on both axes is at most 0.1 K from the bypass thresholds up to 45 C.
-            foreach (double[] axis in new[] { recipe.Intakes_C.Where(x => x >= 12.0).ToArray(), recipe.Extracts_C.Where(x => x >= 17.9).ToArray() })
+            foreach (double[] axis in new[] { recipe.Intakes_C.Where(x => x >= 12.0).ToArray(), recipe.Extracts_C.Where(x => x >= 17.9 && x <= 45.0).ToArray() })
             {
                 Assert.That(axis.Last(), Is.EqualTo(45.0).Within(1e-9));
                 for (int i = 1; i < axis.Length; i++)
