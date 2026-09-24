@@ -74,7 +74,8 @@ namespace SAM.Analytical.Tas.TPD
                 mechanicalVentilationMaterialisation.Bindings,
                 noIzamThermalSource.ZoneReferences,
                 fanHeatGainPolicy,
-                mechanicalVentilationMaterialisation.RecirculationCoolings);
+                mechanicalVentilationMaterialisation.RecirculationCoolings,
+                mechanicalVentilationMaterialisation.GuidanceCoolings);
 
             //-------------------------------------------------------------------------------------------
             //2. The duty carriers, in a working copy. PR1's graph is an input and stays one: the caller
@@ -213,6 +214,31 @@ namespace SAM.Analytical.Tas.TPD
                 }
             }
 
+            //-------------------------------------------------------------------------------------------
+            //7. SAM#123: what each manufacturer-guidance cooling unit did, hour by hour. A read that
+            //   cannot be made refuses; what the unit did is reported, not judged here.
+            //-------------------------------------------------------------------------------------------
+            GuidanceCoolingResults guidanceCoolingResults = null;
+
+            if (systemVentilationConversionContext.GuidanceCoolings.Count != 0)
+            {
+                guidanceCoolingResults = Modify.GuidanceCoolingResults(path_TPD, systemVentilationConversionContext, startHour, endHour);
+
+                notes.AddRange(guidanceCoolingResults.Notes);
+
+                if (!guidanceCoolingResults.IsComplete)
+                {
+                    refusals.AddRange(guidanceCoolingResults.Refusals);
+
+                    if (refusals.Count == 0)
+                    {
+                        refusals.Add("The manufacturer-guidance evidence did not complete, and said nothing about why.");
+                    }
+
+                    return new SystemVentilationRoute(noIzamThermalSource, path_TPD, simulationEvidence, null, null, null, refusals, notes);
+                }
+            }
+
             return new SystemVentilationRoute(
                 noIzamThermalSource,
                 path_TPD,
@@ -221,6 +247,7 @@ namespace SAM.Analytical.Tas.TPD
                 systemVentilationConversionContext.ConnectionBindings,
                 systemZoneTemperatureResults,
                 recirculationCoolingResults,
+                guidanceCoolingResults,
                 refusals,
                 notes);
         }

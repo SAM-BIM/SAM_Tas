@@ -64,7 +64,8 @@ namespace SAM.Analytical.Tas.TPD
             IEnumerable<MechanicalVentilationBinding> mechanicalVentilationBindings,
             IDictionary<Guid, string> dictionary_ZoneReference,
             SystemVentilationFanHeatGainPolicy fanHeatGainPolicy = SystemVentilationFanHeatGainPolicy.ClearToZero,
-            IEnumerable<MechanicalVentilationRecirculationCooling> mechanicalVentilationRecirculationCoolings = null)
+            IEnumerable<MechanicalVentilationRecirculationCooling> mechanicalVentilationRecirculationCoolings = null,
+            IEnumerable<MechanicalVentilationGuidanceCooling> mechanicalVentilationGuidanceCoolings = null)
         {
             SystemVentilationConversionContext result = new SystemVentilationConversionContext
             {
@@ -76,6 +77,16 @@ namespace SAM.Analytical.Tas.TPD
                 foreach (MechanicalVentilationRecirculationCooling mechanicalVentilationRecirculationCooling in mechanicalVentilationRecirculationCoolings)
                 {
                     result.Add(mechanicalVentilationRecirculationCooling);
+                }
+            }
+
+            //SAM#123: the manufacturer-guidance cooling units. Their only new connections join the exchanger,
+            //the supply coil and the supply fan, so they touch no room connector and change no leg intent.
+            if (mechanicalVentilationGuidanceCoolings != null)
+            {
+                foreach (MechanicalVentilationGuidanceCooling mechanicalVentilationGuidanceCooling in mechanicalVentilationGuidanceCoolings)
+                {
+                    result.Add(mechanicalVentilationGuidanceCooling);
                 }
             }
 
