@@ -41,10 +41,10 @@ namespace SAM.Analytical.Tas.TPD
         /// <item><description><b>DX coil.</b> No enable gates, and <c>MinimumOffcoil</c> = a table over the
         /// coil's own entering temperature: <c>max(minimum, entering - (coil drop - fan rise)(elevated))</c>,
         /// which a controlled coil holds as its leaving temperature. The fans' own heat stays cleared - the
-        /// stated fan rise is carried in the net drop instead. A finite cooling duty is required by TAS: the
-        /// product's largest combined (coolth recovery + sensible) figure, which TAS applies to the total
-        /// (sensible + latent) duty. It is an upper bound, not a DX rating - the coil's stated sensible duty at
-        /// the elevated airflow is well below it, so it binds only on a large latent load.</description></item>
+        /// stated fan rise is carried in the net drop instead. The finite cooling duty TAS requires is
+        /// <see cref="GuidanceCoolingDuty_W"/>, a numerical value large enough that the law, not the duty, sets the
+        /// leaving temperature whenever the stat calls. No product capacity figure is used: none is published as
+        /// a DX total duty.</description></item>
         /// </list>
         /// <para>
         /// <b>Manufacturer guidance, not certified performance.</b> Nothing here is written as a certified
@@ -313,7 +313,7 @@ namespace SAM.Analytical.Tas.TPD
 
             systemVentilationConversionContext.Note(string.Format(
                 CultureInfo.InvariantCulture,
-                "{0} grounded (MANUFACTURER GUIDANCE, not certified performance): cooling-stat in zone {1} at {2:0.###} C (+{3:0.###} K band); supply {4:0.###} -> {5:0.###} l/s and extract {6:0.###} -> {5:0.###} l/s while cooling ({7} extract/transfer damper(s)); exchanger bypass (intake > {11:0.###} C, extract > intake and > {12:0.###} C) else recovery {8:0.###} at design / {13:0.####} at {5:0.###} l/s; DX supply = coil entering - {9:0.###} K, not below {14:0.###} C; duty bound {10:0} W total (the product's largest combined figure, not a DX rating); read back.",
+                "{0} grounded (MANUFACTURER GUIDANCE, not certified performance): cooling-stat in zone {1} at {2:0.###} C (+{3:0.###} K band); supply {4:0.###} -> {5:0.###} l/s and extract {6:0.###} -> {5:0.###} l/s while cooling ({7} extract/transfer damper(s)); exchanger bypass (intake > {11:0.###} C, extract > intake and > {12:0.###} C) else recovery {8:0.###} at design / {13:0.####} at {5:0.###} l/s; DX supply = coil entering - {9:0.###} K, not below {14:0.###} C, whenever the stat calls (numerical duty {10:0} W, not a rating); read back.",
                 label,
                 Query.NativeReference(systemZone_Stat),
                 recipe.ActivationTemperature_C,
@@ -335,6 +335,16 @@ namespace SAM.Analytical.Tas.TPD
 
         /// <summary>An inert coil setpoint [&#176;C]: a controlled coil ignores it, and it can never gate cooling.</summary>
         public const double GuidanceCoolingInertSetpoint_C = -100.0;
+
+        /// <summary>
+        /// The DX coil's cooling duty [W] - a numerical value, <b>not a rating and not a constraint</b>. TAS needs a
+        /// finite duty for a controlled coil, and a controlled coil delivers its signal times that duty until the
+        /// off-coil law stops it. A duty this large makes any stat signal reach the stated law, which is the
+        /// manufacturer's on/off cooling at the room stat; the product's published 2.2 kW is a combined coolth
+        /// recovery + sensible figure, not a DX total duty, and used here it made the coil modulate proportionally in
+        /// part-signal hours (Stage 13: 424 of 794 July-August part-flow hours short of the law).
+        /// </summary>
+        public const double GuidanceCoolingDuty_W = 100000.0;
 
         /// <summary>Everything the grounding writes, resolved and checked once from the unit's strategy.</summary>
         public class GuidanceRecipe
@@ -475,25 +485,6 @@ namespace SAM.Analytical.Tas.TPD
                 return false;
             }
 
-            VentilationUnitPerformanceOutput output_Capacity = guidanceCooling.Settings.SupplyAirTemperatureTable?.Output(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity);
-            double capacity_kW = double.NaN;
-            if (output_Capacity?.Values != null && string.Equals(output_Capacity.Unit, "kW", StringComparison.OrdinalIgnoreCase))
-            {
-                foreach (double value in output_Capacity.Values)
-                {
-                    if (!double.IsNaN(value) && !double.IsInfinity(value) && (double.IsNaN(capacity_kW) || value > capacity_kW))
-                    {
-                        capacity_kW = value;
-                    }
-                }
-            }
-
-            if (!(capacity_kW > 0))
-            {
-                refusal = "states no combined cooling capacity in kW on the product's table, so the DX coil has no stated bound.";
-                return false;
-            }
-
             recipe = new GuidanceRecipe
             {
                 ActivationTemperature_C = strategy.CoolingActivationTemperature_C,
@@ -506,13 +497,16 @@ namespace SAM.Analytical.Tas.TPD
                 Elevated_Lps = elevated_Lps,
                 DesignSupply_Lps = designSupply_Lps,
                 DesignExtract_Lps = designExtract_Lps,
-                CoolingDuty_W = capacity_kW * 1000.0,
+                CoolingDuty_W = GuidanceCoolingDuty_W,
             };
 
-            //Breakpoints at 0.1 K through the thresholds up to 35 C on both axes, with the thresholds on the grid
-            //and a 0.01 K step just above each extract threshold, so neither switch smears (Stage 7 / Stage 11).
-            recipe.Intakes_C = Axis(new double[] { -20, -5, 5 }, System.Math.Min(recipe.BypassMinimumIntake_C, 12.0), 35.0, new double[] { 38, 45 }, null);
-            recipe.Extracts_C = Axis(new double[] { 5, 12 }, System.Math.Min(recipe.BypassMinimumExtract_C, 18.0) - 0.1, 35.0, new double[] { 40 }, new double[] { recipe.BypassMinimumExtract_C + 0.01, recipe.ActivationTemperature_C + 0.01 });
+            //Breakpoints at 0.1 K through the thresholds up to 45 C on both axes, with the thresholds on the grid
+            //and a 0.01 K step just above each extract threshold, so neither switch smears (Stage 7 / Stage 11). The
+            //bypass diagonal (extract = intake) smears over at most 0.1 K anywhere up to 45 C; coarser breakpoints
+            //above 35 C left 17 heatwave hours partly recovering on the MG run (Stage 13). Beyond 45 C the table holds
+            //its edge, which keeps the state right there too.
+            recipe.Intakes_C = Axis(new double[] { -20, -5, 5 }, System.Math.Min(recipe.BypassMinimumIntake_C, 12.0), 45.0, new double[0], null);
+            recipe.Extracts_C = Axis(new double[] { 5, 12 }, System.Math.Min(recipe.BypassMinimumExtract_C, 18.0) - 0.1, 45.0, new double[0], new double[] { recipe.BypassMinimumExtract_C + 0.01, recipe.ActivationTemperature_C + 0.01 });
 
             return true;
         }

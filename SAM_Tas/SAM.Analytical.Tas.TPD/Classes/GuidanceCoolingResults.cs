@@ -249,6 +249,7 @@ namespace SAM.Analytical.Tas.TPD
             int hours_Elevated = 0, hours_Modulating = 0, hours_Cooling = 0, hours_CoolingWithoutSignal = 0, hours_SignalWithoutCooling = 0;
             int hours_Full = 0, hours_FullExact = 0, hours_CapacityLimited = 0, hours_RoomAboveBand = 0;
             int hours_ElevatedExchangerExact = 0, hours_AtMinimum = 0, hours_BelowMinimumCoilCooling = 0, hours_BelowMinimumEnteringCold = 0;
+            int hours_Part = 0, hours_PartExact = 0;
             double maximumError_K = 0, minimumSupply_C = double.PositiveInfinity, maximumRoom_C = double.NegativeInfinity;
 
             for (int i = 0; i < Count; i++)
@@ -262,6 +263,18 @@ namespace SAM.Analytical.Tas.TPD
                     if (System.Math.Abs(ExchangerLeaving_C[i] - ExchangerTarget_C(i)) <= 0.05)
                     {
                         hours_ElevatedExchangerExact++;
+                    }
+                }
+                else if (signal > 0.01)
+                {
+                    hours_Modulating++;
+                    if (cooling)
+                    {
+                        hours_Part++;
+                        if (System.Math.Abs(Supply_C[i] - SupplyTarget_C(i)) <= 0.05)
+                        {
+                            hours_PartExact++;
+                        }
                     }
                 }
 
@@ -284,10 +297,6 @@ namespace SAM.Analytical.Tas.TPD
                     {
                         hours_AtMinimum++;
                     }
-                }
-                else if (signal > 0.01)
-                {
-                    hours_Modulating++;
                 }
 
                 if (cooling)
@@ -332,7 +341,7 @@ namespace SAM.Analytical.Tas.TPD
 
             return string.Format(
                 CultureInfo.InvariantCulture,
-                "{0}: design {1:0.###}/{2:0.###} l/s supply/extract, elevated {3:0.###} l/s; {4} h fully elevated, {5} h modulating; exchanger state (bypass / recovery {19:0.####}) within 0.05 K in {20} of {4} fully elevated hours; DX cooling {6} h ({7} h without a stat signal, {8} h signal without cooling); supply law max({21:0.###}, coil entering - {9:0.###} K) met within 0.05 K in {10} of {11} fully elevated cooling hours not capacity-limited (max error {12:0.###} K); {22} cooling hour(s) at the limit; below the limit while the stat calls: {23} h cooled there by the coil, {24} h with the coil entering already below it; {13} fully elevated hour(s) at the {14:0} W total duty bound; minimum supply {15:0.##} C; stat room max {16:0.##} C, above {17:0.##} C in {18} h.",
+                "{0}: design {1:0.###}/{2:0.###} l/s supply/extract, elevated {3:0.###} l/s; {4} h fully elevated, {5} h modulating; exchanger state (bypass / recovery {19:0.####}) within 0.05 K in {20} of {4} fully elevated hours; DX cooling {6} h ({7} h without a stat signal, {8} h signal without cooling); supply law max({21:0.###}, coil entering - {9:0.###} K) met within 0.05 K in {10} of {11} fully elevated cooling hours not capacity-limited (max error {12:0.###} K) and in {25} of {26} part-flow cooling hours; {22} cooling hour(s) at the limit; below the limit while the stat calls: {23} h cooled there by the coil, {24} h with the coil entering already below it; {13} fully elevated hour(s) at the {14:0} W total duty bound; minimum supply {15:0.##} C; stat room max {16:0.##} C, above {17:0.##} C in {18} h.",
                 Name,
                 DesignSupply_Lps,
                 DesignExtract_Lps,
@@ -357,7 +366,9 @@ namespace SAM.Analytical.Tas.TPD
                 MinimumSupply_C,
                 hours_AtMinimum,
                 hours_BelowMinimumCoilCooling,
-                hours_BelowMinimumEnteringCold);
+                hours_BelowMinimumEnteringCold,
+                hours_PartExact,
+                hours_Part);
         }
     }
 }

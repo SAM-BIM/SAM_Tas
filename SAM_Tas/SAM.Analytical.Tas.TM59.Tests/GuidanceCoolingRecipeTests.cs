@@ -29,7 +29,7 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(recipe.MinimumSupply_C, Is.EqualTo(13.0));
             Assert.That(recipe.DesignSupply_Lps, Is.EqualTo(25.0));
             Assert.That(recipe.DesignExtract_Lps, Is.EqualTo(25.0));
-            Assert.That(recipe.CoolingDuty_W, Is.EqualTo(2000.0).Within(1e-9));
+            Assert.That(recipe.CoolingDuty_W, Is.EqualTo(TPD.Modify.GuidanceCoolingDuty_W));
             Assert.That(recipe.ExtractFraction, Is.EqualTo(0.8));
         }
 
@@ -80,12 +80,12 @@ namespace SAM.Analytical.Tas.TM59.Tests
         {
             TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
 
-            foreach (double value in new[] { 12.0, 12.1, 22.0, 30.0 })
+            foreach (double value in new[] { 12.0, 12.1, 22.0, 30.0, 37.4, 40.3, 45.0 })
             {
                 Assert.That(recipe.Intakes_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "intake " + value);
             }
 
-            foreach (double value in new[] { 19.0, 19.01, 22.0, 30.0 })
+            foreach (double value in new[] { 19.0, 19.01, 22.0, 30.0, 37.8, 45.0 })
             {
                 Assert.That(recipe.Extracts_C.Any(x => Math.Abs(x - value) < 1e-9), Is.True, "extract " + value);
             }
@@ -136,12 +136,31 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
-        public void NoStatedCapacity_IsRefused()
+        public void TheDuty_IsNumerical_AndNeedsNoPublishedCapacity()
         {
             MechanicalVentilationGuidanceCooling guidanceCooling = GuidanceCooling(null, withCapacity: false);
 
-            Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out _, out string refusal), Is.False);
-            Assert.That(refusal, Does.Contain("capacity"));
+            Assert.That(TPD.Modify.TryGetGuidanceRecipe(guidanceCooling, out TPD.Modify.GuidanceRecipe recipe, out string refusal), Is.True, refusal);
+            Assert.That(recipe.CoolingDuty_W, Is.EqualTo(TPD.Modify.GuidanceCoolingDuty_W));
+
+            //Far above what the stated drop asks of the coil at the elevated airflow (rho cp V dT ~ 0.8 kW).
+            Assert.That(recipe.CoolingDuty_W, Is.GreaterThan(10.0 * 1.2 * 1.006 * 0.080 * recipe.CoilNetDrop_K * 1000.0));
+        }
+
+        [Test]
+        public void TheBypassDiagonal_IsOnTheGridUpTo45C()
+        {
+            TPD.Modify.TryGetGuidanceRecipe(GuidanceCooling(), out TPD.Modify.GuidanceRecipe recipe, out _);
+
+            //Every step on both axes is at most 0.1 K from the bypass thresholds up to 45 C.
+            foreach (double[] axis in new[] { recipe.Intakes_C.Where(x => x >= 12.0).ToArray(), recipe.Extracts_C.Where(x => x >= 17.9).ToArray() })
+            {
+                Assert.That(axis.Last(), Is.EqualTo(45.0).Within(1e-9));
+                for (int i = 1; i < axis.Length; i++)
+                {
+                    Assert.That(axis[i] - axis[i - 1], Is.LessThanOrEqualTo(0.1 + 1e-9));
+                }
+            }
         }
 
         private static SupplyTemperatureRule CoolingRule(double minimum_C)
