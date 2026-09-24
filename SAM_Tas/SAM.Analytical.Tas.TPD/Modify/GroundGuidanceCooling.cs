@@ -313,7 +313,7 @@ namespace SAM.Analytical.Tas.TPD
 
             systemVentilationConversionContext.Note(string.Format(
                 CultureInfo.InvariantCulture,
-                "{0} grounded (MANUFACTURER GUIDANCE, not certified performance): cooling-stat in zone {1} at {2:0.###} C (+{3:0.###} K band); supply {4:0.###} -> {5:0.###} l/s and extract {6:0.###} -> {5:0.###} l/s while cooling ({7} extract/transfer damper(s)); exchanger bypass (intake > {11:0.###} C, extract > intake and > {12:0.###} C) else recovery {8:0.###} at design / {13:0.####} at {5:0.###} l/s; DX supply = coil entering - {9:0.###} K, not below {14:0.###} C, whenever the stat calls (numerical duty {10:0} W, not a rating); read back.",
+                "{0} grounded (MANUFACTURER GUIDANCE, not certified performance): cooling-stat in zone {1} at {2:0.###} C (+{3:0.###} K band); supply {4:0.###} -> {5:0.###} l/s and extract {6:0.###} -> {5:0.###} l/s while cooling ({7} extract/transfer damper(s)); exchanger bypass (intake >= {11:0.###} C, extract > intake and >= {12:0.###} C) else recovery {8:0.###} at design / {13:0.####} at {5:0.###} l/s; DX supply = coil entering - {9:0.###} K{14}, whenever the stat calls (numerical duty {10:0} W, not a rating); read back.",
                 label,
                 Query.NativeReference(systemZone_Stat),
                 recipe.ActivationTemperature_C,
@@ -328,7 +328,7 @@ namespace SAM.Analytical.Tas.TPD
                 recipe.BypassMinimumIntake_C,
                 recipe.BypassMinimumExtract_C,
                 recipe.CoolingExtractFraction,
-                recipe.MinimumSupply_C));
+                double.IsNaN(recipe.MinimumSupply_C) ? " (no minimum stated)" : string.Format(CultureInfo.InvariantCulture, ", not below {0:0.###} C", recipe.MinimumSupply_C)));
 
             return true;
         }
