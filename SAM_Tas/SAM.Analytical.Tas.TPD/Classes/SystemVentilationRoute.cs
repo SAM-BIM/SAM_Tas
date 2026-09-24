@@ -62,6 +62,32 @@ namespace SAM.Analytical.Tas.TPD
             }
         }
 
+        /// <summary>
+        /// SAM#123: a complete route whose document carries manufacturer-guidance cooling units, with what each
+        /// unit did hour by hour. Null for a route with none.
+        /// </summary>
+        public SystemVentilationRoute(
+            NoIzamThermalSource noIzamThermalSource,
+            string path_TPD,
+            SimulationEvidence simulationEvidence,
+            IEnumerable<SystemVentilationBinding> bindings,
+            IEnumerable<SystemVentilationConnectionBinding> connectionBindings,
+            SystemZoneTemperatureResults systemZoneTemperatureResults,
+            RecirculationCoolingResults recirculationCoolingResults,
+            GuidanceCoolingResults guidanceCoolingResults,
+            IEnumerable<string> refusals,
+            IEnumerable<string> notes)
+            : this(noIzamThermalSource, path_TPD, simulationEvidence, bindings, connectionBindings, systemZoneTemperatureResults, recirculationCoolingResults, refusals, notes)
+        {
+            if (IsComplete)
+            {
+                GuidanceCoolingResults = guidanceCoolingResults;
+            }
+        }
+
+        /// <summary>SAM#123: the manufacturer-guidance evidence, or null where the document carries no such unit.</summary>
+        public GuidanceCoolingResults GuidanceCoolingResults { get; }
+
         /// <summary>The recirculation cooling evidence, or null where the document carries no branch.</summary>
         public RecirculationCoolingResults RecirculationCoolingResults
         {

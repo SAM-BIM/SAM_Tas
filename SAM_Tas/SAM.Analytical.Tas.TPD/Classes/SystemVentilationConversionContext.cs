@@ -115,6 +115,54 @@ namespace SAM.Analytical.Tas.TPD
             return true;
         }
 
+        private readonly Dictionary<Guid, Analytical.Systems.MechanicalVentilationGuidanceCooling> guidanceCooling_By_AirSystem = new Dictionary<Guid, Analytical.Systems.MechanicalVentilationGuidanceCooling>();
+
+        /// <summary>
+        /// SAM#123: one air system's manufacturer-guidance cooling unit, as SAM_Systems materialised it -
+        /// the exchanger, the supply DX coil after it, both fans, the stat room and the rooms' design and
+        /// elevated airflows - grounded natively by <see cref="Modify.GroundGuidanceCooling"/>.
+        /// </summary>
+        public bool Add(Analytical.Systems.MechanicalVentilationGuidanceCooling mechanicalVentilationGuidanceCooling)
+        {
+            if (mechanicalVentilationGuidanceCooling == null)
+            {
+                return false;
+            }
+
+            if (guidanceCooling_By_AirSystem.ContainsKey(mechanicalVentilationGuidanceCooling.Guid_AirSystem) || recirculationCooling_By_AirSystem.ContainsKey(mechanicalVentilationGuidanceCooling.Guid_AirSystem))
+            {
+                Refuse(string.Format(
+                    "Air system {0} is stated to carry a manufacturer-guidance cooling unit alongside another cooling unit.",
+                    mechanicalVentilationGuidanceCooling.Guid_AirSystem));
+
+                return false;
+            }
+
+            guidanceCooling_By_AirSystem[mechanicalVentilationGuidanceCooling.Guid_AirSystem] = mechanicalVentilationGuidanceCooling;
+
+            return true;
+        }
+
+        /// <summary>Every manufacturer-guidance cooling unit, ordered by air system guid.</summary>
+        public List<Analytical.Systems.MechanicalVentilationGuidanceCooling> GuidanceCoolings
+        {
+            get
+            {
+                List<Guid> guids = new List<Guid>(guidanceCooling_By_AirSystem.Keys);
+                guids.Sort();
+
+                return guids.ConvertAll(x => guidanceCooling_By_AirSystem[x]);
+            }
+        }
+
+        /// <summary>The manufacturer-guidance cooling unit of one air system, or null where it has none.</summary>
+        public Analytical.Systems.MechanicalVentilationGuidanceCooling GuidanceCooling(Guid guid_AirSystem)
+        {
+            lookupCount++;
+
+            return guidanceCooling_By_AirSystem.TryGetValue(guid_AirSystem, out Analytical.Systems.MechanicalVentilationGuidanceCooling result) ? result : null;
+        }
+
         /// <summary>Every recirculation cooling branch, ordered by air system guid.</summary>
         public List<Analytical.Systems.MechanicalVentilationRecirculationCooling> RecirculationCoolings
         {

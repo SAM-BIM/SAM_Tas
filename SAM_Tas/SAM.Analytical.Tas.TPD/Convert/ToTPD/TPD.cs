@@ -1087,6 +1087,11 @@ namespace SAM.Analytical.Tas.TPD
                                 //read back against the graph, then the controller that turns its law into
                                 //flow, on the native mixed-return duct no SAM connection names.
                                 Modify.GroundRecirculationCooling(systemVentilationConversionContext, airSystem.Guid, system, dictionary_SystemComponent);
+
+                                //SAM#123: the unit's manufacturer-guidance cooling, if it has one - the Stage 11
+                                //TAS recipe (room-stat DX, elevated supply and extract, exchanger cooling state,
+                                //to - X supply law), every value read back and refused on disagreement.
+                                Modify.GroundGuidanceCooling(systemVentilationConversionContext, airSystem.Guid, system, dictionary_SystemComponent);
                             }
                         }
 
