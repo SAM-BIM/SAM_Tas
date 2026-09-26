@@ -624,21 +624,7 @@ namespace SAM.Analytical.Tas
 
                 if (adjacencyCluster != null)
                 {
-                    if (coolingDesignDays != null)
-                    {
-                        for (int i = 0; i < coolingDesignDays.Count; i++)
-                        {
-                            adjacencyCluster.AddObject(new DesignDay(coolingDesignDays[i], LoadType.Cooling));
-                        }
-                    }
-
-                    if (heatingDesignDays != null)
-                    {
-                        for (int i = 0; i < heatingDesignDays.Count; i++)
-                        {
-                            adjacencyCluster.AddObject(new DesignDay(heatingDesignDays[i], LoadType.Heating));
-                        }
-                    }
+                    Modify.ReplaceDesignDays(adjacencyCluster, coolingDesignDays, heatingDesignDays);
                 }
             }
 
