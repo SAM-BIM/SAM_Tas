@@ -1,6 +1,6 @@
 # Project Progress
 
-## Current: replace per-run records instead of appending (26 Sep 2026) - PR OPEN, not merged
+## Current: replace per-run records instead of appending (26 Sep 2026) - MERGED as SAM_Tas#67 (`b32c0808`)
 
 **Status.** Branch `fix/parto-replace-run-records-2026-09-26` from `sow/2026-Q3` `39828c6`; commits `bf0daba`, `63df74d`.
 Second of three coordinated PRs: merge SAM `fix/deepclone-guidless-objects-2026-09-26` first (this repo builds against
@@ -18,7 +18,8 @@ Second of three coordinated PRs: merge SAM `fix/deepclone-guidless-objects-2026-
 **Validation.** SAM.Analytical.Tas.TM59.Tests 947/947 (+3 `DesignDayRecordReplacementTests`). `SAM_Tas.sln` Release
 exit 0. Live 2B re-run (real TAS): every round 2 design days (Z1 only) and 4 zone results; `.sam` flat at 166 KB.
 
-**Next step.** Owner review; CI green; merge after SAM, before SAM_UI.
+**Next step.** Done. Merged in order SAM#142 (`78a57466`) -> SAM_Tas#67 (`b32c0808`) -> SAM_UI#119 (`5a0b9bf6`);
+re-validated against the merged SAM build (TM59 947/947). Deployed by SAM_Deploy#50 (`7fcd79a7`).
 
 ## Previous: Nuaire reply (24 Sep 2026) - exchanger then DX drop, 13 C floor
 
