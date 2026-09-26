@@ -1,6 +1,26 @@
 # Project Progress
 
-## Current: Nuaire reply (24 Sep 2026) - exchanger then DX drop, 13 C floor
+## Current: replace per-run records instead of appending (26 Sep 2026) - PR OPEN, not merged
+
+**Status.** Branch `fix/parto-replace-run-records-2026-09-26` from `sow/2026-Q3` `39828c6`; commits `bf0daba`, `63df74d`.
+Second of three coordinated PRs: merge SAM `fix/deepclone-guidless-objects-2026-09-26` first (this repo builds against
+`..\SAM\build`), then this, then SAM_UI `feature/parto-2b-sam-growth-2026-09-26`. Full record: SAM_UI
+`documentation/evidence/parto-2b-sam-growth/GROWTH.md`.
+
+**Defects (found investigating the Part O 2B per-round `.sam` growth).**
+- `WorkflowCalculator` APPENDED each run's design days to the cluster, although `Modify.AddDesignDays` clears the TBD's
+  and writes only the run's: +2 per run, and stale design days of an earlier weather (London beside CIBSE Z1) kept in
+  the model. Now `Modify.ReplaceDesignDays` (new, `Modify/ReplaceDesignDays.cs`) - the cluster records exactly the TBD's.
+- `Modify.AddResults` replaced space/surface results but appended a `ZoneSimulationResult` per zone per run. Now the
+  earlier cooling result of the same source is removed first, as for spaces.
+- Neither record feeds sizing, simulation, TM59 or the optimiser: no input changes (live: TM59 reports identical).
+
+**Validation.** SAM.Analytical.Tas.TM59.Tests 947/947 (+3 `DesignDayRecordReplacementTests`). `SAM_Tas.sln` Release
+exit 0. Live 2B re-run (real TAS): every round 2 design days (Z1 only) and 4 zone results; `.sam` flat at 166 KB.
+
+**Next step.** Owner review; CI green; merge after SAM, before SAM_UI.
+
+## Previous: Nuaire reply (24 Sep 2026) - exchanger then DX drop, 13 C floor
 
 **Status.** MERGED into `sow/2026-Q3` on 2026-09-24, in order: SAM-BIM/SAM#133 (`54c43438`) -> SAM-BIM/SAM_Systems#29 (`c88c9b37`) -> SAM-BIM/SAM_Tas#65 (`1b659756`) -> SAM-BIM/SAM_UI#107 (`8f58144c`). CI green and Codex review clean (all findings fixed and answered) on every PR. The `feature/parto-nuaire-reply-2026-09-24` branches are deleted.
 The full cross-repo record (evidence, decisions, TAS probes, MG
