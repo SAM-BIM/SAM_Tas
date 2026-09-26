@@ -20,6 +20,9 @@ exit 0. Live 2B re-run (real TAS): every round 2 design days (Z1 only) and 4 zon
 
 **Next step.** Done. Merged in order SAM#142 (`78a57466`) -> SAM_Tas#67 (`b32c0808`) -> SAM_UI#119 (`5a0b9bf6`);
 re-validated against the merged SAM build (TM59 947/947). Deployed by SAM_Deploy#50 (`7fcd79a7`).
+No further SAM_Tas work is planned for this fix. The next step is Part O UX Pass 6 (final Part O consistency and
+end-to-end acceptance), started in a fresh session from SAM_UI `sow/2026-Q3`; it changes SAM_Tas only if that pass
+finds a defect here.
 
 ## Previous: Nuaire reply (24 Sep 2026) - exchanger then DX drop, 13 C floor
 
