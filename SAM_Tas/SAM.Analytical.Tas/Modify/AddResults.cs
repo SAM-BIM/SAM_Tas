@@ -282,6 +282,15 @@ namespace SAM.Analytical.Tas
 
                     if(zoneSimulationResult_Cooling != null)
                     {
+                        //Replaced, as the space and surface results above are: a zone result from an earlier
+                        //run of the same model is stale once this run's exists, and keeping it left a re-run
+                        //model with one more per zone per run and no way to tell which was current.
+                        List<ZoneSimulationResult> zoneSimulationResults_Existing = adjacencyCluster.GetResults<ZoneSimulationResult>(zone, Query.Source())?.FindAll(x => x.LoadType() == LoadType.Cooling);
+                        if (zoneSimulationResults_Existing != null && zoneSimulationResults_Existing.Count != 0)
+                        {
+                            adjacencyCluster.Remove(zoneSimulationResults_Existing);
+                        }
+
                         adjacencyCluster.AddObject(zoneSimulationResult_Cooling);
                         adjacencyCluster.AddRelation(zone, zoneSimulationResult_Cooling);
                         result.Add(zoneSimulationResult_Cooling);
