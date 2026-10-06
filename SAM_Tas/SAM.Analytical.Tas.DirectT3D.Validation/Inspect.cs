@@ -32,7 +32,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
 
             sb.AppendLine("panel types: " + string.Join(", ", panels.GroupBy(x => x.PanelType).Select(x => x.Key + "=" + x.Count())));
             foreach (Construction c in cluster.GetConstructions() ?? new List<Construction>())
-                sb.AppendLine(string.Format(ci, "construction '{0}' thickness={1:F3} adiabatic={2}", c.Name, c.GetThickness(), Analytical.Query.Adiabatic(c)));
+                sb.AppendLine(string.Format(ci, "construction '{0}' thickness={1:F3} adiabatic={2} layers=[{3}]", c.Name, c.GetThickness(), Analytical.Query.Adiabatic(c), string.Join(" | ", (c.ConstructionLayers ?? new List<ConstructionLayer>()).Select(l => l.Name + " " + l.Thickness.ToString("F3", ci)))));
             foreach (ApertureConstruction ac in cluster.GetApertureConstructions() ?? new List<ApertureConstruction>())
                 sb.AppendLine(string.Format(ci, "apertureConstruction '{0}' type={1} paneLayers={2} frameLayers={3}", ac.Name, ac.ApertureType, ac.PaneConstructionLayers?.Count, ac.FrameConstructionLayers?.Count));
 
@@ -64,6 +64,16 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 sb.AppendLine(string.Format(ci, "  element '{0}' width={1:F3} BEType={2} ground={3} ghost={4} transparent={5} key={6}", e.Name, e.Width, e.BEType, e.Ground, e.Ghost, e.Transparent, e.Key));
             foreach (T3DWindowSpec w in plan.Windows)
                 sb.AppendLine(string.Format(ci, "  window '{0}' openingType={1} positionType={2} framePct={3:F1} frameWidth={4} transparent={5} internalShadows={6} key={7}", w.Name, w.OpeningType, w.PositionType, w.FramePercent, w.FrameWidth, w.Transparent, w.InternalShadows, w.Key));
+            foreach (T3DSurfaceSpec surf in plan.Surfaces.Where(x => x.Kind == T3DSurfaceKind.Internal))
+            {
+                List<Point3D> pts = new List<Point3D>();
+                for (int i = 0; i < surf.Coordinates.GetLength(1); i++) pts.Add(new Point3D(surf.Coordinates[0, i], surf.Coordinates[1, i], surf.Coordinates[2, i]));
+                Vector3D n = pts.NewellNormal();
+                double azimuth = (Math.Atan2(n.X, n.Y) * 180 / Math.PI + 360) % 360;
+                sb.AppendLine(string.Format(ci, "  INTERNAL panel='{0}' A='{1}'(idx {2}) B='{3}'(idx {4}) area={5:F2} azimuthOfNormal={6:F0} spaces(panel order)=[{7}]", surf.PanelName, plan.Zones[surf.Zone].Name, surf.Zone, plan.Zones[surf.Zone2].Name, surf.Zone2, n.Length / 2, azimuth,
+                    string.Join("|", (cluster.GetSpaces(cluster.GetObject<Panel>(surf.PanelGuid)) ?? new List<Space>()).Select(x => x.Name))));
+            }
+
             foreach (T3DZoneSpec z in plan.Zones)
                 sb.AppendLine(string.Format(ci, "  zone '{0}' external={1} {2}", z.Name, z.External, z.Description));
 

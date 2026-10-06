@@ -3,6 +3,7 @@
 
 using SAM.Geometry.Spatial;
 using System.Collections.Generic;
+using System.Linq;
 
 // This file is compiled into BOTH the licensed validation harness and the COM-free unit tests
 // (SAM.Analytical.Tas.TM59.Tests links it), so the two always describe the same synthetic buildings. It touches no
@@ -108,9 +109,23 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             return result;
         }
 
+        // One material per construction layer: the gbXML export reads the library, and with it the pane material is what
+        // makes the glazing transparent.
+        private static SAM.Core.MaterialLibrary Materials()
+        {
+            SAM.Core.MaterialLibrary result = new SAM.Core.MaterialLibrary("Materials");
+            foreach (string name in new[] { "Wall layer", "Roof layer", "Floor layer", "Partition layer", "Internal floor layer", "Frame layer" })
+            {
+                result.Add(new SAM.Core.OpaqueMaterial(name, "Synthetic", name, name, 1.0, 1000, 1800));
+            }
+
+            result.Add(new SAM.Core.TransparentMaterial("Pane layer", "Synthetic", "Pane layer", "Pane layer", 1.0, 840, 2500));
+            return result;
+        }
+
         private static AnalyticalModel Model(string name, AdjacencyCluster adjacencyCluster)
         {
-            return new AnalyticalModel(name, null, null, null, adjacencyCluster, new SAM.Core.MaterialLibrary("Materials"), new ProfileLibrary("Profiles"));
+            return new AnalyticalModel(name, null, null, null, adjacencyCluster, Materials(), new ProfileLibrary("Profiles"));
         }
 
         /// <summary>One box zone, the reference box. With <paramref name="window"/> a 2 x 1 m window in the south wall.</summary>
@@ -196,6 +211,21 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             adjacencyCluster.AddRelation(spaceB, partition);
 
             return Model("TwoZones", adjacencyCluster);
+        }
+
+        /// <summary>
+        /// The two-zone building with A's north wall adiabatic AND a 1 x 1 m window in it: what becomes of an opening in an
+        /// adiabatic wall decides whether the repair that re-derives adiabatic surfaces from geometry is redundant.
+        /// </summary>
+        public static AnalyticalModel AdiabaticWallWithWindow()
+        {
+            AnalyticalModel model = TwoZones(adiabaticNorthWallOfA: true);
+            AdjacencyCluster adjacencyCluster = model.AdjacencyCluster;
+            Space spaceA = adjacencyCluster.GetSpaces().First(x => x.Name == "A");
+            Panel north = adjacencyCluster.GetPanels(spaceA).First(x => Analytical.Query.Adiabatic(x));
+            north.AddAperture(Analytical.Create.Aperture(GlazingConstruction, Quad(P(2, 4, 1), P(3, 4, 1), P(3, 4, 2), P(2, 4, 2))));
+            adjacencyCluster.AddObject(north);
+            return new AnalyticalModel(model, adjacencyCluster);
         }
 
         /// <summary>

@@ -107,6 +107,28 @@ namespace SAM.Analytical.Tas
                 panels = new List<Panel>();
             }
 
+            // ZONES IN SAM's SPACE ORDER, before any panel is read. The order is not cosmetic: TAS gives the LATER zone of a
+            // vertical internal surface the reversed side of the construction (layers running the other way round for that
+            // zone), which matters whenever the layers are not symmetric - a paint film on one face only. SAM's own TBD export
+            // and the gbXML route both put the later space of the pair there, so the zones are created in that order here,
+            // rather than in the order the panels happen to mention them.
+            HashSet<Guid> spaces_Bounding = new HashSet<Guid>();
+            foreach (Panel panel in panels)
+            {
+                if (panel != null && panel.PanelType != Analytical.PanelType.Shade && spacesByPanel.TryGetValue(panel.Guid, out List<ISpace> spaces_Temp) && spaces_Temp.Count <= 2)
+                {
+                    spaces_Temp.ForEach(x => spaces_Bounding.Add((x as SAMObject)?.Guid ?? Guid.Empty));
+                }
+            }
+
+            foreach (ISpace space in spaces)
+            {
+                if (spaces_Bounding.Contains((space as SAMObject)?.Guid ?? Guid.Empty))
+                {
+                    ZoneIndex(plan, zoneIndexes, space);
+                }
+            }
+
             foreach (Panel panel in panels)
             {
                 if (panel == null)
@@ -252,6 +274,9 @@ namespace SAM.Analytical.Tas
                 }
             }
 
+            // A zone none of whose panels could be imported would only upset TAS: dropped, and every surface's zone index rewritten.
+            RemoveEmptyZones(plan);
+
             report.Zones = plan.Zones.Count;
             report.Elements = plan.Elements.Count;
             report.Windows = plan.Windows.Count;
@@ -267,6 +292,52 @@ namespace SAM.Analytical.Tas
             }
 
             return plan;
+        }
+
+        private static void RemoveEmptyZones(T3DImportPlan plan)
+        {
+            HashSet<int> used = new HashSet<int>();
+            foreach (T3DSurfaceSpec surface in plan.Surfaces)
+            {
+                used.Add(surface.Zone);
+                if (surface.Zone2 != -1)
+                {
+                    used.Add(surface.Zone2);
+                }
+            }
+
+            if (used.Count == plan.Zones.Count)
+            {
+                return;
+            }
+
+            int[] map = new int[plan.Zones.Count];
+            List<T3DZoneSpec> zones = new List<T3DZoneSpec>();
+            for (int i = 0; i < plan.Zones.Count; i++)
+            {
+                if (used.Contains(i))
+                {
+                    map[i] = zones.Count;
+                    zones.Add(plan.Zones[i]);
+                }
+                else
+                {
+                    map[i] = -1;
+                    plan.Report.Skipped.Add(string.Format("Space '{0}' ({1}): none of its panels could be imported, so no zone was made for it.", plan.Zones[i].Name, plan.Zones[i].SpaceGuid));
+                }
+            }
+
+            foreach (T3DSurfaceSpec surface in plan.Surfaces)
+            {
+                surface.Zone = map[surface.Zone];
+                if (surface.Zone2 != -1)
+                {
+                    surface.Zone2 = map[surface.Zone2];
+                }
+            }
+
+            plan.Zones.Clear();
+            plan.Zones.AddRange(zones);
         }
 
         private static string PanelIdentity(Panel panel)
@@ -424,7 +495,7 @@ namespace SAM.Analytical.Tas
             global::System.Drawing.Color color = global::System.Drawing.Color.Empty;
             if (construction == null || !construction.TryGetValue(Analytical.ConstructionParameter.Color, out color))
             {
-                color = Analytical.Query.Color(panel.PanelType);
+                color = CosmeticColor(() => Analytical.Query.Color(panel.PanelType)) ?? global::System.Drawing.Color.Empty;
             }
 
             result.Colour = color == global::System.Drawing.Color.Empty ? Core.Convert.ToUint(global::System.Drawing.Color.Gray) : Core.Convert.ToUint(color);
@@ -638,10 +709,10 @@ namespace SAM.Analytical.Tas
             result.Name = name + " ";
 
             // Colour: the rule the gbXML route applies per aperture (Query.Color(aperture, Pane)).
-            global::System.Drawing.Color? color = Color(aperture, Analytical.AperturePart.Pane);
+            global::System.Drawing.Color? color = CosmeticColor(() => Color(aperture, Analytical.AperturePart.Pane));
             if (color == null || !color.HasValue || color.Value == global::System.Drawing.Color.Empty)
             {
-                color = apertureConstruction == null ? global::System.Drawing.Color.Empty : Analytical.Query.Color(apertureConstruction.ApertureType);
+                color = apertureConstruction == null ? global::System.Drawing.Color.Empty : CosmeticColor(() => Analytical.Query.Color(apertureConstruction.ApertureType));
             }
 
             result.Colour = color.HasValue && color.Value != global::System.Drawing.Color.Empty ? Core.Convert.ToUint(color.Value) : Core.Convert.ToUint(global::System.Drawing.Color.Black);
@@ -713,6 +784,21 @@ namespace SAM.Analytical.Tas
             windows[key] = result;
             plan.Windows.Add(result);
             return result;
+        }
+
+        // A colour is cosmetic: it must never be the reason an import fails. Where System.Drawing.Common is unavailable (a
+        // process that is not a Windows desktop one - e.g. the COM-free unit tests) the colour is simply not stated and
+        // the default is used.
+        private static global::System.Drawing.Color? CosmeticColor(Func<global::System.Drawing.Color?> colour)
+        {
+            try
+            {
+                return colour();
+            }
+            catch (PlatformNotSupportedException)
+            {
+                return null;
+            }
         }
 
         private static string ShortHash(string text)

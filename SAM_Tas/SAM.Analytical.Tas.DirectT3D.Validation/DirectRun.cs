@@ -19,6 +19,54 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
         public double Milliseconds_Export;
     }
 
+    public static class GbXmlRun
+    {
+        /// <summary>
+        /// The established route over the same model, as the workflow runs it: gbXML written from the model, imported into a
+        /// new T3D by TAS, the T3D repaired by Query.UpdateT3D, then TAS's own T3D -> TBD export.
+        /// </summary>
+        public static DirectRunResult Run(AnalyticalModel analyticalModel, bool widths, string directory, string name)
+        {
+            Directory.CreateDirectory(directory);
+
+            DirectRunResult result = new DirectRunResult
+            {
+                Path_T3D = Path.Combine(directory, name + ".t3d"),
+                Path_TBD = Path.Combine(directory, name + ".tbd")
+            };
+
+            string path_gbXML = Path.Combine(directory, name + ".xml");
+            foreach (string path in new[] { result.Path_T3D, result.Path_TBD, path_gbXML })
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+
+            gbXMLSerializer.gbXML gbXML = SAM.Analytical.gbXML.Convert.TogbXML(analyticalModel);
+            if (gbXML == null || !SAM.Core.gbXML.Create.gbXML(gbXML, path_gbXML))
+            {
+                return result;
+            }
+
+            using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(result.Path_T3D))
+            {
+                TAS3D.T3DDocument t3DDocument = sAMT3DDocument.T3DDocument;
+                t3DDocument.TogbXML(path_gbXML, true, true, true);
+                t3DDocument.SetUseBEWidths(widths);
+                Query.UpdateT3D(analyticalModel, t3DDocument, false);
+                sAMT3DDocument.Save();
+                result.Converted = true;
+                result.Exported = Convert.ToTBD(t3DDocument, result.Path_TBD, 1, 365, 15, true, false);
+            }
+
+            if (result.Exported)
+            {
+                result.Tbd = TbdSnapshot.Read(result.Path_TBD);
+            }
+
+            return result;
+        }
+    }
+
     public static class DirectRun
     {
         /// <summary>

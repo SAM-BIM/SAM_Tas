@@ -16,7 +16,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
     public sealed class TbdSnapshot
     {
         public sealed class Be { public string Name; public int BEType; public double Width; public bool Ground; public string Guid; public string Construction; public int Surfaces; public uint Colour; public List<string> ApertureTypes = new List<string>(); }
-        public sealed class Surf { public string Zone; public int Number; public string Type; public double Area; public double Orientation; public double Inclination; public string Be; public bool Linked; public int BEType; }
+        public sealed class Surf { public string Zone; public int Number; public string Type; public double Area; public double Orientation; public double Inclination; public string Be; public bool Linked; public int BEType; public int Reversed; }
         public sealed class Zn { public string Name; public string Description; public string Guid; public double FloorArea; public double Volume; public bool External; public List<Surf> Surfaces = new List<Surf>(); }
 
         public List<Be> BuildingElements = new List<Be>();
@@ -74,7 +74,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                         zn.Surfaces.Add(new Surf
                         {
                             Zone = zn.Name, Number = zs.number, Type = zs.type.ToString(), Area = zs.area, Orientation = zs.orientation, Inclination = zs.inclination,
-                            Be = be?.name ?? string.Empty, BEType = be == null ? -1 : be.BEType, Linked = zs.linkSurface != null
+                            Be = be?.name ?? string.Empty, BEType = be == null ? -1 : be.BEType, Linked = zs.linkSurface != null, Reversed = zs.reversed
                         });
                     }
                     s.Zones.Add(zn);
@@ -108,7 +108,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             {
                 sb.AppendLine(string.Format(ci, "ZONE '{0}' desc='{1}' floor={2:F3} vol={3:F3} external={4} surfaces={5}", z.Name, z.Description, z.FloorArea, z.Volume, z.External, z.Surfaces.Count));
                 foreach (Surf f in z.Surfaces)
-                    sb.AppendLine(string.Format(ci, "   #{0} {1} area={2:F3} orient={3:F1} incl={4:F1} BE='{5}' linked={6}", f.Number, f.Type, f.Area, f.Orientation, f.Inclination, f.Be, f.Linked));
+                    sb.AppendLine(string.Format(ci, "   #{0} {1} area={2:F3} orient={3:F1} incl={4:F1} BE='{5}' linked={6} reversed={7}", f.Number, f.Type, f.Area, f.Orientation, f.Inclination, f.Be, f.Linked, f.Reversed));
             }
             return sb.ToString();
         }

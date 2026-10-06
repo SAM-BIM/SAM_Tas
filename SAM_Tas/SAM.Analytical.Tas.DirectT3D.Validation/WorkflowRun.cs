@@ -88,7 +88,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
 
             if (result != null)
             {
-                SAM.Core.Convert.ToFile(result, Path.Combine(directory, stem + ".result.sam"), SAM.Core.SAMFileType.Json);
+                SAM.Core.Convert.ToFile(result, Path.Combine(directory, stem + ".result.json"), SAM.Core.SAMFileType.Json);
             }
 
             return result == null ? 5 : 0;

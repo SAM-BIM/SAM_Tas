@@ -299,9 +299,10 @@ namespace SAM.Analytical.Tas
             {
                 //The conversion block's six steps (Opening TBD file, Updating Weather Data, Updating HDD and CDD
                 //Day Types, Opening T3D file, Converting SAM to T3D, T3D to TBD -> Shading), plus the two
-                //per-aperture-element steps ("Reusing Aperture Definitions", "Updating Aperture Types"), less the two
-                //repair steps the direct route does not run (Assigning Adiabatic Constructions, Setting Adiabatic).
-                count = count + 6;
+                //per-aperture-element steps ("Reusing Aperture Definitions", "Updating Aperture Types") and its own
+                //"Aligning Reversed Surfaces", less the two repair steps the direct route does not run (Assigning Adiabatic
+                //Constructions, Setting Adiabatic).
+                count = count + 7;
             }
 
             //One step for the clone, so a warm-started run's progress reports what it actually does rather
@@ -601,6 +602,17 @@ namespace SAM.Analytical.Tas
                 adjacencyCluster = result.AdjacencyCluster;
                 Step("Updating Ids");
                 Modify.UpdateIds(adjacencyCluster, tBDDocument.Building);
+
+                if (route_Direct)
+                {
+                    // TAS picks the reversed side of an internal wall from its own geometry and WrImportIDF's reverseElement flag
+                    // has no effect on it (measured), so on the direct route the side is set here, from the identities UpdateIds has
+                    // just stamped, to SAM's convention - the one the gbXML route and SAM's direct TBD export both have. It
+                    // matters wherever a construction is not symmetric (a paint film on one face only).
+                    Step("Aligning Reversed Surfaces");
+                    Modify.UpdateReversed(tBDDocument.Building, adjacencyCluster, out int count_Reversed);
+                    notes.Add(string.Format("Aligning reversed surfaces: {0} internal surface(s) moved to SAM's convention (first space unreversed, second reversed).", count_Reversed));
+                }
 
                 if (perApertureElements)
                 {
