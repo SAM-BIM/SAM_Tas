@@ -6,7 +6,7 @@
 
 ## Last updated
 
-2026-10-06 (Q4 bootstrap).
+2026-10-06 (Q4 operational cleanup).
 
 ## Current status
 
@@ -44,6 +44,13 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
 ## Next step
 
 - Owner to set Q4 priorities; then start the first Q4 task from this branch.
+
+## Q4 operational cleanup (2026-10-06)
+
+- Reviewed every active Q2/Q3 reference in this repository on `sow/2026-Q4` (workflow branch filters, dependency-branch resolution, `.gitmodules`/validation, docs). Historical Q2/Q3 mentions (feature documentation records, the frozen Q3 section below) are intentionally unchanged.
+- Changed (`dd69cac`): removed the dead `$candidates += 'sow/2026-Q2'` fallback from the dependency-branch resolution in `.github/workflows/build.yml`. No dependency repository has a `sow/2026-Q2` branch, so the entry never matched and resolution already fell through to the default branch; behaviour is unchanged (PR head ref, current sow ref, then the dependency's default branch) and no per-quarter edit is needed.
+- Checked, no action: the `github.repository_owner == 'SAM-BIM'` build guard (intentional; its comment names HoareLea only to explain why the guard exists), CODEOWNERS (SAM-BIM owners), and workflow secrets (no HoareLea-named secret). The local `upstream` (HoareLea) remote is preserved.
+- Full cross-repository record, migration table and owner decisions: `SAM_Deploy:sow/2026-Q4` `PROJECT_PROGRESS.md`.
 
 ---
 
