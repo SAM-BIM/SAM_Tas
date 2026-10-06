@@ -116,14 +116,31 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
         /// <summary>One box zone, the reference box. With <paramref name="window"/> a 2 x 1 m window in the south wall.</summary>
         public static AnalyticalModel Box(bool window = false)
         {
+            return Box(window ? 1 : 0);
+        }
+
+        /// <summary>
+        /// The reference box with <paramref name="windows"/> separate 1 x 1 m windows side by side on the south wall, all of
+        /// the one aperture construction - the case that shows how TAS groups openings into TBD surfaces.
+        /// </summary>
+        public static AnalyticalModel Box(int windows)
+        {
             Space space = new Space("Box", P(2.5, 2, 1.5));
 
             List<Panel> panels = BoxPanels(0, Width, 0, Depth, 0, Height, FloorConstruction, PanelType.SlabOnGrade, RoofConstruction, PanelType.Roof, WallConstruction, PanelType.WallExternal);
 
-            if (window)
+            if (windows == 1)
             {
                 Panel south = panels[2];
                 south.AddAperture(Analytical.Create.Aperture(GlazingConstruction, Quad(P(1.5, 0, 1), P(3.5, 0, 1), P(3.5, 0, 2), P(1.5, 0, 2))));
+            }
+            else
+            {
+                for (int i = 0; i < windows; i++)
+                {
+                    double x = 0.5 + i * 1.5;
+                    panels[2].AddAperture(Analytical.Create.Aperture(GlazingConstruction, Quad(P(x, 0, 1), P(x + 1, 0, 1), P(x + 1, 0, 2), P(x, 0, 2))));
+                }
             }
 
             AdjacencyCluster adjacencyCluster = new AdjacencyCluster();

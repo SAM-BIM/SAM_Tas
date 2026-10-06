@@ -15,6 +15,23 @@ namespace SAM.Analytical.Tas
         public string Path_gbXML { get; set; } = null;
 
         /// <summary>
+        /// How the SAM model gets into a TAS3D <c>.t3d</c> ahead of the T3D -> TBD export.
+        /// <para>
+        /// <b>Defaults to <see cref="Tas.T3DRoute.GbXML"/> - the established route - and only an explicit
+        /// <see cref="Tas.T3DRoute.Direct"/> changes anything.</b> A settings file written before this property
+        /// existed does not contain it and so reads as <see cref="Tas.T3DRoute.GbXML"/>; an unrecognised value reads
+        /// as <see cref="Tas.T3DRoute.GbXML"/> too. Nothing selects <see cref="Tas.T3DRoute.Direct"/> by omission.
+        /// </para>
+        /// <para>
+        /// <see cref="Tas.T3DRoute.Direct"/> builds the T3D straight from the SAM geometry
+        /// (<c>Convert.ToT3D</c>) and ignores <see cref="Path_gbXML"/>. It is chosen by this setting - not by
+        /// <see cref="Path_gbXML"/> being empty - so a caller that forgot a gbXML path still gets the route it
+        /// asked for, and a caller that asked for the default is never surprised.
+        /// </para>
+        /// </summary>
+        public T3DRoute T3DRoute { get; set; } = T3DRoute.GbXML;
+
+        /// <summary>
         /// An already-converted TBD to <b>start this run from</b>, instead of converting the geometry
         /// again. Copied to <see cref="Path_TBD"/> before anything else runs; never itself written to.
         ///
@@ -124,6 +141,7 @@ namespace SAM.Analytical.Tas
             {
                 Path_TBD = workflowSettings.Path_TBD;
                 Path_gbXML = workflowSettings.Path_gbXML;
+                T3DRoute = workflowSettings.T3DRoute;
                 Path_TBD_Canonical = workflowSettings.Path_TBD_Canonical;
                 WeatherData = workflowSettings.WeatherData;
                 DesignDays_Heating = workflowSettings.DesignDays_Heating;
@@ -166,6 +184,11 @@ namespace SAM.Analytical.Tas
             if (jObject.ContainsKey("Path_gbXML"))
             {
                 Path_gbXML = jObject["Path_gbXML"]?.GetValue<string>() ?? null;
+            }
+
+            if (jObject.ContainsKey("T3DRoute"))
+            {
+                T3DRoute = ToT3DRoute(jObject["T3DRoute"]);
             }
 
             if (jObject.ContainsKey("WeatherData"))
@@ -291,6 +314,29 @@ namespace SAM.Analytical.Tas
             return true;
         }
 
+        /// <summary>
+        /// Reads a serialized route. Only the exact name <c>"Direct"</c> (or its number, 1) selects the direct route;
+        /// anything else - <c>"GbXML"</c>, null, a number that is not 1, text that is not a route - is the
+        /// established gbXML route, so a corrupt or foreign value can never switch a workflow onto the new route.
+        /// </summary>
+        private static T3DRoute ToT3DRoute(JsonNode jsonNode)
+        {
+            if (jsonNode is JsonValue jsonValue)
+            {
+                if (jsonValue.TryGetValue(out string text))
+                {
+                    return string.Equals(text?.Trim(), nameof(Tas.T3DRoute.Direct), System.StringComparison.OrdinalIgnoreCase) ? T3DRoute.Direct : T3DRoute.GbXML;
+                }
+
+                if (jsonValue.TryGetValue(out int number))
+                {
+                    return number == (int)Tas.T3DRoute.Direct ? T3DRoute.Direct : T3DRoute.GbXML;
+                }
+            }
+
+            return T3DRoute.GbXML;
+        }
+
         public JsonObject ToJsonObject()
         {
             JsonObject jObject = new JsonObject();
@@ -310,6 +356,8 @@ namespace SAM.Analytical.Tas
             {
                 jObject.Add("Path_gbXML", Path_gbXML);
             }
+
+            jObject.Add("T3DRoute", T3DRoute.ToString());
 
             if (WeatherData != null)
             {

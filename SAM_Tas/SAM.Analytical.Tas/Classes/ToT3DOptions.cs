@@ -31,6 +31,27 @@ namespace SAM.Analytical.Tas
         public bool ElementPerPanel { get; set; } = false;
 
         /// <summary>
+        /// One TAS window type per <c>ApertureConstruction</c> (true) instead of one per aperture (false).
+        /// <para>
+        /// <b>Defaults to false, and that is a measured decision, not a preference.</b> TAS folds every opening of
+        /// <i>one window object</i> on <i>one host surface</i> into a single TBD zone surface (one frame and one pane
+        /// surface for however many openings there are): three 3.33 m2 windows on one wall that share a window type
+        /// come out as one 10 m2 window. That keeps the total area but loses what SAM_Tas relies on - N apertures keep
+        /// N pane and N frame zone surfaces, which is what lets each aperture carry its own opening control, shade and
+        /// stamped identity - and it cannot honour a per-aperture frame percentage either, since the percentage is an
+        /// attribute of the window object. So the default is one window object per aperture, named after the
+        /// aperture (<c>Windows: &lt;name&gt; &lt;aperture GUID&gt; </c>), exactly as the gbXML route's are, which is also
+        /// what the aperture steps that run after the export read.
+        /// </para>
+        /// <para>
+        /// True shares one window object per aperture construction (and host position and frame percentage): the
+        /// TBD then holds one shared <c>Windows: &lt;name&gt; -pane</c>/<c>-frame</c> element pair, at the price above.
+        /// It is for callers that want exactly that and do not read aperture identity back.
+        /// </para>
+        /// </summary>
+        public bool SharedWindowTypes { get; set; } = false;
+
+        /// <summary>
         /// Whether <c>PanelType.Shade</c> panels are imported through <c>WrImportIDF.AddShadeSurface</c>.
         /// <para>
         /// The call is accepted by TAS, but whether the shade it creates takes part in the T3D -> TBD shading

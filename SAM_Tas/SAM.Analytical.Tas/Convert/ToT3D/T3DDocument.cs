@@ -79,6 +79,32 @@ namespace SAM.Analytical.Tas
             return ToT3D(plan, t3DDocument, options, location);
         }
 
+        // The zone sets a freshly created document holds, deleted. Indexed defensively: the TAS3D accessors are not
+        // consistent about whether they count from 0 or 1 (GetZone counts from 1), so both are tried and only
+        // sets that exist and carry TAS's default name are touched.
+        private static void RemoveDefaultZoneSets(TAS3D.Building building)
+        {
+            List<zoneSet> zoneSets = new List<zoneSet>();
+            for (int index = 0; index < 8; index++)
+            {
+                zoneSet zoneSet = building.GetZoneSet(index);
+                if (zoneSet != null && !zoneSets.Exists(x => x.name == zoneSet.name && x.numOfZones == zoneSet.numOfZones))
+                {
+                    zoneSets.Add(zoneSet);
+                }
+            }
+
+            foreach (zoneSet zoneSet in zoneSets)
+            {
+                if (zoneSet.name == "Zone")
+                {
+                    zoneSet.Delete();
+                }
+
+                Core.Modify.ReleaseCOMObject(zoneSet);
+            }
+        }
+
         /// <summary>
         /// Replays a plan into a freshly created <paramref name="t3DDocument"/>. The plan's report is completed
         /// with what TAS accepted and what it did not.
@@ -209,6 +235,11 @@ namespace SAM.Analytical.Tas
                 }
 
                 // ---- Zones ------------------------------------------------------------------------------
+                // Create() seeds a default zone set, 'Zone', holding twenty unused zones. The TBD export turns every zone set
+                // into a zone group, so left in place it arrives as an empty 'Zone' group beside the real one. The
+                // set is empty of SAM content - nothing of ours is ever put in it - so it is removed.
+                RemoveDefaultZoneSets(building);
+
                 zoneSet zoneSet = building.AddZoneSet(options.ZoneSetName, string.Empty, 0);
                 comObjects.Add(zoneSet);
 

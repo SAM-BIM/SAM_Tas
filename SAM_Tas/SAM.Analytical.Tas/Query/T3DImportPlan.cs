@@ -23,8 +23,9 @@ namespace SAM.Analytical.Tas
         /// <item><description><b>Elements</b> - one per SAM <c>Construction</c> (plus a split where one construction is used both on and off the ground,
         /// or as air), unless <see cref="ToT3DOptions.ElementPerPanel"/> asks for one per panel. Width, colour, transparency, BE type and ground
         /// follow the rules <c>Query.UpdateT3D</c> applies to the elements the gbXML route creates.</description></item>
-        /// <item><description><b>Window types</b> - one per <c>ApertureConstruction</c> (split only where the frame percentage or the host's position type
-        /// differ), never one per aperture.</description></item>
+        /// <item><description><b>Window types</b> - one window object per aperture by default, because TAS folds the openings of one window object on one
+        /// host into a single zone surface (see <see cref="ToT3DOptions.SharedWindowTypes"/>); with that option, one per <c>ApertureConstruction</c> (split only
+        /// where the frame percentage or the host's position type differ).</description></item>
         /// <item><description><b>Surfaces</b> - a shade panel (<c>Analytical.PanelType.Shade</c>, or no space) is a shade; one space is <c>AddSurface</c> (adiabatic per
         /// <see cref="Analytical.Query.Adiabatic(Panel)"/>); two spaces are <c>AddInternalSurface</c> - or, when adiabatic, one adiabatic
         /// <c>AddSurface</c> per zone, which is what the gbXML route's <c>UpdateAdiabatic</c> ends up with.</description></item>
@@ -146,7 +147,7 @@ namespace SAM.Analytical.Tas
                     {
                         PanelGuid = panel.Guid,
                         PanelName = panel.Name,
-                        ElementKey = ElementSpec(plan, elements, elementNames, panel, false, false, materialLibrary, adjacencyCluster, options, report).Key,
+                        ElementKey = ElementSpec(plan, elements, elementNames, panel, 0, false, false, materialLibrary, adjacencyCluster, options, report).Key,
                         Coordinates = polygon_Shade.ToTasCoordinates()
                     });
                     report.ShadesImported++;
@@ -199,7 +200,7 @@ namespace SAM.Analytical.Tas
                 bool adiabatic = Analytical.Query.Adiabatic(panel);
                 bool ground = zone_B == -1 && IsGround(panel);
 
-                T3DElementSpec elementSpec = ElementSpec(plan, elements, elementNames, panel, ground, panel.PanelType == Analytical.PanelType.Air, materialLibrary, adjacencyCluster, options, report);
+                T3DElementSpec elementSpec = ElementSpec(plan, elements, elementNames, panel, count_Spaces, ground, panel.PanelType == Analytical.PanelType.Air, materialLibrary, adjacencyCluster, options, report);
 
                 // ---- Surface(s) ----------------------------------------------------------------------------
                 Vector3D normal_Polygon = polygon.NewellNormal();
@@ -371,7 +372,7 @@ namespace SAM.Analytical.Tas
 
         // ---- Elements ---------------------------------------------------------------------------------------
 
-        private static T3DElementSpec ElementSpec(T3DImportPlan plan, Dictionary<string, T3DElementSpec> elements, HashSet<string> elementNames, Panel panel, bool ground, bool ghost, MaterialLibrary materialLibrary, AdjacencyCluster adjacencyCluster, ToT3DOptions options, T3DImportReport report)
+        private static T3DElementSpec ElementSpec(T3DImportPlan plan, Dictionary<string, T3DElementSpec> elements, HashSet<string> elementNames, Panel panel, int spaces, bool ground, bool ghost, MaterialLibrary materialLibrary, AdjacencyCluster adjacencyCluster, ToT3DOptions options, T3DImportReport report)
         {
             Construction construction = panel.Construction;
 
@@ -423,7 +424,7 @@ namespace SAM.Analytical.Tas
             global::System.Drawing.Color color = global::System.Drawing.Color.Empty;
             if (construction == null || !construction.TryGetValue(Analytical.ConstructionParameter.Color, out color))
             {
-                color = Analytical.Query.Color(panel.PanelType, false);
+                color = Analytical.Query.Color(panel.PanelType);
             }
 
             result.Colour = color == global::System.Drawing.Color.Empty ? Core.Convert.ToUint(global::System.Drawing.Color.Gray) : Core.Convert.ToUint(color);
@@ -449,30 +450,29 @@ namespace SAM.Analytical.Tas
             result.Transparent = transparent;
             result.InternalShadows = construction != null && construction.TryGetValue(Analytical.ConstructionParameter.IsInternalShadow, out bool internalShadows) ? internalShadows : transparent;
 
-            // BE type, from the construction's panel type, else its default panel type, else the panel's own.
+            // BE type: what the construction states (its panel type, then its default panel type), else what the panel
+            // is. The gbXML route inherits TAS's own choice from the gbXML surface type for a generic 'Wall' or 'Floor'
+            // construction, which TAS's BE type list has no entry for; the direct route has no gbXML surface type, so it
+            // derives the same answer from how the panel is used (see PanelBEType).
             Analytical.PanelType panelType = construction == null ? Analytical.PanelType.Undefined : construction.PanelType();
-            string bEType_Text = null;
-            if (panelType != Analytical.PanelType.Undefined)
+            result.BEType = panelType == Analytical.PanelType.Undefined ? -1 : BEType(panelType.Text());
+            if (result.BEType == -1 && construction != null && construction.TryGetValue(Analytical.ConstructionParameter.DefaultPanelType, out string defaultPanelType) && !string.IsNullOrEmpty(defaultPanelType))
             {
-                bEType_Text = panelType.Text();
-            }
-            else if (construction != null && construction.TryGetValue(Analytical.ConstructionParameter.DefaultPanelType, out string defaultPanelType))
-            {
-                bEType_Text = defaultPanelType;
-            }
-            else if (panel.PanelType != Analytical.PanelType.Undefined)
-            {
-                panelType = panel.PanelType;
-                bEType_Text = panelType.Text();
+                result.BEType = BEType(defaultPanelType);
             }
 
-            if (!string.IsNullOrEmpty(bEType_Text))
+            if (result.BEType == -1)
             {
-                result.BEType = BEType(bEType_Text);
-                if (result.BEType != -1)
-                {
-                    panelType = PanelType(result.BEType);
-                }
+                result.BEType = PanelBEType(panel, spaces, ground);
+            }
+
+            if (result.BEType != -1)
+            {
+                panelType = PanelType(result.BEType);
+            }
+            else if (panelType == Analytical.PanelType.Undefined)
+            {
+                panelType = panel.PanelType;
             }
 
             result.ZoneFloorArea = panelType.PanelGroup() == PanelGroup.Floor || panel.PanelGroup == PanelGroup.Floor;
@@ -493,6 +493,32 @@ namespace SAM.Analytical.Tas
             elements[key] = result;
             plan.Elements.Add(result);
             return result;
+        }
+
+        // The TAS BE type of a panel from what it is and how it is used: its own panel type where TAS's list has an
+        // entry for it, and otherwise (a generic Wall, Floor or Ceiling) from whether it separates two spaces or is
+        // exposed. -1 where there is no sensible answer; the TAS default is then left.
+        private static int PanelBEType(Panel panel, int spaces, bool ground)
+        {
+            int result = BEType(panel.PanelType.Text());
+            if (result != -1)
+            {
+                return result;
+            }
+
+            switch (panel.PanelType)
+            {
+                case Analytical.PanelType.Wall:
+                    return spaces == 2 ? BEType("Internal Wall") : BEType("External Wall");
+
+                case Analytical.PanelType.Floor:
+                    return ground ? BEType("Slab on Grade") : spaces == 2 ? BEType("Internal Floor") : BEType("Exposed Floor");
+
+                case Analytical.PanelType.Ceiling:
+                    return BEType("Internal Ceiling");
+            }
+
+            return -1;
         }
 
         // ---- Openings ---------------------------------------------------------------------------------------
@@ -537,13 +563,13 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                T3DWindowSpec window = WindowSpec(plan, windows, windowNames, aperture, panel, polygon, adjacencyCluster, materialLibrary);
+                T3DWindowSpec window = WindowSpec(plan, windows, windowNames, aperture, panel, polygon, adjacencyCluster, materialLibrary, options);
 
                 surface.Openings.Add(new T3DOpeningSpec { ApertureGuid = aperture.Guid, WindowKey = window.Key, Coordinates = polygon.ToTasCoordinates() });
             }
         }
 
-        private static T3DWindowSpec WindowSpec(T3DImportPlan plan, Dictionary<string, T3DWindowSpec> windows, HashSet<string> windowNames, Aperture aperture, Panel panel, List<Point3D> polygon, AdjacencyCluster adjacencyCluster, MaterialLibrary materialLibrary)
+        private static T3DWindowSpec WindowSpec(T3DImportPlan plan, Dictionary<string, T3DWindowSpec> windows, HashSet<string> windowNames, Aperture aperture, Panel panel, List<Point3D> polygon, AdjacencyCluster adjacencyCluster, MaterialLibrary materialLibrary, ToT3DOptions options)
         {
             ApertureConstruction apertureConstruction = aperture.ApertureConstruction;
             Analytical.ApertureType apertureType = aperture.ApertureType;
@@ -566,10 +592,19 @@ namespace SAM.Analytical.Tas
                     break;
             }
 
-            double framePercent = double.IsNaN(aperture.GetFrameFactor()) ? double.NaN : global::System.Math.Round(aperture.GetFrameFactor() * 100, 1);
+            // The aperture's own frame percentage, exactly. A shared window type can only carry one value for all its
+            // apertures, so there it is rounded to a tenth of a percent to let near-identical frames share.
+            double framePercent = double.IsNaN(aperture.GetFrameFactor()) ? double.NaN : aperture.GetFrameFactor() * 100;
+            if (options.SharedWindowTypes && !double.IsNaN(framePercent))
+            {
+                framePercent = global::System.Math.Round(framePercent, 1);
+            }
 
-            string key = string.Format(CultureInfo.InvariantCulture, "{0}|position={1}|frame={2}|type={3}",
-                apertureConstruction == null ? "none" : apertureConstruction.Guid.ToString("N"), positionType, framePercent, apertureType);
+            // One window object per aperture unless the caller asked for shared types: TAS folds the openings of one
+            // window object on one host into ONE zone surface, so sharing loses the one-surface-per-aperture identity.
+            string key = options.SharedWindowTypes
+                ? string.Format(CultureInfo.InvariantCulture, "{0}|position={1}|frame={2}|type={3}", apertureConstruction == null ? "none" : apertureConstruction.Guid.ToString("N"), positionType, framePercent, apertureType)
+                : "aperture:" + aperture.Guid.ToString("N");
 
             if (windows.TryGetValue(key, out T3DWindowSpec result))
             {
@@ -579,16 +614,28 @@ namespace SAM.Analytical.Tas
             result = new T3DWindowSpec { Key = key, OpeningType = openingType, PositionType = positionType, FramePercent = framePercent };
 
             // The name TAS builds its two building elements from. See T3DWindowSpec.Name.
-            string baseName = BuildingElementNamePrefix(apertureType) + ConstructionNameBase(apertureConstruction?.Name ?? "Aperture");
-            string name = baseName;
-            if (windowNames.Contains(name))
+            string name;
+            if (options.SharedWindowTypes)
             {
-                name = baseName + "_" + ShortHash(key);
+                string baseName = BuildingElementNamePrefix(apertureType) + ConstructionNameBase(apertureConstruction?.Name ?? "Aperture");
+                name = baseName;
+                if (windowNames.Contains(name))
+                {
+                    name = baseName + "_" + ShortHash(key);
+                }
+
+                windowNames.Add(name);
+                result.Description = apertureConstruction?.Guid.ToString("D");
+            }
+            else
+            {
+                // 'Windows: <name> <aperture GUID> ' - the instance name Query.UniqueNameDecomposition reads the GUID back
+                // out of, and Query.NamesContainingApertureGuid recognises as a physical aperture's, never a shared definition.
+                name = BuildingElementNamePrefix(apertureType) + ConstructionNameBase(string.IsNullOrWhiteSpace(aperture.Name) ? apertureConstruction?.Name : aperture.Name) + " " + aperture.Guid.ToString("D");
+                result.Description = aperture.Guid.ToString("D");
             }
 
-            windowNames.Add(name);
             result.Name = name + " ";
-            result.Description = apertureConstruction?.Guid.ToString("D");
 
             // Colour: the rule the gbXML route applies per aperture (Query.Color(aperture, Pane)).
             global::System.Drawing.Color? color = Color(aperture, Analytical.AperturePart.Pane);

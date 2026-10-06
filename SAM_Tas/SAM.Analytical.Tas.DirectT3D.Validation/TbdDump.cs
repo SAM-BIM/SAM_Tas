@@ -15,7 +15,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
     /// </summary>
     public sealed class TbdSnapshot
     {
-        public sealed class Be { public string Name; public int BEType; public double Width; public bool Ground; public string Guid; public string Construction; public int Surfaces; }
+        public sealed class Be { public string Name; public int BEType; public double Width; public bool Ground; public string Guid; public string Construction; public int Surfaces; public uint Colour; public List<string> ApertureTypes = new List<string>(); }
         public sealed class Surf { public string Zone; public int Number; public string Type; public double Area; public double Orientation; public double Inclination; public string Be; public bool Linked; public int BEType; }
         public sealed class Zn { public string Name; public string Description; public string Guid; public double FloorArea; public double Volume; public bool External; public List<Surf> Surfaces = new List<Surf>(); }
 
@@ -23,6 +23,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
         public List<Zn> Zones = new List<Zn>();
         public int ApertureTypes;
         public int Constructions;
+        public List<string> ConstructionNames = new List<string>();
+        public List<string> ApertureTypeNames = new List<string>();
+        public List<string> ZoneGroupNames = new List<string>();
 
         public double TotalFloorArea { get { double d = 0; foreach (Zn z in Zones) d += z.FloorArea; return d; } }
         public double TotalVolume { get { double d = 0; foreach (Zn z in Zones) d += z.Volume; return d; } }
@@ -50,10 +53,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                     if (be == null) break;
                     Be e = new Be { Name = be.name, BEType = be.BEType, Width = be.width, Ground = be.ground != 0, Guid = be.GUID };
                     try { e.Construction = be.GetConstruction()?.name; } catch { }
+                    e.Colour = be.colour;
+                    try { for (int t = 0; ; t++) { TBD.ApertureType at = be.GetApertureType(t); if (at == null) break; e.ApertureTypes.Add(at.name); } } catch { }
                     s.BuildingElements.Add(e);
                 }
-                for (int i = 0; b.GetConstruction(i) != null; i++) s.Constructions++;
-                for (int i = 0; b.GetApertureType(i) != null; i++) s.ApertureTypes++;
+                for (int i = 0; ; i++) { TBD.Construction c = b.GetConstruction(i); if (c == null) break; s.Constructions++; s.ConstructionNames.Add(c.name); }
+                for (int i = 0; ; i++) { TBD.ApertureType at = b.GetApertureType(i); if (at == null) break; s.ApertureTypes++; s.ApertureTypeNames.Add(at.name); }
+                for (int i = 0; ; i++) { TBD.ZoneGroup g = b.GetZoneGroup(i); if (g == null) break; s.ZoneGroupNames.Add(g.name); }
 
                 for (int i = 0; ; i++)
                 {
@@ -94,7 +100,10 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             StringBuilder sb = new StringBuilder();
             sb.AppendLine(string.Format(ci, "TBD zones={0} floorArea={1:F3} volume={2:F3} BEs={3} constructions={4} apertureTypes={5}", Zones.Count, TotalFloorArea, TotalVolume, BuildingElements.Count, Constructions, ApertureTypes));
             foreach (Be e in BuildingElements)
-                sb.AppendLine(string.Format(ci, "BE '{0}' BEType={1} width={2:F3} ground={3} surfaces={4} construction='{5}'", e.Name, e.BEType, e.Width, e.Ground, e.Surfaces, e.Construction));
+                sb.AppendLine(string.Format(ci, "BE '{0}' BEType={1} width={2:F3} ground={3} surfaces={4} construction='{5}' apertureTypes=[{6}]", e.Name, e.BEType, e.Width, e.Ground, e.Surfaces, e.Construction, string.Join("|", e.ApertureTypes)));
+            sb.AppendLine("constructions: " + string.Join(" | ", ConstructionNames));
+            sb.AppendLine("apertureTypes: " + string.Join(" | ", ApertureTypeNames));
+            sb.AppendLine("zoneGroups: " + string.Join(" | ", ZoneGroupNames));
             foreach (Zn z in Zones)
             {
                 sb.AppendLine(string.Format(ci, "ZONE '{0}' desc='{1}' floor={2:F3} vol={3:F3} external={4} surfaces={5}", z.Name, z.Description, z.FloorArea, z.Volume, z.External, z.Surfaces.Count));

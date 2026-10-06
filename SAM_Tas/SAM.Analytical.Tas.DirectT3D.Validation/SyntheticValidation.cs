@@ -18,6 +18,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             Box(check, directory, widths: true);
             Box(check, directory, widths: false);
             BoxWithWindow(check, directory);
+            ThreeWindows(check, directory);
             TwoZones(check, directory);
             AdiabaticWall(check, directory);
             Ground(check, directory);
@@ -32,7 +33,12 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
 
         private static DirectRunResult Run(Checker check, string directory, string name, AnalyticalModel model, bool widths)
         {
-            DirectRunResult result = DirectRun.Run(model, new ToT3DOptions { UseWidths = widths }, directory, name);
+            return Run(check, directory, name, model, new ToT3DOptions { UseWidths = widths });
+        }
+
+        private static DirectRunResult Run(Checker check, string directory, string name, AnalyticalModel model, ToT3DOptions options)
+        {
+            DirectRunResult result = DirectRun.Run(model, options, directory, name);
             check.Info("report: " + (result.Report == null ? "(none)" : result.Report.ToString()));
             if (result.Report != null)
             {
@@ -73,6 +79,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             check.Equal(Count(tbd, "tbdLink"), 0, "linked surfaces");
             check.Equal(Count(tbd, "tbdNullLink"), 0, "null-linked (adiabatic) surfaces");
 
+            check.True(tbd.ZoneGroupNames.SequenceEqual(new[] { "SAM" }), "zone groups are exactly [SAM] - TAS's seeded empty 'Zone' set was removed (found: " + string.Join("|", tbd.ZoneGroupNames) + ")");
+
             Guid spaceGuid = result.Report.ZoneNames.Keys.FirstOrDefault();
             check.Equal(tbd.Zones[0].Description, Query.ZoneDescription(spaceGuid), "zone description carries the SAM space GUID");
         }
@@ -90,13 +98,38 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             TbdSnapshot.Be pane = tbd.BuildingElements.FirstOrDefault(x => x.Name.EndsWith("-pane"));
             TbdSnapshot.Be frame = tbd.BuildingElements.FirstOrDefault(x => x.Name.EndsWith("-frame"));
             check.True(pane != null && frame != null, "TAS made a -pane and a -frame building element for the window type");
-            check.Equal(pane?.Name, "Windows: EXT_GLZ -pane", "pane element has the shared-definition name");
-            check.Equal(frame?.Name, "Windows: EXT_GLZ -frame", "frame element has the shared-definition name");
+            Guid apertureGuid = result.Plan.Surfaces.SelectMany(x => x.Openings).Select(x => x.ApertureGuid).FirstOrDefault();
+            check.Equal(pane?.Name, "Windows: EXT_GLZ " + apertureGuid.ToString("D") + " -pane", "pane element is named after its aperture (the per-aperture instance name)");
+            check.Equal(frame?.Name, "Windows: EXT_GLZ " + apertureGuid.ToString("D") + " -frame", "frame element is named after its aperture");
 
             double opening = tbd.AllSurfaces().Where(x => x.Be.StartsWith("Windows: EXT_GLZ")).Sum(x => x.Area);
             check.Near(opening, 2.0, 0.01, "frame + pane area equals the 2 m2 opening polygon");
             double south = tbd.AllSurfaces().Where(x => x.Be == "EXT_WALL" && Math.Abs(x.Orientation - 180) < 1).Sum(x => x.Area);
             check.Near(south, 15.0 - 2.0, 0.01, "south wall (5 x 3 = 15 m2) net of the 2 m2 opening");
+        }
+
+        private static void ThreeWindows(Checker check, string directory)
+        {
+            check.Section("three_windows (three separate 1 x 1 m windows on one wall, one aperture construction, widths OFF)");
+
+            DirectRunResult perAperture = Run(check, directory, "three_windows_per_aperture", SyntheticModels.Box(3), new ToT3DOptions { UseWidths = false });
+            if (perAperture.Tbd != null)
+            {
+                TbdSnapshot tbd = perAperture.Tbd;
+                check.Equal(perAperture.Report.Windows, 3, "default: one window object per aperture");
+                check.Equal(tbd.AllSurfaces().Count(x => x.Be.EndsWith(" -pane") || x.Be.EndsWith(" -frame")), 6, "default: 3 apertures keep 3 pane + 3 frame zone surfaces");
+                check.Near(tbd.AllSurfaces().Where(x => x.Be.StartsWith("Windows:")).Sum(x => x.Area), 3.0, 0.01, "default: 3 m2 of opening");
+            }
+
+            DirectRunResult shared = Run(check, directory, "three_windows_shared", SyntheticModels.Box(3), new ToT3DOptions { UseWidths = false, SharedWindowTypes = true });
+            if (shared.Tbd != null)
+            {
+                TbdSnapshot tbd = shared.Tbd;
+                check.Equal(shared.Report.Windows, 1, "SharedWindowTypes: one window object for the aperture construction");
+                check.Equal(tbd.AllSurfaces().Count(x => x.Be.EndsWith(" -pane") || x.Be.EndsWith(" -frame")), 2, "SharedWindowTypes: TAS folds the 3 openings into ONE pane + ONE frame zone surface (the identity loss the default avoids)");
+                check.Near(tbd.AllSurfaces().Where(x => x.Be.StartsWith("Windows:")).Sum(x => x.Area), 3.0, 0.01, "SharedWindowTypes: the total opening area is kept");
+                check.Equal(tbd.BuildingElements.Count(x => x.Name == "Windows: EXT_GLZ -pane"), 1, "SharedWindowTypes: one shared 'Windows: EXT_GLZ -pane' element");
+            }
         }
 
         private static void TwoZones(Checker check, string directory)

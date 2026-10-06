@@ -103,6 +103,11 @@ namespace SAM.Analytical.Tas
                     //all-non-shade SAM centroid.
                     Dictionary<string, TBD.zone> zonesByGuid = new Dictionary<string, TBD.zone>(zones.Count);
                     Dictionary<string, TBD.zone> zonesByName = new Dictionary<string, TBD.zone>(zones.Count);
+
+                    //Zones the direct SAM -> T3D route made carry the SAM space they were made from in their
+                    //description (Query.ZoneDescription), and that outranks every other identity. Absent - so
+                    //empty - for every zone the gbXML route makes, which then resolve exactly as they always did.
+                    Dictionary<System.Guid, TBD.zone> zonesBySpaceGuid_Description = new Dictionary<System.Guid, TBD.zone>();
                     foreach (TBD.zone z in zones)
                     {
                         if (z == null) continue;
@@ -110,13 +115,15 @@ namespace SAM.Analytical.Tas
                             zonesByGuid[z.GUID] = z;
                         if (!string.IsNullOrWhiteSpace(z.name))
                             zonesByName[z.name] = z;
+                        if (z.description.TryGetSpaceGuid(out System.Guid spaceGuid_Description))
+                            zonesBySpaceGuid_Description[spaceGuid_Description] = z;
                     }
 
                     Dictionary<System.Guid, TBD.zone> zonesBySpaceGuid = new Dictionary<System.Guid, TBD.zone>(spaces.Count);
                     foreach (Space space in spaces)
                     {
                         zoneGuids_Spaces.TryGetValue(space.Guid, out string spaceZoneGuid);
-                        TBD.zone zone = Query.ResolvedZone(spaceZoneGuid, space?.Name, zonesByGuid, zonesByName);
+                        TBD.zone zone = Query.ResolvedZone(space.Guid, zonesBySpaceGuid_Description, spaceZoneGuid, space?.Name, zonesByGuid, zonesByName);
                         if (zone != null)
                         {
                             zonesBySpaceGuid[space.Guid] = zone;

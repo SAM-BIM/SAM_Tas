@@ -11,6 +11,56 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
     /// <summary>Throw-away experiments that established how the TAS importer behaves; kept as evidence.</summary>
     public static class Probes
     {
+        /// <summary>
+        /// How TAS groups openings into TBD surfaces and names elements: three openings on one host with one window
+        /// type, and two window types that share a name but differ in frame percentage.
+        /// </summary>
+        public static int Windows(string[] args)
+        {
+            string dir = args[1];
+            Directory.CreateDirectory(dir);
+            string tbd = Path.Combine(dir, "probe_windows2.tbd");
+            if (File.Exists(tbd)) File.Delete(tbd);
+
+            T3DDocument doc = new T3DDocument();
+            try
+            {
+                doc.Create();
+                Building b = doc.Building;
+                Element wall = b.AddElement("WALL", 0x0080FF, 0.3);
+                Element roof = b.AddElement("ROOF", 0x00FF00, 0.35);
+                Element gf = b.AddElement("GROUND_FLOOR", 0x808080, 0.4); gf.ground = true;
+                window wA = b.AddWindow("Windows: GLZ ", 0, 0x0000FF, 1.0, 1.0, 1.0); wA.isPercFrame = true; wA.framePerc = 10;
+                window wB = b.AddWindow("Windows: GLZ ", 0, 0x0000FF, 1.0, 1.0, 1.0); wB.isPercFrame = true; wB.framePerc = 20;
+                window wC = b.AddWindow("Windows: GLZ ", 0, 0x0000FF, 1.0, 1.0, 1.0); wC.isPercFrame = true; wC.framePerc = 10;
+                Zone z = b.AddZoneSet("SAM", "", 0).AddZone();
+                z.name = "Box";
+                WrImportIDF imp = (WrImportIDF)doc.CreateIDFImport();
+                imp.SetUseBEWidths(false);
+                double W = 10, D = 4, H = 3;
+                imp.AddSurface(z, gf, false, false, C(P(0, 0, 0), P(0, D, 0), P(W, D, 0), P(W, 0, 0)));
+                imp.AddSurface(z, roof, false, false, C(P(0, 0, H), P(W, 0, H), P(W, D, H), P(0, D, H)));
+                // south wall with: A, A (same window object twice), B, C (distinct object, same name+frame as A)
+                imp.AddSurface(z, wall, false, false, C(P(0, 0, 0), P(W, 0, 0), P(W, 0, H), P(0, 0, H)));
+                imp.AddOpening(wA, C(P(1, 0, 1), P(2, 0, 1), P(2, 0, 2), P(1, 0, 2)));
+                imp.AddOpening(wA, C(P(3, 0, 1), P(4, 0, 1), P(4, 0, 2), P(3, 0, 2)));
+                imp.AddOpening(wB, C(P(5, 0, 1), P(6, 0, 1), P(6, 0, 2), P(5, 0, 2)));
+                imp.AddOpening(wC, C(P(7, 0, 1), P(8, 0, 1), P(8, 0, 2), P(7, 0, 2)));
+                imp.AddSurface(z, wall, false, false, C(P(W, 0, 0), P(W, D, 0), P(W, D, H), P(W, 0, H)));
+                imp.AddSurface(z, wall, false, false, C(P(W, D, 0), P(0, D, 0), P(0, D, H), P(W, D, H)));
+                imp.AddSurface(z, wall, false, false, C(P(0, D, 0), P(0, 0, 0), P(0, 0, H), P(0, D, H)));
+                Console.WriteLine("CreateImportedModel=" + imp.CreateImportedModel());
+                doc.SetUseBEWidths(false);
+                Console.WriteLine("ExportNew=" + doc.ExportNew(1, 365, 15, 1, 1, 1, tbd, 1, 0, 0));
+                Console.WriteLine("window pane/frame GUIDs: A " + wA.paneGUID + "/" + wA.frameGUID + "  B " + wB.paneGUID + "/" + wB.frameGUID + "  C " + wC.paneGUID + "/" + wC.frameGUID);
+                Marshal.ReleaseComObject(imp);
+            }
+            finally { try { doc.Close(); } catch { } Marshal.FinalReleaseComObject(doc); }
+
+            Console.Write(TbdSnapshot.Read(tbd).ToText());
+            return 0;
+        }
+
         static object C(params double[][] pts)
         {
             double[,] t = new double[3, pts.Length];

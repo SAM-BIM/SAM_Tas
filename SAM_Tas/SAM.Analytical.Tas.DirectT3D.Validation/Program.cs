@@ -19,11 +19,23 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                     case "probe":
                         return Probes.Run(args);
 
+                    case "probe-windows":
+                        return Probes.Windows(args);
+
                     case "synthetic":
                         return SyntheticValidation.Run(args[1]);
 
+                    case "compare":
+                        return TbdCompare.Run(args);
+
+                    case "inspect":
+                        return Inspect.Run(args);
+
+                    case "workflow":
+                        return WorkflowRun.Run(args);
+
                     default:
-                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir>");
+                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>]");
                         return 2;
                 }
             }

@@ -9,6 +9,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
     public sealed class DirectRunResult
     {
         public T3DImportReport Report;
+        public T3DImportPlan Plan;
         public TbdSnapshot Tbd;
         public string Path_T3D;
         public string Path_TBD;
@@ -43,7 +44,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 TAS3D.T3DDocument t3DDocument = sAMT3DDocument.T3DDocument;
 
                 System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                result.Converted = analyticalModel.ToT3D(t3DDocument, options, out result.Report);
+                result.Plan = analyticalModel.T3DImportPlan(options);
+                result.Converted = result.Plan != null && result.Plan.ToT3D(t3DDocument, options, analyticalModel.Location);
+                result.Report = result.Plan?.Report;
                 result.Milliseconds_Convert = stopwatch.Elapsed.TotalMilliseconds;
 
                 if (result.Converted)
