@@ -45,6 +45,10 @@ namespace SAM.Analytical.Tas
 
         /// <summary>What the plan could not turn into geometry, and what it noticed along the way.</summary>
         public T3DImportReport Report { get; } = new T3DImportReport();
+
+        // Whether every panel carrying an aperture construction is external, per aperture construction. One answer for the whole construction,
+        // so it is worked out once instead of once per aperture (which would rescan every panel for each aperture).
+        internal Dictionary<System.Guid, bool> AllHostsExternal { get; } = new Dictionary<System.Guid, bool>();
     }
 
     /// <summary>One TAS <c>Element</c> (a building element definition).</summary>

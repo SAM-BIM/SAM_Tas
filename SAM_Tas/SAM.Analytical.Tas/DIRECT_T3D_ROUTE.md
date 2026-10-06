@@ -141,7 +141,7 @@ Everything here ran on this machine (Tas 9.5.7, licensed) on 2026-10-07; the art
 | Check | Result |
 | --- | --- |
 | `MSBuild SAM_Tas.sln` (Debug, .NET Framework MSBuild) | succeeds, 0 errors; the harness is part of the solution |
-| `dotnet test SAM.Analytical.Tas.TM59.Tests` | **1108 passed**, 0 failed (1055 existing + 53 new in `DirectT3DRouteTests`) |
+| `dotnet test SAM.Analytical.Tas.TM59.Tests` | **1113 passed**, 0 failed (1055 existing + 58 new in `DirectT3DRouteTests`) |
 | `dotnet test benchmark/SAM.Analytical.Tas.Benchmark.Tests` | **16 passed** (unchanged) |
 | Licensed `synthetic` (box on/off, window, three windows, door + rooflight, partition, adiabatic, ground, stacked x 2 orders) | **104 checks, 0 failed** |
 | Licensed `shade` | 8 checks, 0 failed |
@@ -256,7 +256,11 @@ TAS's own shading export is the cost at scale on either route; the direct conver
 | 9 | Simulation parity was measured on one real model (9 spaces); no larger real model was available, only synthetic grids up to 300 zones (TBD identical to the gbXML route at 100 zones) | follow-up |
 | 10 | `SAM_Tas_Grasshopper` and SAM_UI are untouched: nothing there can select `T3DRoute.Direct` yet | follow-up (by design) |
 | 11 | Panels with holes import the outer loop only (reported); shades with holes likewise | known limitation |
-| 12 | `AddInternalSurface`'s `reverseElement` cannot be used (inert); the layer direction of horizontal internal surfaces is TAS's geometric choice, equal to the gbXML route's in every measured case | known limitation |
+| 12 | `AddInternalSurface`'s `reverseElement` cannot be used (inert); the layer direction of horizontal internal surfaces is TAS's geometric choice, equal to the gbXML route's in every measured case. Sloped internal panels are not given SAM's rule either (not measured) and keep TAS's side | known limitation |
+| 13 | The element / window attribute rules in `Query.T3DImportPlan` (thickness, colour, transparency, BE type, frame width) are re-implemented from `Query.UpdateT3D`; a change to one must be made in the other. Sharing one decision helper would remove the drift risk but means touching `UpdateT3D` (not done: no unrelated refactors) | follow-up |
+| 14 | `Modify.UpdateIds` now reads each TBD zone's description (one extra COM read per zone) on the gbXML route too, to build the description-GUID index; it finds none there | follow-up (minor) |
+| 15 | No automated test asserts which workflow steps run per route, or that `Modify.UpdateReversed` writes to a TBD (COM): the licensed harness covers both and is not part of `dotnet test` / CI | follow-up |
+| 16 | A curved (non-polygonal) panel or aperture boundary is skipped and reported; it is not discretised | known limitation |
 
 There are no blockers. The branch is ready for review; items 1 and 2 are the ones that need a person with TAS3D open.
 

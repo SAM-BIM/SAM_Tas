@@ -128,8 +128,8 @@ namespace SAM.Analytical.Tas
             {
                 t3DDocument.Create();
 
+                // Not released here: doc.Building is the document's own object, and a caller may hold the very same wrapper.
                 TAS3D.Building building = t3DDocument.Building;
-                comObjects.Add(building);
 
                 // ---- Building ---------------------------------------------------------------------------
                 if (!string.IsNullOrWhiteSpace(plan.Name))

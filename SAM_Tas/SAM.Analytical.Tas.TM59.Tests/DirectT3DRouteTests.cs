@@ -892,6 +892,42 @@ namespace SAM.Analytical.Tas.TM59.Tests
             });
         }
 
+        [TestCase(0.0, 0.5, TestName = "Plan_NorthAngle_Zero_IsTheHalfDegreeTasNeeds")]
+        [TestCase(90.0, 90.0)]
+        [TestCase(-30.0, 330.0, TestName = "Plan_NorthAngle_Negative_IsTheSameDirectionNotAClampToHalfADegree")]
+        [TestCase(390.0, 30.0)]
+        public void Plan_NorthAngle_IsDegreesInZeroTo360(double degrees, double expected)
+        {
+            AnalyticalModel model = SyntheticModels.Box();
+            model.SetValue(Analytical.AnalyticalModelParameter.NorthAngle, degrees * Math.PI / 180);
+
+            Assert.That(model.T3DImportPlan().NorthAngle, Is.EqualTo(expected).Within(0.05));
+        }
+
+        [Test]
+        public void Plan_AnOpenFirstShell_UsesTheClosedSecondShellToOrientTheSurface()
+        {
+            // A's roof removed (open shell); B is closed. The partition's outward side for A is the opposite of B's.
+            AnalyticalModel model = SyntheticModels.TwoZones();
+            AdjacencyCluster cluster = model.AdjacencyCluster;
+            Space a = cluster.GetSpaces().Single(x => x.Name == "A");
+            Panel roofOfA = cluster.GetPanels(a).Single(x => x.PanelType == PanelType.Roof);
+            cluster.RemoveObject<Panel>(roofOfA.Guid);
+
+            T3DImportPlan plan = new AnalyticalModel(model, cluster).T3DImportPlan();
+
+            T3DSurfaceSpec partition = plan.Surfaces.Single(x => x.Kind == T3DSurfaceKind.Internal);
+            string first = plan.Zones[partition.Zone].Name;
+            Vector3D normal = Unit(Normal(partition));
+            Assert.Multiple(() =>
+            {
+                // A is the first zone (its shell is open), so the verified answer came from B's shell.
+                Assert.That(first, Is.EqualTo("A"));
+                Assert.That(normal.X, Is.EqualTo(1).Within(1e-9), "out of A, toward B");
+                Assert.That(plan.Report.Notes.Any(x => x.Contains("shell is not closed") && x.Contains(partition.PanelGuid.ToString())), Is.False, "no unverified-orientation caveat for the partition");
+            });
+        }
+
         [Test]
         public void Plan_NullModelOrCluster_IsNull()
         {

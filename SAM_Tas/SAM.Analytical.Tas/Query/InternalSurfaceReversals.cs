@@ -22,8 +22,9 @@ namespace SAM.Analytical.Tas
         /// from the identities <c>Modify.UpdateIds</c> stamped.
         /// </para>
         /// <para>
-        /// Horizontal panels (floors and ceilings) are not touched: TAS assigns those from the geometry (the face seen from
-        /// above is the unreversed one), identically to the gbXML route in every case measured.
+        /// Panels that are not walls (floors, ceilings and slopes) are not touched: TAS assigns those from the geometry (the face seen from
+        /// above is the unreversed one), identically to the gbXML route in every horizontal case measured; slopes were not measured, so
+        /// they are not given a rule either.
         /// </para>
         /// </summary>
         /// <param name="adjacencyCluster">The model, after <c>Modify.UpdateIds</c> has stamped panels and spaces.</param>
@@ -54,7 +55,7 @@ namespace SAM.Analytical.Tas
                     continue;
                 }
 
-                if (IsHorizontal(panel))
+                if (!IsVertical(panel))
                 {
                     continue;
                 }
@@ -99,11 +100,11 @@ namespace SAM.Analytical.Tas
             return result;
         }
 
-        // A floor or ceiling: its normal is (nearly) vertical.
-        private static bool IsHorizontal(Panel panel)
+        // A wall: its normal is (nearly) horizontal. Anything else - floors, ceilings, and slopes in between - keeps the side TAS chose.
+        private static bool IsVertical(Panel panel)
         {
             Vector3D normal = panel.Normal;
-            return normal != null && global::System.Math.Abs(normal.Unit.Z) > 0.9999;
+            return normal != null && global::System.Math.Abs(normal.Unit.Z) < 0.05;
         }
     }
 }

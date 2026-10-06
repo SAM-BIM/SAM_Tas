@@ -6,7 +6,6 @@ using SAM.Geometry.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace SAM.Analytical.Tas
@@ -57,7 +56,10 @@ namespace SAM.Analytical.Tas
             {
                 //The same rule Query.UpdateT3D applies on the gbXML route: degrees to one decimal, and never
                 //below half a degree.
-                plan.NorthAngle = global::System.Math.Max(global::System.Math.Round(Units.Convert.ToDegrees(northAngle), 1), 0.5);
+                // A negative angle is the same direction as its positive equivalent; it must not be clamped to the half degree.
+                double degrees = global::System.Math.Round(Units.Convert.ToDegrees(northAngle), 1);
+                degrees = ((degrees % 360) + 360) % 360;
+                plan.NorthAngle = global::System.Math.Max(degrees, 0.5);
             }
 
             // ---- Which spaces bound which panels, read once ------------------------------------------------
@@ -194,6 +196,17 @@ namespace SAM.Analytical.Tas
                 ISpace space_B = count_Spaces == 2 ? spaces_Panel[1] : null;
 
                 Vector3D normal_A = OutwardNormal(adjacencyCluster, space_A, panel, outwardNormals, openShells, options.Tolerance, out bool verified_A);
+                if (normal_A == null && space_B != null)
+                {
+                    // The first space's shell is open: the second space's, if closed, still says which way is out - the other way for this one.
+                    Vector3D normal_B = OutwardNormal(adjacencyCluster, space_B, panel, outwardNormals, openShells, options.Tolerance, out bool verified_B);
+                    if (verified_B && normal_B != null)
+                    {
+                        normal_A = normal_B.GetNegated();
+                        verified_A = true;
+                    }
+                }
+
                 if (normal_A == null)
                 {
                     normal_A = face3D.GetPlane()?.Normal;
@@ -202,7 +215,7 @@ namespace SAM.Analytical.Tas
                 List<Point3D> polygon = face3D.TasPolygon(normal_A, options.Tolerance, out bool _, out int holes);
                 if (polygon == null)
                 {
-                    report.Skipped.Add(string.Format("Panel {0}: degenerate geometry (fewer than three distinct, non-collinear vertices or no area), so it was not imported.", identity));
+                    report.Skipped.Add(string.Format("Panel {0}: degenerate or non-polygonal geometry (fewer than three distinct, non-collinear vertices, no area, or a curved boundary that is not a polygon), so it was not imported.", identity));
                     continue;
                 }
 
@@ -617,7 +630,7 @@ namespace SAM.Analytical.Tas
                 List<Point3D> points = (externalEdge3D as ISegmentable3D)?.GetPoints();
                 if (points == null)
                 {
-                    report.Skipped.Add(identity + ": no geometry, so no opening was imported.");
+                    report.Skipped.Add(identity + ": no polygonal geometry (missing, or a curved boundary), so no opening was imported.");
                     continue;
                 }
 
@@ -630,7 +643,7 @@ namespace SAM.Analytical.Tas
                 List<Point3D> polygon = projected.TasPolygon(normal_Host, options.Tolerance, out bool _);
                 if (polygon == null)
                 {
-                    report.Skipped.Add(identity + ": degenerate geometry, so no opening was imported.");
+                    report.Skipped.Add(identity + ": degenerate or non-polygonal geometry, so no opening was imported.");
                     continue;
                 }
 
@@ -745,11 +758,14 @@ namespace SAM.Analytical.Tas
                 }
                 else
                 {
-                    List<Panel> panels = adjacencyCluster.GetPanels(apertureConstruction);
-                    if (panels != null && panels.Count != 0)
+                    if (!plan.AllHostsExternal.TryGetValue(apertureConstruction.Guid, out bool allExternal))
                     {
-                        result.InternalShadows = panels.TrueForAll(x => adjacencyCluster.External(x));
+                        List<Panel> panels = adjacencyCluster.GetPanels(apertureConstruction);
+                        allExternal = panels != null && panels.Count != 0 && panels.TrueForAll(x => adjacencyCluster.External(x));
+                        plan.AllHostsExternal[apertureConstruction.Guid] = allExternal;
                     }
+
+                    result.InternalShadows = allExternal;
                 }
             }
 
@@ -801,19 +817,18 @@ namespace SAM.Analytical.Tas
             }
         }
 
+        // A stable 32-bit FNV-1a hash as eight hex digits: a name discriminator, not a security measure, so nothing that a FIPS-only
+        // crypto policy can refuse.
         private static string ShortHash(string text)
         {
-            using (MD5 md5 = MD5.Create())
+            uint hash = 2166136261;
+            foreach (byte value in Encoding.UTF8.GetBytes(text))
             {
-                byte[] bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(text));
-                StringBuilder stringBuilder = new StringBuilder();
-                for (int i = 0; i < 4; i++)
-                {
-                    stringBuilder.Append(bytes[i].ToString("X2", CultureInfo.InvariantCulture));
-                }
-
-                return stringBuilder.ToString();
+                hash ^= value;
+                hash *= 16777619;
             }
+
+            return hash.ToString("X8", CultureInfo.InvariantCulture);
         }
     }
 }
