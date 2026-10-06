@@ -25,6 +25,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                     case "synthetic":
                         return SyntheticValidation.Run(args[1]);
 
+                    case "scale":
+                        return ScaleExperiment.Run(args);
+
                     case "reversed-real":
                         return ReversedExperiment.RunReal(args[1], args[2]);
 
@@ -59,7 +62,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                         return WorkflowRun.Run(args);
 
                     default:
-                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | reversed <outDir> | deep <a.tbd> <b.tbd> [out.txt] | t3d <file.t3d> [out.txt] | models <gbxml.result.json> <direct.result.json> <outPrefix> | widths <model.sam> <outDir> | gating <model.sam> <outDir> [gbxml.tbd] | shade <outDir> | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>]");
+                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | scale <outDir> <nx> <ny> [gbxml] | reversed <outDir> | deep <a.tbd> <b.tbd> [out.txt] | t3d <file.t3d> [out.txt] | models <gbxml.result.json> <direct.result.json> <outPrefix> | widths <model.sam> <outDir> | gating <model.sam> <outDir> [gbxml.tbd] | shade <outDir> | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>]");
                         return 2;
                 }
             }

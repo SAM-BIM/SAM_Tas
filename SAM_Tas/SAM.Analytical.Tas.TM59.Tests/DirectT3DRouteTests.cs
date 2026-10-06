@@ -855,6 +855,44 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void Plan_AGridOfZones_CountsAddUp_AndTheDoorAndRooflightGetTheirOwnTypes()
+        {
+            // 10 x 10 zones: 100 slabs and 100 roofs; 9 x 10 + 10 x 9 = 180 shared partitions, each ONE surface; 4 x 10 = 40 perimeter walls,
+            // two windows in each of the 20 that face north or south.
+            T3DImportPlan plan = SyntheticModels.Grid(10, 10).T3DImportPlan();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(plan.Zones, Has.Count.EqualTo(100));
+                Assert.That(plan.Report.GroundSurfaces, Is.EqualTo(100));
+                Assert.That(plan.Report.InternalSurfaces, Is.EqualTo(180), "9 x 10 + 10 x 9 shared partitions, each ONE surface");
+                Assert.That(plan.Report.ExternalSurfaces, Is.EqualTo(140), "100 roofs + 40 perimeter walls");
+                Assert.That(plan.Report.Surfaces, Is.EqualTo(420));
+                Assert.That(plan.Report.Openings, Is.EqualTo(40), "two windows in each of the 20 north / south perimeter walls");
+                Assert.That(plan.Report.Skipped, Is.Empty);
+            });
+        }
+
+        [Test]
+        public void Plan_ADoorAndARooflight_AreTypedByTheirHost()
+        {
+            T3DImportPlan plan = SyntheticModels.BoxWithDoorAndRooflight().T3DImportPlan();
+
+            T3DWindowSpec door = plan.Windows.Single(x => x.Name.StartsWith("Doors: EXT_DOOR"));
+            T3DWindowSpec rooflight = plan.Windows.Single(x => x.Name.StartsWith("Windows: EXT_GLZ"));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(door.OpeningType, Is.EqualTo(2), "AddWindow openingType 2 is a door");
+                Assert.That(door.PositionType, Is.EqualTo(2));
+                Assert.That(door.Transparent, Is.False, "an opaque door");
+                Assert.That(rooflight.OpeningType, Is.EqualTo(1), "an opening in a roof is a rooflight");
+                Assert.That(rooflight.PositionType, Is.EqualTo(1));
+                Assert.That(Points(plan.Surfaces.Single(x => x.Openings.Any(o => o.WindowKey == rooflight.Key)).Openings.Single().Coordinates).All(x => Math.Abs(x.Z - 3) < 1e-9), Is.True, "on the roof plane");
+            });
+        }
+
+        [Test]
         public void Plan_NullModelOrCluster_IsNull()
         {
             Assert.Multiple(() =>

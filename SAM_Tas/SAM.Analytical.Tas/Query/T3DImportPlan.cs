@@ -462,9 +462,9 @@ namespace SAM.Analytical.Tas
             // construction match all read it). A second element for the same construction, or two constructions
             // sharing a name, is told apart by a short stable suffix rather than silently merged.
             string name = construction != null && !string.IsNullOrWhiteSpace(construction.Name) ? construction.Name : panel.PanelType.Text();
-            if (options.ElementPerPanel && !string.IsNullOrWhiteSpace(panel.Name))
+            if (options.ElementPerPanel)
             {
-                name = name + " " + panel.Name;
+                name = name + " [" + panel.Guid.ToString("N").Substring(0, 8) + "]";
             }
 
             if (elementNames.Contains(name))

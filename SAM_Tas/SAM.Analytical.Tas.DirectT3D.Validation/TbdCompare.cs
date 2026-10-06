@@ -130,7 +130,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 if (x.Ground != y.Ground) add(Category.Unresolved, "building elements", string.Format(ci, "'{0}': ground gbXML {1} vs direct {2}", x.Name, x.Ground, y.Ground));
                 if (x.Surfaces != y.Surfaces) add(Category.Unresolved, "building elements", string.Format(ci, "'{0}': {1} surfaces in gbXML vs {2} in direct", x.Name, x.Surfaces, y.Surfaces));
                 if (x.Construction != y.Construction) add(Category.Unresolved, "building elements", string.Format(ci, "'{0}': construction gbXML '{1}' vs direct '{2}'", x.Name, x.Construction, y.Construction));
-                if (x.Colour != y.Colour) add(Category.Unresolved, "building elements", string.Format(ci, "'{0}': colour gbXML {1:X6} vs direct {2:X6}", x.Name, x.Colour, y.Colour));
+                // Cosmetic: where a construction states no colour the gbXML route keeps the colour TAS gave its gbXML surface type, the direct
+                // route uses SAM's own colour for the panel type. Neither enters the simulation.
+                if (x.Colour != y.Colour) add(Category.EquivalentRepresentation, "building elements", string.Format(ci, "'{0}': colour gbXML {1:X6} vs direct {2:X6} (cosmetic - TAS's default for the gbXML surface type vs SAM's colour for the panel type)", x.Name, x.Colour, y.Colour));
                 if (!x.ApertureTypes.OrderBy(t => t).SequenceEqual(y.ApertureTypes.OrderBy(t => t))) add(Category.Unresolved, "building elements", string.Format(ci, "'{0}': aperture types gbXML [{1}] vs direct [{2}]", x.Name, string.Join("|", x.ApertureTypes), string.Join("|", y.ApertureTypes)));
             }
 
@@ -141,7 +143,15 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             foreach (string name in b.ConstructionNames.Except(a.ConstructionNames)) add(Category.Unresolved, "constructions", "'" + name + "' is only in the direct TBD");
             foreach (string name in a.ApertureTypeNames.Except(b.ApertureTypeNames)) add(Category.Unresolved, "aperture types", "'" + name + "' is only in the gbXML TBD");
             foreach (string name in b.ApertureTypeNames.Except(a.ApertureTypeNames)) add(Category.Unresolved, "aperture types", "'" + name + "' is only in the direct TBD");
-            if (!a.ZoneGroupNames.OrderBy(x => x).SequenceEqual(b.ZoneGroupNames.OrderBy(x => x))) add(Category.Unresolved, "zone groups", "gbXML [" + string.Join("|", a.ZoneGroupNames) + "] vs direct [" + string.Join("|", b.ZoneGroupNames) + "]");
+            if (!a.ZoneGroupNames.OrderBy(x => x).SequenceEqual(b.ZoneGroupNames.OrderBy(x => x)))
+            {
+                // The TBD turns each T3D zone set into a zone group: 'gbXml Spaces' is the set TAS's gbXML import makes, 'SAM' the one the
+                // direct route makes (ToT3DOptions.ZoneSetName). Anything else differing is not that.
+                List<string> onlyA = a.ZoneGroupNames.Except(b.ZoneGroupNames).ToList();
+                List<string> onlyB = b.ZoneGroupNames.Except(a.ZoneGroupNames).ToList();
+                bool zoneSetNameOnly = onlyA.Count == 1 && onlyB.Count == 1 && onlyA[0] == "gbXml Spaces" && onlyB[0] == "SAM";
+                add(zoneSetNameOnly ? Category.EquivalentRepresentation : Category.Unresolved, "zone groups", "gbXML [" + string.Join("|", a.ZoneGroupNames) + "] vs direct [" + string.Join("|", b.ZoneGroupNames) + "]" + (zoneSetNameOnly ? " (only the name of the zone set that holds every zone differs)" : string.Empty));
+            }
 
             // Zones by name.
             foreach (TbdSnapshot.Zn x in a.Zones)

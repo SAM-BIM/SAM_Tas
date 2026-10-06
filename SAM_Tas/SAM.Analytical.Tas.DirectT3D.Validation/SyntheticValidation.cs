@@ -19,6 +19,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             Box(check, directory, widths: false);
             BoxWithWindow(check, directory);
             ThreeWindows(check, directory);
+            DoorAndRooflight(check, directory);
             TwoZones(check, directory);
             AdiabaticWall(check, directory);
             Ground(check, directory);
@@ -106,6 +107,25 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             check.Near(opening, 2.0, 0.01, "frame + pane area equals the 2 m2 opening polygon");
             double south = tbd.AllSurfaces().Where(x => x.Be == "EXT_WALL" && Math.Abs(x.Orientation - 180) < 1).Sum(x => x.Area);
             check.Near(south, 15.0 - 2.0, 0.01, "south wall (5 x 3 = 15 m2) net of the 2 m2 opening");
+        }
+
+        private static void DoorAndRooflight(Checker check, string directory)
+        {
+            check.Section("door_rooflight (an opaque door in the south wall, a glazed opening in the roof, widths OFF)");
+
+            DirectRunResult result = Run(check, directory, "door_rooflight", SyntheticModels.BoxWithDoorAndRooflight(), widths: false);
+            if (result.Tbd == null) return;
+            TbdSnapshot tbd = result.Tbd;
+
+            check.Equal(result.Report.Openings, 2, "openings imported");
+            TbdSnapshot.Be doorPane = tbd.BuildingElements.FirstOrDefault(x => x.Name.StartsWith("Doors: EXT_DOOR") && x.Name.EndsWith("-pane"));
+            TbdSnapshot.Be roofPane = tbd.BuildingElements.FirstOrDefault(x => x.Name.StartsWith("Windows: EXT_GLZ") && x.Name.EndsWith("-pane"));
+            check.True(doorPane != null, "the door's element carries the 'Doors: ' prefix");
+            check.Equal(doorPane?.BEType ?? -1, Query.BEType("Door"), "the door pane is a Door building element (BEType 14)");
+            check.True(roofPane != null, "the rooflight's element carries the 'Windows: ' prefix");
+            check.Equal(roofPane?.BEType ?? -1, Query.BEType("Rooflight"), "the opening in the roof is a Rooflight building element (BEType 13), not glazing (12)");
+            check.Near(tbd.AllSurfaces().Where(x => x.Be.StartsWith("Doors:")).Sum(x => x.Area), 2.0, 0.01, "the door's 2 m2");
+            check.Near(tbd.AllSurfaces().Where(x => x.Be.StartsWith("Windows:") && Math.Abs(x.Inclination) < 1).Sum(x => x.Area), 1.0, 0.01, "the rooflight's 1 m2, on a horizontal surface");
         }
 
         private static void ThreeWindows(Checker check, string directory)

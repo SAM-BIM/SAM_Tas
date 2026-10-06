@@ -213,6 +213,105 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             return Model("TwoZones", adjacencyCluster);
         }
 
+        public static ApertureConstruction DoorConstruction { get; } = CreateDoorConstruction();
+
+        // An opaque door: no transparent material and no Transparent parameter, so TAS builds a door (BEType 14), not glazing.
+        private static ApertureConstruction CreateDoorConstruction()
+        {
+            return new ApertureConstruction(System.Guid.Parse("00000000-0000-0000-0000-0000000000b2"), "EXT_DOOR", ApertureType.Door, new[] { new ConstructionLayer("Partition layer", 0.04) });
+        }
+
+        /// <summary>
+        /// The reference box with a 1 x 2 m door in the south wall and a 1 x 1 m rooflight in the roof - the two openings whose
+        /// TAS position type is not the window default.
+        /// </summary>
+        public static AnalyticalModel BoxWithDoorAndRooflight()
+        {
+            AnalyticalModel model = Box();
+            AdjacencyCluster adjacencyCluster = model.AdjacencyCluster;
+
+            Panel south = adjacencyCluster.GetPanels().First(x => x.PanelType == PanelType.WallExternal && System.Math.Abs(x.GetBoundingBox().Max.Y) < 1e-9);
+            south.AddAperture(Analytical.Create.Aperture(DoorConstruction, Quad(P(1, 0, 0), P(2, 0, 0), P(2, 0, 2), P(1, 0, 2))));
+            adjacencyCluster.AddObject(south);
+
+            Panel roof = adjacencyCluster.GetPanels().First(x => x.PanelType == PanelType.Roof);
+            roof.AddAperture(Analytical.Create.Aperture(GlazingConstruction, Quad(P(2, 1, 3), P(3, 1, 3), P(3, 2, 3), P(2, 2, 3))));
+            adjacencyCluster.AddObject(roof);
+
+            return new AnalyticalModel(model, adjacencyCluster);
+        }
+
+        /// <summary>
+        /// A single storey of <paramref name="nx"/> x <paramref name="ny"/> zones, each 5 x 4 x 3 m, side by side - one shared
+        /// partition between neighbours, a roof and a slab on grade each, and (with <paramref name="windows"/>) two windows in every
+        /// outer wall. The scale case: a TM59-sized building is a few hundred zones and a few thousand panels.
+        /// </summary>
+        public static AnalyticalModel Grid(int nx, int ny, bool windows = true)
+        {
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            Space[,] spaces = new Space[nx, ny];
+            for (int i = 0; i < nx; i++)
+            {
+                for (int j = 0; j < ny; j++)
+                {
+                    spaces[i, j] = new Space(string.Format("Z{0}_{1}", i, j), P(i * 5 + 2.5, j * 4 + 2, 1.5));
+                    adjacencyCluster.AddObject(spaces[i, j]);
+                }
+            }
+
+            for (int i = 0; i < nx; i++)
+            {
+                for (int j = 0; j < ny; j++)
+                {
+                    double x0 = i * 5, x1 = x0 + 5, y0 = j * 4, y1 = y0 + 4;
+                    Space space = spaces[i, j];
+
+                    Panel floor = Panel(FloorConstruction, PanelType.SlabOnGrade, Quad(P(x0, y0, 0), P(x0, y1, 0), P(x1, y1, 0), P(x1, y0, 0)));
+                    Panel roof = Panel(RoofConstruction, PanelType.Roof, Quad(P(x0, y0, 3), P(x1, y0, 3), P(x1, y1, 3), P(x0, y1, 3)));
+                    foreach (Panel panel in new[] { floor, roof })
+                    {
+                        adjacencyCluster.AddObject(panel);
+                        adjacencyCluster.AddRelation(space, panel);
+                    }
+
+                    // South (y0) and west (x0) walls; the north and east walls belong to the neighbour when there is one.
+                    for (int side = 0; side < 4; side++)
+                    {
+                        // 0 south, 1 east, 2 north, 3 west
+                        int ni = i + (side == 1 ? 1 : side == 3 ? -1 : 0);
+                        int nj = j + (side == 2 ? 1 : side == 0 ? -1 : 0);
+                        bool neighbour = ni >= 0 && ni < nx && nj >= 0 && nj < ny;
+                        if (neighbour && (side == 1 || side == 2))
+                        {
+                            continue; // built by the neighbour's west / south side
+                        }
+
+                        Face3D face = side == 0 ? Quad(P(x0, y0, 0), P(x1, y0, 0), P(x1, y0, 3), P(x0, y0, 3))
+                            : side == 1 ? Quad(P(x1, y0, 0), P(x1, y1, 0), P(x1, y1, 3), P(x1, y0, 3))
+                            : side == 2 ? Quad(P(x1, y1, 0), P(x0, y1, 0), P(x0, y1, 3), P(x1, y1, 3))
+                            : Quad(P(x0, y1, 0), P(x0, y0, 0), P(x0, y0, 3), P(x0, y1, 3));
+
+                        Panel wall = Panel(neighbour ? PartitionConstruction : WallConstruction, neighbour ? PanelType.WallInternal : PanelType.WallExternal, face);
+                        if (!neighbour && windows && (side == 0 || side == 2))
+                        {
+                            double y = side == 0 ? y0 : y1;
+                            wall.AddAperture(Analytical.Create.Aperture(GlazingConstruction, Quad(P(x0 + 0.5, y, 1), P(x0 + 2, y, 1), P(x0 + 2, y, 2.2), P(x0 + 0.5, y, 2.2))));
+                            wall.AddAperture(Analytical.Create.Aperture(GlazingConstruction, Quad(P(x0 + 2.8, y, 1), P(x0 + 4.3, y, 1), P(x0 + 4.3, y, 2.2), P(x0 + 2.8, y, 2.2))));
+                        }
+
+                        adjacencyCluster.AddObject(wall);
+                        adjacencyCluster.AddRelation(space, wall);
+                        if (neighbour)
+                        {
+                            adjacencyCluster.AddRelation(spaces[ni, nj], wall);
+                        }
+                    }
+                }
+            }
+
+            return Model(string.Format("Grid{0}x{1}", nx, ny), adjacencyCluster);
+        }
+
         /// <summary>
         /// The two-zone building with A's north wall adiabatic AND a 1 x 1 m window in it: what becomes of an opening in an
         /// adiabatic wall decides whether the repair that re-derives adiabatic surfaces from geometry is redundant.
