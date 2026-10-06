@@ -113,7 +113,7 @@ namespace SAM.Analytical.Tas
             building.AddUnusedInternalConditions(adjacencyCluster, profileLibrary, dayTypes_NonHDD);
 
             //Updating Builidng Information
-            building.description = string.Format("Delivered by SAM https://github.com/HoareLea/SAM [{0}]", System.DateTime.Now.ToString("yyyy/MM/dd"));
+            building.description = string.Format("Delivered by SAM https://github.com/SAM-BIM/SAM [{0}]", System.DateTime.Now.ToString("yyyy/MM/dd"));
 
             TBD.GeneralDetails generaldetails = building.GetGeneralDetails();
             if(generaldetails != null)
