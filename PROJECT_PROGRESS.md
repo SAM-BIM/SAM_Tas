@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-07 (Java-free GenOpt PR1-T closeout, SAM_Tas#85).
+2026-10-07 (Java-free GenOpt PR3 closeout, SAM_Tas#86).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; see the GenOpt section below).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; see the GenOpt sections below).
 
 ## Q4 priorities
 
@@ -112,6 +112,75 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
 - **Next step:** after D1–D4, SAM PR2 (`feature/native-optimiser-kernel`, kernel in `SAM.Math`), then SAM_Tas PR3
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
+  - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Java-free GenOpt replacement — PR3, native Tas GenOpt route (2026-10-07)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#86 (`feature/native-genopt-tas-evaluator`) merged into `sow/2026-Q4` as merge commit
+    `63a5fec7f1681662f56f89e3c84c2a8824bff7bb` (PR head `229142e36b2b22bee8c4d7c69dedd117734a2085`, Q4 base `60d56621`).
+  - Merge method: merge commit, head-commit protected.
+  - Code-owner review: @ZiolkowskiJakub approved.
+  - Remote and local branch removed.
+  - Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/NATIVE_GENOPT_ROUTE.md`.
+- **Work completed:** `GenOptDocument.RunNative` maps the existing GenOpt objects onto the SAM.Math kernel (SAM#183)
+  and evaluates with `TasGenExecute.exe` directly (Gate T protocol). It uses no Java, GenOpt, cmd.exe or registry.
+  - `GenOptNumber`: the Java writer's text, read with GenOpt's StreamTokenizer arithmetic (D1). Exponent algorithm
+    keywords are refused (D2).
+  - `Convert.ToSAM_Optimiser` / `ToSAM_OptimisationProblem`:
+    - GPSHookeJeeves and GoldenSection are supported. GoldenSection takes AbsDiffFunction and exactly one parameter.
+    - GPSCoordinateSearch is refused (D3).
+    - Every other algorithm type or class throws `NotSupportedException`.
+    - GPS mesh values must be integers in GenOpt's domain. MaxEqualResults ≥ 2. WriteStepNumber = true is refused.
+      UnitsOfExecution never makes the run parallel.
+  - `NativeGenOptWorkspace`: one folder per run. The project snapshot is an allow-list: `Script.txt` plus
+    TasGenComm's T3D/TBD/TPD/TSD/TWD.
+  - `TasGenExecuteObjectiveEvaluator`:
+    - one fresh folder per attempt (`NNNN`, `NNNN-retry`) and `Variables.txt`;
+    - failure on a non-zero exit, a non-empty `Error.txt`, or a missing or unparseable objective (comma decimals are
+      refused); the kernel owns the retry;
+    - cooperative cancellation between evaluations, with no process kill.
+  - The legacy `Run()` is unchanged.
+- **Owner decisions:**
+  - Legacy Java route: `Run()` writes `cmd /c "start …"`, which hangs under GenOpt 3.1.1 because GenOpt rewrites `/c`
+    to `C:\c`. Accepted as a pre-existing defect. Not fixed; it is input for PR6.
+  - GPSCoordinateSearch: the D3 Java-only oracle showed the SAM_Tas writer always emits `Seed`/`NumberOfInitialPoint`,
+    which GenOpt rejects, so the Java route cannot run it. The adapter refuses it. A future native configuration layer
+    may expose CoordinateSearch, but not as legacy compatibility.
+  - Cancellation count: the PR2 kernel contract (a cancelled run counts the assigned but unlaunched simulation) is
+    accepted. It may be revisited for presentation before SAM_UI (PR5).
+  - Non-integer mesh values are refused, where Java truncates them (no silent repair).
+- **PR3 Java-only oracle** (real genopt.jar 3.1.1, JRE 8, existing SAM_Tas writer, no Tas):
+  - GPSCoordinateSearch is rejected for all Seed/NumberOfInitialPoint values.
+  - `AbsDiffFunction = 1E-05` gives "Expected ';', got 'E-05'".
+  - Mesh domain: divider > 1, s0 ≥ 0, t > 0, m > 0; fractions are silently truncated.
+  - MaxEqualResults < 2 is rejected.
+  - The writer's `E+`, `E-`, `-0` and 17-digit texts are read bit for bit as `GenOptNumber` predicts.
+- **Files changed:** 24 (+2957/−1).
+  - `SAM.Analytical.Tas.GenOpt`: `Classes/Native/*` (5), `Convert/*` (2), `GenOptDocument.cs` (additive), csproj
+    (SAM.Math HintPath), `NATIVE_GENOPT_ROUTE.md`.
+  - New `SAM.Analytical.Tas.GenOpt.Tests` (NUnit, HintPath pattern) and `SAM.Analytical.Tas.GenOpt.Tests.StubTasGenExecute`.
+  - `SAM_Tas.sln` (2 projects appended), `.github/workflows/build.yml` (test step).
+- **Validation:**
+  - `SAM.Analytical.Tas.GenOpt.Tests`: 173/173. It includes 25 SAM golden GenOpt traces replayed bit for bit through
+    `RunNative` plus the stub.
+  - 5/5 adapter mutations caught.
+  - `MSBuild SAM_Tas.sln /t:Rebuild` Release: 0 errors. TM59 1128/1128, Benchmark 16/16.
+  - Licensed Systems Demo: Java GenOpt A, Java GenOpt B and native were **bit-identical**, with a Java-vs-Java noise
+    floor of 0. That covers candidates, numbering, objectives (Result, Cost, CO2), termination and best point.
+    - GoldenSection: 11 simulations, best Setpoint 4.968943799848584.
+    - GPSHookeJeeves: 16 simulations, 41/10 listing rows, best Setpoint 5.
+    - The Java controls invoked TasGenExecute directly because of the legacy `cmd /c` hang (accepted deviation).
+  - PR CI `build` and `spdx` green on the head.
+- **Unresolved issues, risks:**
+  - The legacy `Run()` command hang (PR6).
+  - Licensed acceptance covers one parameter (Systems Demo); multi-parameter runs are covered by the stub and golden
+    tests.
+  - TasGenExecute culture: native refuses comma-decimal output.
+  - `SAM.Math`'s `Java8FloatText` keeps a stale .NET Framework sentence in a comment. It is deferred to a separate
+    comment-only SAM PR; there is no .NET Framework requirement.
+- **Next step:** PR3 is frozen. PR4 (Grasshopper), then PR5 (SAM_UI), then PR6 (Java retirement), each only when the
+  owner requests it.
 
 ---
 
