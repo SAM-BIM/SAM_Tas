@@ -70,11 +70,14 @@ namespace SAM.Analytical.Tas
         /// <summary>False when the conversion could not run at all (no model, no TAS document, TAS refused).</summary>
         public bool Success { get; set; }
 
+        /// <summary>How many of TAS's storeys were given their SAM level name (see <see cref="Query.StoreyName"/>).</summary>
+        public int StoreysNamed { get; set; }
+
         public override string ToString()
         {
             return string.Format(CultureInfo.InvariantCulture,
-                "zones={0} elements={1} windows={2} surfaces={3} (external={4} internal={5} adiabatic={6} ground={7}) openings={8} shades={9}/{10} skipped={11} notes={12} success={13}",
-                Zones, Elements, Windows, Surfaces, ExternalSurfaces, InternalSurfaces, AdiabaticSurfaces, GroundSurfaces, Openings, ShadesImported, Shades, Skipped.Count, Notes.Count, Success);
+                "zones={0} elements={1} windows={2} surfaces={3} (external={4} internal={5} adiabatic={6} ground={7}) openings={8} shades={9}/{10} storeysNamed={14} skipped={11} notes={12} success={13}",
+                Zones, Elements, Windows, Surfaces, ExternalSurfaces, InternalSurfaces, AdiabaticSurfaces, GroundSurfaces, Openings, ShadesImported, Shades, Skipped.Count, Notes.Count, Success, StoreysNamed);
         }
     }
 }

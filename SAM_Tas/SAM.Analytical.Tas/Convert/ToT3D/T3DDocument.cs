@@ -105,6 +105,88 @@ namespace SAM.Analytical.Tas
             }
         }
 
+        // The importer makes its own storeys and names them by height ("Storey at level 0.000 m"). A storey every one of whose
+        // zones' spaces names the same SAM level is given that name - what the gbXML route's storey carries from the gbXML
+        // BuildingStorey. Zones are matched to their spaces by the [SpaceGuid] in the zone description. A name two storeys would
+        // both get is given to neither. Metadata only: a failure here is noted, never a reason to fail the import.
+        private static void NameStoreys(TAS3D.Building building, T3DImportPlan plan)
+        {
+            Dictionary<Guid, string> levelNames = new Dictionary<Guid, string>();
+            foreach (T3DZoneSpec zoneSpec in plan.Zones)
+            {
+                levelNames[zoneSpec.SpaceGuid] = zoneSpec.LevelName;
+            }
+
+            List<TAS3D.Floor> floors = new List<TAS3D.Floor>();
+            try
+            {
+                Dictionary<TAS3D.Floor, string> names = new Dictionary<TAS3D.Floor, string>();
+                for (int index = 1; ; index++)
+                {
+                    TAS3D.Floor floor = building.GetFloor(index);
+                    if (floor == null)
+                    {
+                        break;
+                    }
+
+                    floors.Add(floor);
+
+                    List<string> levelNames_Floor = new List<string>();
+                    if (floor.GetZonesOnFloor() is object[] zones)
+                    {
+                        foreach (object @object in zones)
+                        {
+                            if (@object is TAS3D.Zone zone)
+                            {
+                                levelNames_Floor.Add(Query.TryGetSpaceGuid(zone.description, out Guid spaceGuid) && levelNames.TryGetValue(spaceGuid, out string levelName) ? levelName : null);
+                            }
+
+                            // Not released: these are the zones this replay created, the same wrappers its own list holds and releases.
+                        }
+                    }
+
+                    string name = levelNames_Floor.Count == 0 ? null : levelNames_Floor.StoreyName();
+                    if (name != null)
+                    {
+                        names[floor] = name;
+                    }
+                }
+
+                foreach (KeyValuePair<TAS3D.Floor, string> keyValuePair in names)
+                {
+                    int count = 0;
+                    foreach (string name in names.Values)
+                    {
+                        if (name == keyValuePair.Value)
+                        {
+                            count++;
+                        }
+                    }
+
+                    if (count == 1)
+                    {
+                        keyValuePair.Key.name = keyValuePair.Value;
+                        plan.Report.StoreysNamed++;
+                    }
+                    else
+                    {
+                        plan.Report.Notes.Add(string.Format("Storey '{0}': its zones name level '{1}', which another storey's zones name too, so TAS's storey name was kept.", keyValuePair.Key.name, keyValuePair.Value));
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                plan.Report.Notes.Add(string.Format("Storey names: not set ({0}); TAS's own storey names were kept.", exception.Message));
+            }
+            finally
+            {
+                foreach (TAS3D.Floor floor in floors)
+                {
+                    Core.Modify.ReleaseCOMObject(floor);
+                }
+            }
+        }
+
         /// <summary>
         /// Replays a plan into a freshly created <paramref name="t3DDocument"/>. The plan's report is completed
         /// with what TAS accepted and what it did not.
@@ -356,6 +438,10 @@ namespace SAM.Analytical.Tas
                 if (!created)
                 {
                     report.Skipped.Add("TAS reported that it could not create the imported model (CreateImportedModel returned false).");
+                }
+                else
+                {
+                    NameStoreys(building, plan);
                 }
 
                 return report.Success;

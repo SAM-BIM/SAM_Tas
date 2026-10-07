@@ -509,6 +509,14 @@ namespace SAM.Analytical.Tas
                         Step("Converting SAM to T3D");
                         bool converted = result.ToT3D(t3DDocument, new ToT3DOptions() { UseWidths = WorkflowSettings.UseWidths }, out T3DImportReport report_T3D);
 
+                        // Measured (DIRECT_T3D_ROUTE.md, "Zone volumes"): with widths ON the direct T3D offsets floors and roofs by half
+                        // their width as well as walls, whereas TAS's gbXML import keeps the full zone height, so the two routes' zone
+                        // volumes differ (real model, Studio: 261.8 vs 288.8 m3). With widths OFF both reproduce SAM's own volumes exactly.
+                        if (WorkflowSettings.UseWidths)
+                        {
+                            notes.Add("Direct T3D conversion with UseWidths: TAS treats every SAM polygon as a centre line and offsets floors and roofs as well as walls, so zone volumes are smaller than on the gbXML route (which keeps the full zone height) and than SAM's own. SAM panels are the physical inner surfaces; UseWidths = false reproduces SAM's volumes on both routes.");
+                        }
+
                         if (report_T3D != null)
                         {
                             notes.Add(string.Format("Direct T3D conversion: {0}.", report_T3D));

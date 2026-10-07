@@ -146,7 +146,7 @@ Everything here ran on this machine (Tas 9.5.7, licensed) on 2026-10-07; the art
 | Check | Result |
 | --- | --- |
 | `MSBuild SAM_Tas.sln` (Debug, .NET Framework MSBuild) | succeeds, 0 errors; the harness is part of the solution |
-| `dotnet test SAM.Analytical.Tas.TM59.Tests` | **1116 passed**, 0 failed (1055 existing + 61 in `DirectT3DRouteTests`), after the final review |
+| `dotnet test SAM.Analytical.Tas.TM59.Tests` | **1118 passed**, 0 failed (1055 existing + 63 in `DirectT3DRouteTests`), after the final review and the volume/storey follow-up |
 | `dotnet test benchmark/SAM.Analytical.Tas.Benchmark.Tests` | **16 passed** (unchanged) |
 | Licensed `synthetic` (box on/off, window, three windows, door + rooflight, partition, adiabatic, ground, stacked x 2 orders) | **104 checks, 0 failed** |
 | Licensed `shade` | 8 checks, 0 failed |
@@ -246,11 +246,58 @@ the spread within each route above is what to expect.
 TAS's own shading export is the cost at scale on either route; the direct conversion is under 1 % of it. The two routes' TBDs for the 10 x 10 grid match
 (100 zones, 2000 m2, 6000 m3, 680 surfaces, 85 building elements).
 
+## Zone volumes, storeys, ID and colours (after the TAS3D visual inspection)
+
+The owner's TAS3D inspection showed `Studio 1_0` with the same floor area (72.191 m2) on both routes but volume 261.83 m3 on one and 288.764 on
+the other. Measured with the harness `volumes` mode (each T3D copied, exported with the document's widths setting left as saved, OFF and ON,
+and the T3D zone and the exported TBD zone read back):
+
+| Zone | SAM shell (area / volume) | both routes, widths OFF: T3D = TBD | gbXML, widths ON | direct, widths ON |
+| --- | --- | --- | --- | --- |
+| Studio 1_0 | 75 / 300 | 75 / 300 | 72.19 / 288.764 | 72.19 / 261.830 |
+| Corridor_1 | 366 / 1464 | 366 / 1464 | 355.86 / 1423.440 | 355.37 / 1288.879 |
+| Bathroom_2 | 25 / 100 | 25 / 100 | 24.25 / 97.015 | 24.25 / 87.966 |
+| Bedroom 2_3 | 105 / 420 | 105 / 420 | 102.77 / 411.094 | 102.77 / 372.749 |
+| Kitchen_4 | 75 / 300 | 75 / 300 | 72.77 / 291.094 | 72.77 / 263.942 |
+| Ensuite_5 | 30 / 120 | 30 / 120 | 29.18 / 116.714 | 29.18 / 105.827 |
+| Bedroom 2_6 | 105 / 420 | 105 / 420 | 102.77 / 411.094 | 102.77 / 372.749 |
+| Kitchen_7 | 75 / 300 | 75 / 300 | 72.45 / 289.806 | 72.45 / 262.774 |
+| Ensuite_8 | 30 / 120 | 30 / 120 | 28.85 / 115.409 | 28.85 / 104.644 |
+
+* **What was compared before**: the TBD `zone.volume` / `floorArea` of the TBDs the workflow exported, with `UseWidths = false` (the workflow
+  default). Those are identical per zone on both routes and equal to SAM's own shell - unchanged.
+* **What TAS3D displayed**: the zone with building-element widths ON - the values above match it to the third decimal. The widths flag is not
+  saved in the T3D (both files export at widths OFF when it is not set), so TAS3D's own display setting decides what it shows.
+* **Why the two differ with widths ON**: the elements are identical (roof 0.3335 m, ground floor 0.4127 m). The direct importer treats every
+  polygon as a centre line and offsets the floor and roof by half their width: 4 - (0.3335 + 0.4127) / 2 = 3.627 m, and 72.191 x 3.627 = 261.83.
+  TAS's gbXML import keeps the zone's full 4.000 m height (every gbXML zone above is floor area x 4.000 exactly) and offsets the walls only.
+  It is TAS's importer behaviour; neither the widths, the orientation, the storey nor the coordinates differ between the two inputs.
+* **Which is right**: SAM's panels are the physical inner surfaces, so `UseWidths = false` is the correct setting for a SAM model, and on it
+  both routes give SAM's volumes exactly. With widths ON neither route matches SAM. No geometry was changed. On the direct route a
+  `UseWidths = true` run now gets a workflow note saying its volumes will differ from the gbXML route's.
+* The gbXML T3D also stores import-time zone values as saved (Studio 73.426 / 293.705), which TAS replaces at export; the direct T3D stores 0
+  until export. Neither is read by anything downstream.
+
+**Storey**: TAS3D storeys are `TAS3D.Floor` objects with a writable `name`. The gbXML route's storey is named from the gbXML `BuildingStorey`
+("Level 0"); the direct importer names it by height ("Storey at level 0.000 m"). `Convert.ToT3D` now names each storey after the SAM level
+(`SpaceParameter.LevelName`) when every zone on it names the same level (`Query.StoreyName`; zones matched by their `[SpaceGuid]`), and leaves
+TAS's name otherwise or when two storeys would get the same name. Real model: storey `Level 0`; the exported TBD is property-identical to the
+simulated one (`deep`, 0 differences). `T3DImportReport.StoreysNamed` counts it.
+
+**ID**: the `ID` the gbXML route shows is gbXML import metadata. `TAS3D.Zone` exposes name, description, GUID (read-only through COM),
+colour, external, floor area, volume and tags - no ID - and `WrImportIDF` takes none, so the direct route cannot set it. The zone **name**
+is the SAM space name on both routes, and the SAM space GUID stays in the zone description, which `UpdateIds` resolves by first. Nothing
+changed.
+
+**Colours**: the direct route sets each zone's colour from the SAM space colour (`SpaceParameter.Color`) - the mapping SAM's own TBD export
+(`Modify.Update`) uses. gbXML cannot carry a colour, so the gbXML route shows TAS's default palette. Element colours agree except the ground
+floor (see the comparison table). Colours are not read by the simulation; nothing changed.
+
 ## Open issues and manual acceptance
 
 | # | Item | Class |
 | --- | --- | --- |
-| 1 | **A person has not opened a produced T3D in TAS3D.** All geometry was checked through TAS's own accessors and the TBD it exports; no visual inspection took place. Preserved for it: `direct-t3d-q4\000000_SAM_AnalyticalModel.t3d` / `.tbd` and the synthetic and shade `.t3d` files. **MANUAL ACCEPTANCE REQUIRED** | manual acceptance only |
+| 1 | **Visual inspection in TAS3D: done 2026-10-07** by the owner (direct vs gbXML T3D of the real model): shell and windows valid, the file opens and works. The differences it raised - zone volume, ID, storey, colours - are explained in "Zone volumes, storeys, ID and colours" below | resolved |
 | 2 | Zone `exposedPerimeter` / `facadeLength` differ from the gbXML route on three zones (adiabatic walls excluded on the direct route). Evidence gathered: the TAS Theory Manual (`Documentation/TAS_Theory.pdf`, Zone Heat Balance) gives a ground floor's external boundary as the groundwater temperature with no perimeter term; nothing in SAM / SAM_Tas reads either field (only `Modify.Update` writes it); every simulation-read surface property is identical between the routes. What cannot be settled from source: whether a TAS module outside the dynamic simulation (e.g. a compliance/ground-floor U-value calculator) reads it. **MANUAL ACCEPTANCE REQUIRED** | manual acceptance only |
 | 3 | The residual 66 simulation outputs at <= 8.95e-5 relative are not proven. Every property the simulation reads is identical; what differs is TAS's surface creation order (the `SurfaceNumber` stamps) and the absolute vs recentred float32 coordinates. The affected outputs (external conduction, building heat transfer, occupancy gains that depend on zone temperature) and the size are consistent with an iterative heat balance converging to its tolerance from a different summation order, not with a modelling difference | follow-up (negligible) |
 | 4 | `reverseElement` is inert in TAS, so the reversed side is set in the TBD (`UpdateReversed`) from stamps `UpdateIds` writes. A panel that cannot be stamped (unmatched geometry) keeps TAS's choice; horizontal panels are always left to TAS | follow-up |
@@ -312,6 +359,7 @@ makes TAS show a modal save error), close TAS3D/TBD first, and run one mode at a
 | `deep <a.tbd> <b.tbd> [out]` | the properties the simulation reads (perimeter, altitude, shade proportions, reversed ...) |
 | `models <a.result.json> <b.result.json> <prefix>` | the SAM models each route hands back, outputs compared numerically |
 | `scale <dir> <nx> <ny> [gbxml]` | grid of zones: plan, COM replay and export timings |
+| `volumes <model.sam> <dir> <label>=<file.t3d> ...` | per zone: SAM shell vs T3D and exported TBD floor area / volume, widths as saved / OFF / ON, and the storeys (copies only) |
 | `inspect <model.sam>` / `dump <tbd>` / `t3d <file>` | describe a model and its plan / a TBD / a T3D |
 
 Do not rebuild the harness while a timing run is in progress, and never run two TAS-driving processes at once.

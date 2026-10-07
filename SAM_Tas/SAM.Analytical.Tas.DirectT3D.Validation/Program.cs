@@ -16,6 +16,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                         Console.Write(TbdSnapshot.Read(args[1]).ToText());
                         return 0;
 
+                    case "volumes":
+                        return VolumeExperiment.Run(args);
+
                     case "probe":
                         return Probes.Run(args);
 
@@ -62,7 +65,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                         return WorkflowRun.Run(args);
 
                     default:
-                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | scale <outDir> <nx> <ny> [gbxml] | reversed <outDir> | deep <a.tbd> <b.tbd> [out.txt] | t3d <file.t3d> [out.txt] | models <gbxml.result.json> <direct.result.json> <outPrefix> | widths <model.sam> <outDir> | gating <model.sam> <outDir> [gbxml.tbd] | shade <outDir> | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>]");
+                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | scale <outDir> <nx> <ny> [gbxml] | reversed <outDir> | deep <a.tbd> <b.tbd> [out.txt] | t3d <file.t3d> [out.txt] | models <gbxml.result.json> <direct.result.json> <outPrefix> | widths <model.sam> <outDir> | gating <model.sam> <outDir> [gbxml.tbd] | shade <outDir> | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>] | volumes <model.sam> <outDir> <label>=<file.t3d>...");
                         return 2;
                 }
             }

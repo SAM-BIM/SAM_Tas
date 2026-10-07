@@ -453,6 +453,11 @@ namespace SAM.Analytical.Tas
                 External = space is ExternalSpace
             };
 
+            if (space is SAMObject sAMObject_Space && sAMObject_Space.TryGetValue(Analytical.SpaceParameter.LevelName, out string levelName) && !string.IsNullOrWhiteSpace(levelName))
+            {
+                zone.LevelName = levelName.Trim();
+            }
+
             if (space is Space space_Space && space_Space.TryGetValue(Analytical.SpaceParameter.Color, out SAMColor sAMColor) && sAMColor != null)
             {
                 zone.Colour = Core.Convert.ToUint(sAMColor.ToColor());

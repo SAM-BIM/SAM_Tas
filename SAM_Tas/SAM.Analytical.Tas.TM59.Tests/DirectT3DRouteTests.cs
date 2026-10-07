@@ -773,6 +773,44 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void StoreyName_IsTheLevelEveryZoneNames_AndNeverAGuess()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(new[] { "Level 0", "Level 0 ", " Level 0" }.StoreyName(), Is.EqualTo("Level 0"), "every zone names the same level");
+                Assert.That(new[] { "Level 0", "Level 1" }.StoreyName(), Is.Null, "zones that disagree");
+                Assert.That(new[] { "Level 0", null }.StoreyName(), Is.Null, "a zone with no level");
+                Assert.That(new[] { "Level 0", "  " }.StoreyName(), Is.Null, "a zone with a blank level");
+                Assert.That(new string[0].StoreyName(), Is.Null, "a storey with no zones");
+                Assert.That(((IEnumerable<string>)null).StoreyName(), Is.Null);
+                Assert.That(new[] { "Level 0", "level 0" }.StoreyName(), Is.Null, "level names are compared exactly");
+            });
+        }
+
+        [Test]
+        public void Plan_Zones_CarryTheSpacesLevelName()
+        {
+            AnalyticalModel model = SyntheticModels.TwoZones();
+            AdjacencyCluster cluster = model.AdjacencyCluster;
+            foreach (Space space in cluster.GetSpaces())
+            {
+                if (space.Name == "A")
+                {
+                    space.SetValue(Analytical.SpaceParameter.LevelName, "Level 0");
+                    cluster.AddObject(space);
+                }
+            }
+
+            T3DImportPlan plan = new AnalyticalModel(model, cluster).T3DImportPlan();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(plan.Zones.Single(x => x.Name == "A").LevelName, Is.EqualTo("Level 0"));
+                Assert.That(plan.Zones.Single(x => x.Name == "B").LevelName, Is.Null, "a space with no level name gives none");
+            });
+        }
+
+        [Test]
         public void Plan_ElementPerPanel_GivesEverySurfaceItsOwnElement()
         {
             T3DImportPlan plan = SyntheticModels.Box().T3DImportPlan(new ToT3DOptions { ElementPerPanel = true });

@@ -123,6 +123,13 @@ namespace SAM.Analytical.Tas
 
         /// <summary>True for a SAM <c>ExternalSpace</c> - what is outside the building, not a conditioned zone.</summary>
         public bool External { get; set; }
+
+        /// <summary>
+        /// The SAM space's level name (<c>SpaceParameter.LevelName</c>), or null. The importer makes its own storeys and names
+        /// them by height ("Storey at level 0.000 m"); a storey all of whose zones name the same level is given that name
+        /// (see <see cref="Query.StoreyName"/>). Metadata only - nothing the simulation reads.
+        /// </summary>
+        public string LevelName { get; set; }
     }
 
     /// <summary>Which <c>WrImportIDF</c> call a surface is made with.</summary>
