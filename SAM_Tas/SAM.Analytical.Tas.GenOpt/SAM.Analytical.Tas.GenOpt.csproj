@@ -14,6 +14,13 @@
     <ProjectReference Include="..\SAM.Core.Tas\SAM.Core.Tas.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Native optimisation kernel (HookeJeeves, CoordinateSearch, GoldenSection) used by GenOptDocument.RunNative. -->
+    <Reference Include="SAM.Math">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\SAM\build\SAM.Math.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
   </ItemGroup>
 </Project>
