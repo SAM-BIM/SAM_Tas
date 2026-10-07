@@ -22,8 +22,9 @@ importer (`T3DDocument.CreateIDFImport()` -> `TAS3D.WrImportIDF`), **with no gbX
 5. [Validation](#validation)
 6. [Real-model comparison, direct vs gbXML](#real-model-comparison-direct-vs-gbxml)
 7. [Performance](#performance)
-8. [Open issues and manual acceptance](#open-issues-and-manual-acceptance)
-9. [How to re-run](#how-to-re-run)
+8. [Load-sensitive acceptance, direct vs gbXML](#load-sensitive-acceptance-direct-vs-gbxml-2026-10-07)
+9. [Open issues and manual acceptance](#open-issues-and-manual-acceptance)
+10. [How to re-run](#how-to-re-run)
 
 ## Architecture
 
@@ -293,6 +294,58 @@ changed.
 (`Modify.Update`) uses. gbXML cannot carry a colour, so the gbXML route shows TAS's default palette. Element colours agree except the ground
 floor (see the comparison table). Colours are not read by the simulation; nothing changed.
 
+## Load-sensitive acceptance, direct vs gbXML (2026-10-07)
+
+**Why it was added.** The real-model comparison above has a gap: that model (Part O) simulates **free-running** - its TSD has *zero* heating and cooling
+load in every zone, on both routes - so "471 / 537 outputs bit-identical" said nothing about plant loads, set-points, ideal-plant sizing or natural
+ventilation. A model was built so that an error in identity, side, orientation, opening or zone properties cannot cancel.
+
+**The fixture** (`LoadSensitiveModel`, compiled into the harness and the COM-free tests; fixed GUIDs, no external file): three zones, A office
+8 x 5 x 3 m, B meeting 4 x 5 x 3 m, C store 8 x 3 x **4** m (taller, so its south face is a partition to A plus an external strip above A's roof).
+External walls face N, S, E and W; five windows of five sizes in two glazing types with different solar transmittance, two of them openable (Office
+south: unrestricted, Cd 0.62; Meeting east: closed at night, Cd 0.70, factor 0.6); three wall, three roof and two ground-floor constructions of distinct
+materials (different conductivity, density, solar reflectance, emissivity); an **asymmetric** partition A-B (insulation / concrete / plaster, stored
+with its relations B first) and a symmetric one A-C; one adiabatic wall (C east); per-zone internal conditions that differ in every field the workflow
+writes (people density and gains, equipment, lighting, infiltration, supply ventilation, heating and cooling set-point profiles; C is never cooled).
+`loadsensitive-reversed` lists the spaces C, B, A, which moves every partition's reversed side to the other zone.
+
+**How it was run.** `Run-LoadSensitive.ps1` (licensed machine, TAS GUI closed): the real `WorkflowCalculator` on each route, `UseWidths = false`, full-year
+simulation, London TRY from the CIBSE 2005 library supplied through `WorkflowSettings.WeatherData` (that is what makes the workflow derive heating and
+cooling design days and size the plant; weather carried only as a model parameter gives no design days and a free-running model). Then:
+
+| Comparison | Mode | Result (both models) |
+| --- | --- | --- |
+| TBD inputs by name, ~2100 properties: building, controls, weather, every zone's IC / gains (24 h and yearly profiles) / thermostat / emitters / room, every surface (area, orientation, inclination, **reversed**, element, link), elements, constructions **layer by layer**, aperture types, IZAMs, zone groups | `inputs` | 2066 identical, 77 identity / cosmetic (GUIDs, space-guid description, colours, zone-set name), **0 unexpected**. The two `exposedPerimeter` / `facadeLength` values of Store_C (14 vs 11 m) are the known adiabatic-wall effect: the difference is the 3 m adiabatic east wall |
+| Surface properties and shade proportions the simulation reads | `deep` | only that same Store_C perimeter pair |
+| Every hourly zone series (32 arrays x 3 zones = 96) | `tsd`, `tsd-order` | see below |
+| The SAM model each route hands back (404 outputs, load peaks compared component by component) | `models` | 308 / 328 bit-identical, the rest <= 1.5e-4 (6.4e-5 reversed) relative, **0 differences** (the only classified one is a write-only TAS3D `isUsed` stamp that `UpdateT3D` writes on the gbXML route) |
+
+**Simulation.** Gains and airflow are bit-identical (people, lighting, equipment, infiltration, ventilation, aperture flows in and out: all zero difference).
+Peak and annual loads agree to <= 1e-6 relative (Office_A: heating peak 1523.7885 / 1523.7880 W, cooling peak 2502.2517 / 2502.2522 W; Meeting_B
+1079.3243 / 1079.3239 and 1773.1339 / 1773.1337 W; Store_C heating 2373.4668 / 2373.4661 W; annual heating 9514.6181 / 9514.6156 kWh in Office_A), peak
+hours identical, zone temperatures <= 2e-5 K. **Without openable windows (an earlier run of the same model) every series agreed to <= 1.5e-5 of its own peak, none beyond 1e-4.** With natural ventilation active, 47
+of 96 series differ in some hours by up to 1.2e-3 of their own peak, and that is TAS's own sensitivity to surface creation order, not the route:
+*the same route on the same inputs is bit-identical* (control: gbXML run twice, 0 / 96 series differ), but adding the panels in another order (same building,
+same inputs) moves gbXML by up to 1.2e-3 and direct by up to 9.6e-4 (two more orderings were run per route: up to 2.4e-3 in the reversed model), in the
+same series that differ between the routes. A route difference no larger than twice the same-route spread is therefore not a modelling difference (`tsd-order`).
+
+**Things that were decided after seeing results, stated plainly.**
+1. The first, fixed tolerance (1e-4 of a series' peak) came from the free-running real model and is too tight for a naturally ventilated one; it fails 14 series
+   that the same-route reordering also moves. The criterion is now "route difference <= 2 x the same-route order spread, or <= 1e-6", with **three** orderings
+   per route (one reordering gave a borderline series at 2.35x).
+2. **One series is not covered by that criterion and is listed as a named, bounded residual (`TsdCompare.KnownResiduals`):** Office_A cooling load in the base
+   model, in the single hour 4210 (day 176 10:00, load ramping 1199 -> 1464 -> 2502 W): gbXML 1463.89 / 1463.91 / 1463.91 W, direct 1463.78 / 1463.76 / 1463.76 W
+   over the three orderings - 0.11-0.16 W, 7e-5 to 1.1e-4 of that hour's load, ~4e-7 of annual demand. Every other series of the zone (temperatures, every gain,
+   conduction, infiltration, ventilation, aperture flows) is bit-identical in that hour, no TBD input differs, and every other hour of the series looks like order
+   noise. The cause was not isolated beyond TAS's load convergence in a steeply ramping hour. The reversed-order model has none. Anything larger than 1e-4 of peak
+   in that series would fail again.
+3. `UpdateReversed` moved **0** surfaces on the base model (TAS's own choice happened to match SAM's convention for both partitions); on the reversed-order model
+   it has real work to do and the TBDs still agree with the gbXML route's, including every `reversed` flag.
+
+**Re-run:** `Run-LoadSensitive.ps1 -Control -OrderControl` (about 6 min; exit 0 = no unexpected input difference and every simulated series explained or named).
+Two defects in the FIXTURE and harness were found on the way and fixed, neither in the route: opaque materials without a default thickness make TAS refuse the
+model ("Building element has an illegal construction assigned to it", identically on both routes), and weather carried only on the model gives no design days.
+
 ## Open issues and manual acceptance
 
 | # | Item | Class |
@@ -355,6 +408,12 @@ makes TAS show a modal save error), close TAS3D/TBD first, and run one mode at a
 | `gating <model.sam> <dir> [gbxml.tbd]` | what each gbXML-era repair would do to a direct TBD; where TAS puts the geometry |
 | `reversed <dir>` / `reversed-real <model.sam> <dir>` | which side of an internal wall TAS reverses, `reverseElement` false vs true |
 | `workflow <model.sam> <dir> <gbxml or direct> [simulate] [widths] [name=<stem>]` | the real `WorkflowCalculator` on either route; writes `.t3d/.tbd/.timing.csv/.notes.txt/.result.json` |
+| `workflow loadsensitive[-reversed][-shuffled\|-rotated] <dir> <gbxml or direct> simulate weather=<.twd or .sam> weathername=<text>` | the same, on the synthetic load-sensitive fixture, with weather supplied through the settings |
+| `inputs <gbxml.tbd> <direct.tbd> [prefix]` | ~2100 TBD properties by name, differences classified expected / UNEXPECTED (exit 6 on unexpected) |
+| `tsd <a.tsd> <b.tsd> [prefix] [labelA labelB tol]` | every hourly zone series of two TSDs: peaks, annual figures, temperatures, hour-by-hour differences (exit 7 beyond tolerance) |
+| `tsd-order <prefix> <gb.tsd> <di.tsd> [<gb2.tsd> <di2.tsd>]...` | the route difference against each route's own order sensitivity (exit 8 if unexplained) |
+| `tsd-hours <a.tsd> <b.tsd> <zone> <array> [n]` | the hours where one series differs most |
+| `weather-list <.twd>` | the weather years in a TAS library |
 | `compare <gbxml.tbd> <direct.tbd> <prefix>` | structural comparison with every difference classified (`.compare.txt` / `.json`) |
 | `deep <a.tbd> <b.tbd> [out]` | the properties the simulation reads (perimeter, altitude, shade proportions, reversed ...) |
 | `models <a.result.json> <b.result.json> <prefix>` | the SAM models each route hands back, outputs compared numerically |

@@ -17,7 +17,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
     {
         public static int Run(string[] args)
         {
-            // workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<file stem>]
+            // workflow <model.sam|loadsensitive[-reversed][-shuffled|-rotated]> <outDir> <gbxml|direct> [simulate] [widths] [name=<file stem>] [weather=<model.sam or .twd> [weathername=<text>]]
             string path_Model = args[1];
             string directory = args[2];
             T3DRoute route = string.Equals(args[3], "direct", StringComparison.OrdinalIgnoreCase) ? T3DRoute.Direct : T3DRoute.GbXML;
@@ -27,16 +27,50 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
 
             Directory.CreateDirectory(directory);
 
-            AnalyticalModel model = SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Model)?.FirstOrDefault();
+            // "loadsensitive" is the synthetic three-zone fixture (LoadSensitiveModel); anything else is a .sam file.
+            bool synthetic = path_Model.StartsWith("loadsensitive", StringComparison.OrdinalIgnoreCase);
+            AnalyticalModel model = synthetic ? LoadSensitiveModel.Create(path_Model.IndexOf("-reversed", StringComparison.OrdinalIgnoreCase) >= 0, path_Model.IndexOf("-shuffled", StringComparison.OrdinalIgnoreCase) >= 0 ? PanelOrder.Reversed : path_Model.IndexOf("-rotated", StringComparison.OrdinalIgnoreCase) >= 0 ? PanelOrder.Rotated : PanelOrder.AsListed) : SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Model)?.FirstOrDefault();
             if (model == null)
             {
                 Console.WriteLine("cannot read model " + path_Model);
                 return 3;
             }
 
+            // The synthetic model carries no weather of its own. Take it from a real model, so the run has the same sun and
+            // temperatures the real-model comparison had - and stamp it on the model, which is where the workflow looks.
+            string path_Weather = args.Select(x => x.StartsWith("weather=") ? x.Substring(8) : null).FirstOrDefault(x => x != null);
+            string weatherName = args.Select(x => x.StartsWith("weathername=") ? x.Substring(12) : null).FirstOrDefault(x => x != null);
+            SAM.Weather.WeatherData weatherData = null;
+            if (path_Weather != null)
+            {
+                if (path_Weather.EndsWith(".twd", StringComparison.OrdinalIgnoreCase))
+                {
+                    // A TAS weather library: the first year whose name contains weathername= (or simply the first).
+                    List<SAM.Weather.WeatherData> weatherDatas = SAM.Weather.Tas.Convert.ToSAM_WeatherDatas(path_Weather);
+                    weatherData = weatherName == null ? weatherDatas?.FirstOrDefault() : weatherDatas?.FirstOrDefault(x => x?.Name != null && x.Name.IndexOf(weatherName, StringComparison.OrdinalIgnoreCase) >= 0);
+                }
+                else
+                {
+                    AnalyticalModel weatherModel = SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Weather)?.FirstOrDefault();
+                    weatherModel?.TryGetValue(Analytical.AnalyticalModelParameter.WeatherData, out weatherData);
+                }
+
+                if (weatherData == null)
+                {
+                    Console.WriteLine("no weather data in " + path_Weather);
+                    return 3;
+                }
+
+                model.SetValue(Analytical.AnalyticalModelParameter.WeatherData, weatherData);
+                Console.WriteLine("weather: " + weatherData.Name);
+            }
+
             string path_TBD = Path.Combine(directory, stem + ".tbd");
             string path_T3D = Path.Combine(directory, stem + ".t3d");
             string path_gbXML = Path.Combine(directory, stem + ".xml");
+
+            // The exact model this run converted, so the comparison can be reproduced from the folder alone.
+            SAM.Core.Convert.ToFile(model, Path.Combine(directory, stem + ".input.sam"), SAM.Core.SAMFileType.Json);
 
             foreach (string path in new[] { path_TBD, path_T3D, path_gbXML, Path.ChangeExtension(path_TBD, ".tsd") })
             {
@@ -55,7 +89,11 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 RemoveExistingTBD = true,
                 UseWidths = widths,
                 SimulateFrom = 1,
-                SimulateTo = 365
+                SimulateTo = 365,
+
+                // Weather the caller supplies is what the workflow derives its heating and cooling design days from (and so what sizes
+                // the plant). A model that only carries weather as a parameter gets no design days, no sizing, and free-running zones.
+                WeatherData = weatherData
             };
 
             if (route == T3DRoute.GbXML)

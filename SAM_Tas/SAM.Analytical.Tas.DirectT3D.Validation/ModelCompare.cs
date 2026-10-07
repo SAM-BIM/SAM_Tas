@@ -130,7 +130,20 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 foreach (JsonNode parameter in parameterSet?["Parameters"] as JsonArray ?? new JsonArray())
                 {
                     string name = parameter?["Name"]?.GetValue<string>();
-                    if (name != null) result[name] = parameter["Value"]?.ToJsonString().Trim('"');
+                    if (name == null) continue;
+
+                    // A structured value (a load peak with its components, say) is compared leaf by leaf, numerically: as one opaque string
+                    // any last-digit difference in any component would count as the whole output differing.
+                    if (parameter["Value"] is JsonObject structured)
+                    {
+                        Dictionary<string, string> leaves = new Dictionary<string, string>();
+                        Walk(structured, string.Empty, leaves);
+                        foreach (KeyValuePair<string, string> leaf in leaves) result[name + "." + leaf.Key] = leaf.Value;
+                    }
+                    else
+                    {
+                        result[name] = parameter["Value"]?.ToJsonString().Trim('"');
+                    }
                 }
             }
 
@@ -207,9 +220,18 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 // panel order vs gbXML's). The number is an identifier that is consistent within each TBD, not a property of the model.
                 bool surfaceNumber = entry.Key.EndsWith("SurfaceNumber") || (entry.Key == "Reference" && entry.Value[0].Contains("SurfaceSimulationResult"));
                 bool timestamp = entry.Key == "DateTime";
-                string classification = surfaceNumber ? "equivalent representation (TAS surface numbering follows creation order)" : timestamp ? "expected (the time the run was made)" : "UNRESOLVED";
+
+                // The gbXML route's Query.UpdateT3D stamps each panel's construction with a ParameterSet read off the TAS3D building element
+                // ("Interop.TAS3D.dll": IsUsed). The direct route has no UpdateT3D, so it is absent there. Nothing reads it - it is the
+                // T3D element's own isUsed flag, and the TBD (which is what TAS simulates) does not carry it.
+                bool tas3dStamp = (entry.Key.StartsWith("Type.ParameterSets[]") || (title == "constructions" && entry.Key.StartsWith("ParameterSets[]"))) && entry.Value.All(x => x.Contains("direct=(absent)"));
+
+                string classification = surfaceNumber ? "equivalent representation (TAS surface numbering follows creation order)"
+                    : timestamp ? "expected (the time the run was made)"
+                    : tas3dStamp ? "known, no consumer (the TAS3D element isUsed stamp that only the gbXML route's UpdateT3D writes)"
+                    : "UNRESOLVED";
                 sb.AppendLine(string.Format("  [{0}] differs at '{1}' on {2} object(s); e.g. {3}", classification, entry.Key, entry.Value.Count, entry.Value[0]));
-                if (!surfaceNumber && !timestamp) differences++;
+                if (!surfaceNumber && !timestamp && !tas3dStamp) differences++;
             }
 
             if (count_Numeric != 0)

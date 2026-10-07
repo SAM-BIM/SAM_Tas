@@ -2,6 +2,7 @@
 // Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using System;
+using System.Collections.Generic;
 
 namespace SAM.Analytical.Tas.DirectT3D.Validation
 {
@@ -67,8 +68,28 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                     case "workflow":
                         return WorkflowRun.Run(args);
 
+                    case "weather-list":
+                        foreach (SAM.Weather.WeatherData weatherData in SAM.Weather.Tas.Convert.ToSAM_WeatherDatas(args[1]) ?? new List<SAM.Weather.WeatherData>())
+                        {
+                            Console.WriteLine(weatherData?.Name);
+                        }
+
+                        return 0;
+
+                    case "inputs":
+                        return LoadInputs.Run(args);
+
+                    case "tsd":
+                        return TsdCompare.Run(args);
+
+                    case "tsd-hours":
+                        return TsdCompare.RunHours(args);
+
+                    case "tsd-order":
+                        return TsdCompare.RunWithOrderNoise(args);
+
                     default:
-                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | scale <outDir> <nx> <ny> [gbxml] | reversed <outDir> | deep <a.tbd> <b.tbd> [out.txt] | t3d <file.t3d> [out.txt] | models <gbxml.result.json> <direct.result.json> <outPrefix> | widths <model.sam> <outDir> | gating <model.sam> <outDir> [gbxml.tbd] | shade <outDir> | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>] | volumes <model.sam> <outDir> <label>=<file.t3d>...");
+                        Console.WriteLine("modes: dump <tbd> | probe <outDir> | synthetic <outDir> | inspect <model.sam> [out.txt] | scale <outDir> <nx> <ny> [gbxml] | reversed <outDir> | deep <a.tbd> <b.tbd> [out.txt] | t3d <file.t3d> [out.txt] | models <gbxml.result.json> <direct.result.json> <outPrefix> | widths <model.sam> <outDir> | gating <model.sam> <outDir> [gbxml.tbd] | shade <outDir> | compare <gbxml.tbd> <direct.tbd> <outPrefix> | workflow <model.sam|loadsensitive[-reversed][-shuffled|-rotated]> <outDir> <gbxml|direct> [simulate] [widths] [name=<stem>] [weather=<model.sam>] | inputs <gbxml.tbd> <direct.tbd> [outPrefix] | tsd <gbxml.tsd> <direct.tsd> [outPrefix] | tsd-order <outPrefix> <gbxml.tsd> <direct.tsd> [<gbxml-reordered.tsd> <direct-reordered.tsd>]... | volumes <model.sam> <outDir> <label>=<file.t3d>...");
                         return 2;
                 }
             }
