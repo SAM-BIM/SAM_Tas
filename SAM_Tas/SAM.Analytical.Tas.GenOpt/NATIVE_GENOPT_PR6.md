@@ -117,7 +117,19 @@ retirement: the class models GenOpt's arithmetic, which native reproduces.
 
 ## Validation
 
-See the PR description of each repository for the exact numbers on the final heads.
+- **SAM_Tas** (head `31ae7ef`): `MSBuild SAM_Tas.sln /t:Rebuild` Release (VS 18; `APPDATA`/`USERPROFILE` redirected
+  to scratch because `SAM.Core.Tas` deploys resources there; real `NUGET_PACKAGES`): 0 errors, pre-existing warnings
+  only. `SAM.Analytical.Tas.GenOpt.Tests` **216/216** (173 before + 43 new; the 25 golden traces still replay bit for
+  bit through `RunNative` and the stub; cancellation and failure tests unchanged). `SAM.Analytical.Tas.TM59.Tests`
+  **1128/1128**, `SAM.Analytical.Tas.Benchmark.Tests` **16/16**. Mutations on `NativeGenOptOutcome` (tie -> last
+  wins: 2 fail; no withholding: 1 fail; Nullspace not completed: 1 fail), all reverted. PR CI `build`, `spdx` green.
+- **SAM_Tas_Grasshopper**: see its `NATIVE_GENOPT_PR6.md` (49 passed, 4 Rhino-only skipped; CI green).
+- **SAM_UI**: see its `documentation/NativeOptimisation-PR6.md` (Release Rebuild 0 errors; `TasOptimisation*` 75/75;
+  full suite 2616/2618 with two unrelated pre-existing flakes).
+- **SAM** (`docs/java8floattext-runtime-comment`, comment only): `dotnet build SAM.Math.csproj -c Release` 0 errors;
+  PR CI `build`, `test`, `spdx` green. Codex P2 (do not present .NET Framework hosts as SAM runtimes; owner decision
+  2026-10-07) fixed in `eb1efdcb`.
+- `git diff --check` clean in every repository; every new or changed `.cs` has the SPDX header.
 
 ## Real-system regression (B8)
 
