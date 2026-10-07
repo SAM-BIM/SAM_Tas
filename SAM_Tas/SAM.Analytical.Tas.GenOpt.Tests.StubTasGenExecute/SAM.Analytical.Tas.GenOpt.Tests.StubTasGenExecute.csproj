@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Test-only stand-in for EDSL's TasGenExecute.exe, following the Gate T protocol
+    (SAM.Analytical.Tas.GenOpt/TASGENEXECUTE_PROTOCOL.md): args[0] = project snapshot, working
+    directory = evaluation folder holding Variables.txt; it writes Output.txt / Error.txt there.
+    No Tas, COM or licence. Used by SAM.Analytical.Tas.GenOpt.Tests; never shipped.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>StubTasGenExecute</AssemblyName>
+    <RootNamespace>SAM.Analytical.Tas.GenOpt.Tests.StubTasGenExecute</RootNamespace>
+  </PropertyGroup>
+
+</Project>
