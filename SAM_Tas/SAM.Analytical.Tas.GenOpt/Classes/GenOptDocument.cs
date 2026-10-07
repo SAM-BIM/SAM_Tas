@@ -3,17 +3,19 @@
 
 using SAM.Math;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 
 namespace SAM.Analytical.Tas.GenOpt
 {
+    /// <summary>
+    /// A GenOpt-compatible optimisation definition (parameters, objectives, algorithm, settings and the TasGenExecute
+    /// script) for a Tas workspace. It is run by <see cref="RunNative"/>; the GenOpt-format file objects
+    /// (<see cref="CommandFile"/>, <see cref="ConfigFile"/>, ...) describe the same definition in GenOpt's syntax and
+    /// are kept for compatibility. The legacy Java GenOpt execution route (<c>Run()</c>: GenOpt.bat, java, genopt.jar,
+    /// <c>cmd /c</c>, the Tas Manager project registry) was retired in PR6.
+    /// </summary>
     public class GenOptDocument
     {
-        private string configFileName = "Config.ini";
-        private string executableFileName = "GenOpt.bat";
-        private string outputFileName = "TasOutputs.txt";
-
         private string directory = null;
 
         private Script script = new Script(string.Empty);
@@ -22,9 +24,6 @@ namespace SAM.Analytical.Tas.GenOpt
         private Algorithm algorithm = new GoldenSectionAlgorithm();
         private OptimizationSettings optimizationSettings = new OptimizationSettings();
         private ObjectiveFunctionLocation objectiveFunctionLocation = new ObjectiveFunctionLocation();
-        private IO iO = new IO();
-        private SimulationError simulationError = new SimulationError();
-        private SimulationStart simulationStart = new SimulationStart();
 
         public GenOptDocument(string directory)
         {
@@ -41,139 +40,15 @@ namespace SAM.Analytical.Tas.GenOpt
             return directory;
         }
 
-        public bool Run()
-        {
-            if (!IsValid())
-            {
-                return false;
-            }
-
-            string directory = GetDirectory();
-            if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory))
-            {
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory))
-            {
-                return false;
-            }
-
-            string command = Create.Command(directory);
-            if(string.IsNullOrWhiteSpace(command))
-            {
-                return false;
-            }
-
-            if(simulationStart == null)
-            {
-                simulationStart = new SimulationStart();
-            }
-
-            simulationStart.Command = command;
-
-            ScriptFile scriptFile = ScriptFile;
-            if(scriptFile != null)
-            {
-                string path = System.IO.Path.Combine(directory, "Script.txt");
-                if(!string.IsNullOrWhiteSpace(path))
-                {
-                    scriptFile.Save(path);
-                }
-            }
-            
-            CommandFile commandFile = CommandFile;
-            if(commandFile != null)
-            {
-                string path = GetPath(FileType.Command);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    commandFile.Save(path);
-                }
-            }
-
-            ConfigFile configFile = ConfigFile;
-            if (configFile != null)
-            {
-                string path = System.IO.Path.Combine(directory, configFileName);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    configFile.Save(path);
-                }
-            }
-
-            SimulationConfigFile simulationConfigFile = SimulationConfigFile;
-            if (simulationConfigFile != null)
-            {
-                string path = GetPath(FileType.Configuration);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    simulationConfigFile.Save(path);
-                }
-            }
-
-            TemplateFile templateFile = TemplateFile;
-            if (templateFile != null)
-            {
-                string path = GetPath(FileType.Template);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    templateFile.Save(path);
-                }
-            }
-
-            ParameterFile parameterFile = ParameterFile;
-            if (parameterFile != null)
-            {
-                string path = GetPath(FileType.Input);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    parameterFile.Save(path);
-                }
-            }
-
-            OutputFile outputFile = OutputFile;
-            if (outputFile != null)
-            {
-                string path = System.IO.Path.Combine(directory, outputFileName);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    outputFile.Save(path);
-                }
-            }
-
-            bool result = false;
-
-            Core.Tas.Modify.SetProjectDirectory(directory);
-
-            ExecutableFile executableFile = ExecutableFile;
-            if(executableFile != null)
-            {
-                string path = System.IO.Path.Combine(directory, executableFileName);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    executableFile.Save(path);
-
-                    ProcessStartInfo processStartInfo = new ProcessStartInfo(path);
-                    Process process = Process.Start(processStartInfo);
-                    process.WaitForExit();
-                    process.Close();
-
-                    result = true;
-                }
-            }
-
-            return result;
-        }
-
         /// <summary>
         /// Runs this optimisation natively: the SAM.Math kernel drives <c>TasGenExecute.exe</c> directly
-        /// (TASGENEXECUTE_PROTOCOL.md). Java, GenOpt, cmd.exe and the Tas Manager registry are not used.
-        /// <see cref="Run"/> (the Java route) is unchanged.
+        /// (TASGENEXECUTE_PROTOCOL.md). Java, GenOpt, cmd.exe and the Tas Manager registry are not used. This is the
+        /// only way to run a <see cref="GenOptDocument"/>.
         /// <para>
-        /// Supported algorithms are GPSHookeJeeves and GoldenSection, with GenOpt-compatible settings. GPSCoordinateSearch
-        /// is refused, as the Java route cannot run it; other algorithms throw <see cref="System.NotSupportedException"/>.
-        /// Invalid or Java-incompatible settings throw <see cref="GenOptCompatibilityException"/> before anything runs.
+        /// Supported algorithms are GPSHookeJeeves and GoldenSection (<see cref="Convert.NativeAlgorithmTypes"/>), with
+        /// GenOpt-compatible settings. Every other algorithm, GPSCoordinateSearch included, throws
+        /// <see cref="System.NotSupportedException"/>. Invalid settings, or settings GenOpt itself would not accept, throw
+        /// <see cref="GenOptCompatibilityException"/> before anything runs.
         /// </para>
         /// <para>
         /// The run gets its own folder under <paramref name="runsDirectory"/> (default: <c>SAM_NativeGenOpt</c> in the
@@ -250,20 +125,6 @@ namespace SAM.Analytical.Tas.GenOpt
             }
         }
 
-        public ExecutableFile ExecutableFile
-        {
-            get
-            {
-                string directory = GetDirectory();
-                if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory))
-                {
-                    return null;
-                }
-
-                return new ExecutableFile(Query.TasGenOptJavaPath(), System.IO.Path.Combine(directory, configFileName));
-            }
-        }
-
         public CommandFile CommandFile
         {
             get
@@ -288,19 +149,6 @@ namespace SAM.Analytical.Tas.GenOpt
                 };
 
                 return new ConfigFile() { Simulation = simulation, Optimization = optimization };
-            }
-        }
-
-        public SimulationConfigFile SimulationConfigFile
-        {
-            get
-            {
-                return new SimulationConfigFile()
-                {
-                    SimulationError = simulationError,
-                    IO = iO,
-                    SimulationStart = simulationStart,
-                };
             }
         }
 
@@ -513,7 +361,7 @@ namespace SAM.Analytical.Tas.GenOpt
             }
         }
 
-        /// <summary>The OptimizationSettings section (MaxIte, MaxEqualResults, ...), used by both routes.</summary>
+        /// <summary>The OptimizationSettings section (MaxIte, MaxEqualResults, ...).</summary>
         public OptimizationSettings OptimizationSettings
         {
             get
@@ -526,90 +374,5 @@ namespace SAM.Analytical.Tas.GenOpt
                 optimizationSettings = value;
             }
         }
-
-        public string ErrorMessage
-        {
-            get
-            {
-                return simulationError?.ErrorMessage;
-            }
-
-            set
-            {
-                if(simulationError == null)
-                {
-                    simulationError = new SimulationError();
-                }
-
-                simulationError.ErrorMessage = value;
-            }
-        }
-
-        public NumberFormat? NumberFormat
-        {
-            get
-            {
-                return iO?.NumberFormat;
-            }
-
-            set
-            {
-                if(value == null || !value.HasValue)
-                {
-                    return;
-                }
-
-                if(iO == null)
-                {
-                    iO = new IO();
-                }
-
-                iO.NumberFormat = value.Value;
-
-            }
-        }
-
-        public string Command
-        {
-            get
-            {
-                return simulationStart?.Command;
-            }
-
-            set
-            {
-                if(simulationStart == null)
-                {
-                    simulationStart = new SimulationStart();
-                }
-
-                simulationStart.Command = value;
-            }
-        }
-
-        public bool? WriteInputFileExtension
-        {
-            get
-            {
-                return simulationStart?.WriteInputFileExtension;
-            }
-
-            set
-            {
-                if(value == null || !value.HasValue)
-                {
-                    return;
-                }
-
-                if(simulationStart == null)
-                {
-                    simulationStart = new SimulationStart();
-                }
-
-                simulationStart.WriteInputFileExtension = value.Value;
-            }
-        }
-
-
     }
 }

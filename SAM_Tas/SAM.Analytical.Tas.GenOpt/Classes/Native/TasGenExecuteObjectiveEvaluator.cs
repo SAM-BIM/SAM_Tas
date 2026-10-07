@@ -143,9 +143,9 @@ namespace SAM.Analytical.Tas.GenOpt
         }
 
         /// <summary>
-        /// Variables.txt in the form TasGenExecute reads and the Java route's template produces:
+        /// Variables.txt in the form TasGenExecute reads (the form GenOpt's template produced for it):
         /// <c>Name,&lt;value&gt;,Min,Max,Step,System.Double</c>, one line per parameter, joined with '\n'. The value is
-        /// the kernel coordinate as invariant round-trip text. Min, Max and Step are the Java writer's text for the
+        /// the kernel coordinate as invariant round-trip text. Min, Max and Step are the GenOpt-format writer's text for the
         /// parameter's own values.
         /// </summary>
         public static string VariablesText(IReadOnlyList<NumberParameter> parameters, IReadOnlyList<double> coordinates)
