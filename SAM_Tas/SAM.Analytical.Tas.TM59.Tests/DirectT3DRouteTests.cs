@@ -364,9 +364,9 @@ namespace SAM.Analytical.Tas.TM59.Tests
         private const string ZoneGuid_B = "{BBBBBBBB-0000-4000-8000-00000000000B}";
 
         // The two-zone building with its spaces stamped with zone GUIDs, and its partition stamped with the two surfaces TAS made for it.
-        private static AdjacencyCluster StampedTwoZones(string zoneGuid_Of_Stamp1, string zoneGuid_Of_Stamp2, bool secondStamp, out Panel partition, out List<Space> spaces_OfPartition)
+        private static AdjacencyCluster StampedTwoZones(string zoneGuid_Of_Stamp1, string zoneGuid_Of_Stamp2, bool secondStamp, out Panel partition, out List<Space> spaces_OfPartition, bool partitionRelatedToBFirst = false)
         {
-            AnalyticalModel model = SyntheticModels.TwoZones();
+            AnalyticalModel model = SyntheticModels.TwoZones(false, partitionRelatedToBFirst);
             AdjacencyCluster cluster = model.AdjacencyCluster;
 
             foreach (Space space in cluster.GetSpaces())
@@ -413,6 +413,28 @@ namespace SAM.Analytical.Tas.TM59.Tests
             {
                 Assert.That(reversals_Crossed[Tas.Query.ZoneSurfaceKey(ZoneGuid_B, 4)], Is.EqualTo(spaces_Crossed[0].Name != "B"));
                 Assert.That(reversals_Crossed[Tas.Query.ZoneSurfaceKey(ZoneGuid_A, 1)], Is.EqualTo(spaces_Crossed[0].Name != "A"));
+            });
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void InternalSurfaceReversals_TheLaterSpaceInTheModelIsReversed_HoweverThePanelsRelationsAreStored(bool partitionRelatedToBFirst)
+        {
+            // A is the earlier space in the model in both cases; only the order of the partition's own relations differs. Modify.Update
+            // reverses the surface of the space it reaches later in adjacencyCluster.GetSpaces(), and the gbXML exporter sorts a surface's
+            // AdjacentSpaceIds by the same model index - so the answer must follow the model's order, never the relation order.
+            AdjacencyCluster cluster = StampedTwoZones(ZoneGuid_A, ZoneGuid_B, true, out Panel _, out List<Space> spaces_OfPartition, partitionRelatedToBFirst);
+
+            Assert.That(cluster.GetSpaces().Select(x => x.Name), Is.EqualTo(new[] { "A", "B" }), "the model lists A first");
+            Assert.That(spaces_OfPartition[0].Name, Is.EqualTo(partitionRelatedToBFirst ? "B" : "A"), "the fixture really stores the partition's relations in the order asked for");
+
+            Dictionary<ZoneSurfaceKey, bool> reversals = cluster.InternalSurfaceReversals();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(reversals, Has.Count.EqualTo(2));
+                Assert.That(reversals[Tas.Query.ZoneSurfaceKey(ZoneGuid_A, 4)], Is.False, "A, the earlier space in the model, sees the layers as listed");
+                Assert.That(reversals[Tas.Query.ZoneSurfaceKey(ZoneGuid_B, 1)], Is.True, "B, the later space in the model, sees them reversed");
             });
         }
 
@@ -726,6 +748,27 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Assert.That(withoutShades.Report.Shades, Is.EqualTo(1), "still counted");
                 Assert.That(withoutShades.Report.ShadesImported, Is.EqualTo(0));
                 Assert.That(withoutShades.Report.Skipped.Any(x => x.Contains("Shade panel")), Is.True, "and named - never silently lost");
+            });
+        }
+
+        [Test]
+        public void Plan_AnApertureOnAShade_IsReported_NotSilentlyLost()
+        {
+            AnalyticalModel model = SyntheticModels.BoxWithShade();
+            AdjacencyCluster cluster = model.AdjacencyCluster;
+
+            Panel canopy = cluster.GetPanels().Single(x => x.PanelType == PanelType.Shade);
+            Aperture aperture = Analytical.Create.Aperture(SyntheticModels.GlazingConstruction, SyntheticModels.Quad(new Point3D(1, -1.5, 3), new Point3D(2, -1.5, 3), new Point3D(2, -0.5, 3), new Point3D(1, -0.5, 3)));
+            Assert.That(aperture, Is.Not.Null);
+            Assert.That(canopy.AddAperture(aperture), Is.True);
+            cluster.AddObject(canopy);
+
+            T3DImportPlan plan = new AnalyticalModel(model, cluster).T3DImportPlan();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(plan.Shades, Has.Count.EqualTo(1), "the shade itself is still imported");
+                Assert.That(plan.Report.Skipped.Count(x => x.Contains(aperture.Guid.ToString()) && x.Contains("shade")), Is.EqualTo(1), "its aperture, which AddShadeSurface cannot carry, is named in the report");
             });
         }
 

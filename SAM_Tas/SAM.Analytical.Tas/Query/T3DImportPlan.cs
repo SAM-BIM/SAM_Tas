@@ -148,6 +148,16 @@ namespace SAM.Analytical.Tas
                 {
                     report.Shades++;
 
+                    // AddShadeSurface takes no openings: an aperture on a shade (or on a panel no space bounds) is not imported,
+                    // and is said so rather than lost.
+                    foreach (Aperture aperture_Shade in panel.Apertures ?? new List<Aperture>())
+                    {
+                        if (aperture_Shade != null)
+                        {
+                            report.Skipped.Add(string.Format("Aperture '{0}' ({1}) on panel {2}: the panel is imported as a shade (it is a shade, or no space bounds it), and a shade carries no openings, so no opening was imported.", string.IsNullOrWhiteSpace(aperture_Shade.Name) ? "unnamed" : aperture_Shade.Name, aperture_Shade.Guid, identity));
+                        }
+                    }
+
                     if (!options.ImportShades)
                     {
                         report.Skipped.Add(string.Format("Shade panel {0}: not imported, ImportShades is off.", identity));

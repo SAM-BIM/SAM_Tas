@@ -8,8 +8,9 @@ namespace SAM.Analytical.Tas
     public static partial class Modify
     {
         /// <summary>
-        /// Sets which side of each internal wall is <c>reversed</c> in the TBD to SAM's convention - the panel's first space sees
-        /// the construction's layers as listed, the second sees them reversed - for a TBD the direct SAM -> T3D route made.
+        /// Sets which side of each internal wall is <c>reversed</c> in the TBD to SAM's convention - of the panel's two spaces, the
+        /// one earlier in the model sees the construction's layers as listed, the later one sees them reversed - for a TBD the
+        /// direct SAM -> T3D route made.
         /// See <see cref="Query.InternalSurfaceReversals(AdjacencyCluster)"/> for why the importer cannot be told and what is
         /// left alone. A surface already on the right side is not written to.
         /// <para>

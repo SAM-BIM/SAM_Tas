@@ -611,7 +611,7 @@ namespace SAM.Analytical.Tas
                     // matters wherever a construction is not symmetric (a paint film on one face only).
                     Step("Aligning Reversed Surfaces");
                     Modify.UpdateReversed(tBDDocument.Building, adjacencyCluster, out int count_Reversed);
-                    notes.Add(string.Format("Aligning reversed surfaces: {0} internal surface(s) moved to SAM's convention (first space unreversed, second reversed).", count_Reversed));
+                    notes.Add(string.Format("Aligning reversed surfaces: {0} internal surface(s) moved to SAM's convention (the earlier space in the model unreversed, the later one reversed).", count_Reversed));
                 }
 
                 if (perApertureElements)

@@ -173,7 +173,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
         /// Two 5 x 4 x 3 m zones side by side (A: x 0..5, B: x 5..10) separated by one shared partition at x = 5.
         /// With <paramref name="adiabaticNorthWallOfA"/> A's north wall is adiabatic.
         /// </summary>
-        public static AnalyticalModel TwoZones(bool adiabaticNorthWallOfA = false)
+        public static AnalyticalModel TwoZones(bool adiabaticNorthWallOfA = false, bool partitionRelatedToBFirst = false)
         {
             Space spaceA = new Space("A", P(2.5, 2, 1.5));
             Space spaceB = new Space("B", P(7.5, 2, 1.5));
@@ -207,8 +207,17 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
             }
 
             adjacencyCluster.AddObject(partition);
-            adjacencyCluster.AddRelation(spaceA, partition);
-            adjacencyCluster.AddRelation(spaceB, partition);
+            if (partitionRelatedToBFirst)
+            {
+                // The model still lists A before B; only the partition's own relations are stored B-first.
+                adjacencyCluster.AddRelation(spaceB, partition);
+                adjacencyCluster.AddRelation(spaceA, partition);
+            }
+            else
+            {
+                adjacencyCluster.AddRelation(spaceA, partition);
+                adjacencyCluster.AddRelation(spaceB, partition);
+            }
 
             return Model("TwoZones", adjacencyCluster);
         }

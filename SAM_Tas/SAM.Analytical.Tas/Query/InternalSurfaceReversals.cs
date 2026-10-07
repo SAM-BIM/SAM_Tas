@@ -10,8 +10,9 @@ namespace SAM.Analytical.Tas
     {
         /// <summary>
         /// For every internal panel that separates two spaces, which of its two TBD zone surfaces is <b>reversed</b> - the one
-        /// whose construction layers run the other way round for its zone - by SAM's own convention: the panel's first space
-        /// sees the layers as listed, the second sees them reversed. The same convention <c>Modify.Update</c> (SAM's direct TBD
+        /// whose construction layers run the other way round for its zone - by SAM's own convention: of the panel's two spaces,
+        /// the one earlier in the model (<c>AdjacencyCluster.GetSpaces()</c>) sees the layers as listed, the later one sees them
+        /// reversed. The same convention <c>Modify.Update</c> (SAM's direct TBD
         /// export) writes and the gbXML route ends up with.
         /// <para>
         /// <b>Why this has to be said at all on the direct route.</b> <c>WrImportIDF.AddInternalSurface</c> takes a
@@ -42,6 +43,23 @@ namespace SAM.Analytical.Tas
                 return result;
             }
 
+            // "First" and "second" are the two spaces' order in the MODEL, not the order a panel's relations happen to be
+            // stored in: Modify.Update walks adjacencyCluster.GetSpaces() and reverses the later space's surface, and the gbXML
+            // exporter sorts a surface's AdjacentSpaceIds by the same index. GetSpaces(panel) can list them the other way
+            // round (a panel related to the later space first), which would put the reversed side on the wrong zone.
+            Dictionary<System.Guid, int> spaceOrder = new Dictionary<System.Guid, int>();
+            List<Space> spaces_All = adjacencyCluster.GetSpaces();
+            if (spaces_All != null)
+            {
+                for (int i = 0; i < spaces_All.Count; i++)
+                {
+                    if (spaces_All[i] != null && !spaceOrder.ContainsKey(spaces_All[i].Guid))
+                    {
+                        spaceOrder[spaces_All[i].Guid] = i;
+                    }
+                }
+            }
+
             foreach (Panel panel in panels)
             {
                 if (panel == null || panel.PanelType == Analytical.PanelType.Shade)
@@ -50,9 +68,19 @@ namespace SAM.Analytical.Tas
                 }
 
                 List<Space> spaces = adjacencyCluster.GetSpaces(panel);
-                if (spaces == null || spaces.Count != 2)
+                if (spaces == null || spaces.Count != 2 || spaces[0] == null || spaces[1] == null)
                 {
                     continue;
+                }
+
+                if (!spaceOrder.TryGetValue(spaces[0].Guid, out int order_0) || !spaceOrder.TryGetValue(spaces[1].Guid, out int order_1))
+                {
+                    continue;
+                }
+
+                if (order_1 < order_0)
+                {
+                    spaces = new List<Space> { spaces[1], spaces[0] };
                 }
 
                 if (!IsVertical(panel))

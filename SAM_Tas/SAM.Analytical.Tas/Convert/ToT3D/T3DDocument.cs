@@ -162,6 +162,10 @@ namespace SAM.Analytical.Tas
                     }
                 }
 
+                // A call TAS refuses - an element or window type it will not create, or a surface, opening or shade it
+                // rejects - fails the conversion: the T3D would be missing the geometry that hangs on it.
+                bool failed = false;
+
                 // ---- Elements ---------------------------------------------------------------------------
                 Dictionary<string, TAS3D.Element> elements = new Dictionary<string, TAS3D.Element>();
                 foreach (T3DElementSpec spec in plan.Elements)
@@ -170,6 +174,7 @@ namespace SAM.Analytical.Tas
                     if (element == null)
                     {
                         report.Skipped.Add(string.Format("Element '{0}': TAS refused to create it, so every panel on it was not imported.", spec.Name));
+                        failed = true;
                         continue;
                     }
 
@@ -202,6 +207,7 @@ namespace SAM.Analytical.Tas
                     if (window == null)
                     {
                         report.Skipped.Add(string.Format("Window type '{0}': TAS refused to create it, so every opening on it was not imported.", spec.Name));
+                        failed = true;
                         continue;
                     }
 
@@ -268,7 +274,6 @@ namespace SAM.Analytical.Tas
                 //before CreateIDFImport it has no effect - measured - so it is set on both sides of the import.)
                 wrImportIDF.SetUseBEWidths(options.UseWidths);
 
-                bool failed = false;
                 foreach (T3DSurfaceSpec surface in plan.Surfaces)
                 {
                     if (!elements.TryGetValue(surface.ElementKey, out TAS3D.Element element))
