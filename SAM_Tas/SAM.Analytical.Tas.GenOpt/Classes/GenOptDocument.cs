@@ -1,4 +1,8 @@
-﻿using System.Collections.Generic;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Math;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
@@ -160,6 +164,67 @@ namespace SAM.Analytical.Tas.GenOpt
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Runs this optimisation natively: the SAM.Math kernel drives <c>TasGenExecute.exe</c> directly
+        /// (TASGENEXECUTE_PROTOCOL.md). Java, GenOpt, cmd.exe and the Tas Manager registry are not used.
+        /// <see cref="Run"/> (the Java route) is unchanged.
+        /// <para>
+        /// Supported algorithms are GPSHookeJeeves and GoldenSection, with GenOpt-compatible settings. GPSCoordinateSearch
+        /// is refused, as the Java route cannot run it; other algorithms throw <see cref="System.NotSupportedException"/>.
+        /// Invalid or Java-incompatible settings throw <see cref="GenOptCompatibilityException"/> before anything runs.
+        /// </para>
+        /// <para>
+        /// The run gets its own folder under <paramref name="runsDirectory"/> (default: <c>SAM_NativeGenOpt</c> in the
+        /// workspace). It holds the project snapshot (Script.txt plus the workspace's T3D/TBD/TPD/TSD/TWD files) and one
+        /// fresh folder per evaluation attempt. Evaluations run one at a time. Cancellation is cooperative: a running
+        /// TasGenExecute finishes normally, then the run stops with <see cref="OptimisationOutcome.Cancelled"/>.
+        /// </para>
+        /// </summary>
+        /// <param name="runsDirectory">Parent of the run folder; keep it short. Null for the default.</param>
+        /// <param name="tasGenExecutePath">TasGenExecute.exe; null for the installed one (<see cref="Query.TasGenOptExecutePath"/>).</param>
+        /// <param name="progress">Kernel progress, one notification per trace entry.</param>
+        /// <param name="cancellationToken">Stops the run before the next evaluation.</param>
+        public NativeGenOptRun RunNative(string runsDirectory = null, string tasGenExecutePath = null, System.IProgress<OptimisationProgress> progress = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (!IsValid())
+            {
+                throw new GenOptCompatibilityException("The TasGenExecute script is empty.");
+            }
+
+            string directory = GetDirectory();
+            if (directory == null)
+            {
+                throw new System.IO.DirectoryNotFoundException("The optimisation workspace does not exist: '" + this.directory + "'.");
+            }
+
+            // Map and validate everything before any folder is created or any process is started.
+            List<NumberParameter> numberParameters = Convert.NumberParameters(parameters);
+            List<Objective> objectives = Convert.Objectives(objectiveFunctionLocation);
+            OptimisationProblem problem = Convert.ToSAM_OptimisationProblem(numberParameters.ConvertAll(x => (IParameter)x), objectiveFunctionLocation);
+            if (optimizationSettings == null)
+            {
+                throw new GenOptCompatibilityException("OptimizationSettings is required.");
+            }
+
+            Optimiser optimiser = Convert.ToSAM_Optimiser(algorithm, optimizationSettings, numberParameters.Count);
+
+            string executablePath = string.IsNullOrWhiteSpace(tasGenExecutePath) ? Query.TasGenOptExecutePath() : tasGenExecutePath;
+            if (!System.IO.File.Exists(executablePath))
+            {
+                throw new System.IO.FileNotFoundException("TasGenExecute was not found.", executablePath);
+            }
+
+            NativeGenOptWorkspace workspace = NativeGenOptWorkspace.Create(
+                directory,
+                script.Text,
+                string.IsNullOrWhiteSpace(runsDirectory) ? System.IO.Path.Combine(directory, "SAM_NativeGenOpt") : runsDirectory);
+
+            TasGenExecuteObjectiveEvaluator evaluator = new TasGenExecuteObjectiveEvaluator(executablePath, workspace.ProjectDirectory, workspace.EvaluationsDirectory, numberParameters, objectives);
+            OptimisationResult result = optimiser.Run(problem, evaluator, progress, cancellationToken);
+
+            return new NativeGenOptRun(workspace, numberParameters.ConvertAll(x => x.Name), objectives.ConvertAll(x => x.Name), result);
         }
 
         bool IsValid()
@@ -445,6 +510,20 @@ namespace SAM.Analytical.Tas.GenOpt
             set
             {
                 algorithm = value;
+            }
+        }
+
+        /// <summary>The OptimizationSettings section (MaxIte, MaxEqualResults, ...), used by both routes.</summary>
+        public OptimizationSettings OptimizationSettings
+        {
+            get
+            {
+                return optimizationSettings;
+            }
+
+            set
+            {
+                optimizationSettings = value;
             }
         }
 

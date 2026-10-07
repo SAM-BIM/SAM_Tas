@@ -238,6 +238,22 @@ jobs:
             --logger 'console;verbosity=normal'
           if ($LASTEXITCODE -ne 0) { throw "TM59 room-use regression tests failed" }
 
+      - name: Run native GenOpt adapter tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # SAM.Analytical.Tas.GenOpt.Tests: the native GenOpt adapter (mapping, Gate T file contract, workspace,
+          # retry/cancellation) and end-to-end replays of the SAM GenOpt golden traces through a stub TasGenExecute
+          # child process. COM-free and Tas-free; same HintPath pattern as the TM59 tests (built SAM_Tas/build and
+          # SAM/build assemblies), and it reads the golden traces from the sibling SAM checkout.
+          $testProject = 'SAM_Tas/SAM_Tas/SAM.Analytical.Tas.GenOpt.Tests/SAM.Analytical.Tas.GenOpt.Tests.csproj'
+          Write-Host "==> Testing: $testProject"
+          & dotnet test $testProject `
+            -c Release `
+            --logger 'console;verbosity=normal'
+          if ($LASTEXITCODE -ne 0) { throw "Native GenOpt adapter tests failed" }
+
       - name: Upload build folders (optional)
         uses: actions/upload-artifact@v4
         with:
