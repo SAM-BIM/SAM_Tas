@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-06 (Q4 operational cleanup).
+2026-10-07 (Direct T3D closeout).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). No product source changed. No Q4 product work has started.
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default.
 
 ## Q4 priorities
 
@@ -24,7 +24,7 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
 
 ## Repository-specific next steps
 
-- Await Q4 planning. Open PRs for Q4 work against `sow/2026-Q4`.
+- Await Q4 planning; first candidates are the Direct T3D follow-ups below. Open PRs for Q4 work against `sow/2026-Q4`.
 - Follow the continuity convention in `AGENTS.md` for every PR and closeout.
 
 ## Decisions / assumptions
@@ -61,6 +61,21 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
 - **Validation:** `msbuild SAM_Tas.sln -p:Configuration=Release` (.NET Framework MSBuild, APPDATA/USERPROFILE redirected): 0 errors; `SAM.Analytical.Tas.dll` contains the new text and not the old. TAS-COM-dependent tests not run locally (none references the string). PR CI build and spdx green.
 - **Unresolved issues, risks:** None introduced.
 - **Next step:** None for this change.
+
+## Direct T3D import route (2026-10-07)
+
+- **Status:** complete. SAM-BIM/SAM_Tas#84 (`feature/t3d-direct-import`) merged into `sow/2026-Q4` as merge commit `f9202503e6142d1a19cde964cbe833de30973ea2`. Design record: `SAM_Tas/SAM.Analytical.Tas/DIRECT_T3D_ROUTE.md`.
+- **Work completed:** opt-in route `SAM AnalyticalModel -> TAS direct importer (WrImportIDF) -> T3D -> TBD`, selected by `WorkflowSettings.T3DRoute` (`GbXML` default, `Direct` explicit opt-in; a missing/old serialized value resolves to `GbXML`). COM-free `T3DImportPlan` describes zones/surfaces/apertures/shades and is unit-testable; `Convert.ToT3D` replays it into TAS. SAM space GUID is kept in the zone description, SAM space name in the zone name.
+- **Decisions / assumptions:**
+  - Widths OFF is intentional: SAM polygons already represent the physical shell, and both routes then reproduce SAM area/volume exactly. Widths ON differs only through TAS's two importers treating element thickness differently.
+  - Storey name is taken from the SAM level name (fixed).
+  - One TAS window per aperture is intentional: one window per `ApertureConstruction` makes TAS collapse openings sharing a window object into one TBD opening.
+  - `UpdateReversed` is required for asymmetric internal constructions (`reverseElement` is not reliable); on Direct, `UpdateT3D` and the adiabatic assign/set stages are skipped.
+  - `exposedPerimeter`/`facadeLength` differ on adiabatic boundaries (Direct excludes adiabatic wall lengths). Known, documented, non-blocking: no effect on any simulated series.
+- **Files changed:** 46 files (+8641/-17): `T3DImportPlan`/`TasCoordinates`/`UpdateSpaces`/`ZoneDescription` and related Query/Convert/Modify code, `WorkflowSettings`, tests, the licensed validation harness `SAM.Analytical.Tas.DirectT3D.Validation`, `DIRECT_T3D_ROUTE.md`.
+- **Validation:** geometry and TBD validation, real-model validation (9 zones; Direct and gbXML equivalent) and a load-sensitive three-zone validation through full-year simulation all completed; Direct and gbXML thermal inputs and results accepted as equivalent for the tested models. Final: 1128 tests passed, licensed synthetic suite passed, full solution build passed. The licensed harness is not part of CI.
+- **Unresolved issues, risks:** one substantial real model plus the synthetic fixtures only; no real project exercises `ExternalSpace`; curved boundaries are skipped, not discretised; some mapping logic duplicates legacy `UpdateT3D`.
+- **Next steps (follow-ups, each its own feature branch + PR):** expose `T3DRoute` in SAM_Tas_Grasshopper; expose `T3DRoute` in SAM_UI; broader real-project validation; `ExternalSpace` validation; curved-boundary handling; consider reducing the duplicated mapping logic.
 
 ---
 
