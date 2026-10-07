@@ -11,8 +11,14 @@ GPSCoordinateSearch refusal). The SAM PR is independent. SAM_Deploy is not chang
 
 ## Current status
 
-Implementation, tests and evidence complete; PRs open for owner review. PR numbers, CI and review state are in the PR
-descriptions.
+Implementation, tests and evidence complete; PRs open for owner review, none merged:
+
+- SAM-BIM/SAM_Tas#87 (this branch) - merge first;
+- SAM-BIM/SAM_Tas_Grasshopper#12 and SAM-BIM/SAM_UI#212 - after #87, in either order;
+- SAM-BIM/SAM#185 (comment only) - independent.
+
+Codex review: SAM#185 P2 (do not present .NET Framework hosts as SAM runtimes) and the "record must hold the
+validation" P1s on SAM_Tas_Grasshopper#12 and SAM_UI#212 were fixed and their threads resolved.
 
 ## Inventory (B1) - every remaining legacy hit, classified
 
