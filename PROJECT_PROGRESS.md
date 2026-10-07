@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-07 (Direct T3D closeout).
+2026-10-07 (Java-free GenOpt PR1-T closeout, SAM_Tas#85).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default.
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; see the GenOpt section below).
 
 ## Q4 priorities
 
@@ -76,6 +76,42 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
 - **Validation:** geometry and TBD validation, real-model validation (9 zones; Direct and gbXML equivalent) and a load-sensitive three-zone validation through full-year simulation all completed; Direct and gbXML thermal inputs and results accepted as equivalent for the tested models. Final: 1128 tests passed, licensed synthetic suite passed, full solution build passed. The licensed harness is not part of CI.
 - **Unresolved issues, risks:** one substantial real model plus the synthetic fixtures only; no real project exercises `ExternalSpace`; curved boundaries are skipped, not discretised; some mapping logic duplicates legacy `UpdateT3D`.
 - **Next steps (follow-ups, each its own feature branch + PR):** expose `T3DRoute` in SAM_Tas_Grasshopper; expose `T3DRoute` in SAM_UI; broader real-project validation; `ExternalSpace` validation; curved-boundary handling; consider reducing the duplicated mapping logic.
+
+## Java-free GenOpt replacement — PR1-T, TasGenExecute protocol evidence (2026-10-07)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#85 (`feature/tasgenexecute-protocol-evidence`) merged into `sow/2026-Q4` as merge commit
+    `1873e5786a6b29c216dfbdf401df4b45e2ddfa6a` (PR head `a353487c4b3ac33a1bcd3e4909aa52772e35942e`, Q4 base `f213f50a`).
+  - Merge method: merge commit, head-commit protected. Remote and local branch removed.
+  - Docs only. Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/TASGENEXECUTE_PROTOCOL.md`.
+  - Companion of SAM-BIM/SAM#182 (GenOpt semantic oracle, PR1; see SAM's `PROJECT_PROGRESS.md`).
+- **Work completed:**
+  - Reconstructed how Tas Generic Optimisation drives Java GenOpt 3.1.1 (IL of `TasGenOpt.exe`, `TasGenExecute.exe`,
+    `TasGenComm.dll`) and which layers exist only because GenOpt is external Java.
+  - Gate T, licensed Tas: `TasGenExecute.exe "<workspace>"` runs **directly, without Java or GenOpt**, with the working
+    directory set to a fresh evaluation folder holding `Variables.txt`.
+- **Findings:**
+  - The Tas Manager registry (`Modify.SetProjectDirectory`) is not needed.
+  - `TasOutputs.txt` is not read.
+  - `Output.txt` is appended to: the first line is `<date>::Result::<v>`, values have 15 significant digits.
+  - Error classes: script exception and compile error give exit 0 with `Error.txt`; a missing `Script.txt` or
+    `Variables.txt` gives exit `0xE0434352` and no files.
+  - Results were bit-identical to the 2025-12-05 Java GenOpt run on 4 distinct points.
+  - Two concurrent runs in separate folders succeeded.
+- **Decisions / assumptions:**
+  - The future evaluator (PR3) invokes `TasGenExecute.exe` directly in a unique per-evaluation folder.
+  - Failure = non-zero exit code, non-empty `Error.txt`, or no `Result::` line.
+  - Phase 1 stays sequential.
+  - No EDSL model, script or binary committed; the scratch Tas copies stayed local.
+- **Files changed:** `SAM_Tas/SAM.Analytical.Tas.GenOpt/TASGENEXECUTE_PROTOCOL.md` (new).
+- **Validation:** licensed Tas run, T1–T7 in the record. PR CI: `build` and `spdx` green.
+- **Unresolved issues, risks:**
+  - TasGenExecute is an external EDSL binary (path hard-coded in `Query.TasGenOptDirectory`, exit code not meaningful,
+    culture-dependent output).
+  - Owner decisions D1–D4 are tracked in SAM's PR1 record and progress file.
+- **Next step:** after D1–D4, SAM PR2 (`feature/native-optimiser-kernel`, kernel in `SAM.Math`), then SAM_Tas PR3
+  (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
+  isolation + licensed acceptance).
 
 ---
 
