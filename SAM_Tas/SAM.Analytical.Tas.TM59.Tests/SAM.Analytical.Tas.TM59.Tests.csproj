@@ -114,6 +114,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The synthetic buildings of the direct SAM -> T3D route, compiled from the licensed validation harness so the harness and
+         these COM-free tests describe the same boxes. The file touches no TAS type. -->
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\SyntheticModels.cs" Link="DirectT3D\SyntheticModels.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\LoadSensitiveModel.cs" Link="DirectT3D\LoadSensitiveModel.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Same TM59 TextMap resource the production code loads (SAM.Analytical.Query.
          DefaultInternalConditionTextMap_TM59), copied locally so the test doesn't depend
          on ActiveSetting or a %APPDATA%\SAM install being present on the build machine. -->

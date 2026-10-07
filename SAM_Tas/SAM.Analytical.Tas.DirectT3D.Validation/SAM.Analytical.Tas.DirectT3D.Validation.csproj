@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Licensed validation harness for the direct SAM -> T3D route (ToT3D / T3DRoute.Direct).
+
+    It drives EDSL Tas over COM, so it can only run on a machine with Tas installed and - like the benchmark CLI -
+    it must be built with the .NET Framework MSBuild (ResolveComReference), never `dotnet build`. It is deliberately
+    NOT a test project: nothing here runs in `dotnet test`. The COM-free halves of the feature (the geometry helper,
+    the import plan, the settings round trip) are covered by SAM.Analytical.Tas.TM59.Tests.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>SAM.Analytical.Tas.DirectT3D.Validation</RootNamespace>
+    <AssemblyName>direct-t3d-validation</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SAM.Analytical.Tas\SAM.Analytical.Tas.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Interop.TAS3D">
+      <HintPath>..\..\references_buildonly\Interop.TAS3D.dll</HintPath>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Interop.TBD">
+      <HintPath>..\..\references_buildonly\Interop.TBD.dll</HintPath>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Interop.TCD">
+      <HintPath>..\..\references_buildonly\Interop.TCD.dll</HintPath>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Interop.TIC">
+      <HintPath>..\..\references_buildonly\Interop.TIC.dll</HintPath>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Interop.TSD">
+      <HintPath>..\..\references_buildonly\Interop.TSD.dll</HintPath>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SAM.Core">
+      <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical">
+      <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Architectural">
+      <HintPath>..\..\..\SAM\build\SAM.Architectural.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Weather">
+      <HintPath>..\..\..\SAM\build\SAM.Weather.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Units">
+      <HintPath>..\..\..\SAM\build\SAM.Units.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical.gbXML">
+      <HintPath>..\..\..\SAM_gbXML\build\SAM.Analytical.gbXML.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Core.gbXML">
+      <HintPath>..\..\..\SAM_gbXML\build\SAM.Core.gbXML.dll</HintPath>
+    </Reference>
+    <Reference Include="gbXMLSerializer">
+      <HintPath>..\..\..\SAM_gbXML\references\gbXMLSerializer.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

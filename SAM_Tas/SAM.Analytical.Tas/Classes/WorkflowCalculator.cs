@@ -213,6 +213,18 @@ namespace SAM.Analytical.Tas
                 return null;
             }
 
+            // The direct route converts the geometry too (SAM -> T3D -> TBD), so a canonical TBD - which says the
+            // geometry is already converted - contradicts it exactly as it contradicts a gbXML. Refused for the same
+            // reason, before any file is touched.
+            if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_TBD_Canonical) && WorkflowSettings.T3DRoute == T3DRoute.Direct)
+            {
+                notes.Add("This run was asked to convert the geometry directly (T3DRoute.Direct) and also to start from a canonical TBD, which are contradictory instructions - one says the geometry must be converted, the other that it already is. Nothing was run. Supply one or the other.");
+
+                Ended?.Invoke(this, new System.EventArgs());
+
+                return null;
+            }
+
             // THE working model, and the reason a copy has to be DEEP when this run takes one itself.
             //
             // Everything below works on `result` and the model is handed back at the end, so the intent has
@@ -262,11 +274,35 @@ namespace SAM.Analytical.Tas
                 out List<DesignDay> coolingDesignDays,
                 out List<DesignDay> heatingDesignDays);
 
+            // How SAM gets into a T3D. T3DRoute.Direct is only ever an explicit choice (WorkflowSettings.T3DRoute
+            // defaults to GbXML), and when it is chosen Path_gbXML is ignored, so the two flags are exclusive and
+            // "route_gbXML" is exactly the condition every gbXML-only step used to test for itself.
+            bool route_Direct = WorkflowSettings.T3DRoute == T3DRoute.Direct;
+            bool route_gbXML = !route_Direct && !string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML);
+
+            // Both routes hand TAS one T3D window per aperture - the gbXML route because each opening is named after its
+            // aperture, the direct route (ToT3DOptions.SharedWindowTypes = false) on purpose, because TAS folds every
+            // opening of one window object on one host surface into a SINGLE TBD zone surface and the aperture identity
+            // the rest of SAM_Tas keeps (N apertures, N pane and N frame surfaces) would be lost. TAS therefore builds one
+            // aperture building element and construction per aperture on either route, and the two steps that collapse
+            // those onto shared definitions and write the aperture types run on either.
+            bool perApertureElements = route_gbXML || route_Direct;
+
             int count = 6;
-            if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
+            if (route_gbXML)
             {
                 //Nine gbXML-only steps, plus "Reusing Aperture Definitions".
                 count = count + 10;
+            }
+
+            if (route_Direct)
+            {
+                //The conversion block's six steps (Opening TBD file, Updating Weather Data, Updating HDD and CDD
+                //Day Types, Opening T3D file, Converting SAM to T3D, T3D to TBD -> Shading), plus the two
+                //per-aperture-element steps ("Reusing Aperture Definitions", "Updating Aperture Types") and its own
+                //"Aligning Reversed Surfaces", less the two repair steps the direct route does not run (Assigning Adiabatic
+                //Constructions, Setting Adiabatic).
+                count = count + 7;
             }
 
             //One step for the clone, so a warm-started run's progress reports what it actually does rather
@@ -383,7 +419,7 @@ namespace SAM.Analytical.Tas
                 notes.Add(string.Format("This run started from the canonical TBD '{0}', copied to '{1}'. The geometry, constructions, apertures and shading calculation it carries were not recomputed; the ventilation state, the zone identities and the full-year simulation were.", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD));
             }
 
-            if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
+            if (route_gbXML || route_Direct)
             {
                 string path_T3D = System.IO.Path.Combine(directory, string.Format("{0}.{1}", fileName, "t3d"));
                 if (System.IO.File.Exists(path_T3D))
@@ -458,29 +494,85 @@ namespace SAM.Analytical.Tas
                 }
 
                 Step("Opening T3D file");
-                using (SAMT3DDocument sAMT3DDocument = new SAMT3DDocument(path_T3D))
+
+                // The gbXML route opens the (just deleted, so new) file at its path; the direct route builds the
+                // model in a created document and saves it to that path itself.
+                using (SAMT3DDocument sAMT3DDocument = route_Direct ? new SAMT3DDocument() : new SAMT3DDocument(path_T3D))
                 {
                     TAS3D.T3DDocument t3DDocument = sAMT3DDocument.T3DDocument;
 
-                    Step("Importing gbXML");
-                    t3DDocument.TogbXML(WorkflowSettings.Path_gbXML, true, true, true);
+                    if (route_Direct)
+                    {
+                        // SAM -> T3D with no gbXML and no repair of a gbXML-created T3D: the converter states every
+                        // zone, element, window type, surface and opening itself, so there is nothing for
+                        // Query.UpdateT3D to decode or fix afterwards. See Convert.ToT3D.
+                        Step("Converting SAM to T3D");
+                        bool converted = result.ToT3D(t3DDocument, new ToT3DOptions() { UseWidths = WorkflowSettings.UseWidths }, out T3DImportReport report_T3D);
 
-                    //sets the window position to wall 2026.04.22
+                        // Measured (DIRECT_T3D_ROUTE.md, "Zone volumes"): with widths ON the direct T3D offsets floors and roofs by half
+                        // their width as well as walls, whereas TAS's gbXML import keeps the full zone height, so the two routes' zone
+                        // volumes differ (real model, Studio: 261.8 vs 288.8 m3). With widths OFF both reproduce SAM's own volumes exactly.
+                        if (WorkflowSettings.UseWidths)
+                        {
+                            notes.Add("Direct T3D conversion with UseWidths: TAS treats every SAM polygon as a centre line and offsets floors and roofs as well as walls, so zone volumes are smaller than on the gbXML route (which keeps the full zone height) and than SAM's own. SAM panels are the physical inner surfaces; UseWidths = false reproduces SAM's volumes on both routes.");
+                        }
+
+                        if (report_T3D != null)
+                        {
+                            notes.Add(string.Format("Direct T3D conversion: {0}.", report_T3D));
+                            foreach (string skipped in report_T3D.Skipped)
+                            {
+                                notes.Add(Modify.NotePrefix_Issue + "Direct T3D conversion: " + skipped);
+                            }
+                        }
+
+                        // A model TAS did not accept is not a model to carry on with: every later step would work on
+                        // a T3D that is missing surfaces. The same return-null refusal the other gates use.
+                        if (!converted)
+                        {
+                            notes.Add(Modify.NotePrefix_Issue + "Direct T3D conversion: the SAM model could not be converted into a T3D, so nothing further was run.");
+
+                            Ended?.Invoke(this, new System.EventArgs());
+
+                            return null;
+                        }
+                    }
+                    else
+                    {
+                        Step("Importing gbXML");
+                        t3DDocument.TogbXML(WorkflowSettings.Path_gbXML, true, true, true);
+
+                        //sets the window position to wall 2026.04.22
 
 
 
-                    Step("Updating T3D file");
-                    t3DDocument.SetUseBEWidths(WorkflowSettings.UseWidths);
-                    result = Query.UpdateT3D(result, t3DDocument, WorkflowSettings.UpdateWindowPositionType);
+                        Step("Updating T3D file");
+                        t3DDocument.SetUseBEWidths(WorkflowSettings.UseWidths);
+                        result = Query.UpdateT3D(result, t3DDocument, WorkflowSettings.UpdateWindowPositionType);
+                    }
 
                     t3DDocument.Building.latitude = float.IsNaN(latitude) ? t3DDocument.Building.latitude : latitude;
                     t3DDocument.Building.longitude = float.IsNaN(longitude) ? t3DDocument.Building.longitude : longitude;
                     t3DDocument.Building.timeZone = float.IsNaN(timeZone) ? t3DDocument.Building.timeZone : timeZone;
 
-                    sAMT3DDocument.Save();
+                    if (route_Direct)
+                    {
+                        sAMT3DDocument.Save(path_T3D);
+                    }
+                    else
+                    {
+                        sAMT3DDocument.Save();
+                    }
 
                     Step("T3D to TBD -> Shading");
                     Convert.ToTBD(t3DDocument, WorkflowSettings.Path_TBD, 1, 365, 15, true, false);
+
+                    if (route_Direct)
+                    {
+                        // What Query.UpdateT3D's zone loop does on the gbXML route - the TAS zone's properties onto its
+                        // SAM space - done once TAS has computed them (a T3D zone reports no area until the export).
+                        result = Query.UpdateSpaces(result, t3DDocument.Building);
+                    }
                 }
             }
 
@@ -494,11 +586,22 @@ namespace SAM.Analytical.Tas
                 Step("Updating Facing External Elements");
                 result = Query.UpdateFacingExternal(result, tBDDocument);
 
-                Step("Assigning Adiabatic Constructions");
-                Modify.AssignAdiabaticConstruction(tBDDocument, "Adiabatic", new string[] { "-unzoned", "-internal", "-exposed" }, false, true);
+                // gbXML-created T3D only (see the direct route below): TAS names the elements it builds from gbXML surface
+                // types '<...>-unzoned', '-internal' and '-exposed', and this gives those the 'Adiabatic' construction. A
+                // direct T3D names its elements after the SAM constructions and has none of these.
+                if (!route_Direct)
+                {
+                    Step("Assigning Adiabatic Constructions");
+                    Modify.AssignAdiabaticConstruction(tBDDocument, "Adiabatic", new string[] { "-unzoned", "-internal", "-exposed" }, false, true);
+                }
 
-                Step("Setting Adiabatic");
-                Modify.UpdateAdiabatic(tBDDocument, result, Tolerance.MacroDistance);
+                // The direct route states every adiabatic panel at import (isAdiabatic), both sides of an adiabatic
+                // partition included; this step re-derives the same thing from geometry, to repair gbXML, which cannot say it.
+                if (!route_Direct)
+                {
+                    Step("Setting Adiabatic");
+                    Modify.UpdateAdiabatic(tBDDocument, result, Tolerance.MacroDistance);
+                }
 
                 Step("Updating Building Elements");
                 Modify.UpdateBuildingElements(tBDDocument, result, out List<string> notes_BuildingElements);
@@ -508,7 +611,18 @@ namespace SAM.Analytical.Tas
                 Step("Updating Ids");
                 Modify.UpdateIds(adjacencyCluster, tBDDocument.Building);
 
-                if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
+                if (route_Direct)
+                {
+                    // TAS picks the reversed side of an internal wall from its own geometry and WrImportIDF's reverseElement flag
+                    // has no effect on it (measured), so on the direct route the side is set here, from the identities UpdateIds has
+                    // just stamped, to SAM's convention - the one the gbXML route and SAM's direct TBD export both have. It
+                    // matters wherever a construction is not symmetric (a paint film on one face only).
+                    Step("Aligning Reversed Surfaces");
+                    Modify.UpdateReversed(tBDDocument.Building, adjacencyCluster, out int count_Reversed);
+                    notes.Add(string.Format("Aligning reversed surfaces: {0} internal surface(s) moved to SAM's convention (the earlier space in the model unreversed, the later one reversed).", count_Reversed));
+                }
+
+                if (perApertureElements)
                 {
                     // On this route TAS's own T3D -> TBD conversion created one aperture building element and
                     // one construction PER APERTURE PER PART, named after the aperture, because the gbXML
@@ -544,7 +658,7 @@ namespace SAM.Analytical.Tas
                 Step("Creating Zone Groups");
                 Modify.AddDefaultZoneGroups(tBDDocument?.Building, adjacencyCluster);
 
-                if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
+                if (perApertureElements)
                 {
                     Step("Updating Aperture Types");
                     Modify.SetApertureTypes(tBDDocument.Building, adjacencyCluster, out List<string> notes_ApertureTypes, Tolerance.MacroDistance);

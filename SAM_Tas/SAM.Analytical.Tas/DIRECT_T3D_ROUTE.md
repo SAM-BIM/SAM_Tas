@@ -1,0 +1,424 @@
+# The direct SAM -> T3D route (`T3DRoute.Direct`)
+
+An opt-in way to build the TAS3D `.t3d` for a workflow run straight from a SAM `AnalyticalModel`, through TAS's own geometry
+importer (`T3DDocument.CreateIDFImport()` -> `TAS3D.WrImportIDF`), **with no gbXML anywhere**. The established route
+(`SAM -> gbXML -> ImportGBXML -> UpdateT3D -> TBD`) is unchanged and stays the default.
+
+* Branch `feature/t3d-direct-import`, cut from `origin/sow/2026-Q4` (`f624ebc`) and rebased onto `origin/sow/2026-Q4` `720ad5e` on 2026-10-07
+  (the three Q4 commits in between change only the TBD building description URL in `UpdateZones.cs` and documentation). No pull request has
+  been opened.
+* Switch: `WorkflowSettings.T3DRoute` (`GbXML` default, `Direct`). Only the exact serialized value `"Direct"` (or the number 1)
+  selects it; a missing, unknown or corrupt value reads as `GbXML`. Nothing selects the direct route by omission.
+* Everything below was **measured on licensed Tas 9.5.7** with the harness in
+  `SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation` (see "How to re-run"). Where a measurement contradicted the implementation
+  specification, the measurement won and this document says so.
+
+## Contents
+
+1. [Architecture](#architecture)
+2. [Workflow integration and what was gated](#workflow-integration-and-what-was-gated)
+3. [Where the specification was wrong, and what was done](#where-the-specification-was-wrong-and-what-was-done)
+4. [The four open questions](#the-four-open-questions)
+5. [Validation](#validation)
+6. [Real-model comparison, direct vs gbXML](#real-model-comparison-direct-vs-gbxml)
+7. [Performance](#performance)
+8. [Load-sensitive acceptance, direct vs gbXML](#load-sensitive-acceptance-direct-vs-gbxml-2026-10-07)
+9. [Open issues and manual acceptance](#open-issues-and-manual-acceptance)
+10. [How to re-run](#how-to-re-run)
+
+## Architecture
+
+The conversion is two halves, on purpose.
+
+```
+AnalyticalModel --Query.T3DImportPlan--> T3DImportPlan (no TAS, no COM) --Convert.ToT3D--> T3DDocument
+                                              |                                                 |
+                      every decision, testable offline                  replayed in the one order WrImportIDF allows
+```
+
+| Piece | File | Role |
+| --- | --- | --- |
+| `T3DRoute` | `Enums/T3DRoute.cs` | `GbXML = 0` (default), `Direct = 1` |
+| `ToT3DOptions` | `Classes/ToT3DOptions.cs` | `UseWidths` (false), `ElementPerPanel` (false), `SharedWindowTypes` (false), `ImportShades` (true), `ZoneSetName`, `Tolerance`, `SnapTolerance` |
+| `T3DImportPlan` + specs | `Classes/T3DImportPlan.cs` | COM-free plan: zones, elements, window types, surfaces (each followed by its openings), shades, report |
+| `T3DImportReport` | `Classes/T3DImportReport.cs` | counts, the SAM space -> zone map, every skipped item with the reason, every caveat |
+| `Query.T3DImportPlan` | `Query/T3DImportPlan.cs` | reads the model and makes every decision |
+| `Query.TasPolygon`, `ToTasCoordinates`, `NewellNormal`, `ProjectedOnPlane` | `Query/TasCoordinates.cs` | the **one** polygon helper (closing vertex, near-duplicates, collinear points, tolerance, orientation, `double[3,n]`) |
+| `Convert.ToT3D(model, T3DDocument \| path, options, out report)` | `Convert/ToT3D/T3DDocument.cs` | the COM replay; releases every COM object it created |
+| `Query.ZoneDescription`, `TryGetSpaceGuid` | `Query/ZoneDescription.cs` | the SAM space GUID carried in the zone description (`[SpaceGuid]=...`) |
+| `Query.UpdateSpaces` | `Query/UpdateSpaces.cs` | the zone loop `UpdateT3D` runs on the gbXML route, for the direct route |
+| `Query.InternalSurfaceReversals`, `Modify.UpdateReversed` | `Query/`, `Modify/` | sets the reversed side of internal walls (see below) |
+
+The signature differs from the specification's sketch on purpose: `ToT3D(model, T3DDocument, ToT3DOptions, out report)` has no default
+for `options`, because the existing two-argument `ToT3D(AnalyticalModel, T3DDocument)` returns a `Building` and an optional
+parameter would have let a new overload capture existing callers.
+
+### What the plan decides
+
+* **Zones** - one per `Space` / `ExternalSpace` that bounds at least one importable panel, created in SAM's space order. Name = space name,
+  description = `[SpaceGuid]=<guid>` (TAS's own `Zone.GUID` is read-only through COM). The zone is `external` for an `ExternalSpace`. A space whose panels
+  could not be imported gets no zone (reported).
+* **Elements** - one per SAM `Construction` (plus a split where the same construction is used on and off the ground, or as air, so ground is never
+  wrong), named after it; width = `DefaultThickness` else the layers' thickness; colour, transparency, internal shadows, BE type, ground, ghost,
+  floor-area flag follow the rules `Query.UpdateT3D` applies on the gbXML route; the construction GUID rides in the element description. A generic
+  `Wall` / `Floor` construction gets its BE type from how the panel is used (the gbXML route inherits TAS's choice from the gbXML surface type).
+* **Surfaces** - shade (`PanelType.Shade` or no space) -> `AddShadeSurface`; one space -> `AddSurface` (adiabatic per
+  `Analytical.Query.Adiabatic`); two spaces -> `AddInternalSurface`, or, when adiabatic, one adiabatic `AddSurface` per zone (what the gbXML
+  route's `UpdateAdiabatic` ends up with). The polygon normal is made to point **out of the first zone**, taken from that space's own closed
+  shell; an open shell cannot say which way is out, so the panel's own normal is used and the report says so.
+* **Openings** - each aperture is emitted immediately after its host (`AddOpening` attaches to the surface added last), snapped onto the host
+  plane and wound the same way. **Window types are one window object per aperture** (see "Where the specification was wrong").
+* Polygons with holes: `AddSurface` takes one outer loop; the outer loop is imported and the hole is reported.
+
+## Workflow integration and what was gated
+
+`WorkflowCalculator` branches only inside the T3D conversion block. The gbXML path is unchanged, including every `Step(...)` name, so
+`.timing.csv` output stays comparable. The direct route adds `Converting SAM to T3D` (replacing `Importing gbXML` + `Updating T3D file`) and
+`Aligning Reversed Surfaces`.
+
+`Direct` together with `Path_TBD_Canonical` is refused up front, exactly as `Path_gbXML` + canonical already is.
+
+| Step | gbXML | Direct | Why (evidence) |
+| --- | --- | --- | --- |
+| `Query.UpdateT3D` | yes | **no** | the converter states every element, window and zone itself; the space stamping it did is `UpdateSpaces` |
+| Updating Facing External Elements | yes | yes | reads building element **names**, which are the same on both routes |
+| Assigning Adiabatic Constructions | yes | **no** | it re-assigns building elements whose names end `-unzoned`/`-internal`/`-exposed` - names only TAS's gbXML import makes. Measured: **0** matches on a direct TBD (real model and synthetic). Left on, it would re-assign a SAM construction that happened to be called `...-internal` |
+| Setting Adiabatic (`UpdateAdiabatic`) | yes | **no** | the importer states `isAdiabatic` itself. Real model: running it over a direct TBD changes nothing (14 -> 14 null links). Synthetic adiabatic wall **with a window**: TAS already null-links the opening's pane and frame natively (3 of 3). And it is **harmful** on a direct TBD: it aligns SAM geometry to the TBD by the footprint recentring the gbXML import does, but a direct TBD keeps SAM coordinates (gbXML TBD min = (-30.5,-8,-6), direct TBD min = (0,0,0) = SAM), so it flagged a false null link (4 vs 3) |
+| Updating Building Elements | yes | yes | constructions, colours, aperture control. Per-aperture window names decode exactly as on the gbXML route |
+| Updating Ids | yes | yes | resolves each space's zone by the `[SpaceGuid]` in the zone description first, then the stamped GUID, then the name |
+| **Aligning Reversed Surfaces** | n/a | **yes (new)** | see "Reversed side" |
+| Reusing Aperture Definitions | yes | yes | one window object per aperture -> TAS builds one element and construction per aperture on both routes, and they must be collapsed. Real model: 40 aperture parts rebound onto shared definitions, identical to the gbXML route |
+| Updating Aperture Types | yes | yes | real model: 20 of 20 apertures updated on both routes |
+
+### Reversed side of internal walls (found by the real-model simulation)
+
+Simulating the real model through both routes gave results that differed by up to 14 % on some outputs. Two runs of the **same** route are
+bit-identical (noise floor = 0), so the difference was real. Cause: for a partition between two zones TAS decides which side is *reversed*
+(its layers run the other way round for that zone). `WrImportIDF.AddInternalSurface`'s `reverseElement` flag has **no effect** on this (identical TBD
+for `false` and `true`, on synthetic and real models); TAS decides from its own geometry, and on the real model half the partitions disagreed
+with SAM's convention - of a panel's two spaces, the one **earlier in the model** (`AdjacencyCluster.GetSpaces()`) sees the layers as listed,
+the later one sees them reversed, which is what `Modify.Update` (SAM's own direct TBD export, which walks `GetSpaces()`) writes and what the
+gbXML route produces (the gbXML exporter sorts a surface's `AdjacentSpaceId`s by the same model index). The order is the model's, not the order
+the panel's own relations are stored in (`GetSpaces(panel)`); the final review found the first implementation used the latter, which can
+differ (see "Final review"). The partition's first layer is a paint film on one face only, so the
+side matters. `Modify.UpdateReversed` now sets it from the identities `UpdateIds` has just stamped. Horizontal surfaces are left to TAS
+(identical to the gbXML route in every case measured, both space orders). After the fix the two routes' full-year results agree to **9e-5
+relative**.
+
+## Where the specification was wrong, and what was done
+
+| Specification said | Measured / found | Decision |
+| --- | --- | --- |
+| One window type per `ApertureConstruction`, not per aperture | **TAS folds every opening of one window object on one host surface into one TBD zone surface**: three 3.33 m2 windows on one wall became one 10 m2 window (frame 1.12 + pane 8.88). That keeps the area but loses "N apertures keep N pane and N frame surfaces" - the identity Stage 3 (`APERTURE_*.md`) is built on - and a per-aperture frame percentage, which is an attribute of the window object. Also the window-per-construction building elements carried hash-suffixed names no construction matched (3 GLAZING elements got no construction) | **One window object per aperture by default**, named `Windows: <name> <aperture GUID> ` (trailing space: TAS appends `-pane`/`-frame` directly) so the existing name decoding and the shared-definition collapse work unchanged. `ToT3DOptions.SharedWindowTypes = true` gives the specification's design and its consequences; it is covered by a licensed test that shows the fold |
+| `Query.OpeningType(aperture)` gives the opening type | it throws `NotImplementedException` (the legacy `ToT3D(Aperture)` is dead code) | own mapping: door 2, roof 1, else 0 for `AddWindow`; `positionType` from the host (wall window 0 / door 2, roof 1, floor 4) as `UpdateT3D` does. `AddWindow` accepts 0-2 only (3 returns null; `positionType` 4 is settable afterwards, 3 is not) |
+| Widths default ON (TAS importer default) | with widths ON TAS treats polygons as centre lines and shrinks every zone 10-12 % | default `UseWidths = false`, the same default as `WorkflowSettings.UseWidths`, so the SAM polygons are the geometry (see Q1) |
+| `doc.Create()`'s default `Zone` zone set "doesn't reach the TBD" | it reaches the TBD as an empty zone **group** called `Zone` | deleted before the SAM zone set is made |
+| Put the space GUID in the zone description | confirmed - it survives T3D -> TBD and `SAMZoneMetadata.Compose` (which `UpdateZone` runs) preserves it | `[SpaceGuid]=<guid>` segment; `UpdateIds` resolves by it first |
+| Remaining `UpdateIds`/`UpdateAdiabatic`/... "re-check" | see the gating table | gated, each with evidence |
+| The spec's "T3D -> TBD" keeps widths as `doc.SetUseBEWidths` | also needed after `CreateImportedModel` | set on the importer before the first `Add*` and on the document after the import |
+
+Differences from the Q3 baseline the specification was written against: `sow/2026-Q4` is `master` `28ac11a7` plus documentation and CI
+files only, so the workflow, converter and step code the specification names are identical; line numbers in the specification are obsolete.
+
+## The four open questions
+
+**A. Are SAM panel polygons centre lines?** No. For every one of the 9 spaces of the real model, widths OFF reproduces the volume of SAM's own
+shell for that space **exactly** (3544.0 m3 in total) and widths ON shrinks it (3121.4 m3, -11.9 %; floor 886.0 -> 860.6 m2). No geometry offset is
+introduced. The synthetic reference box (5 x 4 x 3 m; walls 0.30, roof 0.35, floor 0.40 m): widths ON floor **17.39 m2**, volume **45.649 m3**; widths OFF
+**20 m2**, **60 m3** - exactly the specification's numbers.
+
+**B. Horizontal internal surfaces.** Verified, both space orders (`StackedZones(upperFirst)`): one `AddInternalSurface` gives one `tbdLink` pair, the
+lower zone sees a ceiling (inclination 0), the upper a floor (180), areas 20 m2 each, floor areas 20 and volumes 60 for both zones, and TAS assigns the
+reversed side identically to the gbXML route. The plan test pins the normal pointing out of whichever zone comes first.
+
+**C. Shades.** `AddShadeSurface` **works and is equivalent to the gbXML route**. A south window with and without a 2 m canopy (London): the pane's
+hourly shade proportion (TBD stores the *sunlit* fraction; -1 = no direct sun) falls from 239.0 to 136.7 sunlit window-hours over the representative days,
+to 40.5 with a lower, deeper canopy, and the hourly arrays for the canopy case are **identical** to what the gbXML route gives for the same model
+(15 Jun: `-1 ... 0.47 0.11 -1 ... 0.12 0.43 -1 ...`). Shades are therefore imported directly; `ToT3DOptions.ImportShades = false` lists
+them in the report instead of dropping them silently. Not exercised through the real-model workflow (the real model has no shade panels).
+
+**D. `AddGroupOpening`.** Not used. The only reference to `WindowGroup` in SAM and SAM_Tas is a one-line enumerator, `Query.WindowGroups`, that nothing calls;
+SAM has two aperture types (window, door) and an aperture is one polygon plus a frame.
+
+## Validation
+
+Everything here ran on this machine (Tas 9.5.7, licensed) on 2026-10-07; the artifacts are preserved (see "How to re-run").
+
+| Check | Result |
+| --- | --- |
+| `MSBuild SAM_Tas.sln` (Debug, .NET Framework MSBuild) | succeeds, 0 errors; the harness is part of the solution |
+| `dotnet test SAM.Analytical.Tas.TM59.Tests` | **1118 passed**, 0 failed (1055 existing + 63 in `DirectT3DRouteTests`), after the final review and the volume/storey follow-up |
+| `dotnet test benchmark/SAM.Analytical.Tas.Benchmark.Tests` | **16 passed** (unchanged) |
+| Licensed `synthetic` (box on/off, window, three windows, door + rooflight, partition, adiabatic, ground, stacked x 2 orders) | **104 checks, 0 failed** |
+| Licensed `shade` | 8 checks, 0 failed |
+| Licensed `widths` (real model) | 10 checks, 0 failed |
+| Licensed `gating` | 7 checks, 0 failed |
+
+**Synthetic geometry** (TBD read back through TAS's own accessors, independent of the code under test):
+
+| Case | Result |
+| --- | --- |
+| Box 5 x 4 x 3 (walls 0.30 / roof 0.35 / floor 0.40), widths ON | floor **17.39 m2**, volume **45.649 m3**, 6 surfaces: 5 `tbdExposed` + 1 `tbdGround` |
+| same, widths OFF | **20.0 m2**, **60.0 m3** |
+| One window 2 x 1 m in the south wall | pane 1.71 + frame 0.29 = 2.0 m2 (the polygon, not the window type, sets the size); the south wall is 15 - 2 = 13 m2; building elements `Windows: EXT_GLZ <aperture guid> -pane` / `-frame` |
+| Three windows on one wall | default: 3 window objects, **3 pane + 3 frame surfaces**; `SharedWindowTypes`: 1 window object, **1 pane + 1 frame surface** (the fold), same 3 m2 |
+| Door + rooflight | the door is `Doors: ... -pane`, BEType 14 (2 m2); the opening in the roof is BEType **13 (rooflight)**, 1 m2 on a horizontal surface |
+| Two zones with one partition | the partition is **one** `AddInternalSurface` -> 2 `tbdLink` surfaces, both linked, on `INT_PARTITION`; 8 exposed, 2 ground; floor 40, volume 120 |
+| Horizontal internal floor, either space order | one `AddInternalSurface` -> 2 `tbdLink`, inclination 0 (lower zone) and 180 (upper), 20 m2 each; zone floor 20 / volume 60 each |
+| Adiabatic north wall | 1 `tbdNullLink` (A's north wall, 15 m2), 7 exposed, partition still `tbdLink` |
+| Adiabatic wall with a window in it | wall + pane + frame are all `tbdNullLink` as imported (TAS carries the flag to the openings) |
+| Slab on grade | 1 `tbdGround` of 20 m2 on `GRD_FLOOR`; only that element is flagged ground |
+| Zone identity | zone description is `[SpaceGuid]=<guid>`; the zone groups are exactly `[SAM]` (TAS's seeded empty `Zone` set removed) |
+
+**Skipped / invalid geometry** is never silent: degenerate polygons (fewer than 3 distinct, non-collinear vertices, or no area), panels bounding more
+than two spaces, spaces none of whose panels import, holes, open shells and apertures off their host plane are counted in `T3DImportReport.Skipped` /
+`.Notes`; the workflow turns `Skipped` into `ISSUE:` notes (raised as warnings by the Grasshopper component) and refuses the run only when TAS itself
+rejects a call or `CreateImportedModel` fails.
+
+## Real-model comparison, direct vs gbXML
+
+Model: `000000_SAM_AnalyticalModel.sam` (9 spaces, 50 panels, 20 apertures, 4 constructions, 1 aperture construction), run through the real
+`WorkflowCalculator` on each route into its own folder, with full-year simulation (the `final-*` runs; the files already in the `2026-09-29 partOi` folder were
+never touched). The comparison is `compare` (TBD structure), `deep` (every property the simulation reads) and `models` (the SAM model each route hands back).
+
+**Same, number for number** (19 totals): TBD zones 12, floor area 913.000 m2, volume 3598.000 m3, 128 zone surfaces - `tbdExposed` 47 (272 m2),
+`tbdGround` 27 (1012 m2), `tbdLink` 40 (992 m2), `tbdNullLink` 14 (1230 m2) - 40 aperture surfaces (64.8 m2: pane 57.39 + frame 7.41), 11 building elements,
+11 constructions, 2 aperture types; every building element's BE type, width, ground flag, construction and aperture types; **every zone's surface multiset**
+(type, orientation, inclination, area, building element); and the SAM model each route hands back (9 spaces, 4 constructions, 50 panels, 20 apertures).
+
+| Difference | Class | Explanation |
+| --- | --- | --- |
+| Zone description carries `[SpaceGuid]=...` (9 zones) | expected improvement | the gbXML TBD carries no SAM space identity; this is what `UpdateIds` resolves by first |
+| Element `SIM_EXT_GRD_FLR FLR01` colour 808040 vs 004080 | equivalent representation | cosmetic: no construction colour is stated, so gbXML keeps TAS's default for the gbXML surface type and direct uses SAM's colour for the panel type |
+| Zone group `gbXml Spaces` vs `SAM` | equivalent representation | the name of the T3D zone set holding every zone |
+| TAS surface numbers in `ZoneSurfaceReference` stamps and surface results' `Reference` | equivalent representation | TAS numbers surfaces in creation order; consistent within each TBD |
+| `zone.exposedPerimeter` / `facadeLength` of Corridor_1 (82 vs 6 m), Kitchen_7 (15.5 vs 10.5), Ensuite_8 (5 vs 0) | expected improvement - **MANUAL ACCEPTANCE REQUIRED** | the direct route states adiabatic walls at import so TAS leaves them out of the exposed perimeter; the gbXML route computes the perimeter before its adiabatic repair, so it includes them. The differences equal the adiabatic wall lengths exactly. Effect on results: none measurable here (see below), but whether TAS's ground model ever reads the field should be confirmed by a person |
+| Window `level` in the T3D (0 vs 0.85 m) | equivalent representation | the opening polygon, not the window type, positions the opening; identical TBD |
+| Internal-wall `reversed` side | **likely defect, fixed** | see "Reversed side of internal walls" |
+
+**Full-year results**: 18 result sets (9 spaces x heating/cooling), 537 simulation outputs. **471 are bit-identical; the other 66 agree within
+8.95e-5 relative** (opaque/glazing external conduction, building heat transfer, a few gains). Two runs of the **same** route are bit-identical in all
+537, so this residual is real but tiny; its cause was not isolated (the only other measured differences are the exposed perimeter above and the float
+precision of recentred vs absolute coordinates). Before the reversed-side fix the same comparison showed 121 differing outputs, up to 14 %.
+Excluded as non-outputs, on both routes and in same-route reruns: `Zone Guid` (minted by TAS) and `Dry Bulb Temperature` (the result import reads it
+from a field TAS does not fill, so it is garbage and differs between any two runs).
+
+**Aperture steps**: "Reusing Aperture Definitions" rebound 40 aperture parts onto shared definitions and removed 40 per-aperture elements; "Updating Aperture Types"
+updated 20 of 20 - the same notes on both routes. The `ZoneSurfaceReference` / `BuildingElementGuid` stamps are on the same objects on both routes.
+
+**Preserved artifacts** (both sets, plus every comparison file) are in the `2026-09-29 partOi` folder under `gbxml-q4-reference` and `direct-t3d-q4`.
+
+## Performance
+
+Cold TAS start for every run (TAS processes killed before each, nothing else running), three runs per route, the same model, simulation off
+(the settings the 2026-10-01 baseline used). `.timing.csv` step names are unchanged, so the runs compare directly.
+
+| Step (median of 3) | gbXML ms | direct ms | change |
+| --- | ---: | ---: | ---: |
+| Opening T3D file | 10 708 | 731 | -9 976 |
+| Importing gbXML | 52 | - | removed |
+| Updating T3D file (`UpdateT3D`) | 401 | - | removed |
+| Converting SAM to T3D | - | 438 | new |
+| T3D to TBD -> Shading | 32 630 | 26 966 | -5 664 |
+| Assigning Adiabatic Constructions | 42 | - | removed |
+| Setting Adiabatic | 1 750 | - | removed |
+| Updating Building Elements | 944 | 733 | -211 |
+| Updating Ids | 3 675 | 3 288 | -387 |
+| Aligning Reversed Surfaces | - | 113 | new |
+| Reusing Aperture Definitions | 885 | 811 | -74 |
+| Updating Aperture Types | 2 739 | 2 142 | -597 |
+| Updating Zones + Add IZAMs + Sizing | 4 860 | 3 770 | -1 090 |
+| **TOTAL** | **60 904** (57 066 - 61 731) | **41 368** (33 848 - 41 884) | **-19 536 (-32 %)** |
+
+Against the baseline in the specification (58.2 s on 2026-10-01: T3D -> TBD shading 25.0 s, opening T3D 11.0 s, Updating Ids 4.5 s, Updating Aperture
+Types 2.8 s, Reusing Aperture Definitions 1.4 s) the gbXML route measured here is in line (60.9 s; the shading step, 32.6 s, is the main difference and
+varies with machine load). **Where the time goes:** nearly all the gain is `Opening T3D file` (a T3D opened by path versus one created: 10.7 s vs 0.7 s) and
+the T3D -> TBD export (-5.7 s). The repair stages the direct route drops (`UpdateT3D`, the gbXML import, both adiabatic steps) are only about 2.2 s together -
+removing them alone is a ~4 % gain, not the headline. A first batch that overlapped other work on the machine was discarded and repeated (it had gbXML at 51-84 s);
+the spread within each route above is what to expect.
+
+**Per-call COM cost is not a bottleneck.** The converter makes one COM call per surface or opening (plus one per element, window type and zone):
+
+| Synthetic building | Zones / surfaces / openings | Plan | COM replay | T3D -> TBD export |
+| --- | --- | ---: | ---: | ---: |
+| 10 x 10 grid | 100 / 420 / 40 | 376 ms | 471 ms (1.0 ms per call) | 86.7 s (gbXML route end to end for the same model: 83.6 s) |
+| 20 x 15 grid | 300 / 1235 / 80 | 560 ms | 866 ms (0.66 ms per call) | 160.7 s |
+
+TAS's own shading export is the cost at scale on either route; the direct conversion is under 1 % of it. The two routes' TBDs for the 10 x 10 grid match
+(100 zones, 2000 m2, 6000 m3, 680 surfaces, 85 building elements).
+
+## Zone volumes, storeys, ID and colours (after the TAS3D visual inspection)
+
+The owner's TAS3D inspection showed `Studio 1_0` with the same floor area (72.191 m2) on both routes but volume 261.83 m3 on one and 288.764 on
+the other. Measured with the harness `volumes` mode (each T3D copied, exported with the document's widths setting left as saved, OFF and ON,
+and the T3D zone and the exported TBD zone read back):
+
+| Zone | SAM shell (area / volume) | both routes, widths OFF: T3D = TBD | gbXML, widths ON | direct, widths ON |
+| --- | --- | --- | --- | --- |
+| Studio 1_0 | 75 / 300 | 75 / 300 | 72.19 / 288.764 | 72.19 / 261.830 |
+| Corridor_1 | 366 / 1464 | 366 / 1464 | 355.86 / 1423.440 | 355.37 / 1288.879 |
+| Bathroom_2 | 25 / 100 | 25 / 100 | 24.25 / 97.015 | 24.25 / 87.966 |
+| Bedroom 2_3 | 105 / 420 | 105 / 420 | 102.77 / 411.094 | 102.77 / 372.749 |
+| Kitchen_4 | 75 / 300 | 75 / 300 | 72.77 / 291.094 | 72.77 / 263.942 |
+| Ensuite_5 | 30 / 120 | 30 / 120 | 29.18 / 116.714 | 29.18 / 105.827 |
+| Bedroom 2_6 | 105 / 420 | 105 / 420 | 102.77 / 411.094 | 102.77 / 372.749 |
+| Kitchen_7 | 75 / 300 | 75 / 300 | 72.45 / 289.806 | 72.45 / 262.774 |
+| Ensuite_8 | 30 / 120 | 30 / 120 | 28.85 / 115.409 | 28.85 / 104.644 |
+
+* **What was compared before**: the TBD `zone.volume` / `floorArea` of the TBDs the workflow exported, with `UseWidths = false` (the workflow
+  default). Those are identical per zone on both routes and equal to SAM's own shell - unchanged.
+* **What TAS3D displayed**: the zone with building-element widths ON - the values above match it to the third decimal. The widths flag is not
+  saved in the T3D (both files export at widths OFF when it is not set), so TAS3D's own display setting decides what it shows.
+* **Why the two differ with widths ON**: the elements are identical (roof 0.3335 m, ground floor 0.4127 m). The direct importer treats every
+  polygon as a centre line and offsets the floor and roof by half their width: 4 - (0.3335 + 0.4127) / 2 = 3.627 m, and 72.191 x 3.627 = 261.83.
+  TAS's gbXML import keeps the zone's full 4.000 m height (every gbXML zone above is floor area x 4.000 exactly) and offsets the walls only.
+  It is TAS's importer behaviour; neither the widths, the orientation, the storey nor the coordinates differ between the two inputs.
+* **Which is right**: SAM's panels are the physical inner surfaces, so `UseWidths = false` is the correct setting for a SAM model, and on it
+  both routes give SAM's volumes exactly. With widths ON neither route matches SAM. No geometry was changed. On the direct route a
+  `UseWidths = true` run now gets a workflow note saying its volumes will differ from the gbXML route's.
+* The gbXML T3D also stores import-time zone values as saved (Studio 73.426 / 293.705), which TAS replaces at export; the direct T3D stores 0
+  until export. Neither is read by anything downstream.
+
+**Storey**: TAS3D storeys are `TAS3D.Floor` objects with a writable `name`. The gbXML route's storey is named from the gbXML `BuildingStorey`
+("Level 0"); the direct importer names it by height ("Storey at level 0.000 m"). `Convert.ToT3D` now names each storey after the SAM level
+(`SpaceParameter.LevelName`) when every zone on it names the same level (`Query.StoreyName`; zones matched by their `[SpaceGuid]`), and leaves
+TAS's name otherwise or when two storeys would get the same name. Real model: storey `Level 0`; the exported TBD is property-identical to the
+simulated one (`deep`, 0 differences). `T3DImportReport.StoreysNamed` counts it.
+
+**ID**: the `ID` the gbXML route shows is gbXML import metadata. `TAS3D.Zone` exposes name, description, GUID (read-only through COM),
+colour, external, floor area, volume and tags - no ID - and `WrImportIDF` takes none, so the direct route cannot set it. The zone **name**
+is the SAM space name on both routes, and the SAM space GUID stays in the zone description, which `UpdateIds` resolves by first. Nothing
+changed.
+
+**Colours**: the direct route sets each zone's colour from the SAM space colour (`SpaceParameter.Color`) - the mapping SAM's own TBD export
+(`Modify.Update`) uses. gbXML cannot carry a colour, so the gbXML route shows TAS's default palette. Element colours agree except the ground
+floor (see the comparison table). Colours are not read by the simulation; nothing changed.
+
+## Load-sensitive acceptance, direct vs gbXML (2026-10-07)
+
+**Why it was added.** The real-model comparison above has a gap: that model (Part O) simulates **free-running** - its TSD has *zero* heating and cooling
+load in every zone, on both routes - so "471 / 537 outputs bit-identical" said nothing about plant loads, set-points, ideal-plant sizing or natural
+ventilation. A model was built so that an error in identity, side, orientation, opening or zone properties cannot cancel.
+
+**The fixture** (`LoadSensitiveModel`, compiled into the harness and the COM-free tests; fixed GUIDs, no external file): three zones, A office
+8 x 5 x 3 m, B meeting 4 x 5 x 3 m, C store 8 x 3 x **4** m (taller, so its south face is a partition to A plus an external strip above A's roof).
+External walls face N, S, E and W; five windows of five sizes in two glazing types with different solar transmittance, two of them openable (Office
+south: unrestricted, Cd 0.62; Meeting east: closed at night, Cd 0.70, factor 0.6); three wall, three roof and two ground-floor constructions of distinct
+materials (different conductivity, density, solar reflectance, emissivity); an **asymmetric** partition A-B (insulation / concrete / plaster, stored
+with its relations B first) and a symmetric one A-C; one adiabatic wall (C east); per-zone internal conditions that differ in every field the workflow
+writes (people density and gains, equipment, lighting, infiltration, supply ventilation, heating and cooling set-point profiles; C is never cooled).
+`loadsensitive-reversed` lists the spaces C, B, A, which moves every partition's reversed side to the other zone.
+
+**How it was run.** `Run-LoadSensitive.ps1` (licensed machine, TAS GUI closed): the real `WorkflowCalculator` on each route, `UseWidths = false`, full-year
+simulation, London TRY from the CIBSE 2005 library supplied through `WorkflowSettings.WeatherData` (that is what makes the workflow derive heating and
+cooling design days and size the plant; weather carried only as a model parameter gives no design days and a free-running model). Then:
+
+| Comparison | Mode | Result (both models) |
+| --- | --- | --- |
+| TBD inputs by name, ~2100 properties: building, controls, weather, every zone's IC / gains (24 h and yearly profiles) / thermostat / emitters / room, every surface (area, orientation, inclination, **reversed**, element, link), elements, constructions **layer by layer**, aperture types, IZAMs, zone groups | `inputs` | 2066 identical, 77 identity / cosmetic (GUIDs, space-guid description, colours, zone-set name), **0 unexpected**. The two `exposedPerimeter` / `facadeLength` values of Store_C (14 vs 11 m) are the known adiabatic-wall effect: the difference is the 3 m adiabatic east wall |
+| Surface properties and shade proportions the simulation reads | `deep` | only that same Store_C perimeter pair |
+| Every hourly zone series (32 arrays x 3 zones = 96) | `tsd`, `tsd-order` | see below |
+| The SAM model each route hands back (404 outputs, load peaks compared component by component) | `models` | 308 / 328 bit-identical, the rest <= 1.5e-4 (6.4e-5 reversed) relative, **0 differences** (the only classified one is a write-only TAS3D `isUsed` stamp that `UpdateT3D` writes on the gbXML route) |
+
+**Simulation.** Gains and airflow are bit-identical (people, lighting, equipment, infiltration, ventilation, aperture flows in and out: all zero difference).
+Peak and annual loads agree to <= 1e-6 relative (Office_A: heating peak 1523.7885 / 1523.7880 W, cooling peak 2502.2517 / 2502.2522 W; Meeting_B
+1079.3243 / 1079.3239 and 1773.1339 / 1773.1337 W; Store_C heating 2373.4668 / 2373.4661 W; annual heating 9514.6181 / 9514.6156 kWh in Office_A), peak
+hours identical, zone temperatures <= 2e-5 K. **Without openable windows (an earlier run of the same model) every series agreed to <= 1.5e-5 of its own peak, none beyond 1e-4.** With natural ventilation active, 47
+of 96 series differ in some hours by up to 1.2e-3 of their own peak, and that is TAS's own sensitivity to surface creation order, not the route:
+*the same route on the same inputs is bit-identical* (control: gbXML run twice, 0 / 96 series differ), but adding the panels in another order (same building,
+same inputs) moves gbXML by up to 1.2e-3 and direct by up to 9.6e-4 (two more orderings were run per route: up to 2.4e-3 in the reversed model), in the
+same series that differ between the routes. A route difference no larger than twice the same-route spread is therefore not a modelling difference (`tsd-order`).
+
+**Things that were decided after seeing results, stated plainly.**
+1. The first, fixed tolerance (1e-4 of a series' peak) came from the free-running real model and is too tight for a naturally ventilated one; it fails 14 series
+   that the same-route reordering also moves. The criterion is now "route difference <= 2 x the same-route order spread, or <= 1e-6", with **three** orderings
+   per route (one reordering gave a borderline series at 2.35x).
+2. **One series is not covered by that criterion and is listed as a named, bounded residual (`TsdCompare.KnownResiduals`):** Office_A cooling load in the base
+   model, in the single hour 4210 (day 176 10:00, load ramping 1199 -> 1464 -> 2502 W): gbXML 1463.89 / 1463.91 / 1463.91 W, direct 1463.78 / 1463.76 / 1463.76 W
+   over the three orderings - 0.11-0.16 W, 7e-5 to 1.1e-4 of that hour's load, ~4e-7 of annual demand. Every other series of the zone (temperatures, every gain,
+   conduction, infiltration, ventilation, aperture flows) is bit-identical in that hour, no TBD input differs, and every other hour of the series looks like order
+   noise. The cause was not isolated beyond TAS's load convergence in a steeply ramping hour. The reversed-order model has none. Anything larger than 1e-4 of peak
+   in that series would fail again.
+3. `UpdateReversed` moved **0** surfaces on the base model (TAS's own choice happened to match SAM's convention for both partitions); on the reversed-order model
+   it has real work to do and the TBDs still agree with the gbXML route's, including every `reversed` flag.
+
+**Re-run:** `Run-LoadSensitive.ps1 -Control -OrderControl` (about 6 min; exit 0 = no unexpected input difference and every simulated series explained or named).
+Two defects in the FIXTURE and harness were found on the way and fixed, neither in the route: opaque materials without a default thickness make TAS refuse the
+model ("Building element has an illegal construction assigned to it", identically on both routes), and weather carried only on the model gives no design days.
+
+## Open issues and manual acceptance
+
+| # | Item | Class |
+| --- | --- | --- |
+| 1 | **Visual inspection in TAS3D: done 2026-10-07** by the owner (direct vs gbXML T3D of the real model): shell and windows valid, the file opens and works. The differences it raised - zone volume, ID, storey, colours - are explained in "Zone volumes, storeys, ID and colours" below | resolved |
+| 2 | Zone `exposedPerimeter` / `facadeLength` differ from the gbXML route on three zones (adiabatic walls excluded on the direct route). Evidence gathered: the TAS Theory Manual (`Documentation/TAS_Theory.pdf`, Zone Heat Balance) gives a ground floor's external boundary as the groundwater temperature with no perimeter term; nothing in SAM / SAM_Tas reads either field (only `Modify.Update` writes it); every simulation-read surface property is identical between the routes. What cannot be settled from source: whether a TAS module outside the dynamic simulation (e.g. a compliance/ground-floor U-value calculator) reads it. **MANUAL ACCEPTANCE REQUIRED** | manual acceptance only |
+| 3 | The residual 66 simulation outputs at <= 8.95e-5 relative are not proven. Every property the simulation reads is identical; what differs is TAS's surface creation order (the `SurfaceNumber` stamps) and the absolute vs recentred float32 coordinates. The affected outputs (external conduction, building heat transfer, occupancy gains that depend on zone temperature) and the size are consistent with an iterative heat balance converging to its tolerance from a different summation order, not with a modelling difference | follow-up (negligible) |
+| 4 | `reverseElement` is inert in TAS, so the reversed side is set in the TBD (`UpdateReversed`) from stamps `UpdateIds` writes. A panel that cannot be stamped (unmatched geometry) keeps TAS's choice; horizontal panels are always left to TAS | follow-up |
+| 5 | Door/window apertures in **internal** (two-sided) walls were validated only on one synthetic adiabatic case; no real model here has one | follow-up |
+| 6 | `ExternalSpace` zones (`zone.external = true`) are built but no model with an `ExternalSpace` was available to run through TAS | follow-up |
+| 7 | `WorkflowSettings.UpdateWindowPositionType` is not consulted: the direct route always sets the position type from the host (the gbXML route skips non-rectangular apertures unless the flag is on) | follow-up |
+| 8 | A model with skipped panels continues with `ISSUE:` notes (it does not stop); only a TAS rejection stops the run. Whether a skipped panel should also stop it is a policy choice for the owner | follow-up |
+| 9 | Simulation parity was measured on one real model (9 spaces); no larger real model was available, only synthetic grids up to 300 zones (TBD identical to the gbXML route at 100 zones) | follow-up |
+| 10 | `SAM_Tas_Grasshopper` and SAM_UI are untouched: nothing there can select `T3DRoute.Direct` yet | follow-up (by design) |
+| 11 | Panels with holes import the outer loop only (reported); shades with holes likewise | known limitation |
+| 12 | `AddInternalSurface`'s `reverseElement` cannot be used (inert); the layer direction of horizontal internal surfaces is TAS's geometric choice, equal to the gbXML route's in every measured case. Sloped internal panels are not given SAM's rule either (not measured) and keep TAS's side | known limitation |
+| 13 | The element / window attribute rules in `Query.T3DImportPlan` (thickness, colour, transparency, BE type, frame width) are re-implemented from `Query.UpdateT3D`; a change to one must be made in the other. Sharing one decision helper would remove the drift risk but means touching `UpdateT3D` (not done: no unrelated refactors) | follow-up |
+| 14 | `Modify.UpdateIds` now reads each TBD zone's description (one extra COM read per zone) on the gbXML route too, to build the description-GUID index; it finds none there | follow-up (minor) |
+| 15 | No automated test asserts which workflow steps run per route, or that `Modify.UpdateReversed` writes to a TBD (COM): the licensed harness covers both and is not part of `dotnet test` / CI | follow-up |
+| 16 | A curved (non-polygonal) panel or aperture boundary is skipped and reported; it is not discretised | known limitation |
+
+There are no blockers. The branch is ready for review; items 1 and 2 are the ones that need a person with TAS3D open.
+
+### Final review (2026-10-07)
+
+An independent review after the rebase onto `720ad5e`. Fixed (each with a COM-free test):
+
+| Severity | Finding | Fix |
+| --- | --- | --- |
+| Medium (latent) | `Query.InternalSurfaceReversals` took "first" and "second" space from `GetSpaces(panel)`, i.e. the order the panel's relations are stored in. `Modify.Update` and the gbXML exporter both use the model's space order. Where the two differ (a panel related to the later space first), the reversed side would land on the wrong zone - the 14 % class of error the step exists to remove. The original test derived "first" from the same relation order, so it could not catch it | the pair is ordered by `AdjacencyCluster.GetSpaces()`; new test `InternalSurfaceReversals_TheLaterSpaceInTheModelIsReversed_HoweverThePanelsRelationsAreStored` fails without the fix. No effect on the real model: all 20 of its internal walls have relation order = model order, and the rerun direct TBD is property-for-property identical to the one simulated |
+| Low | `Convert.ToT3D` reported an element or window type TAS refused to create, but still returned success, so the workflow carried on with surfaces missing | a refused `AddElement` / `AddWindow` now fails the conversion like any other TAS rejection |
+| Low | An aperture on a shade panel (or on a panel no space bounds) was dropped silently: `AddShadeSurface` takes no openings | reported in `T3DImportReport.Skipped`; new test `Plan_AnApertureOnAShade_IsReported_NotSilentlyLost` |
+
+Re-validated after the fixes: solution build 0 errors; TM59 tests 1116 passed; benchmark 16 passed; licensed `synthetic` 104/104; the real model
+through the direct workflow (no simulation) gives the same `compare` result against the preserved gbXML reference (19 equivalent totals, same
+cosmetic differences) and a `deep` comparison with **zero** differing properties against the direct TBD whose full-year results are quoted above.
+The full-year simulation was therefore not repeated. Artifacts: `C:\t3dv\syn-1007`, `C:\t3dv\real-1007`.
+
+The previous review's four follow-ups are items 12 (sloped internal panels), 13 (duplicated `UpdateT3D` rules), 14 (extra zone-description read on the gbXML
+route) and 15 (no CI coverage of the COM half); none changes results on the default route, so none blocks the PR. One deliberate divergence is
+worth knowing: a negative SAM north angle is normalised into [0, 360) on the direct route, where `Query.UpdateT3D` clamps it to 0.5 degrees.
+
+## How to re-run
+
+All of it needs a licensed Tas and the .NET Framework MSBuild (COM references); `dotnet build` cannot build the harness.
+
+```bash
+MSBuild.exe SAM_Tas.sln -restore -p:Configuration=Debug          # builds the library, the harness and the tests
+dotnet test SAM_Tas/SAM.Analytical.Tas.TM59.Tests -c Debug         # COM-free; includes DirectT3DRouteTests
+```
+
+The harness is `SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/bin/Debug/direct-t3d-validation.exe`. Write its output under a **short** path (a long path
+makes TAS show a modal save error), close TAS3D/TBD first, and run one mode at a time:
+
+| Mode | What it does |
+| --- | --- |
+| `synthetic <dir>` | the synthetic buildings, each read back from the TBD TAS exports (104 checks) |
+| `shade <dir>` | with/without canopy, direct vs gbXML, hourly shade proportions |
+| `widths <model.sam> <dir>` | widths ON/OFF per zone against SAM's shell volume |
+| `gating <model.sam> <dir> [gbxml.tbd]` | what each gbXML-era repair would do to a direct TBD; where TAS puts the geometry |
+| `reversed <dir>` / `reversed-real <model.sam> <dir>` | which side of an internal wall TAS reverses, `reverseElement` false vs true |
+| `workflow <model.sam> <dir> <gbxml or direct> [simulate] [widths] [name=<stem>]` | the real `WorkflowCalculator` on either route; writes `.t3d/.tbd/.timing.csv/.notes.txt/.result.json` |
+| `workflow loadsensitive[-reversed][-shuffled\|-rotated] <dir> <gbxml or direct> simulate weather=<.twd or .sam> weathername=<text>` | the same, on the synthetic load-sensitive fixture, with weather supplied through the settings |
+| `inputs <gbxml.tbd> <direct.tbd> [prefix]` | ~2100 TBD properties by name, differences classified expected / UNEXPECTED (exit 6 on unexpected) |
+| `tsd <a.tsd> <b.tsd> [prefix] [labelA labelB tol]` | every hourly zone series of two TSDs: peaks, annual figures, temperatures, hour-by-hour differences (exit 7 beyond tolerance) |
+| `tsd-order <prefix> <gb.tsd> <di.tsd> [<gb2.tsd> <di2.tsd>]...` | the route difference against each route's own order sensitivity (exit 8 if unexplained) |
+| `tsd-hours <a.tsd> <b.tsd> <zone> <array> [n]` | the hours where one series differs most |
+| `weather-list <.twd>` | the weather years in a TAS library |
+| `compare <gbxml.tbd> <direct.tbd> <prefix>` | structural comparison with every difference classified (`.compare.txt` / `.json`) |
+| `deep <a.tbd> <b.tbd> [out]` | the properties the simulation reads (perimeter, altitude, shade proportions, reversed ...) |
+| `models <a.result.json> <b.result.json> <prefix>` | the SAM models each route hands back, outputs compared numerically |
+| `scale <dir> <nx> <ny> [gbxml]` | grid of zones: plan, COM replay and export timings |
+| `volumes <model.sam> <dir> <label>=<file.t3d> ...` | per zone: SAM shell vs T3D and exported TBD floor area / volume, widths as saved / OFF / ON, and the storeys (copies only) |
+| `inspect <model.sam>` / `dump <tbd>` / `t3d <file>` | describe a model and its plan / a TBD / a T3D |
+
+Do not rebuild the harness while a timing run is in progress, and never run two TAS-driving processes at once.
