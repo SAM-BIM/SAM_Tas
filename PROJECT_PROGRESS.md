@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-08 (native Optimisation PR4 closeout, SAM_Tas#88).
+2026-10-08 (native Optimisation PR7a closeout, SAM_Tas#89).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89; next: PR7a-2 (glazing swap, g-value from available glazing systems), then PR7b (see the PR7a section below).
 
 ## Q4 priorities
 
@@ -113,6 +113,60 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Native Optimisation PR7a, licensed spike for the `tas-model` blocks (2026-10-08)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#89 (`spike/optimisation-tas-model-blocks`) merged into `sow/2026-Q4` as merge commit
+    `d393ffbacd5073f63a4540e45390f9224beba3f8`. Its parents are the Q4 base `861d3e75` and the reviewed PR head
+    `6fd69fbdd22310d7841fcfc976cc3a912d2ed290`.
+  - Merge method: merge commit with `--match-head-commit`, after the owner's approval. CI on the head: `build` and
+    `spdx` green. No review comments. Remote and local branch deleted.
+  - Evidence only; no product code. Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_PR7A_SPIKE.md`.
+    Spike files (not in `SAM_Tas.sln`): `SAM_Tas/spikes/optimisation-pr7a/` (`chain.csx`, 21 compiler probes, the
+    driver `Invoke-Pr7aEvaluation.ps1`, the reader probe `probe/`). Raw evidence stays local in `C:\TasOut\pr7a\`.
+  - Programme: plan of record SAM_UI `documentation/NativeOptimisation-Plan-ModelBindings.md`; PR6 SAM#188 merged.
+- **Work completed (licensed, Systems Demo copies plus one SAM-generated Part O model):**
+  - One TasGenExecute script runs the whole chain: TBD edit → `simulate(1,365,0,1,0,0,tsd,1,0)` → TSD read → TPD
+    `FixTSDPath` → controller setpoint → the Demo's `SimulateEx` → annual result sets. No lock or leftover process in any
+    run; TasManager registry unchanged.
+  - Durations (5 repeats, bit-identical): building only 11.5 s, plant only 23.9 s, both 32.2 s, Demo script 24.1 s.
+  - Every V1 target moved the result in the expected direction. Controller parity: Setpoint 4.968943799848584 →
+    cost 7360.04370117188, bit-identical to the PR3/PR5 acceptance (plant room `Plant Room`, `HeatPumpController`).
+  - Every measure equals SAM_Tas' own readers to 15 digits; overheating = `Query.Overheating` (`OccupiedHours28/25`)
+    for the worst occupied zone.
+  - TasGenExecute compiles **C# 7.0 exactly**; LINQ needs `using System.Linq;`; TBD/TSD/TPD/TAS3D/TWD interops are
+    referenced, **TCD is not**; `#r` works.
+- **Findings for PR7b:**
+  - F1: `TSDData.FixTSDPath` throws `RPC_E_SERVERFAULT` when the TBD named in the TSD's absolute
+    `SimulationData.buildingPath` is missing (the Demo's TSD names a folder on the other workstation). Re-pointing
+    `buildingPath` to the evaluation's TBD first fixes it (19/19).
+  - F2: TPD.exe crashes at shutdown in ~17 % of plant evaluations (with or without `Save`); results already read, exit 0,
+    +4–5 s.
+  - F3: names are matched exactly (a Demo internal condition has a trailing space).
+  - SAM-generated TBDs: one internal condition per space (description `"<SAM internal condition> - <space>"`) plus
+    `"- HDD"`; thermostat setpoints are 24-hour profiles (setpoint = highest heating / lowest cooling hour).
+  - TSD daily arrays are 1-based SAFEARRAYs; `Building.GetConstruction(i)` has null gaps.
+- **Owner decisions (2026-10-08, on approving #89):**
+  1. Setpoint targets are offered **per internal condition** (no grouping by SAM internal condition in PR7b).
+  2. The TPD.exe shutdown crash (F2) is **not** reported to EDSL; blocks read results before release and ignore it.
+  3. **Glazing g-value: no pane-property solve.** The g-value target uses the g that SAM already calculates for real
+     glazing systems (`ThermalTransmittanceCalculator.CalculateGlazing`, the Tas TCD calculation behind the Glazing
+     window), picks the **closest match among the glazing systems available to the project** (model, My glazing
+     systems, default library), and swaps that construction in. The next stage proposes the exact method (snapping
+     vs a g-ordered choice) after understanding how SAM's glazing flow works. PR7a's pane-solve is evidence only.
+  4. The optional **glazing-swap test is approved** (next stage).
+- **Files changed:** the record and `SAM_Tas/spikes/optimisation-pr7a/` (27 files). No product file.
+- **Validation:** 77 TasGenExecute evaluations (21 compiler probes, 56 on Tas models); 9 cross-checked against SAM_Tas
+  readers; registry export identical before/after every batch; PR CI green.
+- **Unresolved issues, risks:**
+  - F1 also affects today's `tas-script` route when a Systems Demo project is moved.
+  - Out-of-scope SAM_Tas defects seen: `Query.Constructions` stops at the first null; `ConsumptionHeating/Cooling`
+    hold Wh under a kWh label.
+  - PR6 fixture `systems-demo-bound-golden-section.json` says `"Plant Room 1"`; the Demo's plant room is `"Plant Room"`.
+  - Heating and plant blocks are proven on the Demo only (the SAM model had heating off and no TPD).
+- **Next step:** PR7a-2, a licensed spike for the glazing swap and the g-value from available glazing systems
+  (decisions 3 and 4), then PR7b (catalogue reader, script generator, engine `tas-model`), each after owner review.
 
 ## Native Optimisation PR4, the Optimisation Definition runs on Tas (2026-10-08)
 
