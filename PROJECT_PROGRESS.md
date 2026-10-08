@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-08 (Java-free GenOpt PR6 closeout, SAM_Tas#87).
+2026-10-08 (native Optimisation PR4 closeout, SAM_Tas#88).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below).
 
 ## Q4 priorities
 
@@ -113,6 +113,59 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Native Optimisation PR4, the Optimisation Definition runs on Tas (2026-10-08)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#88 (`feature/optimisation-definition-tas-adapter`) merged into `sow/2026-Q4` as merge commit
+    `a3837acbebb1bdfcf1d68fa519305e67f640fdb8`. Its parents are the Q4 base `7f2043ac` and the reviewed PR head
+    `b5c93fc9ebfc1fa19a0f03a14e5ad04cf30e6624`; the merge tree `98a0e34` is identical to the head tree.
+  - Merge method: merge commit with `--match-head-commit`.
+  - CI: the PR's `build` (it runs the GenOpt tests) and `spdx` were green on the head. The post-merge
+    `Build (Windows)` on `a3837acb` was green (run 37774014140). No review comments.
+  - The remote branch was deleted. Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_DEFINITION_PR4.md`.
+  - Programme: native Optimisation definition and UX. PR1 SAM_UI#214, PR2 SAM#186 and PR3 SAM#187 had already
+    merged.
+- **Work completed.** `SAM.Analytical.Tas.GenOpt` now references `SAM.Core.Optimisation` (HintPath) and adds:
+  - `Query.TasOptimisationCapabilities()` and `Query.TasOptimisationEngine` (`"tas-script"`): golden section 1..1,
+    Hooke–Jeeves 1..∞, minimise only, continuous only, no constraints.
+  - `Convert.ToGenOptDocument(definition, directory, scriptText)` and an overload taking `TasExecutionSettings`.
+    - It validates the definition against the capabilities. Any error throws `TasOptimisationDefinitionException`,
+      a `GenOptCompatibilityException` that carries the diagnostics.
+    - It maps onto the existing GenOpt objects exactly as the SAM_UI form did: objective first; golden-section
+      start and step passed through (absent → minimum and 0); omitted settings keep the SAM_Tas defaults;
+      `MaxEqualResults` at its default.
+  - `TasExecutionSettings`: local, non-portable settings.
+  - `Query.TasScriptCatalogue`: a literal scan of `Variables["…"]` and `ScriptOutput.SetValue("…"`, with comments
+    and literals handled.
+  - `Query.TasScriptDiagnostics`: OPT501/OPT502 warnings, never errors.
+- **Decisions:**
+  - `TasScriptCatalogue` returns the PR3 `OptimisationCatalogue`; it replaces the plan's `TasScriptNames`.
+  - No `RunNative` wrapper. A `Modify` class here could clash with Grasshopper's `Modify.RunNative`.
+  - L6 file and engine checks stay in SAM_UI until PR5.
+  - The capabilities instance lives in a nested holder class. That way neither `Query` nor `Convert` loads
+    `SAM.Core.Optimisation.dll` for the existing route before PR8 deploys it.
+- **Files changed:** 13 (+1297/−1).
+  - Six new source files, the csproj and the record.
+  - Tests: the csproj, `TESTING.md`, `OptimisationDefinitionAdapterTests`, `TasScriptCatalogueTests` and
+    `OptimisationDeploymentTests`.
+  - No SAM.Math, SAM, SAM_UI or Grasshopper change, and no existing GenOpt source changed.
+- **Validation.** Done on the second workstation, with all sibling repos on the Q4 heads.
+  - `SAM.Analytical.Tas.GenOpt.Tests` 257/257 (216 + 41).
+  - The definition document equals the PR5 form document for both Systems Demo fixtures, and the stub runs match
+    evaluation for evaluation, `Variables.txt` bytes included.
+  - **Licensed-run replay:** the recorded PR5 acceptance runs (`C:\TasOut\pr5-acc`) were replayed through this path.
+    A 11/11 and B 16/16 `Variables.txt` were byte-identical. Harness: `C:\TasOut\pr4-replay`, not committed.
+  - Mutations 6/6 caught.
+  - A load context that refuses SAM.Core.Optimisation proves the existing route still runs without it.
+- **Unresolved issues, risks:**
+  - `SAM.Core.Optimisation.dll` (and `SAM.Units.dll`) must ship beside `SAM.Analytical.Tas.GenOpt.dll` before PR5
+    reaches users (PR8, SAM_Deploy).
+  - The script scan is literal.
+  - No new live licensed run; the PR5a acceptance does that through SAM_UI.
+- **Next step:** PR5a in SAM_UI. The form becomes an `OptimisationDefinition`, the examples become JSON, and the run
+  goes through `ToGenOptDocument`, with a licensed A/B rerun. Then PR5b (formatting), each after owner review. The
+  hand-over prompt is `NEXT_SESSION_PROMPT_PR5.md` in the SAM-BIM folder.
 
 ## Java-free GenOpt replacement — PR6, legacy Java route retired, shared result rules (2026-10-08)
 
