@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-08 (native Optimisation PR7a closeout, SAM_Tas#89).
+2026-10-08 (native Optimisation PR7a-2 closeout, SAM_Tas#90).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89; next: PR7a-2 (glazing swap, g-value from available glazing systems), then PR7b (see the PR7a section below).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89 and the glazing-swap spike (PR7a-2, evidence only) as #90; next: the SAM "try every option" PR, then PR7b (see the PR7a-2 and PR7a sections below).
 
 ## Q4 priorities
 
@@ -113,6 +113,62 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Native Optimisation PR7a-2, glazing swap and g-value from available glazing systems (2026-10-08)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#90 (`spike/optimisation-glazing-swap`) merged into `sow/2026-Q4` as merge commit
+    `02a06b6fdc6b697a3d74f9a38a936e6e2832420b`. Its parents are the Q4 base `13d86686` and the reviewed PR head
+    `d928f97c01c64a0bf756e91d0ff3ff1f3cf5ee5c`.
+  - Merge method: merge commit with `--match-head-commit`, after the owner's approval. CI on the head: `build` and
+    `spdx` green. No review comments. Remote and local branch deleted.
+  - Evidence only; no product code. Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_PR7A2_GLAZING.md`.
+    Spike files (not in `SAM_Tas.sln`): `SAM_Tas/spikes/optimisation-pr7a2/` (`swap.csx`, the probe `probe/`
+    with `pool`/`write`/`constructions`, `README.md`). Raw evidence stays local in `C:\TasOut\pr7a2\`.
+- **Work completed (licensed, Systems Demo copy plus a SAM-generated Part O model):**
+  - SAM's glazing flow read end to end: `ThermalTransmittanceCalculator.CalculateGlazing` (TCD, STA, g and light
+    rounded to 0.001, U = `GetUValue()[6]`; 171 systems in 2.94 s), the Glazing window's pools/filters/sort orders, the
+    legacy assign-by-g flow, `SetGlazing`, and SAM_Tas' TBD writer `Modify.UpdateConstructions(building,
+    apertureConstructions, materialLibrary)` (`"Windows: <name> -pane"/"-frame"`).
+  - g parity: the calculator's g equals the TBD's `GetGlazingValues()[5]` bit for bit for 8 systems (g 0.118–0.792) on
+    both TBDs; U and frame U too.
+  - Swap in TasGenExecute (C# 7.0, TBD only): `buildingElement.AssignConstruction` on every element using the target
+    glazing (and the frame element paired by name), read back, simulated. 23 evaluations: exit 0, no lock, no leftover
+    process, registry unchanged; repeats bit-identical; the SAM model's own system written under a new name reproduced
+    the baseline exactly. Solar gain rises strictly with g; cooling/overheating do not (U and light change with the
+    system).
+  - Snapping a continuous g to the closest system gives a step function (Hooke–Jeeves stuck on a plateau when the
+    measured results are replayed); trying every option is exact in n simulations.
+- **Owner decisions (2026-10-08, on approving #90):**
+  1. **Method:** a choice among real systems, ordered by g, run by **"try every option"** (kind
+     `tbd.glazing-construction.choice`, `"discrete"` 1..n). The continuous `tbd.glazing-construction.g-value` is not
+     offered (no pane solve, no snap).
+  2. **Option filter:** not changed by the owner, so the recommended defaults stand: same aperture type and
+     transparency, g in the requested range, Ug ≤ current + 0.3 W/m²K, light ≥ current − 0.1, duplicates (g, U, light to
+     0.001) once, at most 8 options, the current glazing as option 1.
+  3. **Frames: keep the model's frames** (swap the pane construction only).
+  4. **Order (owner asked the agent to choose):** the SAM work first. SAM's schema has only golden section and
+     Hooke–Jeeves, `"discrete"` is reserved (OPT415) and the SAM.Math kernel has no exhaustive method, while SAM_Tas
+     already models GenOpt's `Mesh` algorithm (every grid point), so a SAM PR adds the method (schema value,
+     capabilities, diagnostics, kernel) before PR7b uses it. Chosen from code reading, not from a run.
+- **Findings for PR7b:**
+  - `UpdateConstructions` matches by name and overwrites: a library system named like the model's own glazing replaced
+    the model's in-use construction. Write every candidate under a unique name (`"<name> <last 6 of Guid>"` worked).
+  - Frames must be found through the elements (`"<base>-pane"` → `"<base>-frame"`); SAM-generated TBDs use `"X -frame"`
+    on the element and leave `"Windows: X -frame"` unused; one pane element had no frame element.
+  - Half of the 171-system TCD pool is single glazing; with the U filter only ~5–10 systems remain, so useful options
+    come mainly from "My glazing systems".
+- **Files changed:** the record and `SAM_Tas/spikes/optimisation-pr7a2/` (4 files). No product file.
+- **Validation:** 23 TasGenExecute evaluations, 2 pool runs (179 systems), 4 TBD writes, 2 listings; PR CI green.
+- **Unresolved issues, risks:**
+  - SAM's default `SAM_ApertureConstructionLibrary.JSON` has a `SIM_EXT_GLZ` window with a malformed Guid
+    (`4d00dd0-…`): a new random Guid on every load (separate SAM fix, suggested as its own task).
+  - The `UpdateConstructions` same-name overwrite is a product behaviour worth its own SAM_Tas issue.
+  - Legacy `Tas.Query.Score` is biased when only g is targeted (not used by the plan).
+  - Heating effects are shown on the Demo only (the SAM model has heating off).
+- **Next step:** the SAM PR "try every option" (method value in `sam.optimisation/1`, kernel exhaustive search over a
+  `"discrete"` variable, capabilities and diagnostics), then PR7b (SAM_Tas catalogue reader, script generator, engine
+  `tas-model`, glazing choice). Hand-over prompt: `NEXT_SESSION_PROMPT_TRY_EVERY_OPTION.md` in the SAM-BIM folder.
 
 ## Native Optimisation PR7a, licensed spike for the `tas-model` blocks (2026-10-08)
 
