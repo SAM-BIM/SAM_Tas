@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-07 (Java-free GenOpt PR3 closeout, SAM_Tas#86).
+2026-10-08 (Java-free GenOpt PR6 closeout, SAM_Tas#87).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; see the GenOpt sections below).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below).
 
 ## Q4 priorities
 
@@ -113,6 +113,48 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Java-free GenOpt replacement — PR6, legacy Java route retired, shared result rules (2026-10-08)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#87 (`feature/native-optimisation-pr6-retire-legacy`) merged into `sow/2026-Q4` as merge commit
+    `8dffaa3dabfedb45e43330a8a54fb1ba4a17c34e` (parents: Q4 base `da891dd2` + reviewed PR head
+    `860c5a55a3a7a85d430e2845f1e73563ae0676fa`; merge tree `9fd7e76` identical to the head tree).
+  - Merge method: merge commit with `--match-head-commit`. PR CI (`build`, `spdx`) green on the head; post-merge
+    `Build (Windows)` on `8dffaa3d` green. Codex: no findings on this PR.
+  - Remote and local branch removed. Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/NATIVE_GENOPT_PR6.md`.
+  - Coordinated PR set (owner-approved order): this PR first, then SAM_Tas_Grasshopper#12 and SAM_UI#212 (consumers of
+    `NativeGenOptOutcome`), then SAM#185 (comment only).
+- **Work completed:**
+  - Removed the legacy Java execution route: `GenOptDocument.Run()` (incl. its `Core.Tas.Modify.SetProjectDirectory`
+    call), `ExecutableFile` (GenOpt.bat / `java -classpath genopt.jar`), `Query.TasGenOptJavaPath`, `Create.Command`
+    (`cmd /c start`), the Java-only simulation-launch configuration (`SimulationConfigFile`, `SimulationStart` with a
+    personal-path `cmd /c` default, `SimulationError`, `IO`, `NumberFormat`) and the matching document members; resources
+    `files/resources/Analytical/Tas/GenOpt/GenOpt.bat` and `config.txt`.
+  - GPSCoordinateSearch: removed from `Convert.NativeAlgorithmTypes`; refused with `NotSupportedException` and the D3
+    reason (was `GenOptCompatibilityException`). Enum value and class kept for compatibility; nothing substituted.
+  - New `NativeGenOptOutcome`: Completed / Withheld / Successful / BestEntry (`Best`) / Interval / `IsLower` /
+    `RefusalMessage` — the rules the Grasshopper (PR4) and SAM_UI (PR5) reports duplicated. Wording stays in consumers.
+  - "Java route" wording in messages/comments replaced by "GenOpt-format writer/text"; oracle history kept.
+- **Kept deliberately:** `GenOptDocument` (definition + `RunNative`), algorithm/parameter/objective classes,
+  `GenOptNumber`, `Convert.*`, workspace, evaluator, GenOpt-format input writers, `SetProjectDirectory` (used by
+  `WorkflowCalculator`), the `SAM.Core.Tas` reference, the inert rest of the GenOpt resource folder.
+- **Files changed:** 25 (+816/−425): `SAM.Analytical.Tas.GenOpt` (8 files deleted; `GenOptDocument`, `ToSAM_Optimiser`,
+  4 native-class comment/message edits; new `Classes/Native/NativeGenOptOutcome.cs`; `NATIVE_GENOPT_PR6.md`;
+  `NATIVE_GENOPT_ROUTE.md` pointer), tests (`LegacyRouteRetiredTests`, `NativeGenOptOutcomeTests` new; `MappingTests`,
+  `NativeRunTests`, `TESTING.md`), 2 resource files deleted.
+- **Validation:** `MSBuild SAM_Tas.sln /t:Rebuild` Release 0 errors (APPDATA/USERPROFILE redirected, real
+  `NUGET_PACKAGES`). GenOpt.Tests 216/216 (173 + 43; 25 golden traces bit for bit through `RunNative`), TM59 1128/1128,
+  Benchmark 16/16. IL/metadata test: only `TasGenExecuteObjectiveEvaluator` starts a process; no registry, java or cmd.
+  Mutations on `NativeGenOptOutcome` (tie->last, no withholding, Nullspace not completed) all caught.
+  Licensed acceptance not rerun: native execution unchanged; PR3 acceptance stands.
+- **Unresolved issues, risks:**
+  - Public API removal (`Run`, launch members/types, `TasGenOptJavaPath`, `Create.Command`); no consumer in any SAM-BIM
+    repository; external scripts calling `Run()` would stop compiling.
+  - SAM_Deploy follow-ups (separate task): ship one current `SAM.Math.dll` everywhere and `SAM.Analytical.Tas.GenOpt.dll`
+    beside SAM_UI; delete old `GenOpt.bat`/`config.txt` from existing installations (installer does not remove files).
+- **Next step:** merge SAM_Tas_Grasshopper#12 and SAM_UI#212, then SAM#185 (owner-approved); then the SAM_Deploy shipping
+  task; then the AI-friendly objective model phase when requested.
 
 ## Java-free GenOpt replacement — PR3, native Tas GenOpt route (2026-10-07)
 
