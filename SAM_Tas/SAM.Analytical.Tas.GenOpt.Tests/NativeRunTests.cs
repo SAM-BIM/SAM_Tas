@@ -324,7 +324,8 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 string runs = folder.Folder("runs");
                 GenOptDocument document = Document(folder.Folder("ws"), Quadratic(), algorithm: new GPSCoordinateSearchAlgorithm { MeshSizeDivider = 2, MeshSizeExponentIncrement = 1, NumberOfStepReduction = 4 });
 
-                Assert.Throws<GenOptCompatibilityException>(() => document.RunNative(runs, TestFolder.StubExecutable));
+                Assert.Throws<NotSupportedException>(() => document.RunNative(runs, TestFolder.StubExecutable));
+                Assert.Throws<GenOptCompatibilityException>(() => Document(folder.Folder("ws"), Quadratic(), algorithm: new GPSHookeJeevesAlgorithm { MeshSizeDivider = 2.5, MeshSizeExponentIncrement = 1, NumberOfStepReduction = 4 }).RunNative(runs, TestFolder.StubExecutable));
                 Assert.Throws<NotSupportedException>(() => Document(folder.Path, Quadratic(), algorithm: new NelderMeadONeillcsAlgorithm()).RunNative(runs, TestFolder.StubExecutable));
                 Assert.Throws<FileNotFoundException>(() => Document(folder.Path, Quadratic()).RunNative(runs, folder.Combine("missing.exe")));
                 Assert.That(Directory.GetFileSystemEntries(runs), Is.Empty);

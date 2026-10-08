@@ -20,7 +20,7 @@ namespace SAM.Analytical.Tas.GenOpt
     /// </list>
     /// <para>
     /// The snapshot is an allow-list, not a copy of the source folder. It holds <c>Script.txt</c>, written from the
-    /// document exactly as the Java route writes it, plus the source folder's top-level Tas files of the types
+    /// document exactly as the GenOpt-format writer writes it, plus the source folder's top-level Tas files of the types
     /// TasGenExecute itself discovers. Those types are TasGenComm's <c>TasFiles.TasExtension</c>: T3D, TBD, TPD, TSD
     /// and TWD. Runtime artifacts of earlier runs, such as Variables.txt, Output.txt, Error.txt, GenOpt files and
     /// <c>tmp-genopt-run-*</c> folders, are never carried over.

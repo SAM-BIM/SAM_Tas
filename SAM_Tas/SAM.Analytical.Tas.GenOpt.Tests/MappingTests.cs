@@ -29,14 +29,15 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             public override AlgorithmType AlgorithmType => algorithmType;
         }
 
-        private static readonly AlgorithmType[] PhaseOne = { AlgorithmType.GPSCoordinateSearch, AlgorithmType.GPSHookeJeeves, AlgorithmType.GoldenSection };
+        // PR6: GPSCoordinateSearch is no longer listed as native; it is refused as unsupported like any other algorithm (D3).
+        private static readonly AlgorithmType[] PhaseOne = { AlgorithmType.GPSHookeJeeves, AlgorithmType.GoldenSection };
 
         public static IEnumerable<AlgorithmType> UnsupportedTypes() => Enum.GetValues(typeof(AlgorithmType)).Cast<AlgorithmType>().Where(t => !PhaseOne.Contains(t));
 
         /// <summary>Every concrete algorithm class in SAM.Analytical.Tas.GenOpt except the Phase-1 ones.</summary>
         public static IEnumerable<Type> UnsupportedClasses() => typeof(Algorithm).Assembly.GetTypes()
             .Where(t => typeof(Algorithm).IsAssignableFrom(t) && !t.IsAbstract)
-            .Where(t => t != typeof(GPSHookeJeevesAlgorithm) && t != typeof(GPSCoordinateSearchAlgorithm) && t != typeof(GoldenSectionAlgorithm))
+            .Where(t => t != typeof(GPSHookeJeevesAlgorithm) && t != typeof(GoldenSectionAlgorithm))
             .OrderBy(t => t.Name);
 
         private static GPSHookeJeevesAlgorithm HookeJeeves(double divider = 2, double s0 = 0, double t = 1, double m = 4) => new GPSHookeJeevesAlgorithm
@@ -102,12 +103,13 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
         /// Owner decision D3, PR3 Java-only oracle: with the existing writer, GenOpt 3.1.1 rejects every
         /// GPSCoordinateSearchAlgorithm ("Unknown or unexpected keyword 'Seed'" / 'NumberOfInitialPoint'). That held
         /// for the Tas defaults, for Seed = 0 / NumberOfInitialPoint = 0 with a valid mesh, and for Seed = 7 /
-        /// NumberOfInitialPoint = 5. The native adapter mirrors it.
+        /// NumberOfInitialPoint = 5. PR6 (Java route retired): it is refused as unsupported, with that reason, whatever
+        /// its values, and never substituted.
         /// </summary>
         [TestCase(0, 0, 0)]
         [TestCase(0, 0, 2)]
         [TestCase(7, 5, 2)]
-        public void CoordinateSearch_IsRefusedLikeTheJavaRoute(double seed, int numberOfInitialPoint, double divider)
+        public void CoordinateSearch_IsRefusedAsUnsupportedWithTheReason(double seed, int numberOfInitialPoint, double divider)
         {
             GPSCoordinateSearchAlgorithm algorithm = new GPSCoordinateSearchAlgorithm
             {
@@ -119,9 +121,11 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 NumberOfStepReduction = 4,
             };
 
-            GenOptCompatibilityException exception = Assert.Throws<GenOptCompatibilityException>(() => algorithm.ToSAM_Optimiser(new OptimizationSettings(), 2));
+            NotSupportedException exception = Assert.Throws<NotSupportedException>(() => algorithm.ToSAM_Optimiser(new OptimizationSettings(), 2));
 
+            Assert.That(exception.Message, Does.Contain("'GPSCoordinateSearch' (GPSCoordinateSearchAlgorithm) is not supported"));
             Assert.That(exception.Message, Does.Contain("Seed").And.Contain("NumberOfInitialPoint").And.Contain("MultiStart"));
+            Assert.That(exception.Message, Does.Contain("Supported: GPSHookeJeeves, GoldenSection."));
         }
 
         // ------------------------------------------------------------------ unsupported algorithms
@@ -132,7 +136,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             NotSupportedException exception = Assert.Throws<NotSupportedException>(() => new AnyAlgorithm(algorithmType).ToSAM_Optimiser(new OptimizationSettings(), 1));
 
             Assert.That(exception.Message, Does.Contain(algorithmType.ToString()));
-            Assert.That(exception.Message, Does.Contain("GPSCoordinateSearch, GPSHookeJeeves, GoldenSection"));
+            Assert.That(exception.Message, Does.Contain("Supported: GPSHookeJeeves, GoldenSection."));
         }
 
         [Test]
@@ -140,7 +144,8 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
         {
             int all = Enum.GetValues(typeof(AlgorithmType)).Length;
 
-            Assert.That(UnsupportedTypes().Count(), Is.EqualTo(all - 3));
+            Assert.That(UnsupportedTypes().Count(), Is.EqualTo(all - 2));
+            Assert.That(UnsupportedTypes(), Does.Contain(AlgorithmType.GPSCoordinateSearch));
             Assert.That(Convert.NativeAlgorithmTypes, Is.EquivalentTo(PhaseOne));
         }
 

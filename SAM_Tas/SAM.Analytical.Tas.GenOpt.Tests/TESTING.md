@@ -28,3 +28,6 @@ dotnet test SAM_Tas/SAM.Analytical.Tas.GenOpt.Tests -c Release
   checkout, `../../../SAM/SAM/SAM.Tests/Golden/GenOpt`, which CI also clones. Every case the SAM_Tas GenOpt objects can
   express is replayed end to end through `RunNative` and the stub, bit for bit.
 - The full run takes about 3 minutes, because each evaluation is a real process.
+- **PR6.** `LegacyRouteRetiredTests` reads the built `SAM.Analytical.Tas.GenOpt.dll` (reflection, metadata, an IL scan)
+  to prove the Java route is gone and only `TasGenExecuteObjectiveEvaluator` starts a process.
+  `NativeGenOptOutcomeTests` pins the shared result rules with real kernel results (no process).

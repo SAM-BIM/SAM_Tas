@@ -6,8 +6,8 @@ using System;
 namespace SAM.Analytical.Tas.GenOpt
 {
     /// <summary>
-    /// A GenOpt configuration the native adapter refuses because the Java route cannot run it either, or because it
-    /// is invalid (never silently repaired). The message names the setting and the reason.
+    /// A GenOpt configuration the native adapter refuses because GenOpt 3.1.1 itself would not accept it, or because
+    /// it is invalid (never silently repaired). The message names the setting and the reason.
     /// </summary>
     public class GenOptCompatibilityException : InvalidOperationException
     {

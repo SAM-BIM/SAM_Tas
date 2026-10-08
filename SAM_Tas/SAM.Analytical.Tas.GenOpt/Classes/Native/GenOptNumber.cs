@@ -6,9 +6,9 @@ using System.Globalization;
 namespace SAM.Analytical.Tas.GenOpt
 {
     /// <summary>
-    /// The numbers Java GenOpt 3.1.1 actually works with when it reads the command file the existing (Java-route)
-    /// writer produces. The native adapter applies this before building the generic SAM.Math problem, so native and
-    /// Java runs start from bit-identical values.
+    /// The numbers Java GenOpt 3.1.1 actually works with when it reads the command file the GenOpt-format writer
+    /// (<see cref="CommandFile"/>) produces. The native adapter applies this before building the generic SAM.Math
+    /// problem, so native runs start from the values Java GenOpt started from (bit-identical in the PR3 oracle).
     /// <para>
     /// The writer formats each value with <c>double.ToString()</c> (.NET shortest round-trip text, e.g. "0.9",
     /// "1E-05", "1.5E+20", "-0"). GenOpt reads it with <c>java.io.StreamTokenizer</c> arithmetic, not a correctly
@@ -21,8 +21,8 @@ namespace SAM.Analytical.Tas.GenOpt
     /// <item>an integer-valued result passes through (int), so -0 becomes 0.</item>
     /// </list>
     /// <para>
-    /// The writer's own culture dependence (it uses the current culture) is not reproduced: the Java route only works
-    /// with a '.' decimal separator, so invariant text is the text Java GenOpt can read.
+    /// The writer's own culture dependence (it uses the current culture) is not reproduced: Java GenOpt only worked
+    /// with a '.' decimal separator, so invariant text is the text GenOpt can read.
     /// </para>
     /// </summary>
     public static class GenOptNumber
@@ -41,7 +41,7 @@ namespace SAM.Analytical.Tas.GenOpt
         {
             if (double.IsNaN(value) || double.IsInfinity(value))
             {
-                throw new GenOptCompatibilityException(string.Format(CultureInfo.InvariantCulture, "{0} must be finite; the Java route would write '{1}', which GenOpt 3.1.1 cannot read.", description, WriterText(value)));
+                throw new GenOptCompatibilityException(string.Format(CultureInfo.InvariantCulture, "{0} must be finite; its GenOpt text would be '{1}', which GenOpt 3.1.1 cannot read.", description, WriterText(value)));
             }
 
             return Read(WriterText(value));
@@ -57,7 +57,7 @@ namespace SAM.Analytical.Tas.GenOpt
             string text = WriterText(value);
             if (double.IsNaN(value) || double.IsInfinity(value) || text.IndexOf('E') >= 0 || text.IndexOf('e') >= 0)
             {
-                throw new GenOptCompatibilityException(string.Format(CultureInfo.InvariantCulture, "{0} = {1} cannot be used: the Java route would write '{1}', and GenOpt 3.1.1 rejects exponent notation (or a non-finite value) for algorithm keywords. Use a value that is written as a plain decimal.", keyword, text));
+                throw new GenOptCompatibilityException(string.Format(CultureInfo.InvariantCulture, "{0} = {1} cannot be used: its GenOpt text is '{1}', and GenOpt 3.1.1 rejects exponent notation (or a non-finite value) for algorithm keywords. Use a value that is written as a plain decimal.", keyword, text));
             }
 
             return Read(text);

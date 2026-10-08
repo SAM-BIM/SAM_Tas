@@ -9,19 +9,23 @@ namespace SAM.Analytical.Tas.GenOpt
 {
     public static partial class Convert
     {
-        /// <summary>The algorithms the native optimiser supports (Phase 1).</summary>
-        public static readonly AlgorithmType[] NativeAlgorithmTypes = { AlgorithmType.GPSCoordinateSearch, AlgorithmType.GPSHookeJeeves, AlgorithmType.GoldenSection };
+        /// <summary>
+        /// The algorithms the native optimiser runs. GPSCoordinateSearch is deliberately absent: it stays in
+        /// <see cref="AlgorithmType"/> (and <see cref="GPSCoordinateSearchAlgorithm"/> stays readable) for compatibility,
+        /// but it is refused (owner decision D3, confirmed in PR6).
+        /// </summary>
+        public static readonly AlgorithmType[] NativeAlgorithmTypes = { AlgorithmType.GPSHookeJeeves, AlgorithmType.GoldenSection };
 
         /// <summary>
         /// Maps a GenOpt algorithm object and its optimisation settings to the native SAM.Math optimiser.
         /// <para>
-        /// Only GPSCoordinateSearch, GPSHookeJeeves and GoldenSection are supported. Every other algorithm throws
-        /// <see cref="NotSupportedException"/> and is never replaced by another one. Settings the Java route could
-        /// not run, or that are invalid, throw <see cref="GenOptCompatibilityException"/>. Nothing is rounded, clamped
+        /// Only GPSHookeJeeves and GoldenSection are supported. Every other algorithm, GPSCoordinateSearch included,
+        /// throws <see cref="NotSupportedException"/> and is never replaced by another one. Settings GenOpt 3.1.1 would
+        /// not accept, or that are invalid, throw <see cref="GenOptCompatibilityException"/>. Nothing is rounded, clamped
         /// or repaired.
         /// </para>
         /// </summary>
-        /// <param name="algorithm">The algorithm object, as written by the Java route.</param>
+        /// <param name="algorithm">The GenOpt algorithm object.</param>
         /// <param name="optimizationSettings">The OptimizationSettings section.</param>
         /// <param name="parameterCount">Number of optimisation parameters (golden section requires exactly one).</param>
         public static Optimiser ToSAM_Optimiser(this Algorithm algorithm, OptimizationSettings optimizationSettings, int parameterCount)
@@ -55,11 +59,16 @@ namespace SAM.Analytical.Tas.GenOpt
                         throw Unsupported(algorithm);
                     }
 
-                    // Owner decision D3, from a Java-only GenOpt 3.1.1 oracle: the existing writer always emits
-                    // 'Seed' and 'NumberOfInitialPoint' for GPSCoordinateSearch. Without 'MultiStart', GenOpt rejects
-                    // both ("Unknown or unexpected keyword 'Seed'"), whatever their values, so the Java route cannot run
-                    // any GPSCoordinateSearchAlgorithm. The native adapter mirrors that.
-                    throw new GenOptCompatibilityException("GPSCoordinateSearch cannot be run: the Java route writes 'Seed' and 'NumberOfInitialPoint' for it, and GenOpt 3.1.1 rejects both without 'MultiStart' ('Unknown or unexpected keyword'), whatever their values. The native adapter mirrors the Java route and does not run this configuration.");
+                    // Owner decision D3 (PR3), confirmed when the Java route was retired (PR6): SAM's GenOpt definition of
+                    // GPSCoordinateSearch always carries 'Seed' and 'NumberOfInitialPoint', which GenOpt 3.1.1 rejects
+                    // without 'MultiStart' (Java-only oracle), so no GPSCoordinateSearchAlgorithm has ever run and there is
+                    // no proven behaviour to reproduce. It is refused as unsupported; nothing is substituted. The SAM.Math
+                    // CoordinateSearch kernel is not exposed here.
+                    throw new NotSupportedException(string.Format(
+                        CultureInfo.InvariantCulture,
+                        "GenOpt algorithm 'GPSCoordinateSearch' ({0}) is not supported by the native optimiser: its GenOpt definition always carries 'Seed' and 'NumberOfInitialPoint', which GenOpt 3.1.1 rejects without 'MultiStart', so it was never runnable. Supported: {1}. No other algorithm is substituted.",
+                        algorithm.GetType().Name,
+                        string.Join(", ", NativeAlgorithmTypes)));
 
                 case AlgorithmType.GoldenSection:
                     GoldenSectionAlgorithm goldenSectionAlgorithm = algorithm as GoldenSectionAlgorithm;
@@ -98,7 +107,7 @@ namespace SAM.Analytical.Tas.GenOpt
         {
             return new NotSupportedException(string.Format(
                 CultureInfo.InvariantCulture,
-                "GenOpt algorithm '{0}' ({1}) is not supported by the native optimiser. Supported (Phase 1): {2}. No other algorithm is substituted.",
+                "GenOpt algorithm '{0}' ({1}) is not supported by the native optimiser. Supported: {2}. No other algorithm is substituted.",
                 algorithm.AlgorithmType,
                 algorithm.GetType().Name,
                 string.Join(", ", NativeAlgorithmTypes)));

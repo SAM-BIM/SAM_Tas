@@ -17,6 +17,10 @@ objects onto the merged SAM.Math kernel. Evaluation runs `TasGenExecute.exe` dir
 (`TASGENEXECUTE_PROTOCOL.md` §2.3). Java, GenOpt, cmd.exe and the Tas Manager registry are not used. The Java route
 `Run()` is unchanged (until PR6).
 
+> **PR6 update:** the legacy Java route (`Run()` and its launch configuration) has been removed, GPSCoordinateSearch
+> is refused as unsupported (`NotSupportedException`), and the result rules live in `NativeGenOptOutcome`. See
+> `NATIVE_GENOPT_PR6.md`. This file remains the PR3 record.
+
 | Type (SAM.Analytical.Tas.GenOpt) | Role |
 |---|---|
 | `GenOptNumber` | The doubles Java GenOpt reads from the Java writer's command-file text. The writer produces .NET `ToString()` text; GenOpt reads it with `StreamTokenizer` arithmetic: inexact digit accumulation, double rounding of exponents, `-0` → `0` (D1). Exponent text in algorithm keywords is refused (D2). |

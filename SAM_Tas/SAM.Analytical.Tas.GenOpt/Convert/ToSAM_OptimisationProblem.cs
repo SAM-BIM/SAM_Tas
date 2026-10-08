@@ -13,7 +13,7 @@ namespace SAM.Analytical.Tas.GenOpt
     {
         /// <summary>
         /// Maps GenOpt parameters and objectives to a SAM.Math problem. Each parameter value is the double GenOpt reads
-        /// from the text the Java route writes (<see cref="GenOptNumber"/>, owner decision D1). The first objective is
+        /// from the text the GenOpt-format writer produces (<see cref="GenOptNumber"/>, owner decision D1). The first objective is
         /// the one minimised; the others are recorded.
         /// </summary>
         public static OptimisationProblem ToSAM_OptimisationProblem(this IEnumerable<IParameter> parameters, ObjectiveFunctionLocation objectiveFunctionLocation)
@@ -24,7 +24,7 @@ namespace SAM.Analytical.Tas.GenOpt
             return new OptimisationProblem(numberParameters.ConvertAll(ToSAM_OptimisationParameter), objectives.Count);
         }
 
-        /// <summary>One NumberParameter, with GenOpt's reading of the Java-route text for Ini, Min, Max and Step.</summary>
+        /// <summary>One NumberParameter, with GenOpt's reading of the writer's text for Ini, Min, Max and Step.</summary>
         public static OptimisationParameter ToSAM_OptimisationParameter(this NumberParameter numberParameter)
         {
             if (numberParameter == null)
