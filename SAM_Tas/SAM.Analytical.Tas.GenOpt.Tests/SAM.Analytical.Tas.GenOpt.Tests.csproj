@@ -32,6 +32,12 @@
     <Reference Include="SAM.Core">
       <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
     </Reference>
+    <Reference Include="SAM.Core.Optimisation">
+      <HintPath>..\..\..\SAM\build\SAM.Core.Optimisation.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Units">
+      <HintPath>..\..\..\SAM\build\SAM.Units.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
