@@ -11,7 +11,8 @@ assemblies through `HintPath`, not `ProjectReference`, because `SAM.Analytical.T
 whose `<COMReference>` needs the .NET Framework MSBuild:
 
 - `..\..\build\SAM.Analytical.Tas.GenOpt.dll`, `..\..\build\SAM.Core.Tas.dll` (SAM_Tas.sln)
-- `..\..\..\SAM\build\SAM.Math.dll`, `..\..\..\SAM\build\SAM.Core.dll` (the SAM repository)
+- `..\..\..\SAM\build\SAM.Math.dll`, `..\..\..\SAM\build\SAM.Core.dll`, `..\..\..\SAM\build\SAM.Core.Optimisation.dll`,
+  `..\..\..\SAM\build\SAM.Units.dll` (the SAM repository)
 
 Build SAM, then `MSBuild.exe SAM_Tas.sln -restore -p:Configuration=Release`, then:
 
@@ -31,3 +32,9 @@ dotnet test SAM_Tas/SAM.Analytical.Tas.GenOpt.Tests -c Release
 - **PR6.** `LegacyRouteRetiredTests` reads the built `SAM.Analytical.Tas.GenOpt.dll` (reflection, metadata, an IL scan)
   to prove the Java route is gone and only `TasGenExecuteObjectiveEvaluator` starts a process.
   `NativeGenOptOutcomeTests` pins the shared result rules with real kernel results (no process).
+- **Optimisation Definition (PR4).** `OptimisationDefinitionAdapterTests` read the SAM.Core.Optimisation fixtures from
+  the sibling SAM checkout (`../../../SAM/SAM/SAM.Tests/Golden/Optimisation`). For both Systems Demo examples, the
+  document built from the definition equals the one the SAM_UI form built (PR5), and a stub run of each is
+  evaluation-for-evaluation identical, `Variables.txt` bytes included. `TasScriptCatalogueTests` cover the script scan
+  and its warnings. `OptimisationDeploymentTests` load the built assemblies in a load context that refuses
+  SAM.Core.Optimisation, to prove the existing route never needs it.
