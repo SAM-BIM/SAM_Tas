@@ -38,3 +38,17 @@ dotnet test SAM_Tas/SAM.Analytical.Tas.GenOpt.Tests -c Release
   evaluation-for-evaluation identical, `Variables.txt` bytes included. `TasScriptCatalogueTests` cover the script scan
   and its warnings. `OptimisationDeploymentTests` load the built assemblies in a load context that refuses
   SAM.Core.Optimisation, to prove the existing route never needs it.
+- **"tas-model" engine (PR7b).** No Tas needed:
+  - `TasModelCapabilitiesTests` pin the engine's kinds, keys, units and methods, and check SAM's fixtures against them
+    (with the model's catalogue).
+  - `TasModelCatalogueTests` build catalogues from recorded inventories (`Helpers/TasModelFixtures.cs`) and pin the
+    glazing option filter.
+  - `TasScriptTests` pin one snapshot of the generated TasGenExecute script per chain shape (`Golden/TasModel/*.csx`).
+    They also compile every snapshot as TasGenExecute does: Roslyn at C# 7.0 against the build-only Tas interops
+    (`../../references_buildonly`) and a stand-in for TasGenComm's script globals (`Helpers/TasGenCommStandIn.cs`,
+    `Helpers/TasScriptCompiler.cs`). Set `SAM_TAS_UPDATE_SNAPSHOTS=1` to rewrite the snapshots after a deliberate
+    change, then review the diff.
+  - `TasModelRunnerTests` map definitions onto the kernel and run them end to end through the stub. Script.txt is
+    then the generated C# script, so the stub takes its spec from the `SAM_TAS_GENOPT_STUB_SPEC` environment variable.
+- The licensed proof of the generated blocks is local evidence, recorded in
+  `../SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_PR7B.md`; it is not part of CI.

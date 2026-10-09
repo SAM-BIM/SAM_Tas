@@ -13,6 +13,13 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="NUnit" Version="4.2.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <!-- PR7b: the generated TasGenExecute scripts are compiled at C# 7.0 in the tests (TasScriptCompiler). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PR7b: one snapshot of the generated script per chain shape (TasScriptTests). -->
+    <None Include="Golden\TasModel\*.csx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +44,19 @@
     </Reference>
     <Reference Include="SAM.Units">
       <HintPath>..\..\..\SAM\build\SAM.Units.dll</HintPath>
+    </Reference>
+    <!-- PR7b: the "tas-model" glazing pool holds SAM window systems; their TBD names come from SAM_Tas' naming. -->
+    <Reference Include="SAM.Analytical">
+      <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Architectural">
+      <HintPath>..\..\..\SAM\build\SAM.Architectural.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical.Tas">
+      <HintPath>..\..\build\SAM.Analytical.Tas.dll</HintPath>
     </Reference>
   </ItemGroup>
 

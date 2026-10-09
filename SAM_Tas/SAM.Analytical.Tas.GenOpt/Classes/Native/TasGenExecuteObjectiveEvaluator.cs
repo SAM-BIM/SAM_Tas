@@ -88,19 +88,38 @@ namespace SAM.Analytical.Tas.GenOpt
                 throw new ArgumentNullException(nameof(request));
             }
 
-            if (request.Coordinates.Count != parameters.Count)
+            return Evaluate(request.Simulation, request.Attempt, request.Coordinates);
+        }
+
+        /// <summary>
+        /// Runs one evaluation outside an optimisation run, for example "Test one simulation": the same protocol as the
+        /// kernel's evaluations (folder <c>NNNN</c> for <paramref name="simulation"/>, Variables.txt, classification).
+        /// </summary>
+        public ObjectiveEvaluation Evaluate(int simulation, IReadOnlyList<double> coordinates)
+        {
+            if (coordinates == null)
             {
-                return ObjectiveEvaluation.Failure("Expected " + parameters.Count.ToString(CultureInfo.InvariantCulture) + " coordinates, got " + request.Coordinates.Count.ToString(CultureInfo.InvariantCulture) + ".");
+                throw new ArgumentNullException(nameof(coordinates));
             }
 
-            string evaluationDirectory = EvaluationDirectory(evaluationsDirectory, request.Simulation, request.Attempt);
+            return Evaluate(simulation, 1, coordinates);
+        }
+
+        private ObjectiveEvaluation Evaluate(int simulation, int attempt, IReadOnlyList<double> coordinates)
+        {
+            if (coordinates.Count != parameters.Count)
+            {
+                return ObjectiveEvaluation.Failure("Expected " + parameters.Count.ToString(CultureInfo.InvariantCulture) + " coordinates, got " + coordinates.Count.ToString(CultureInfo.InvariantCulture) + ".");
+            }
+
+            string evaluationDirectory = EvaluationDirectory(evaluationsDirectory, simulation, attempt);
             if (Directory.Exists(evaluationDirectory))
             {
                 return ObjectiveEvaluation.Failure("The evaluation folder already exists: '" + evaluationDirectory + "'.");
             }
 
             Directory.CreateDirectory(evaluationDirectory);
-            System.IO.File.WriteAllText(Path.Combine(evaluationDirectory, VariablesFileName), VariablesText(parameters, request.Coordinates));
+            System.IO.File.WriteAllText(Path.Combine(evaluationDirectory, VariablesFileName), VariablesText(parameters, coordinates));
 
             int exitCode;
             using (Process process = Process.Start(StartInfo(executablePath, projectDirectory, evaluationDirectory)))
