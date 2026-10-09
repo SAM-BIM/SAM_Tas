@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-08 (native Optimisation PR7a-2 closeout, SAM_Tas#90).
+2026-10-09 (native Optimisation PR7b-1 closeout, SAM_Tas#91).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89 and the glazing-swap spike (PR7a-2, evidence only) as #90; next: the SAM "try every option" PR, then PR7b (see the PR7a-2 and PR7a sections below).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89 and the glazing-swap spike (PR7a-2, evidence only) as #90. SAM's "try every option" PR merged as SAM#190. The `tas-model` engine (PR7b-1: catalogue reader, script generator, glazing choice, run mapping) merged as #91; next: PR7b-2 (licensed acceptance matrix) or PR8 (SAM_UI journey), owner's choice (see the PR7b-1 section below). Open: #92 (reader-defect evidence; owner decision on the consumption units).
 
 ## Q4 priorities
 
@@ -113,6 +113,80 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Native Optimisation PR7b-1, the `tas-model` engine (2026-10-09)
+
+- **Status:** complete, closed.
+  - SAM-BIM/SAM_Tas#91 (`feature/optimisation-tas-model`) merged into `sow/2026-Q4` as merge commit
+    `0e3a2aa0a8cbaecdc57d98f824aeaa0bf146c442`. Its parents are the Q4 base `4abad64b` and the reviewed PR head
+    `581853a850375429fb57fe3dd7450bae35543a55`.
+  - Merge method: merge commit with `--match-head-commit`, after the owner's approval on that head. CI on the head:
+    `build` (it runs the GenOpt tests) and `spdx` green. No review comments. Remote and local branch deleted.
+  - Record: `SAM_Tas/SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_PR7B.md`. This is PR7b-1 of a split allowed by the
+    hand-over; PR7b-2 (full licensed acceptance) is not started.
+- **Work completed** (`SAM.Analytical.Tas.GenOpt`):
+  - engine `tas-model` (`Query.TasModelCapabilities`):
+    - methods: golden section (1 variable), Hooke-Jeeves (1..n), try every option (1); minimise; continuous and
+      discrete;
+    - targets: heating/cooling setpoint per TBD internal condition, `tbd.glazing-construction.choice` (display "Glazing
+      system", at most 8 options), TPD controller setpoint;
+    - measures: annual heating/cooling demand (kWh), overheating hours (threshold 28 °C, 20-40), plant energy (kWh),
+      cost (GBP), CO2 (kgCO2e);
+    - the g-value target is not offered; `tas-script` is unchanged;
+  - `Query.TasModelInventory(folder)`: a licensed read-only COM reader; `Query.TasModelCatalogue`: pure, unit-tested;
+  - `Query.TasGlazingSystems` (TCD calculator); `Query.TasGlazingOptions` (the PR7a-2 filter with the owner defaults);
+  - `Create.TasScript`: the C# 7.0 TasGenExecute script from the PR7a/PR7a-2 blocks, with positional names `V1..`/`Y1..`
+    and `Result`;
+  - `Convert.ToSAM_TasModelKernel`: golden section and Hooke-Jeeves exactly as PR4; try every option `(V1, 1, 1, n, 1)`;
+  - `TasModelRunner`:
+    - checks the definition against the capabilities and the model's catalogue (OPT609) before any folder exists;
+    - writes the glazing systems under unique names into the run's snapshot TBD only;
+    - `Run()` and `Test()` (one evaluation);
+  - `TasGenExecuteObjectiveEvaluator.Evaluate(simulation, coordinates)`: a single evaluation through the same code.
+- **Owner decisions taken by the agent and accepted with the approval of #91:**
+  1. heating-design-day conditions (`"<space> - HDD"`) are not offered;
+  2. every plant room is simulated, and a TPD must use exactly one TSD;
+  3. no suggested range for a controller setpoint;
+  4. a pool system equal to the current glazing is not a separate option;
+  5. the short id is added only when names clash within the choice's aperture type;
+  6. more than 7 candidates are spread evenly over the g order;
+  7. cost is offered only when the TPD's stored cost results are in "£";
+  8. the evaluation's TPD is not saved;
+  9. `SAM.Analytical.Tas.GenOpt` now references `SAM.Analytical.Tas` and the TBD/TSD/TPD interops (not embedded).
+     PR10 must deploy them beside it, as today.
+- **Files changed:** 38 (+4783/-5).
+  - 13 classes under `Classes/TasModel/`, 5 `Query` files, `Create/TasScript.cs`, `Convert/ToSAM_TasModelKernel.cs`,
+    the enum, the csproj, the evaluator entry, the record;
+  - tests: 4 suites, 3 helpers, 4 snapshots `Golden/TasModel/*.csx`, the csproj (Roslyn 4.11.0), `TESTING.md`, and the
+    stub's spec from `SAM_TAS_GENOPT_STUB_SPEC`.
+- **Validation:**
+  - `SAM.Analytical.Tas.GenOpt.Tests` 299/299 (257 + 42), including every snapshot compiled at C# 7.0 against the
+    build-only interops and a TasGenComm stand-in;
+  - 18/18 mutations caught; full `SAM_Tas.sln` Release 0 errors;
+  - licensed smoke on copies (`C:\TasOut\pr7b`, local): every block reproduced PR7a/PR7a-2:
+    - Demo heating 22 °C: 20 909.46 kWh; cooling 26 °C: 1 644.41 kWh / 22 h;
+    - SAM model, 24-hour cooling 23→26 °C: 1 123.32 kWh;
+    - controller 3: cost 7 363.17;
+    - glazing choice: option 1 = baseline bit for bit; SIM_INT_GLZ with frames kept = 3 934.92 / 21 166.14 / 508 h;
+    - a full golden-section `Run` converged to 4.968943799848584 in 11 evaluations (the PR3/PR5 point);
+    - TasManager registry unchanged; no leftover Tas process.
+- **Defects found by the smoke and fixed in #91:**
+  - Tas COM servers need full paths: a relative folder gave `RPC_E_SERVERFAULT`;
+  - the TPD `WrResultSet.Dispose()`/`Close()` fault after the values were read (the F2 family) is ignored.
+- **Unresolved issues, risks:**
+  - PR7b-2 not done:
+    - every target's direction on both models (heating on a SAM model needs heating on);
+    - measures compared with SAM_Tas' readers on the evaluation folders;
+    - a 4-5 option choice on both models;
+    - a mixed Hooke-Jeeves run;
+    - repeats and the F2 rate;
+    - a multi-plant-room TPD;
+  - SAM fixture `systems-demo-bound-golden-section.json` still says `"Plant Room 1"` (tests prove it is OPT609 on the
+    Demo; SAM follow-up);
+  - `Modify.UpdateConstructions` still overwrites by name (the runner avoids it with unique names and a refusal);
+  - the malformed `SIM_EXT_GLZ` Guid in SAM's library (its short id is not stable across sessions).
+- **Next step:** owner's choice between PR7b-2 (licensed acceptance, SAM_Tas) and PR8 (SAM_UI journey on `tas-model`).
+  Hand-over prompt: `NEXT_SESSION_PROMPTS_2026-10-09.md` in the SAM-BIM folder.
 
 ## Native Optimisation PR7a-2, glazing swap and g-value from available glazing systems (2026-10-08)
 
