@@ -12,6 +12,34 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SAM.Core.Tas\SAM.Core.Tas.csproj" />
+    <!-- The "tas-model" engine (PR7b): the glazing calculator and TBD writer (ThermalTransmittanceCalculator,
+         Modify.UpdateConstructions) and SAM's aperture constructions. -->
+    <ProjectReference Include="..\SAM.Analytical.Tas\SAM.Analytical.Tas.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Not embedded, as in SAM.Analytical.Tas, so its TBD-typed methods (Modify.UpdateConstructions) can be called.
+         Only the catalogue reader and the glazing writer open Tas documents. -->
+    <Reference Include="Interop.TBD">
+      <HintPath>..\..\references_buildonly\Interop.TBD.dll</HintPath>
+    </Reference>
+    <Reference Include="Interop.TSD">
+      <HintPath>..\..\references_buildonly\Interop.TSD.dll</HintPath>
+    </Reference>
+    <Reference Include="Interop.TPD">
+      <HintPath>..\..\references_buildonly\Interop.TPD.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Core">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <!-- Native optimisation kernel (HookeJeeves, CoordinateSearch, GoldenSection) used by GenOptDocument.RunNative. -->

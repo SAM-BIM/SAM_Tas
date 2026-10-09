@@ -53,6 +53,9 @@ namespace SAM.Analytical.Tas.GenOpt.Tests.StubTasGenExecute
 
         private const int UnhandledClrException = unchecked((int)0xE0434352);
 
+        /// <summary>The environment variable holding the JSON spec when Script.txt is a generated C# script (PR7b).</summary>
+        public const string SpecVariable = "SAM_TAS_GENOPT_STUB_SPEC";
+
         public static int Main(string[] args)
         {
             string workingDirectory = Directory.GetCurrentDirectory();
@@ -66,7 +69,10 @@ namespace SAM.Analytical.Tas.GenOpt.Tests.StubTasGenExecute
                 return UnhandledClrException;
             }
 
-            Spec spec = JsonSerializer.Deserialize<Spec>(File.ReadAllText(scriptPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // A generated "tas-model" script is C#, not a spec: the test then passes the spec in SpecVariable.
+            string scriptText = File.ReadAllText(scriptPath);
+            string specText = scriptText.TrimStart().StartsWith("{", StringComparison.Ordinal) ? scriptText : Environment.GetEnvironmentVariable(SpecVariable);
+            Spec spec = JsonSerializer.Deserialize<Spec>(specText, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             Match match = Regex.Match(Path.GetFileName(workingDirectory), "^([0-9]+)(-retry)?");
             string simulation = match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture) : "0";
             bool retry = match.Success && match.Groups[2].Success;
