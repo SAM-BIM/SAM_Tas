@@ -6,11 +6,11 @@
 
 ## Last updated
 
-2026-10-09 (native Optimisation PR7b-1 closeout, SAM_Tas#91).
+2026-10-09 (native Optimisation PR7b-1 closeout, SAM_Tas#91; reader-defect evidence, SAM_Tas#92).
 
 ## Current status
 
-Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89 and the glazing-swap spike (PR7a-2, evidence only) as #90. SAM's "try every option" PR merged as SAM#190. The `tas-model` engine (PR7b-1: catalogue reader, script generator, glazing choice, run mapping) merged as #91; next: PR7b-2 (licensed acceptance matrix) or PR8 (SAM_UI journey), owner's choice (see the PR7b-1 section below). Open: #92 (reader-defect evidence; owner decision on the consumption units).
+Q4 branch cut from `master` `28ac11a7`, which is the exact commit pinned in SAM_Deploy's frozen Q3 baseline (`v20261006.1`). Bootstrap added only internal docs (this file, `AGENTS.md`). First Q4 product work: the opt-in Direct SAM -> T3D route, merged as #84 (see the Direct T3D section below). The gbXML route remains the default. Second Q4 stream started: the Java-free GenOpt replacement (PR1-T evidence merged as #85; native Tas GenOpt route merged as #86; legacy Java route retired and result rules shared as #87; see the GenOpt sections below). Native Optimisation definition stream: the Tas adapter for the SAM.Core.Optimisation definition merged as #88 (see the PR4 section below). The licensed spike for the `tas-model` blocks (PR7a, evidence only) merged as #89 and the glazing-swap spike (PR7a-2, evidence only) as #90. SAM's "try every option" PR merged as SAM#190. The `tas-model` engine (PR7b-1: catalogue reader, script generator, glazing choice, run mapping) merged as #91; next: PR7b-2 (licensed acceptance matrix) or PR8 (SAM_UI journey), owner's choice (see the PR7b-1 section below). Reader-defect evidence merged as #92 (no construction defect; consumption/peak units are Wh/W under kWh/kW labels; owner chose option A, a coordinated source fix, not started).
 
 ## Q4 priorities
 
@@ -113,6 +113,16 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Reader defects: construction gaps and consumption units, evidence (2026-10-09)
+
+- **Status:** complete, closed (evidence only; no product file changed). SAM-BIM/SAM_Tas#92 (`fix/tas-reader-constructions-consumption`) merged into `sow/2026-Q4` as merge commit `cff2371dcce3d1018539d9660704ee23256e0236` (parents: `e07c7c20` + reviewed PR head `ac33fe7ddd17489ca977ebd5bb3c995749452891`); merge method: merge commit with `--match-head-commit`, after the owner's approval and choice of option A. PR CI (`build`, `spdx`) green on the head. Branch deleted on origin. Record: `SAM_Tas/SAM.Analytical.Tas/TAS_READER_DEFECTS_PR.md`.
+- **Work completed:** (1) `Query.Constructions` has no defect: PR7a's "null gap" was a misreading (20 contiguous constructions; removal compacts); not changed, and the PR7a/PR7a-2 "null gaps" statements are superseded. (2) `ConsumptionHeating`/`ConsumptionCooling` and `PeakHeatingLoad`/`PeakCoolingLoad` hold Wh and W under kWh/kW labels (Systems Demo: 15 227 840.66 and 38 727.41; a year at that peak could use at most 339 MWh, so the value can only be Wh). Three consumers already divide by 1000 (SAM_Tas_Grasshopper `TasTSDAddBuildingResults`, SAM `Convert.ToDesignExplorer`, the SAM_Tas benchmark `ToBenchmark`), so a source-only fix would make them 1000x too small.
+- **Owner decision:** option A, fix at the source in a coordinated set of PRs (SAM marker + DesignExplorer, SAM_Tas source + benchmark, SAM_Tas_Grasshopper), merged back to back the same day; new results carry a marker and a Tas result without it is read as Wh/W; no silent migration. Options B (relabel Wh/W) and C (document only) rejected.
+- **Files changed (1):** the record above.
+- **Validation:** licensed probes on copies (listing, removal, save and re-open; hourly sums vs Tas' own annual and peak sums, ratio 1.00000004); consumer list from a grep of all SAM-BIM repos; PR CI green.
+- **Unresolved issues, risks:** until option A lands, the parameter labels are wrong for direct readers of Tas results; persisted Tas results stay in Wh/W after it (handled by the marker rule). The marker's exact form is still to be chosen in the first PR.
+- **Next step:** the option A programme, from hand-over prompt `SAM-BIM/NEXT_SESSION_PROMPT_TAS_UNITS_FIX.md` (local file, not in git; it points only to committed files). It does not block PR8 (the native Optimisation measures divide by 1000 in their own script). Other open choice: PR7b-2 (licensed acceptance) or PR8, owner's order.
 
 ## Native Optimisation PR7b-1, the `tas-model` engine (2026-10-09)
 
