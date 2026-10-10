@@ -252,8 +252,185 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             }
         }
 
+        /// <summary>
+        /// Follow-up review: the hold shares Delete (so the replacement can rename the file), and so does not stop another
+        /// program from atomically saving over the live path (write a temporary file, then replace). The held handle still
+        /// reads the original, so the final check passes; the external save must not be lost.
+        /// </summary>
         [Test]
-        public void No_other_program_can_open_a_project_file_while_it_is_replaced()
+        public void An_atomic_save_just_before_the_replacement_is_kept_and_reported()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelDesignApplier applier = Applier(project, hashes);
+                Action<string, string, string> replace = applier.FileReplacer;
+                string external = folder.Folder("external");
+                bool saved = false;
+                applier.FileReplacer = (source, destination, displaced) =>
+                {
+                    // Tas saves the TBD the way editors do: a new file atomically replaces the live path (once).
+                    if (!saved)
+                    {
+                        saved = true;
+                        System.IO.File.WriteAllText(Path.Combine(external, Tbd), "tbd saved by Tas");
+                        System.IO.File.Replace(Path.Combine(external, Tbd), destination, null);
+                    }
+
+                    replace(source, destination, displaced);
+                };
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+
+                Assert.That(exception.Message, Does.Contain(Tbd + " was saved by another program while Apply was replacing it"));
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd saved by Tas"), "the other program's save is the project file again");
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(exception.WorkFolder, "original", Tbd)), Is.EqualTo("tbd"));
+                Assert.That(exception.ProjectChanged, Is.False, "no file of the best design is left: the project holds the other program's save");
+                Assert.That(exception.Message, Does.Contain("No file of the best design was left in the project"));
+                Assert.That(Directory.GetFiles(Path.Combine(exception.WorkFolder, "displaced")).Select(System.IO.File.ReadAllText), Does.Contain("tbd written"), "the best design written for it is kept");
+            }
+        }
+
+        /// <summary>
+        /// Follow-up review: when a later replacement fails, the rollback must not put the pre-run backup over a file another
+        /// program saved after Apply replaced it.
+        /// </summary>
+        [Test]
+        public void A_rollback_does_not_restore_the_backup_over_a_later_external_save()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelDesignApplier applier = Applier(project, hashes);
+                applier.TpdWriter = (path, list) =>
+                {
+                    System.IO.File.AppendAllText(path, " written");
+                    return list.Select(x => new TasModelAppliedValue(x, "3", x.Value.ToString("R"), true)).ToList();
+                };
+                applier.InventoryReader = staging => Inventory(heating: 21.25f, controller: 4.5);
+                Action<string, string, string> replace = applier.FileReplacer;
+                string external = folder.Folder("external");
+                applier.FileReplacer = (source, destination, displaced) =>
+                {
+                    if (destination.EndsWith(".tpd", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Tas saved the TBD Apply had just replaced (an atomic save), then the TPD cannot be replaced.
+                        System.IO.File.WriteAllText(Path.Combine(external, Tbd), "tbd saved by Tas after Apply");
+                        System.IO.File.Replace(Path.Combine(external, Tbd), Path.Combine(project, Tbd), null);
+                        throw new IOException("The process cannot access the file because it is being used by another process.");
+                    }
+
+                    replace(source, destination, displaced);
+                };
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Everything, 21.25, 4.5)));
+
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd saved by Tas after Apply"), "the later save is not overwritten by the backup");
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tpd)), Is.EqualTo("tpd"));
+                Assert.That(exception.ProjectChanged, Is.True, "the project is not as it was: the message must say so");
+                Assert.That(exception.Message, Does.Contain(Tbd + " was changed by another program after Apply replaced it"));
+            }
+        }
+
+        /// <summary>The rollback's own restore can meet an atomic save too: what it moves away is checked, and a save is put back.</summary>
+        [Test]
+        public void An_atomic_save_just_before_the_rollbacks_restore_is_kept()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                TasModelDesignApplier applier = Applier(project, Query.TasFileHashes(project));
+                applier.TpdWriter = (path, list) =>
+                {
+                    System.IO.File.AppendAllText(path, " written");
+                    return list.Select(x => new TasModelAppliedValue(x, "3", x.Value.ToString("R"), true)).ToList();
+                };
+                applier.InventoryReader = staging => Inventory(heating: 21.25f, controller: 4.5);
+                Action<string, string, string> replace = applier.FileReplacer;
+                string external = folder.Folder("external");
+                int tbd = 0;
+                applier.FileReplacer = (source, destination, displaced) =>
+                {
+                    if (destination.EndsWith(".tpd", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new IOException("The process cannot access the file because it is being used by another process.");
+                    }
+
+                    if (++tbd == 2)
+                    {
+                        // The restore of the TBD: Tas saves it just before.
+                        System.IO.File.WriteAllText(Path.Combine(external, Tbd), "tbd saved by Tas during the rollback");
+                        System.IO.File.Replace(Path.Combine(external, Tbd), destination, null);
+                    }
+
+                    replace(source, destination, displaced);
+                };
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Everything, 21.25, 4.5)));
+
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd saved by Tas during the rollback"), "the backup did not overwrite it");
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tpd)), Is.EqualTo("tpd"));
+                Assert.That(exception.Message, Does.Contain(Tbd + " was saved by another program during the rollback; that save is the project file again"));
+                Assert.That(exception.ProjectChanged, Is.True);
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(exception.WorkFolder, TasModelDesignApplier.ReplacingNoteName)), Does.Contain("do not overwrite it with the original"), "the note left says so");
+            }
+        }
+
+        /// <summary>Two saves racing one replacement: neither is lost; the earlier is the project file, the later is kept and named.</summary>
+        [Test]
+        public void Two_atomic_saves_racing_one_replacement_are_both_kept()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                TasModelDesignApplier applier = Applier(project, Query.TasFileHashes(project));
+                Action<string, string, string> replace = applier.FileReplacer;
+                string external = folder.Folder("external");
+                int call = 0;
+                applier.FileReplacer = (source, destination, displaced) =>
+                {
+                    call++;
+                    System.IO.File.WriteAllText(Path.Combine(external, Tbd), "tbd save " + call);
+                    System.IO.File.Replace(Path.Combine(external, Tbd), destination, null);
+                    replace(source, destination, displaced);
+                };
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd save 1"));
+                string later = Directory.GetFiles(Path.Combine(exception.WorkFolder, "displaced")).Single(x => System.IO.File.ReadAllText(x) == "tbd save 2");
+                Assert.That(exception.Message, Does.Contain("saved by another program twice").And.Contain(later));
+                Assert.That(exception.ProjectChanged, Is.True);
+            }
+        }
+
+        /// <summary>The OS replacement can fail after moving the project file away: it is moved back.</summary>
+        [Test]
+        public void A_replacement_that_fails_half_way_puts_the_project_file_back()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelDesignApplier applier = Applier(project, hashes);
+                applier.FileReplacer = (source, destination, displaced) =>
+                {
+                    System.IO.File.Move(destination, displaced);
+                    throw new IOException("Unable to move the replacement file to the file to be replaced.");
+                };
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+
+                Assert.That(exception.Message, Does.Contain("Replacing " + Tbd + " failed").And.Contain("Nothing in the project was changed"));
+                Assert.That(exception.ProjectChanged, Is.False);
+                Assert.That(Query.TasFileHashes(project), Is.EqualTo(hashes));
+            }
+        }
+
+        [Test]
+        public void No_other_program_can_open_a_project_file_for_writing_while_it_is_replaced()
         {
             using (TestFolder folder = new TestFolder())
             {
@@ -261,11 +438,12 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 TasModelDesignApplier applier = Applier(project, Query.TasFileHashes(project));
                 string attempt = null;
                 string note = null;
-                applier.FileReplacer = (source, destination) =>
+                applier.FileReplacer = (source, destination, displaced) =>
                 {
                     note = System.IO.File.ReadAllText(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(source)), TasModelDesignApplier.ReplacingNoteName));
 
-                    // The final check and the replacement hold the file: a writer between them is refused.
+                    // The final check and the replacement hold the file: a program opening it to write is refused (an
+                    // atomic save, which renames over the path, is not: see An_atomic_save_just_before_the_replacement...).
                     try
                     {
                         using (new FileStream(destination, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
@@ -278,7 +456,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                         attempt = "refused";
                     }
 
-                    System.IO.File.Replace(source, destination, null);
+                    System.IO.File.Replace(source, destination, displaced);
                 };
 
                 TasModelApplyResult result = applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5));
@@ -288,6 +466,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 Assert.That(result.FilesReplaced, Is.EqualTo(new[] { Tbd }));
                 Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd written"));
                 Assert.That(Directory.GetFiles(result.WorkFolder), Is.Empty, "no pending-replacement note after success");
+                Assert.That(Directory.Exists(Path.Combine(result.WorkFolder, "displaced")), Is.False, "the original moved away is the backup's copy: removed");
             }
         }
 
@@ -345,22 +524,22 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 };
                 applier.InventoryReader = staging => Inventory(heating: 21.25f, controller: 4.5);
                 List<string> replaced = new List<string>();
-                applier.FileReplacer = (source, destination) =>
+                applier.FileReplacer = (source, destination, displaced) =>
                 {
                     replaced.Add(Path.GetFileName(destination));
-                    System.IO.File.Replace(source, destination, null);
                     if (destination.EndsWith(".tpd", StringComparison.OrdinalIgnoreCase))
                     {
-                        // The TPD is left neither the original nor the written copy.
-                        System.IO.File.WriteAllText(destination, "half");
+                        // The OS refuses the replacement (nothing moved).
                         throw new IOException("The process cannot access the file because it is being used by another process.");
                     }
+
+                    System.IO.File.Replace(source, destination, displaced);
                 };
 
                 TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Everything, 21.25, 4.5)));
 
-                Assert.That(replaced, Is.EqualTo(new[] { Tbd, Tpd }), "the TBD first, then the TPD");
-                Assert.That(exception.Message, Does.Contain("Replacing " + Tpd + " failed").And.Contain("every project file was restored from the backup"));
+                Assert.That(replaced, Is.EqualTo(new[] { Tbd, Tpd, Tbd }), "the TBD, then the TPD, then the TBD restored");
+                Assert.That(exception.Message, Does.Contain("Replacing " + Tpd + " failed").And.Contain("The project files Apply had replaced were restored from the backup").And.Contain("Nothing in the project was changed"));
                 Assert.That(exception.ProjectChanged, Is.False);
                 Assert.That(Query.TasFileHashes(project), Is.EqualTo(hashes), "TBD and TPD restored");
                 Assert.That(System.IO.File.Exists(Path.Combine(exception.WorkFolder, TasModelDesignApplier.ReplacingNoteName)), Is.False, "restored: no recovery note");

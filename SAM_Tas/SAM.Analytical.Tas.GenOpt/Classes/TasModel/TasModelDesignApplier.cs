@@ -23,18 +23,24 @@ namespace SAM.Analytical.Tas.GenOpt
     /// <item>The staging copies are written (licensed Tas, COM) and read back with <see cref="Query.TasModelInventory"/>:
     /// every changed item must read back as the best value, and every other internal condition, glazing assignment and
     /// controller exactly as before.</item>
-    /// <item>The project files to replace are then held so that no other program can open them, and every Tas file of
-    /// the project is checked again against the run's hashes: a file saved or simulated by another program meanwhile
-    /// refuses everything, and that program's file is kept. A file another program has open is refused too.</item>
+    /// <item>The project files to replace are then held (shared for delete only) and every Tas file of the project is
+    /// checked again against the run's hashes: a file saved or simulated by another program meanwhile refuses everything,
+    /// and that program's file is kept. The hold refuses a file another program has open and keeps out programs that open
+    /// it; it does not keep out an atomic save (a new file renamed over the path), which the next step catches.</item>
     /// <item>Only then are the project files replaced from staging, one by one, with the operating system's replacement
-    /// (<see cref="System.IO.File.Replace(string, string, string)"/>). If one cannot be replaced, the ones no longer
-    /// original are restored from the backup; the exception says what happened.</item>
+    /// (<see cref="System.IO.File.Replace(string, string, string)"/>), which moves whatever was at the path into the work
+    /// folder in the same operation. That must be the run's original; if it is another program's save, the save is put
+    /// back, nothing more is replaced, and the conflict is reported. If a replacement fails or conflicts, only the files
+    /// that still hold this application's written copy are restored from the backup (each restore again moving away what
+    /// it replaces); a file saved by another program after it was replaced is left as it is and reported.</item>
     /// </list>
-    /// <para>What this does not guarantee: the files are replaced one after another, not as one transaction. If the
-    /// process or the computer stops during the replacement, the TBD may be the best design and the TPD still the
-    /// original; the note <see cref="ReplacingNoteName"/> then stays in the work folder, with the backup and the hashes to
-    /// restore by hand, and the next optimisation or Apply sees files that are not the run's. Nothing is recovered
-    /// automatically.</para>
+    /// <para>What this guarantees: no version of a project file is lost (every replaced version is kept in the work folder
+    /// or is the project file), Apply never reports success over another program's save made before its replacement, and
+    /// it never restores a backup over a save made after it. What it does not: the files are replaced one after another,
+    /// not as one transaction; a save made after a file was replaced, while Apply goes on, is that program's and is left to
+    /// it; if the process or the computer stops during the replacement, the note <see cref="ReplacingNoteName"/> stays in
+    /// the work folder with the backup and the hashes to recover by hand, and the next optimisation or Apply sees files that
+    /// are not the run's. Nothing is recovered automatically.</para>
     /// <para>Changes whose item already holds the best value are reported unchanged and need no file; when no change
     /// needs one, nothing is written at all. One Tas document is open at a time.</para>
     /// </summary>
@@ -79,17 +85,20 @@ namespace SAM.Analytical.Tas.GenOpt
         public Func<string, TasModelInventory> InventoryReader { get; set; } = Query.TasModelInventory;
 
         /// <summary>
-        /// Replaces a project file with its staged copy (source, destination): <see cref="System.IO.File.Replace(string, string, string)"/>
-        /// by default, the operating system's replacement (the staged copy, in the same folder tree, takes the project file's
-        /// place; it is refused while another program has the file open). Replaceable for tests.
+        /// Puts a file at a project file's path (source, destination, displaced): <see cref="System.IO.File.Replace(string, string, string)"/>
+        /// by default, the operating system's replacement. The source (in the work folder, on the same volume) takes the
+        /// destination's place and whatever was at the destination is moved to <c>displaced</c> in the same operation, so
+        /// Apply can tell what it replaced (the run's original, or another program's save) and lose neither. It is refused
+        /// while another program has the file open without delete sharing. Replaceable for tests.
         /// </summary>
-        public Action<string, string> FileReplacer { get; set; } = (source, destination) => System.IO.File.Replace(source, destination, null);
+        public Action<string, string, string> FileReplacer { get; set; } = (source, destination, displaced) => System.IO.File.Replace(source, destination, displaced);
 
         /// <summary>
         /// Writes <paramref name="changes"/> (<see cref="Query.TasModelDesignChanges"/>) into the project.
         /// </summary>
         /// <exception cref="TasModelApplyException">Nothing was applied; <see cref="TasModelApplyException.ProjectChanged"/>
-        /// is true only if a project file could not be restored after a failed replacement.</exception>
+        /// is true when a project file is left neither its original nor another program's save that Apply put back (it
+        /// could not be restored, or another program saved it after Apply replaced it): the message names it.</exception>
         public TasModelApplyResult Apply(IReadOnlyList<TasModelDesignChange> changes)
         {
             if (changes == null || changes.Count == 0 || changes.Any(x => x == null))
@@ -207,19 +216,21 @@ namespace SAM.Analytical.Tas.GenOpt
 
             Dictionary<string, string> staged = files.ToDictionary(x => x, x => Query.FileHash(Path.Combine(staging, x)), StringComparer.OrdinalIgnoreCase);
 
-            // 6. Hold the project files to replace, so that no other program can open them until they are replaced, and
-            // check again, under that hold, that every Tas file is still the run's: Tas (or anyone) may have saved or
-            // simulated the project while the staging copies were written and read back.
-            List<FileStream> holds = new List<FileStream>();
+            // 6. Hold the project files to replace and check again, under that hold, that every Tas file is still the
+            // run's: Tas (or anyone) may have saved or simulated the project while the staging copies were written and read
+            // back. The hold (FileShare.Delete, so that the replacement can rename the file) keeps out programs that open
+            // the file to read or write it, and refuses a file another program has open; it does NOT keep out an atomic
+            // save, which replaces the path rather than opening the file. Step 7 catches those.
+            Dictionary<string, FileStream> holds = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
             string note = Path.Combine(workFolder, ReplacingNoteName);
-            List<string> replaced = new List<string>();
+            Commit commit = new Commit(this, workFolder, backup, current, staged);
             try
             {
                 foreach (string file in files)
                 {
                     try
                     {
-                        holds.Add(new FileStream(Path.Combine(projectFolder, file), FileMode.Open, FileAccess.Read, FileShare.Delete));
+                        holds[file] = new FileStream(Path.Combine(projectFolder, file), FileMode.Open, FileAccess.Read, FileShare.Delete);
                     }
                     catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
                     {
@@ -227,49 +238,45 @@ namespace SAM.Analytical.Tas.GenOpt
                     }
                 }
 
-                List<string> changed = Differences(sourceHashes, LiveHashes(holds));
+                List<string> changed = Differences(sourceHashes, LiveHashes(holds.Values));
                 if (changed.Count > 0)
                 {
                     throw new TasModelApplyException("The Tas files changed while the best design was being written (" + string.Join("; ", changed) + "): another program saved or simulated them. Nothing in the project was changed; the attempt is kept in " + workFolder + ". Run the optimisation again on the current model.", false, workFolder);
                 }
 
-                // 7. Replace the project files from staging (an OS replacement per file); restore every one replaced so far
-                // if one fails. Until the replacement ends, a note in the work folder says how to recover by hand if the
-                // process or the computer stops part-way.
+                // 7. Replace the project files from staging, one by one, with an OS replacement that moves whatever is at
+                // the path into this work folder in the same operation. What it moved away must be the run's original:
+                // anything else is a save another program made after the check, which is put back and reported, and
+                // nothing more is replaced. A note in the work folder says how to recover by hand meanwhile.
                 System.IO.File.WriteAllText(note, ReplacingNote(files, current, staged, backup));
                 foreach (string file in files)
                 {
-                    try
-                    {
-                        FileReplacer(Path.Combine(staging, file), Path.Combine(projectFolder, file));
-                        if (Query.FileHash(Path.Combine(projectFolder, file)) != staged[file])
-                        {
-                            throw new IOException(file + " does not hold the written copy after it was replaced.");
-                        }
-
-                        replaced.Add(file);
-                    }
-                    catch (Exception exception)
-                    {
-                        holds.ForEach(x => x.Dispose());
-                        replaced.Add(file);
-                        List<string> notRestored = Restore(replaced, backup, current);
-                        if (notRestored.Count == 0)
-                        {
-                            DeleteNote(note);
-                            throw new TasModelApplyException("Replacing " + file + " failed (" + Innermost(exception).Message + "), so every project file was restored from the backup. Nothing in the project was changed.", false, workFolder, exception);
-                        }
-
-                        throw new TasModelApplyException("Replacing " + file + " failed (" + Innermost(exception).Message + ") and " + string.Join(", ", notRestored) + " could not be restored. Copy " + (notRestored.Count == 1 ? "it" : "them") + " back from " + backup + " before using the model.", true, workFolder, exception);
-                    }
+                    commit.Replace(file, Path.Combine(staging, file), holds[file]);
                 }
+            }
+            catch (CommitException exception)
+            {
+                holds.Values.ToList().ForEach(x => x.Dispose());
+                List<string> report = commit.Rollback();
+                string text = exception.Message + (report.Count == 0 ? string.Empty : " " + string.Join(" ", report));
+                bool projectChanged = commit.ProjectChanged;
+                if (!projectChanged && !exception.Conflict)
+                {
+                    DeleteNote(note);
+                    throw new TasModelApplyException(text + " Nothing in the project was changed.", false, workFolder, exception.InnerException);
+                }
+
+                // Leave the outcome where the files are, so recovering by hand does not overwrite another program's save.
+                System.IO.File.WriteAllText(note, text + Environment.NewLine + Environment.NewLine + ReplacingNote(files, current, staged, backup));
+                throw new TasModelApplyException(text + (projectChanged ? " Check " + string.Join(", ", commit.Unresolved.Distinct()) + " before using the model (the note in " + workFolder + " says how); the originals are in " + backup + "." : " No file of the best design was left in the project."), projectChanged, workFolder, exception.InnerException);
             }
             finally
             {
-                holds.ForEach(x => x.Dispose());
+                holds.Values.ToList().ForEach(x => x.Dispose());
             }
 
             DeleteNote(note);
+            commit.DeleteDisplacedOriginals();
 
             // The staging copies are the project files now; the backup stays.
             try
@@ -899,8 +906,10 @@ namespace SAM.Analytical.Tas.GenOpt
             List<string> lines = new List<string>
             {
                 "SAM \"Apply best design\" was replacing these Tas files of " + projectFolder + " with the best design.",
-                "If this note is still here, the replacement did not finish: a file may be the original, the best design or incomplete.",
-                "Before using the model, copy the originals back from " + backup + " (SHA-256 below), then run the optimisation again.",
+                "If this note is still here, the replacement did not finish or met another program's save.",
+                "A project file whose SHA-256 is its \"best design\" one below is Apply's: copy its original back from " + backup + ".",
+                "A project file with any other SHA-256 was saved by another program: do not overwrite it with the original.",
+                "Files moved away during the replacement are kept in the \"displaced\" folder beside this note. Then run the optimisation again.",
                 string.Empty,
             };
 
@@ -923,33 +932,242 @@ namespace SAM.Analytical.Tas.GenOpt
             }
         }
 
-        private List<string> Restore(IEnumerable<string> files, string backup, IReadOnlyDictionary<string, string> hashes)
+        /// <summary>A stop of step 7; <see cref="Conflict"/> when another program's save was involved.</summary>
+        private sealed class CommitException : Exception
         {
-            List<string> result = new List<string>();
-            foreach (string file in files)
+            public CommitException(string message, bool conflict, Exception innerException = null)
+                : base(message, innerException)
             {
+                Conflict = conflict;
+            }
+
+            public bool Conflict { get; }
+        }
+
+        /// <summary>
+        /// Step 7 and its rollback. Every replacement is an OS replacement that moves what was at the path into the work
+        /// folder (<c>displaced</c>) in the same operation, so no version of a project file is lost, and what was moved
+        /// away says whose it was: the run's original (expected), this application's written copy (when restoring), or a
+        /// save by another program (put back, reported). Only files that still hold this application's written copy are
+        /// restored; a file another program saved after it was replaced is left as it is and reported.
+        /// </summary>
+        private sealed class Commit
+        {
+            private readonly TasModelDesignApplier applier;
+            private readonly string displacedFolder;
+            private readonly string restoreFolder;
+            private readonly string backup;
+            private readonly IReadOnlyDictionary<string, string> originals;
+            private readonly IReadOnlyDictionary<string, string> staged;
+            private readonly List<string> replaced = new List<string>();
+            private readonly List<string> displacedOriginals = new List<string>();
+            private int count;
+
+            public Commit(TasModelDesignApplier applier, string workFolder, string backup, IReadOnlyDictionary<string, string> originals, IReadOnlyDictionary<string, string> staged)
+            {
+                this.applier = applier;
+                displacedFolder = Path.Combine(workFolder, "displaced");
+                restoreFolder = Path.Combine(workFolder, "restore");
+                this.backup = backup;
+                this.originals = originals;
+                this.staged = staged;
+            }
+
+            /// <summary>Project files that are neither their original nor another program's save Apply put back: check them by hand.</summary>
+            public List<string> Unresolved { get; } = new List<string>();
+
+            public bool ProjectChanged => Unresolved.Count > 0;
+
+            private int Restored { get; set; }
+
+            /// <summary>Puts <paramref name="incoming"/> at <paramref name="file"/>'s path; returns where what was there went.</summary>
+            private string Swap(string incoming, string file)
+            {
+                Directory.CreateDirectory(displacedFolder);
+                string displaced = Path.Combine(displacedFolder, (++count).ToString("00", CultureInfo.InvariantCulture) + "-" + file);
+                string path = Path.Combine(applier.projectFolder, file);
                 try
                 {
-                    // A file whose replacement never happened is still the original: leave it alone.
-                    string path = Path.Combine(projectFolder, file);
-                    if (System.IO.File.Exists(path) && Query.FileHash(path) == hashes[file])
+                    applier.FileReplacer(incoming, path, displaced);
+                }
+                catch
+                {
+                    // The OS replacement can fail after moving the project file away: move it back.
+                    if (!System.IO.File.Exists(path) && System.IO.File.Exists(displaced))
+                    {
+                        System.IO.File.Move(displaced, path);
+                    }
+
+                    throw;
+                }
+
+                return displaced;
+            }
+
+            public void Replace(string file, string incoming, FileStream hold)
+            {
+                string path = Path.Combine(applier.projectFolder, file);
+                string displaced;
+                try
+                {
+                    displaced = Swap(incoming, file);
+                }
+                catch (Exception exception)
+                {
+                    hold.Dispose();
+                    string moved = Path.Combine(displacedFolder, count.ToString("00", CultureInfo.InvariantCulture) + "-" + file);
+                    if (!System.IO.File.Exists(path))
+                    {
+                        Unresolved.Add(file);
+                    }
+                    else if (Hash(path) == staged[file] && Hash(moved) == originals[file])
+                    {
+                        // The replacement happened although an error was reported: it is this commit's to roll back.
+                        replaced.Add(file);
+                    }
+
+                    throw new CommitException("Replacing " + file + " failed (" + Innermost(exception).Message + ").", false, exception);
+                }
+
+                hold.Dispose();
+                if (Hash(displaced) == originals[file])
+                {
+                    displacedOriginals.Add(displaced);
+                    replaced.Add(file);
+                    return;
+                }
+
+                // Another program saved over the project file after the final check (an atomic save is not kept out by
+                // the hold): its save is what the replacement moved away. Put it back, keeping what that moves away too.
+                string back;
+                try
+                {
+                    back = Swap(displaced, file);
+                }
+                catch (Exception exception)
+                {
+                    Unresolved.Add(file);
+                    throw new CommitException(file + " was saved by another program while Apply was replacing it, and that save could not be put back (" + Innermost(exception).Message + "): it is kept at " + displaced + "; the project file holds the best design.", true, exception);
+                }
+
+                if (Hash(back) == staged[file])
+                {
+                    throw new CommitException(file + " was saved by another program while Apply was replacing it. That save is the project file again (the best design written for it is kept at " + back + "), and Apply stopped.", true);
+                }
+
+                Unresolved.Add(file);
+                throw new CommitException(file + " was saved by another program twice while Apply was replacing it. The earlier save is the project file again; the later one is kept at " + back + ".", true);
+            }
+
+            /// <summary>Restores the files this commit replaced that still hold its written copy; says what it did not restore.</summary>
+            public List<string> Rollback()
+            {
+                List<string> result = new List<string>();
+                for (int i = replaced.Count - 1; i >= 0; i--)
+                {
+                    string file = replaced[i];
+                    string live = Hash(Path.Combine(applier.projectFolder, file));
+                    if (live == originals[file])
                     {
                         continue;
                     }
 
-                    System.IO.File.Copy(Path.Combine(backup, file), Path.Combine(projectFolder, file), true);
-                    if (Query.FileHash(Path.Combine(projectFolder, file)) != hashes[file])
+                    if (live != staged[file])
                     {
-                        result.Add(file);
+                        Unresolved.Add(file);
+                        result.Add(file + " was changed by another program after Apply replaced it, so it was not restored (its original is in " + backup + ").");
+                        continue;
+                    }
+
+                    string displaced;
+                    try
+                    {
+                        Directory.CreateDirectory(restoreFolder);
+                        string copy = Path.Combine(restoreFolder, (count + 1).ToString("00", CultureInfo.InvariantCulture) + "-" + file);
+                        System.IO.File.Copy(Path.Combine(backup, file), copy, false);
+                        if (Hash(copy) != originals[file])
+                        {
+                            throw new IOException("the backup of " + file + " is not the original.");
+                        }
+
+                        displaced = Swap(copy, file);
+                    }
+                    catch (Exception exception)
+                    {
+                        Unresolved.Add(file);
+                        result.Add(file + " could not be restored (" + Innermost(exception).Message + "); its original is in " + backup + ".");
+                        continue;
+                    }
+
+                    if (Hash(displaced) == staged[file])
+                    {
+                        Restored++;
+                        TryDelete(displaced);
+                        continue;
+                    }
+
+                    // Another program saved it just before the restore: that save is not overwritten. Put it back.
+                    Unresolved.Add(file);
+                    try
+                    {
+                        string back = Swap(displaced, file);
+                        result.Add(file + " was saved by another program during the rollback; that save is the project file again (" + back + " holds the original Apply had restored).");
+                    }
+                    catch (Exception exception)
+                    {
+                        result.Add(file + " was saved by another program during the rollback and that save could not be put back (" + Innermost(exception).Message + "): it is kept at " + displaced + ".");
                     }
                 }
-                catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+
+                if (Restored > 0)
                 {
-                    result.Add(file);
+                    result.Insert(0, "The project files Apply had replaced were restored from the backup.");
+                }
+
+                return result;
+            }
+
+            /// <summary>After success: the originals moved away are the backup's copies; remove them.</summary>
+            public void DeleteDisplacedOriginals()
+            {
+                displacedOriginals.ForEach(TryDelete);
+                foreach (string folder in new[] { displacedFolder, restoreFolder })
+                {
+                    try
+                    {
+                        if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+                        {
+                            Directory.Delete(folder);
+                        }
+                    }
+                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                    {
+                    }
                 }
             }
 
-            return result;
+            private static string Hash(string path)
+            {
+                try
+                {
+                    return System.IO.File.Exists(path) ? Query.FileHash(path) : null;
+                }
+                catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                {
+                    return null;
+                }
+            }
+
+            private static void TryDelete(string path)
+            {
+                try
+                {
+                    System.IO.File.Delete(path);
+                }
+                catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                {
+                }
+            }
         }
 
         /// <summary>

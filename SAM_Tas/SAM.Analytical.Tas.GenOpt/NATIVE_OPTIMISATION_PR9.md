@@ -14,10 +14,10 @@ resolves the dependency by the same branch name) and needs the new API.
 
 SAM-BIM/SAM_Tas#93 open, **not merged**. The 2026-10-10 architecture review (`PR9_ARCHITECTURE_ADVICE_2026-10-10.md`,
 local to the SAM-BIM workspace) raised three source findings; all three were **reproduced with failing tests and fixed**
-on this branch (see "Safety review" below), with SAM-BIM/SAM_UI#220. The earlier CI-green heads (`dd222a47`, records
-`aad85e39`) are superseded: **final-head CI must be green again**, and **owner review** of the decisions below and in
-the SAM_UI record (the PR9 record of record) is the blocker for merge. Do not merge on the strength of the original
-counts.
+(heads `194a1545` / SAM_UI `60828d31`, CI green). The follow-up review (`PR9_FOLLOWUP_REVIEW_2026-10-10.md`, local) found
+that the hold does not exclude **atomic saves**, so an external save could still be lost; that was **reproduced through
+the applier and fixed** here (see "Follow-up review" below). Heads before it are superseded: **final-head CI** and
+**owner review** of the decisions below and in the SAM_UI record (the PR9 record of record) are the blockers for merge.
 
 ## What was built (`SAM.Analytical.Tas.GenOpt`)
 
@@ -33,6 +33,7 @@ counts.
 | `TasMaterialLayer`, `Query.TasMaterialLayer(s)`, `Query.TasMaterialLayerDifferences` | (Safety review.) A construction layer as the thermal calculation sees it: material name, kind (opaque/transparent/gas), the layer's thickness and the properties of that kind, as the TBD's floats. `TasMaterialLayer(s)` describes a SAM layer exactly as SAM_Tas writes it (`Modify.UpdateConstruction` + the TBD `UpdateMaterial` of the material's kind; pure); the differences are in words ("layer 3 “Clear6” conductivity 0.9, not 1"), to float precision, two NaNs equal. A material's own width and description are not compared (the gbXML route stores the layer thickness as the frame material's width). |
 | `TasGlazingConstructionInfo.PaneLayers` / `.Frames` / `.ZoneSurfaces` | (Safety review; optional constructor arguments, null = not read.) The inventory now reads, for each glazing construction, its layers, the layers of each different construction of the frame elements that pair with its pane elements (`Windows: <base>[_<hash>] -pane` ↔ `-frame`, by `Analytical.Tas.Query.TryDecomposeBuildingElementName`; in the gbXML route the frame element's construction is `<base> -frame`, not the unused `Windows: <base> -frame`), and the number of zone surfaces of its elements in each zone. SAM_UI compares the open model with them. |
 | `TasModelDesignApplier.ReplacingNoteName`, `Query.FileHash(Stream)` | (Safety review.) The recovery note left in the work folder while the project files are replaced; a hash through an open handle. |
+| `TasModelDesignApplier.FileReplacer` `(source, destination, displaced)` | (Follow-up review; was `(source, destination)`.) The replacement takes a third path that receives whatever was at the destination, in the same OS operation (`File.Replace` with a backup name). Test-only injection point; SAM_UI does not set it. |
 
 ### How the originals are protected (`Apply`)
 
@@ -45,24 +46,42 @@ counts.
    light each within one rounding step (0.001) of the option's, **and the pane layer by layer the system's**; a controller
    exactly), and every other internal condition, glazing assignment and controller exactly as before. Otherwise nothing
    in the project is changed and the attempt is kept for diagnosis.
-4. **(Safety review.)** The project files to replace are held (`FileShare.Delete` only: no other program can open them for
-   reading or writing; one that already has them open refuses everything, "… is open in another program"), and **every**
-   top-level Tas file is hashed again under that hold and compared with the run's: a file saved or simulated by another
-   program while the licensed writer and read-back ran refuses everything, and that program's file is **kept** (not
-   overwritten, not "restored").
-5. The project files are replaced from staging (TBD, then TPD) with the operating system's replacement
-   (`File.Replace`; previously `File.Copy(overwrite)`), each hash-checked, while a note
-   (`REPLACING-PROJECT-FILES.txt`: files, original and written hashes, backup folder, what to do) is in the work folder.
-   If one fails, every file no longer original is restored from the backup and the note removed; if a restore fails, the
-   exception (`ProjectChanged`) names the file and the backup, and the note stays.
-6. The note is removed and the staging folder deleted (licensed: an empty `staging` folder can stay when Tas still holds
-   it — pre-existing, the deletion error is ignored); the backup is kept.
+4. **(Safety review.)** The project files to replace are held (`FileStream`, shared for **delete only**, so the replacement
+   can rename them), and **every** top-level Tas file is hashed again under that hold and compared with the run's: a file
+   saved or simulated by another program while the licensed writer and read-back ran refuses everything and is **kept**.
+   What the hold does and does not do: it refuses a file another program has open for writing ("… is open in another
+   program") and keeps out programs that *open* the file to read or write it; it does **not** keep out an **atomic save**
+   (a new file renamed over the path, as editors and Tas may save) — delete sharing permits exactly that, and the held
+   handle then still reads the old file. Step 5 is what catches those (follow-up review).
+5. **(Follow-up review.)** The project files are replaced from staging (TBD, then TPD) with the operating system's
+   replacement `File.Replace(staged, project file, displaced)`, which in the **same operation** moves whatever is at the
+   path into `<work>\displaced\NN-<file>`. That displaced file must be the run's original:
+   - it is → the file is replaced (the displaced original, a copy of the backup, is deleted after success);
+   - it is not → another program saved after the final check: its save is **put back** with the same capturing
+     replacement (what that moves away, Apply's written copy, is kept), nothing more is replaced, already-replaced files
+     are rolled back, and Apply fails with "<file> was saved by another program while Apply was replacing it" — never
+     success. If yet another save arrives during the put-back, both saves are kept and named.
+   A note (`REPLACING-PROJECT-FILES.txt`: files, original and written hashes, backup, what to do) is in the work folder
+   meanwhile. An OS replacement that fails after moving the project file away is undone (the file is moved back).
+6. **Rollback restores only what Apply owns**: a replaced file is restored from the backup only while it still holds
+   Apply's written copy, and the restore again moves away what it replaces and checks it: a save another program made
+   after Apply replaced the file (before or during the rollback) is **left as the project file** (put back if the restore
+   met it) and reported, with `ProjectChanged` and the note rewritten to say which files to check and "do not overwrite it
+   with the original". The note's manual instructions likewise only restore a file that still has the best-design hash.
+7. After success the note is removed and the staging folder deleted (licensed: an empty `staging` folder can stay when Tas
+   still holds it — pre-existing, the deletion error is ignored); the backup is kept.
 
-**The guarantee, exactly.** No other program can write the project files between the final check and their replacement,
-and an exception during replacement restores them. The files are replaced one after another, **not as one transaction**:
-if the process or the computer stops during step 5, the TBD may hold the best design and the TPD the original. The note
-then stays in the work folder with the backup and the hashes to restore by hand, and the next optimisation or Apply sees
-files that are not the run's. Nothing is recovered automatically (owner decision 13 in the SAM_UI record).
+**The guarantee, exactly.** No version of a project file is lost: every version a replacement displaces is kept in the
+work folder or is the project file again. Apply never reports success over another program's save made before its
+replacement of that file, and never restores the backup over a save made after it. A program opening the file to write
+between the final check and the replacement is refused; an atomic save in that window is detected, kept and reported (a
+**conflict**: Apply stops, the other program's save is the project file, nothing of the best design is left, recovery
+by the engineer as reported). Not guaranteed: the files are replaced one after another, **not as one transaction**; a
+save another program makes to a file after Apply replaced it, while Apply goes on, is that program's and Apply reports
+success for its own work; if the process or the computer stops during steps 5–6, the note stays with the backup, the
+displaced files and the hashes, and the files are recovered by hand; nothing is recovered automatically (owner decision 13
+in the SAM_UI record). Whether a file is "the run's" is decided by SHA-256 content: another save with identical bytes is
+indistinguishable and harmless. This is about the Tas files only; Undo in SAM restores the model only.
 
 ## Decisions (owner review; also in the SAM_UI record)
 
@@ -78,10 +97,13 @@ files that are not the run's. Nothing is recovered automatically (owner decision
    rounded (licensed acceptance: the model's `SIM_EXT_GLZ` listed g 0.4 / light 0.804 reads back 0.40016 / 0.80356).
    Equal values are not the same glazing: the written pane is also read back **layer by layer** against the system's
    materials (safety review).
-5. **(Safety review.) The final check is under a hold**: the files to replace are held exclusively and every Tas file is
-   compared with the run's again; a change by another program refuses everything and is kept.
-6. **(Safety review.) OS replacement, no automatic recovery**: `File.Replace` per file, a recovery note while replacing;
-   not one transaction (the guarantee above).
+5. **(Safety review.) The final check is under a hold**: the files to replace are held (delete sharing only) and every
+   Tas file is compared with the run's again; a change by another program refuses everything and is kept. The hold does
+   not exclude atomic saves (follow-up review); decision 6 catches them.
+6. **(Safety review, follow-up.) Capturing OS replacement; conflicts reported; owned-only rollback; no automatic
+   recovery**: `File.Replace` with a displaced-file capture per file, the displaced file checked, another program's save
+   put back and reported; rollback only of files still holding Apply's copy; a recovery note while replacing; not one
+   transaction (the guarantee above).
 
 ## Files changed
 
@@ -95,6 +117,8 @@ files that are not the run's. Nothing is recovered automatically (owner decision
   `Query/TasMaterialLayers.cs`; `TasGlazingConstructionInfo.cs` (`PaneLayers`, `Frames`, `ZoneSurfaces`);
   `Query/TasModelInventory.cs` (reads them); `Query/TasFileHashes.cs` (`FileHash(Stream)`);
   `SAM.Analytical.Tas.GenOpt.csproj` (references `SAM.Architectural`, the base of `ConstructionLayer`).
+- Follow-up review: `TasModelDesignApplier.cs` only (capturing replacement, conflict handling, owned-only rollback, the
+  `FileReplacer` signature, the note's wording).
 - Tests: `SAM.Analytical.Tas.GenOpt.Tests/TasModelApplyTests.cs` (new), `TasMaterialLayerTests.cs` (new, safety review).
 
 ## Safety review (2026-10-10)
@@ -107,7 +131,9 @@ record. Finding 1 here:
   or simulating its TSD during the read-back, was not detected — with the default `File.Copy` replacer Apply
   **succeeded and overwrote that save**; with a stand-in replacer the post-copy hash check "restored" the backup over it.
   A TBD held open by another program, and a writer between the check and the replacement, were not refused.
-- **Fixed**: steps 4–6 above (hold, final check under it, `File.Replace`, recovery note, restore only what is not original).
+- **Fixed** then (`194a1545`): hold, final check under it, `File.Replace`, recovery note, restore only what is not
+  original. That fix was **incomplete**: its record claimed no other program could write between the check and the
+  replacement, which is false for atomic saves — see the follow-up review below, which replaces steps 5–6.
 
 Validation on the final code: Release `MSBuild SAM_Tas.sln -restore` **0 errors**, no warning in a changed file;
 `SAM.Analytical.Tas.GenOpt.Tests` **330/330** (323 + 7: four for finding 1, the pane read back layer by layer, two for the
@@ -119,6 +145,37 @@ S1, S2 and D1 all PASS. The new inventory reader read the real TBDs, and the gen
 pane/frame/placement checks. The written S2 pane read back layer by layer as the system's, and the D1 TPD was replaced
 with `File.Replace` (bit-exact). Best points were identical to the first acceptance. The real-application smoke also
 passed; details in the SAM_UI record.
+
+## Follow-up review (2026-10-10): atomic saves
+
+Review: `PR9_FOLLOWUP_REVIEW_2026-10-10.md` (SAM-BIM workspace, local). The hold opened with `FileShare.Delete` lets
+another program atomically replace the live path; `LiveHashes` then reads the old held file, the check passes, and the
+replacement overwrites the external save, which the backup does not contain either.
+
+- **Reproduced** on `194a1545` through `TasModelDesignApplier`, using the `FileReplacer` injection to atomically replace
+  the live TBD with external content (real `File.Replace` on NTFS, the hold open) just before calling the captured default
+  replacer: **Apply reported success and the external save was gone** (the TBD held the best design). And with TBD + TPD,
+  an external atomic save on the already-replaced TBD followed by a failing TPD replacement: **the rollback copied the
+  pre-run backup over the external save**. (Both tests failed on `194a1545`; log `C:\TasOut\pr9\fix\race-red.log`.)
+- **Fixed**: steps 5–6 above — capturing replacement (displaced file checked against the run's original), a conflicting
+  save put back and reported, rollback only of files still holding Apply's copy (each restore capturing and checking what
+  it moves away), a half-done OS replacement undone, the note's manual instructions never overwriting another save. The
+  hold and the final check are kept, with their limit stated. `FileReplacer` takes the displaced path.
+- **Tests** (5 new, 2 changed): an atomic save just before the replacement (kept as the project file, Apply fails with
+  the conflict, the written copy kept in `displaced`, `ProjectChanged` false); a later save on a replaced file before a
+  failing replacement (not restored over, reported, `ProjectChanged` true); an atomic save just before the rollback's
+  restore (put back, note says do not overwrite it); two saves racing one replacement (both kept, the later named); an OS
+  replacement failing after moving the file away (moved back). The writer-exclusion test now says what it proves (opening
+  to write is refused); the failed-replacement test fails the OS replacement before anything moves, as the OS does.
+- **Validation (final code)**: Release `MSBuild SAM_Tas.sln -restore` and `SAM_UI.sln` 0 errors, no warning in a changed
+  file; `SAM.Analytical.Tas.GenOpt.Tests` **335/335** (330 + 5); SAM_UI `SAM.Analytical.UI.WPF.Tests` **2793/2793** (one
+  unrelated Part O window test failed once in the first full run, passed 3/3 alone and in a full rerun); **mutations 6/6
+  caught** (R1 displaced file not checked, R2 the default replacer keeps nothing, R3 a conflicting save not put back, R4
+  rollback restores another program's save, R5 the restore does not check what it moved away, R6 a half-done replacement
+  not undone; `C:\TasOut\pr9\fix\mutate-race.ps1`, `mutations-race.log`; unmutated 36/36 after). **Licensed rerun** on
+  this build (`C:\TasOut\pr9\fix\race`): S1, S2, D1 PASS with identical best points and bit-exact read-backs, no displaced
+  file or note left after success; the real-application smoke PASS. The conflict paths are proven with real NTFS
+  replacements in the tests, not against a running Tas (an atomic save by Tas itself was not provoked).
 
 ## Validation (before the safety review; counts superseded above)
 
@@ -145,8 +202,14 @@ passed; details in the SAM_UI record.
 
 ## Unresolved issues and risks
 
-- Replacement is per file, not transactional; an interrupted replacement is recovered by hand from the backup (the note
-  says how). Undo in SAM restores the model only, never the Tas files (SAM_UI record).
+- Replacement is per file, not transactional; an interrupted replacement, or a conflict with another program's save, is
+  resolved by the engineer with the backup, the displaced files and the note (nothing automatic). Undo in SAM restores
+  the model only, never the Tas files (SAM_UI record).
+- The hold does not exclude atomic saves; they are detected after the fact by the displaced-file check (a conflict, not
+  a loss). A save after a file was replaced, while Apply replaces the next one, is accepted as the other program's.
+- `File.Replace` needs the work folder on the project's volume (it is under the project) and a file system that supports
+  it (NTFS; not verified on network shares). Where it is refused, Apply fails and changes nothing.
+- The conflict paths were exercised with real NTFS replacements in tests, not by provoking Tas itself to save mid-Apply.
 - The inventory now walks every zone surface of the TBD once (glazing placement): more COM calls on a large model; not
   measured on one.
 - TBD building element names are assumed unique when zone surfaces are counted per element name.
