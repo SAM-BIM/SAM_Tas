@@ -12,8 +12,10 @@ resolves the dependency by the same branch name) and needs the new API.
 
 ## Current status
 
-SAM-BIM/SAM_Tas#93 open, **not merged**. Code, tests and licensed acceptance are complete; awaiting PR CI and **owner review** (decisions
-in the SAM_UI record, which is the PR9 record of record; the SAM_Tas ones are repeated below).
+SAM-BIM/SAM_Tas#93 open, **not merged**, mergeable; no reviews or comments yet. Code, tests and licensed acceptance are
+complete. PR CI (`build`, `spdx`) was **green** on `dd222a47` (2026-10-10); the commit that adds this status changes only
+this record, so CI runs again on the new head. **Blocker for merge: owner review** (decisions in the SAM_UI record, which
+is the PR9 record of record; the SAM_Tas ones are repeated below; the Sizing-TBD finding there too).
 
 ## What was built (`SAM.Analytical.Tas.GenOpt`)
 
@@ -95,6 +97,6 @@ in the SAM_UI record, which is the PR9 record of record; the SAM_Tas ones are re
 
 ## Next step
 
-1. PR CI (`build`, `spdx`) green on the head.
-2. Owner review with the SAM_UI PR. Merge this PR first (merge commit, `--match-head-commit`), then the SAM_UI PR, then
+1. Confirm PR CI (`build`, `spdx`) green on the current head (the records-only commit re-runs it).
+2. Owner review with SAM-BIM/SAM_UI#220 (hand-over steps in its record). Merge this PR first (merge commit, `--match-head-commit`), then the SAM_UI PR, then
    the `PROJECT_PROGRESS.md` closeouts on both `sow/2026-Q4` branches (`[skip ci]`).
