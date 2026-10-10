@@ -370,6 +370,21 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 };
                 Assert.That(applier.Apply(changes).Values.Single().After, Is.EqualTo(pane));
 
+                // The pool may hold a system's values rounded (licensed acceptance: listed g 0.4 / light 0.804, read back
+                // 0.40016 / 0.80356): within 0.001, the option filter's precision, it is the option.
+                applier.InventoryReader = staging => new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
+                {
+                    new TasGlazingConstructionInfo(pane, new[] { "GLAZING 1", "GLAZING 2" }, 0.36886733770370483 + 0.0009, 0.997646152973175 - 0.0009, 0.7281997203826904 + 0.0004),
+                    new TasGlazingConstructionInfo("Windows: Rooflight -pane", new[] { "ROOF 1" }, 0.5, 1.5, 0.6),
+                });
+                Assert.That(applier.Apply(changes).Values.Single().After, Is.EqualTo(pane));
+                applier.InventoryReader = staging => new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
+                {
+                    new TasGlazingConstructionInfo(pane, new[] { "GLAZING 1", "GLAZING 2" }, 0.36886733770370483 + 0.0011, 0.997646152973175, 0.7281997203826904),
+                    new TasGlazingConstructionInfo("Windows: Rooflight -pane", new[] { "ROOF 1" }, 0.5, 1.5, 0.6),
+                });
+                Assert.That(Assert.Throws<TasModelApplyException>(() => applier.Apply(changes)).Message, Does.Contain("not the option's g 0.36886733770370483"));
+
                 // The rooflight moved too: refused.
                 applier.InventoryReader = staging => new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
                 {

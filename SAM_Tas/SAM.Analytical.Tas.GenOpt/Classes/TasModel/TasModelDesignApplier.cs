@@ -824,9 +824,14 @@ namespace SAM.Analytical.Tas.GenOpt
             return result;
         }
 
+        /// <summary>
+        /// A glazing value read back against the option's: within 0.001, the precision the option filter tells systems apart
+        /// by (<see cref="Query.TasGlazingOptions"/>). The option's values are the pool's, which a source may hold rounded
+        /// (the licensed acceptance: a model system listed as g 0.4, light 0.804 reads back 0.40016…, 0.80356… in the TBD).
+        /// </summary>
         private static bool Close(double x, double y)
         {
-            return System.Math.Abs(x - y) <= 1e-4;
+            return System.Math.Abs(x - y) <= 1e-3;
         }
 
         /// <summary>A TBD float as invariant text that reads back as the same float.</summary>
