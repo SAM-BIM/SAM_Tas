@@ -179,6 +179,118 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             }
         }
 
+        [TestCase("writer")]
+        [TestCase("reader")]
+        public void A_source_saved_by_another_program_while_the_staging_copy_is_written_is_refused_and_kept(string mode)
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelDesignApplier applier = Applier(project, hashes);
+                Func<string, IReadOnlyList<TasModelDesignChange>, List<TasModelAppliedValue>> writer = applier.TbdWriter;
+                Func<string, TasModelInventory> reader = applier.InventoryReader;
+
+                // Tas (or anyone) saves the project's TBD, or simulates its TSD, during the licensed write or read-back.
+                if (mode == "writer")
+                {
+                    applier.TbdWriter = (path, list) =>
+                    {
+                        System.IO.File.WriteAllText(Path.Combine(project, Tbd), "tbd saved meanwhile");
+                        return writer(path, list);
+                    };
+                }
+                else
+                {
+                    applier.InventoryReader = staging =>
+                    {
+                        System.IO.File.WriteAllText(Path.Combine(project, Tsd), "tsd simulated meanwhile");
+                        return reader(staging);
+                    };
+                }
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+
+                Assert.That(exception.Message, Does.Contain("changed while the best design was being written (" + (mode == "writer" ? Tbd : Tsd) + " changed)").And.Contain("Nothing in the project was changed"));
+                Assert.That(exception.ProjectChanged, Is.False);
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo(mode == "writer" ? "tbd saved meanwhile" : "tbd"), "the other program's save is kept, neither overwritten nor restored");
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tsd)), Is.EqualTo(mode == "writer" ? "tsd" : "tsd simulated meanwhile"));
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(exception.WorkFolder, "original", Tbd)), Is.EqualTo("tbd"), "the backup is the run's file");
+            }
+        }
+
+        [Test]
+        public void A_project_file_open_in_another_program_at_replacement_is_refused_and_kept()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelDesignApplier applier = Applier(project, hashes);
+                Func<string, IReadOnlyList<TasModelDesignChange>, List<TasModelAppliedValue>> writer = applier.TbdWriter;
+                FileStream other = null;
+                try
+                {
+                    // Another program opens the project's TBD for writing (as Tas does with an open document) and keeps it open.
+                    applier.TbdWriter = (path, list) =>
+                    {
+                        other = new FileStream(Path.Combine(project, Tbd), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+                        return writer(path, list);
+                    };
+
+                    TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+
+                    Assert.That(exception.Message, Does.Contain(Tbd + " is open in another program").And.Contain("Nothing in the project was changed"));
+                    Assert.That(exception.ProjectChanged, Is.False);
+                }
+                finally
+                {
+                    other?.Dispose();
+                }
+
+                Assert.That(Query.TasFileHashes(project), Is.EqualTo(hashes));
+            }
+        }
+
+        [Test]
+        public void No_other_program_can_open_a_project_file_while_it_is_replaced()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                TasModelDesignApplier applier = Applier(project, Query.TasFileHashes(project));
+                string attempt = null;
+                string note = null;
+                applier.FileReplacer = (source, destination) =>
+                {
+                    note = System.IO.File.ReadAllText(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(source)), TasModelDesignApplier.ReplacingNoteName));
+
+                    // The final check and the replacement hold the file: a writer between them is refused.
+                    try
+                    {
+                        using (new FileStream(destination, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
+                        {
+                            attempt = "opened";
+                        }
+                    }
+                    catch (IOException)
+                    {
+                        attempt = "refused";
+                    }
+
+                    System.IO.File.Replace(source, destination, null);
+                };
+
+                TasModelApplyResult result = applier.Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5));
+
+                Assert.That(attempt, Is.EqualTo("refused"));
+                Assert.That(note, Does.Contain("did not finish").And.Contain(result.BackupFolder).And.Contain(Tbd + "  original " + Query.FileHash(Path.Combine(result.BackupFolder, Tbd))), "while replacing, the work folder says how to recover");
+                Assert.That(result.FilesReplaced, Is.EqualTo(new[] { Tbd }));
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd written"));
+                Assert.That(Directory.GetFiles(result.WorkFolder), Is.Empty, "no pending-replacement note after success");
+            }
+        }
+
         [Test]
         public void A_writer_failure_leaves_the_project_untouched()
         {
@@ -236,13 +348,13 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 applier.FileReplacer = (source, destination) =>
                 {
                     replaced.Add(Path.GetFileName(destination));
+                    System.IO.File.Replace(source, destination, null);
                     if (destination.EndsWith(".tpd", StringComparison.OrdinalIgnoreCase))
                     {
+                        // The TPD is left neither the original nor the written copy.
                         System.IO.File.WriteAllText(destination, "half");
                         throw new IOException("The process cannot access the file because it is being used by another process.");
                     }
-
-                    System.IO.File.Copy(source, destination, true);
                 };
 
                 TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => applier.Apply(Changes(TasScriptTests.Everything, 21.25, 4.5)));
@@ -251,6 +363,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 Assert.That(exception.Message, Does.Contain("Replacing " + Tpd + " failed").And.Contain("every project file was restored from the backup"));
                 Assert.That(exception.ProjectChanged, Is.False);
                 Assert.That(Query.TasFileHashes(project), Is.EqualTo(hashes), "TBD and TPD restored");
+                Assert.That(System.IO.File.Exists(Path.Combine(exception.WorkFolder, TasModelDesignApplier.ReplacingNoteName)), Is.False, "restored: no recovery note");
             }
         }
 
@@ -399,6 +512,45 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                     new TasGlazingConstructionInfo("Windows: Rooflight -pane", new[] { "ROOF 1" }, 0.5, 1.5, 0.6),
                 });
                 Assert.That(Assert.Throws<TasModelApplyException>(() => applier.Apply(changes)).Message, Does.Contain("not the option's g 0.36886733770370483"));
+            }
+        }
+
+        [Test]
+        public void The_written_pane_must_read_back_as_the_systems_layers()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = folder.Folder("project");
+                System.IO.File.WriteAllText(Path.Combine(project, "000000_SAM_AnalyticalModel.tbd"), "tbd");
+                TasModelInventory before = new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
+                {
+                    new TasGlazingConstructionInfo(TasModelFixtures.SamGlazing, new[] { "GLAZING 1" }, 0.4001609981060028, 1.2433900833129883, 0.803563117980957),
+                });
+                Dictionary<string, IReadOnlyList<TasGlazingOption>> options = AttachedGlazingOptions();
+                TasGlazingSystem triple = options["Glazing"][2].System;
+                triple.ApertureConstruction = new ApertureConstruction(triple.Guid, triple.Name, ApertureType.Window, new[] { new ConstructionLayer("Low-e 6mm", 0.006) }, null);
+                triple.MaterialLibrary.Add(Analytical.Create.TransparentMaterial("Low-e 6mm", string.Empty, "Low-e 6mm", string.Empty, 1, 0.006, 9999, 0.4, 0.7, 0.3, 0.3, 0.2, 0.2, 0.84, 0.04, false));
+                List<TasModelDesignChange> changes = Query.TasModelDesignChanges(TasModelFixtures.Read(TasScriptTests.Glazing), new double[] { 3 }, options);
+                const string pane = "Windows: Triple low-e a5191c -pane";
+                List<TasMaterialLayer> layers = Query.TasMaterialLayers(triple.ApertureConstruction.PaneConstructionLayers, triple.MaterialLibrary);
+
+                TasModelDesignApplier applier = new TasModelDesignApplier(project, before, Query.TasFileHashes(project))
+                {
+                    TbdWriter = (path, list) => list.Select(x => new TasModelAppliedValue(x, TasModelFixtures.SamGlazing, pane, true)).ToList(),
+                    InventoryReader = staging => new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
+                    {
+                        new TasGlazingConstructionInfo(pane, new[] { "GLAZING 1" }, triple.G, triple.Ug, triple.Light, layers, null, null),
+                    }),
+                };
+                Assert.That(applier.Apply(changes).Values.Single().After, Is.EqualTo(pane));
+
+                // The TBD already held a material of that name with other physics, and the writer kept it: refused.
+                List<TasMaterialLayer> other = new List<TasMaterialLayer> { new TasMaterialLayer("Low-e 6mm", 0.006f, TasMaterialKind.Transparent, layers[0].Properties.Select(x => x.Key == TasMaterialLayer.InternalEmissivity ? new KeyValuePair<string, float>(x.Key, 0.84f) : x)) };
+                applier.InventoryReader = staging => new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
+                {
+                    new TasGlazingConstructionInfo(pane, new[] { "GLAZING 1" }, triple.G, triple.Ug, triple.Light, other, null, null),
+                });
+                Assert.That(Assert.Throws<TasModelApplyException>(() => applier.Apply(changes)).Message, Does.Contain("“" + pane + "” is not the system's pane: layer 1 “Low-e 6mm” internal emissivity 0.84, not 0.04"));
             }
         }
 

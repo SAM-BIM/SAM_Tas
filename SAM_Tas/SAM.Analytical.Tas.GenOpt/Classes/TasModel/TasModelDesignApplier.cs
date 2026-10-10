@@ -23,9 +23,18 @@ namespace SAM.Analytical.Tas.GenOpt
     /// <item>The staging copies are written (licensed Tas, COM) and read back with <see cref="Query.TasModelInventory"/>:
     /// every changed item must read back as the best value, and every other internal condition, glazing assignment and
     /// controller exactly as before.</item>
-    /// <item>Only then are the project files replaced from staging, one by one. If one cannot be replaced, the ones
-    /// already replaced are restored from the backup; the exception says what happened.</item>
+    /// <item>The project files to replace are then held so that no other program can open them, and every Tas file of
+    /// the project is checked again against the run's hashes: a file saved or simulated by another program meanwhile
+    /// refuses everything, and that program's file is kept. A file another program has open is refused too.</item>
+    /// <item>Only then are the project files replaced from staging, one by one, with the operating system's replacement
+    /// (<see cref="System.IO.File.Replace(string, string, string)"/>). If one cannot be replaced, the ones no longer
+    /// original are restored from the backup; the exception says what happened.</item>
     /// </list>
+    /// <para>What this does not guarantee: the files are replaced one after another, not as one transaction. If the
+    /// process or the computer stops during the replacement, the TBD may be the best design and the TPD still the
+    /// original; the note <see cref="ReplacingNoteName"/> then stays in the work folder, with the backup and the hashes to
+    /// restore by hand, and the next optimisation or Apply sees files that are not the run's. Nothing is recovered
+    /// automatically.</para>
     /// <para>Changes whose item already holds the best value are reported unchanged and need no file; when no change
     /// needs one, nothing is written at all. One Tas document is open at a time.</para>
     /// </summary>
@@ -33,6 +42,12 @@ namespace SAM.Analytical.Tas.GenOpt
     {
         /// <summary>The folder, under the Tas project, that holds each application's staging copies and backup.</summary>
         public const string WorkFolderName = "SAM_ApplyBestDesign";
+
+        /// <summary>
+        /// The note in an application's work folder while the project files are being replaced; it stays only if the
+        /// replacement was interrupted (or a file could not be restored) and says how to restore the originals.
+        /// </summary>
+        public const string ReplacingNoteName = "REPLACING-PROJECT-FILES.txt";
 
         private readonly string projectFolder;
         private readonly TasModelInventory inventory;
@@ -63,8 +78,12 @@ namespace SAM.Analytical.Tas.GenOpt
         /// <summary>Reads the staging folder back: <see cref="Query.TasModelInventory(string)"/> by default (licensed Tas). Replaceable for tests.</summary>
         public Func<string, TasModelInventory> InventoryReader { get; set; } = Query.TasModelInventory;
 
-        /// <summary>Replaces a project file with its staged copy (source, destination). Replaceable for tests.</summary>
-        public Action<string, string> FileReplacer { get; set; } = (source, destination) => System.IO.File.Copy(source, destination, true);
+        /// <summary>
+        /// Replaces a project file with its staged copy (source, destination): <see cref="System.IO.File.Replace(string, string, string)"/>
+        /// by default, the operating system's replacement (the staged copy, in the same folder tree, takes the project file's
+        /// place; it is refused while another program has the file open). Replaceable for tests.
+        /// </summary>
+        public Action<string, string> FileReplacer { get; set; } = (source, destination) => System.IO.File.Replace(source, destination, null);
 
         /// <summary>
         /// Writes <paramref name="changes"/> (<see cref="Query.TasModelDesignChanges"/>) into the project.
@@ -188,32 +207,69 @@ namespace SAM.Analytical.Tas.GenOpt
 
             Dictionary<string, string> staged = files.ToDictionary(x => x, x => Query.FileHash(Path.Combine(staging, x)), StringComparer.OrdinalIgnoreCase);
 
-            // 6. Replace the project files; restore every one replaced so far if one fails.
+            // 6. Hold the project files to replace, so that no other program can open them until they are replaced, and
+            // check again, under that hold, that every Tas file is still the run's: Tas (or anyone) may have saved or
+            // simulated the project while the staging copies were written and read back.
+            List<FileStream> holds = new List<FileStream>();
+            string note = Path.Combine(workFolder, ReplacingNoteName);
             List<string> replaced = new List<string>();
-            foreach (string file in files)
+            try
             {
-                try
+                foreach (string file in files)
                 {
-                    FileReplacer(Path.Combine(staging, file), Path.Combine(projectFolder, file));
-                    if (Query.FileHash(Path.Combine(projectFolder, file)) != staged[file])
+                    try
                     {
-                        throw new IOException(file + " does not hold the written copy after it was replaced.");
+                        holds.Add(new FileStream(Path.Combine(projectFolder, file), FileMode.Open, FileAccess.Read, FileShare.Delete));
                     }
-
-                    replaced.Add(file);
+                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                    {
+                        throw new TasModelApplyException(file + " is open in another program (" + Innermost(exception).Message + "), so it cannot be replaced safely. Close it (in Tas too) and apply again. Nothing in the project was changed; the attempt is kept in " + workFolder + ".", false, workFolder, exception);
+                    }
                 }
-                catch (Exception exception)
-                {
-                    replaced.Add(file);
-                    List<string> notRestored = Restore(replaced, backup, current);
-                    if (notRestored.Count == 0)
-                    {
-                        throw new TasModelApplyException("Replacing " + file + " failed (" + Innermost(exception).Message + "), so every project file was restored from the backup. Nothing in the project was changed.", false, workFolder, exception);
-                    }
 
-                    throw new TasModelApplyException("Replacing " + file + " failed (" + Innermost(exception).Message + ") and " + string.Join(", ", notRestored) + " could not be restored. Copy " + (notRestored.Count == 1 ? "it" : "them") + " back from " + backup + " before using the model.", true, workFolder, exception);
+                List<string> changed = Differences(sourceHashes, LiveHashes(holds));
+                if (changed.Count > 0)
+                {
+                    throw new TasModelApplyException("The Tas files changed while the best design was being written (" + string.Join("; ", changed) + "): another program saved or simulated them. Nothing in the project was changed; the attempt is kept in " + workFolder + ". Run the optimisation again on the current model.", false, workFolder);
+                }
+
+                // 7. Replace the project files from staging (an OS replacement per file); restore every one replaced so far
+                // if one fails. Until the replacement ends, a note in the work folder says how to recover by hand if the
+                // process or the computer stops part-way.
+                System.IO.File.WriteAllText(note, ReplacingNote(files, current, staged, backup));
+                foreach (string file in files)
+                {
+                    try
+                    {
+                        FileReplacer(Path.Combine(staging, file), Path.Combine(projectFolder, file));
+                        if (Query.FileHash(Path.Combine(projectFolder, file)) != staged[file])
+                        {
+                            throw new IOException(file + " does not hold the written copy after it was replaced.");
+                        }
+
+                        replaced.Add(file);
+                    }
+                    catch (Exception exception)
+                    {
+                        holds.ForEach(x => x.Dispose());
+                        replaced.Add(file);
+                        List<string> notRestored = Restore(replaced, backup, current);
+                        if (notRestored.Count == 0)
+                        {
+                            DeleteNote(note);
+                            throw new TasModelApplyException("Replacing " + file + " failed (" + Innermost(exception).Message + "), so every project file was restored from the backup. Nothing in the project was changed.", false, workFolder, exception);
+                        }
+
+                        throw new TasModelApplyException("Replacing " + file + " failed (" + Innermost(exception).Message + ") and " + string.Join(", ", notRestored) + " could not be restored. Copy " + (notRestored.Count == 1 ? "it" : "them") + " back from " + backup + " before using the model.", true, workFolder, exception);
+                    }
                 }
             }
+            finally
+            {
+                holds.ForEach(x => x.Dispose());
+            }
+
+            DeleteNote(note);
 
             // The staging copies are the project files now; the backup stays.
             try
@@ -697,9 +753,20 @@ namespace SAM.Analytical.Tas.GenOpt
                     continue;
                 }
 
-                if (!Close(info.G, option.G) || !Close(info.U, option.U) || !Close(info.Light, option.Light))
+                if (!Close(info.G, option.G, GlazingGTolerance) || !Close(info.U, option.U, GlazingUTolerance) || !Close(info.Light, option.Light, GlazingLightTolerance))
                 {
                     result.Add(string.Format(CultureInfo.InvariantCulture, "“{0}” reads g {1}, U {2}, light {3}, not the option's g {4}, U {5}, light {6}.", option.PaneConstruction, info.G, info.U, info.Light, option.G, option.U, option.Light));
+                }
+
+                // The pane, layer by layer, is the system's: the materials the SAM model gets for it (SAM_UI refuses a
+                // model material of the same name that differs) are the ones evaluated.
+                if (info.PaneLayers != null && option.System?.ApertureConstruction != null)
+                {
+                    List<string> layers = Query.TasMaterialLayerDifferences(Query.TasMaterialLayers(option.System.ApertureConstruction.PaneConstructionLayers, option.System.MaterialLibrary), info.PaneLayers);
+                    if (layers.Count > 0)
+                    {
+                        result.Add("“" + option.PaneConstruction + "” is not the system's pane: " + string.Join("; ", layers) + ".");
+                    }
                 }
             }
         }
@@ -802,6 +869,60 @@ namespace SAM.Analytical.Tas.GenOpt
             return result;
         }
 
+        /// <summary>
+        /// The hashes of the project's Tas files now: the held ones read through their holds (no one else can open them),
+        /// the others as usual.
+        /// </summary>
+        private Dictionary<string, string> LiveHashes(IEnumerable<FileStream> holds)
+        {
+            Dictionary<string, FileStream> held = holds.ToDictionary(x => Path.GetFileName(x.Name), StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string path in Directory.GetFiles(projectFolder, "*", SearchOption.TopDirectoryOnly).Where(NativeGenOptWorkspace.IsTasFile))
+            {
+                string name = Path.GetFileName(path);
+                if (held.TryGetValue(name, out FileStream stream))
+                {
+                    stream.Position = 0;
+                    result[name] = Query.FileHash(stream);
+                }
+                else
+                {
+                    result[name] = Query.FileHash(path);
+                }
+            }
+
+            return result;
+        }
+
+        private string ReplacingNote(IEnumerable<string> files, IReadOnlyDictionary<string, string> originals, IReadOnlyDictionary<string, string> staged, string backup)
+        {
+            List<string> lines = new List<string>
+            {
+                "SAM \"Apply best design\" was replacing these Tas files of " + projectFolder + " with the best design.",
+                "If this note is still here, the replacement did not finish: a file may be the original, the best design or incomplete.",
+                "Before using the model, copy the originals back from " + backup + " (SHA-256 below), then run the optimisation again.",
+                string.Empty,
+            };
+
+            foreach (string file in files)
+            {
+                lines.Add(file + "  original " + originals[file] + "  best design " + staged[file]);
+            }
+
+            return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+        }
+
+        private static void DeleteNote(string path)
+        {
+            try
+            {
+                System.IO.File.Delete(path);
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+            {
+            }
+        }
+
         private List<string> Restore(IEnumerable<string> files, string backup, IReadOnlyDictionary<string, string> hashes)
         {
             List<string> result = new List<string>();
@@ -809,6 +930,13 @@ namespace SAM.Analytical.Tas.GenOpt
             {
                 try
                 {
+                    // A file whose replacement never happened is still the original: leave it alone.
+                    string path = Path.Combine(projectFolder, file);
+                    if (System.IO.File.Exists(path) && Query.FileHash(path) == hashes[file])
+                    {
+                        continue;
+                    }
+
                     System.IO.File.Copy(Path.Combine(backup, file), Path.Combine(projectFolder, file), true);
                     if (Query.FileHash(Path.Combine(projectFolder, file)) != hashes[file])
                     {
@@ -825,13 +953,24 @@ namespace SAM.Analytical.Tas.GenOpt
         }
 
         /// <summary>
-        /// A glazing value read back against the option's: within 0.001, the precision the option filter tells systems apart
-        /// by (<see cref="Query.TasGlazingOptions"/>). The option's values are the pool's, which a source may hold rounded
-        /// (the licensed acceptance: a model system listed as g 0.4, light 0.804 reads back 0.40016…, 0.80356… in the TBD).
+        /// How far a glazing value read back from the TBD may be from the option's, per quantity. The option's g, U and light
+        /// are the pool's, which SAM_Tas' glazing calculation reads from TCD rounded to <see cref="global::SAM.Core.Tolerance.MacroDistance"/>
+        /// (<c>Analytical.Tas.Query.GlazingValues</c>, <c>Analytical.Tas.Query.ThermalTransmittance</c>), while the TBD's are
+        /// read unrounded: one rounding step each (the licensed acceptance: a model system listed as g 0.4, light 0.804 reads
+        /// back 0.40016…, 0.80356…). The steps are the same today and named apart so one can change alone. Equal values are
+        /// not the same glazing: the pane is also read back layer by layer (<see cref="Query.TasMaterialLayerDifferences"/>).
         /// </summary>
-        private static bool Close(double x, double y)
+        internal const double GlazingGTolerance = global::SAM.Core.Tolerance.MacroDistance;
+
+        /// <inheritdoc cref="GlazingGTolerance"/>
+        internal const double GlazingUTolerance = global::SAM.Core.Tolerance.MacroDistance;
+
+        /// <inheritdoc cref="GlazingGTolerance"/>
+        internal const double GlazingLightTolerance = global::SAM.Core.Tolerance.MacroDistance;
+
+        private static bool Close(double x, double y, double tolerance)
         {
-            return System.Math.Abs(x - y) <= 1e-3;
+            return System.Math.Abs(x - y) <= tolerance;
         }
 
         /// <summary>A TBD float as invariant text that reads back as the same float.</summary>

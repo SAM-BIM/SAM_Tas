@@ -37,6 +37,14 @@ namespace SAM.Analytical.Tas.GenOpt
         public static string FileHash(string path)
         {
             using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                return FileHash(stream);
+            }
+        }
+
+        /// <summary>The SHA-256 of a stream from its current position to its end, lower-case hex.</summary>
+        public static string FileHash(Stream stream)
+        {
             using (SHA256 sha256 = SHA256.Create())
             {
                 return string.Concat(sha256.ComputeHash(stream).Select(x => x.ToString("x2")));
