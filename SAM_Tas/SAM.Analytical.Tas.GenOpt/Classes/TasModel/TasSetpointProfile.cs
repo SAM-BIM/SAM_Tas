@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
+using System.Collections.Generic;
+using System.Linq;
+
 namespace SAM.Analytical.Tas.GenOpt
 {
     /// <summary>One thermostat profile of a TBD internal condition, as the catalogue needs it (read-only data, no COM).</summary>
@@ -10,12 +13,14 @@ namespace SAM.Analytical.Tas.GenOpt
         /// <param name="factor">The profile factor; the blocks change only factor 1.</param>
         /// <param name="setpoint">The current setpoint (°C): the value, or the highest/lowest hour; null when unknown.</param>
         /// <param name="changedHours">For a 24-hour profile, how many hours hold the setpoint; otherwise 0.</param>
-        public TasSetpointProfile(TasSetpointProfileType type, double factor, double? setpoint, int changedHours = 0)
+        /// <param name="hours">For a 24-hour profile, its 24 values as the TBD holds them (hour 1 first); otherwise null.</param>
+        public TasSetpointProfile(TasSetpointProfileType type, double factor, double? setpoint, int changedHours = 0, IEnumerable<float> hours = null)
         {
             Type = type;
             Factor = factor;
             Setpoint = setpoint;
             ChangedHours = changedHours;
+            Hours = hours?.ToList().AsReadOnly();
         }
 
         public TasSetpointProfileType Type { get; }
@@ -27,6 +32,12 @@ namespace SAM.Analytical.Tas.GenOpt
 
         /// <summary>For a 24-hour profile, the number of hours that hold the setpoint (the others are the setback).</summary>
         public int ChangedHours { get; }
+
+        /// <summary>
+        /// For a 24-hour profile, the 24 hourly values exactly as the TBD stores them (floats, hour 1 first); null for a
+        /// value profile, or when the reader did not record them. "Apply best design" compares them hour by hour.
+        /// </summary>
+        public IReadOnlyList<float> Hours { get; }
 
         /// <summary>True when the blocks can change it: a value or 24-hour profile with factor 1 and a finite setpoint.</summary>
         public bool Supported => Type != TasSetpointProfileType.Unsupported && Factor == 1 && Setpoint.HasValue && !double.IsNaN(Setpoint.Value) && !double.IsInfinity(Setpoint.Value);
