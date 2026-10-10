@@ -65,7 +65,7 @@ namespace SAM.Analytical.Tas.GenOpt
             return result;
         }
 
-        private static string SingleFile(string projectFolder, string extension)
+        internal static string SingleFile(string projectFolder, string extension)
         {
             List<string> paths = Directory.GetFiles(projectFolder, "*", SearchOption.TopDirectoryOnly)
                 .Where(x => string.Equals(Path.GetExtension(x), extension, StringComparison.OrdinalIgnoreCase))
@@ -178,7 +178,7 @@ namespace SAM.Analytical.Tas.GenOpt
                 }
 
                 float setpoint = heating ? hours.Max() : hours.Min();
-                return new TasSetpointProfile(TasSetpointProfileType.Hourly, profile.factor, setpoint, hours.Count(x => x == setpoint));
+                return new TasSetpointProfile(TasSetpointProfileType.Hourly, profile.factor, setpoint, hours.Count(x => x == setpoint), hours);
             }
 
             return new TasSetpointProfile(TasSetpointProfileType.Unsupported, profile.factor, null);
@@ -246,7 +246,7 @@ namespace SAM.Analytical.Tas.GenOpt
             }
         }
 
-        private static void IgnoreServerFault(Action action)
+        internal static void IgnoreServerFault(Action action)
         {
             try
             {
@@ -293,7 +293,7 @@ namespace SAM.Analytical.Tas.GenOpt
         }
 
         /// <summary>A COM SAFEARRAY (1-based or not) as floats, by enumeration.</summary>
-        private static float[] Floats(object values)
+        internal static float[] Floats(object values)
         {
             if (!(values is IEnumerable enumerable))
             {
