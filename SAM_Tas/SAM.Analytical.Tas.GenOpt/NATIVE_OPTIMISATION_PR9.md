@@ -6,13 +6,13 @@
 Branch `feature/optimisation-apply-best-design` → base `sow/2026-Q4` (cut from `a4cd6d32`). Record date: 2026-10-10.
 
 Plan of record: SAM_UI `documentation/NativeOptimisation-Plan-ModelBindings.md` (PR9 row, D2). The window, the plan shown
-to the engineer and the SAM model change are SAM_UI#(see the SAM_UI PR, same branch name), record
+to the engineer and the SAM model change are SAM-BIM/SAM_UI#220 (same branch name), record
 `documentation/NativeOptimisation-PR9-ApplyBestDesign.md`. **Merge this PR first**: the SAM_UI PR builds against it (CI
 resolves the dependency by the same branch name) and needs the new API.
 
 ## Current status
 
-PR open, **not merged**. Code, tests and licensed acceptance are complete; awaiting PR CI and **owner review** (decisions
+SAM-BIM/SAM_Tas#93 open, **not merged**. Code, tests and licensed acceptance are complete; awaiting PR CI and **owner review** (decisions
 in the SAM_UI record, which is the PR9 record of record; the SAM_Tas ones are repeated below).
 
 ## What was built (`SAM.Analytical.Tas.GenOpt`)
