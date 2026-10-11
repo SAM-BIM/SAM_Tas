@@ -16,8 +16,15 @@ SAM-BIM/SAM_Tas#93 open, **not merged**. The 2026-10-10 architecture review (`PR
 local to the SAM-BIM workspace) raised three source findings; all three were **reproduced with failing tests and fixed**
 (heads `194a1545` / SAM_UI `60828d31`, CI green). The follow-up review (`PR9_FOLLOWUP_REVIEW_2026-10-10.md`, local) found
 that the hold does not exclude **atomic saves**, so an external save could still be lost; that was **reproduced through
-the applier and fixed** here (see "Follow-up review" below). Heads before it are superseded: **final-head CI** and
-**owner review** of the decisions below and in the SAM_UI record (the PR9 record of record) are the blockers for merge.
+the applier and fixed** here (see "Follow-up review" below). Heads before it are superseded.
+
+**2026-10-11: owner decisions confirmed** (SAM_UI record, "Owner decisions"): the decisions below are approved as
+implemented; manual recovery for V1 (conflicting saves preserved and reported; Undo restores SAM only, never the Tas
+files); a same-named different glazing material is refused; the strict pane/frame/placement checks are kept, with
+licensed coverage accepted for external glazing through the gbXML export route only. The Sizing finding is option (a), a
+**separate small PR** (not this one). Final-head CI of `dc823fe0` green (build, SPDX). Fresh local Release rebuild of
+this head: `SAM.Analytical.Tas.GenOpt.Tests` **335/335**. Code unchanged. Recording the decisions is not a merge
+approval: **explicit owner approval to merge** is the remaining blocker.
 
 ## What was built (`SAM.Analytical.Tas.GenOpt`)
 
@@ -83,7 +90,7 @@ displaced files and the hashes, and the files are recovered by hand; nothing is 
 in the SAM_UI record). Whether a file is "the run's" is decided by SHA-256 content: another save with identical bytes is
 indistinguishable and harmless. This is about the Tas files only; Undo in SAM restores the model only.
 
-## Decisions (owner review; also in the SAM_UI record)
+## Decisions (approved by the owner 2026-10-11; also in the SAM_UI record)
 
 1. **Same rules as the evaluation.** Apply runs the generated script's blocks, so the files hold exactly what was
    evaluated (the setpoint as the TBD float; the glazing pane on every element of the target, frames kept; a controller as
@@ -218,12 +225,14 @@ replacement overwrites the external save, which the backup does not contain eith
   (a second Apply of the same system to a re-optimised TBD would be refused; the run's hashes refuse it first anyway).
 - Finding, not changed here: Energy Simulation with Sizing (the dialog's default) leaves `<name>_HDDCDD.tbd` and
   `<name>_Uncapped.tbd` beside the TBD, and `Query.TasModelInventory` refuses a folder with more than one TBD, so the
-  Optimisation window cannot read a default Energy Simulation folder (owner decision in the SAM_UI record).
+  Optimisation window cannot read a default Energy Simulation folder. Owner decision 2026-10-11: option (a) as a
+  separate small PR — identify the primary project TBD unambiguously, exclude sizing derivatives consistently from the
+  inventory and the run snapshot, preserve those files, refuse ambiguous folders.
 
 ## Next step
 
-1. Confirm PR CI (`build`, `spdx`) green on the **final** head; earlier green runs do not count.
-2. Owner review with SAM-BIM/SAM_UI#220 (hand-over steps in its record). Merge this PR first (merge commit,
+1. Confirm PR CI (`build`, `spdx`) green on the **final** head (this records-only commit); earlier green runs do not count.
+2. On explicit owner approval to merge, with SAM-BIM/SAM_UI#220 (hand-over steps in its record): merge this PR first (merge commit,
    `--match-head-commit <final head>`), confirm the `sow/2026-Q4` build, then validate and merge the SAM_UI PR against the
    merged SAM_Tas (its record says how), then the `PROJECT_PROGRESS.md` closeouts on both `sow/2026-Q4` branches
    (`[skip ci]`, with the merge SHAs).
