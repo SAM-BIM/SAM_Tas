@@ -65,7 +65,7 @@ namespace SAM.Analytical.Tas.GenOpt
             return result;
         }
 
-        private static string SingleFile(string projectFolder, string extension)
+        internal static string SingleFile(string projectFolder, string extension)
         {
             List<string> paths = Directory.GetFiles(projectFolder, "*", SearchOption.TopDirectoryOnly)
                 .Where(x => string.Equals(Path.GetExtension(x), extension, StringComparison.OrdinalIgnoreCase))
@@ -113,6 +113,8 @@ namespace SAM.Analytical.Tas.GenOpt
                 List<string> names = new List<string>();
                 Dictionary<string, List<string>> elements = new Dictionary<string, List<string>>(StringComparer.Ordinal);
                 Dictionary<string, TBD.Construction> constructions = new Dictionary<string, TBD.Construction>(StringComparer.Ordinal);
+                Dictionary<string, string> glazingOfElement = new Dictionary<string, string>(StringComparer.Ordinal);
+                Dictionary<string, TBD.Construction> frameElements = new Dictionary<string, TBD.Construction>(StringComparer.Ordinal);
                 for (int i = 0; ; i++)
                 {
                     TBD.buildingElement buildingElement = building.GetBuildingElement(i);
@@ -122,8 +124,18 @@ namespace SAM.Analytical.Tas.GenOpt
                     }
 
                     TBD.Construction construction = buildingElement.GetConstruction();
-                    if (construction == null || construction.type != TBD.ConstructionTypes.tcdTransparentConstruction)
+                    if (construction == null)
                     {
+                        continue;
+                    }
+
+                    if (construction.type != TBD.ConstructionTypes.tcdTransparentConstruction)
+                    {
+                        if (Analytical.Tas.Query.TryDecomposeBuildingElementName(buildingElement.name, out _, out _, out AperturePart aperturePart) && aperturePart == AperturePart.Frame)
+                        {
+                            frameElements[buildingElement.name] = construction;
+                        }
+
                         continue;
                     }
 
@@ -135,6 +147,37 @@ namespace SAM.Analytical.Tas.GenOpt
                     }
 
                     list.Add(buildingElement.name);
+                    glazingOfElement[buildingElement.name] = construction.name;
+                }
+
+                // Where each glazing is: its zone surfaces, by zone (one per aperture and adjacent zone).
+                Dictionary<string, Dictionary<string, int>> zoneSurfaces = names.ToDictionary(x => x, x => new Dictionary<string, int>(StringComparer.Ordinal), StringComparer.Ordinal);
+                if (names.Count > 0)
+                {
+                    for (int i = 0; ; i++)
+                    {
+                        TBD.zone zone = building.GetZone(i);
+                        if (zone == null)
+                        {
+                            break;
+                        }
+
+                        for (int j = 0; ; j++)
+                        {
+                            TBD.zoneSurface zoneSurface = zone.GetSurface(j);
+                            if (zoneSurface == null)
+                            {
+                                break;
+                            }
+
+                            string element = zoneSurface.buildingElement?.name;
+                            if (element != null && glazingOfElement.TryGetValue(element, out string glazing))
+                            {
+                                zoneSurfaces[glazing].TryGetValue(zone.name, out int count);
+                                zoneSurfaces[glazing][zone.name] = count + 1;
+                            }
+                        }
+                    }
                 }
 
                 foreach (string name in names)
@@ -146,7 +189,10 @@ namespace SAM.Analytical.Tas.GenOpt
                         elements[name],
                         glazing != null && glazing.Length > 5 ? glazing[5] : double.NaN,
                         u != null && u.Length > 6 ? u[6] : double.NaN,
-                        glazing != null && glazing.Length > 0 ? glazing[0] : double.NaN));
+                        glazing != null && glazing.Length > 0 ? glazing[0] : double.NaN,
+                        MaterialLayers(constructions[name]),
+                        Frames(elements[name], frameElements),
+                        zoneSurfaces[name]));
                 }
             }
             finally
@@ -154,6 +200,104 @@ namespace SAM.Analytical.Tas.GenOpt
                 document.close();
                 Marshal.FinalReleaseComObject(document);
             }
+        }
+
+        /// <summary>A TBD construction's layers: each material's name, kind and properties, and the layer's thickness.</summary>
+        private static List<TasMaterialLayer> MaterialLayers(TBD.Construction construction)
+        {
+            List<TasMaterialLayer> result = new List<TasMaterialLayer>();
+            for (int i = 1; ; i++)
+            {
+                TBD.material material = construction.materials(i);
+                if (material == null)
+                {
+                    break;
+                }
+
+                float thickness = construction.materialWidth[i];
+                List<KeyValuePair<string, float>> properties = new List<KeyValuePair<string, float>>();
+                TasMaterialKind kind;
+                switch ((TBD.MaterialTypes)material.type)
+                {
+                    case TBD.MaterialTypes.tcdTransparentLayer:
+                        kind = TasMaterialKind.Transparent;
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.Conductivity, material.conductivity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.VapourDiffusionFactor, material.vapourDiffusionFactor));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.SolarTransmittance, material.solarTransmittance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.LightTransmittance, material.lightTransmittance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ExternalSolarReflectance, material.externalSolarReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.InternalSolarReflectance, material.internalSolarReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ExternalLightReflectance, material.externalLightReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.InternalLightReflectance, material.internalLightReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ExternalEmissivity, material.externalEmissivity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.InternalEmissivity, material.internalEmissivity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.Blind, material.isBlind == 0 ? 0 : 1));
+                        break;
+
+                    case TBD.MaterialTypes.tcdGasLayer:
+                        kind = TasMaterialKind.Gas;
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.Conductivity, material.conductivity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.SpecificHeat, material.specificHeat));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.Density, material.density));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.DynamicViscosity, material.dynamicViscosity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ConvectionCoefficient, material.convectionCoefficient));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.VapourDiffusionFactor, material.vapourDiffusionFactor));
+                        break;
+
+                    case TBD.MaterialTypes.tcdOpaqueLayer:
+                    case TBD.MaterialTypes.tcdOpaqueMaterial:
+                        kind = TasMaterialKind.Opaque;
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.Conductivity, material.conductivity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.SpecificHeat, material.specificHeat));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.Density, material.density));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.VapourDiffusionFactor, material.vapourDiffusionFactor));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ExternalSolarReflectance, material.externalSolarReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.InternalSolarReflectance, material.internalSolarReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ExternalLightReflectance, material.externalLightReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.InternalLightReflectance, material.internalLightReflectance));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.ExternalEmissivity, material.externalEmissivity));
+                        properties.Add(new KeyValuePair<string, float>(GenOpt.TasMaterialLayer.InternalEmissivity, material.internalEmissivity));
+                        break;
+
+                    default:
+                        kind = TasMaterialKind.Other;
+                        break;
+                }
+
+                result.Add(new TasMaterialLayer(material.name, thickness, kind, properties));
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The frames of a window's pane elements: each different construction of the frame elements with the same
+        /// <c>Windows: &lt;base&gt;</c> / <c>Doors: &lt;base&gt;</c> (SAM_Tas' naming; a collision hash is ignored).
+        /// </summary>
+        private static List<List<TasMaterialLayer>> Frames(IEnumerable<string> paneElements, IReadOnlyDictionary<string, TBD.Construction> frameElements)
+        {
+            HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string paneElement in paneElements)
+            {
+                if (Analytical.Tas.Query.TryDecomposeBuildingElementName(paneElement, out string @base, out ApertureType apertureType, out _))
+                {
+                    keys.Add(apertureType + "|" + @base);
+                }
+            }
+
+            List<List<TasMaterialLayer>> result = new List<List<TasMaterialLayer>>();
+            HashSet<string> constructions = new HashSet<string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, TBD.Construction> frameElement in frameElements.OrderBy(x => x.Key, StringComparer.Ordinal))
+            {
+                if (Analytical.Tas.Query.TryDecomposeBuildingElementName(frameElement.Key, out string @base, out ApertureType apertureType, out _)
+                    && keys.Contains(apertureType + "|" + @base)
+                    && constructions.Add(frameElement.Value.name))
+                {
+                    result.Add(MaterialLayers(frameElement.Value));
+                }
+            }
+
+            return result;
         }
 
         /// <summary>A thermostat profile as the setpoint blocks see it (PR7a, question 3).</summary>
@@ -178,7 +322,7 @@ namespace SAM.Analytical.Tas.GenOpt
                 }
 
                 float setpoint = heating ? hours.Max() : hours.Min();
-                return new TasSetpointProfile(TasSetpointProfileType.Hourly, profile.factor, setpoint, hours.Count(x => x == setpoint));
+                return new TasSetpointProfile(TasSetpointProfileType.Hourly, profile.factor, setpoint, hours.Count(x => x == setpoint), hours);
             }
 
             return new TasSetpointProfile(TasSetpointProfileType.Unsupported, profile.factor, null);
@@ -246,7 +390,7 @@ namespace SAM.Analytical.Tas.GenOpt
             }
         }
 
-        private static void IgnoreServerFault(Action action)
+        internal static void IgnoreServerFault(Action action)
         {
             try
             {
@@ -293,7 +437,7 @@ namespace SAM.Analytical.Tas.GenOpt
         }
 
         /// <summary>A COM SAFEARRAY (1-based or not) as floats, by enumeration.</summary>
-        private static float[] Floats(object values)
+        internal static float[] Floats(object values)
         {
             if (!(values is IEnumerable enumerable))
             {

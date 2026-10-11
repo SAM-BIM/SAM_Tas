@@ -52,3 +52,6 @@ dotnet test SAM_Tas/SAM.Analytical.Tas.GenOpt.Tests -c Release
     then the generated C# script, so the stub takes its spec from the `SAM_TAS_GENOPT_STUB_SPEC` environment variable.
 - The licensed proof of the generated blocks is local evidence, recorded in
   `../SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_PR7B.md`; it is not part of CI.
+- **"Apply best design" (PR9).** `TasModelApplyTests` pin the best point → changes step and the applier's protection of
+  the project (run hashes, staging, read-back, backup, replace, rollback) with stand-in writers and readers. The licensed
+  writers are proven by the PR9 licensed acceptance (`../SAM.Analytical.Tas.GenOpt/NATIVE_OPTIMISATION_PR9.md`).

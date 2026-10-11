@@ -40,6 +40,11 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
     </Reference>
+    <!-- PR9: a SAM construction layer (SAM.Analytical.ConstructionLayer derives from SAM.Architectural.MaterialLayer) compared with a TBD's. -->
+    <Reference Include="SAM.Architectural">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\SAM\build\SAM.Architectural.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <!-- Native optimisation kernel (HookeJeeves, CoordinateSearch, GoldenSection) used by GenOptDocument.RunNative. -->

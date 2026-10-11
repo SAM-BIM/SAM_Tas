@@ -78,6 +78,14 @@ namespace SAM.Analytical.Tas.GenOpt
         public string ScriptText { get; }
 
         /// <summary>
+        /// The SHA-256 of each Tas file of the project as the last <see cref="Run"/> or <see cref="Test"/> copied it into
+        /// its snapshot, before any glazing system was written there (<see cref="Query.TasFileHashes"/>); null before the
+        /// first. "Apply best design" refuses project files that no longer have these hashes: they are not the model
+        /// that was optimised.
+        /// </summary>
+        public IReadOnlyDictionary<string, string> SourceHashes { get; private set; }
+
+        /// <summary>
         /// Writes the glazing systems of the options into the snapshot TBD before the first evaluation:
         /// <see cref="WriteGlazingSystems"/> by default (licensed Tas, COM). Replaceable for tests.
         /// </summary>
@@ -118,6 +126,10 @@ namespace SAM.Analytical.Tas.GenOpt
 
             string runsDirectory = string.IsNullOrWhiteSpace(settings.RunsFolder) ? Path.Combine(settings.ProjectFolder, "SAM_NativeGenOpt") : settings.RunsFolder;
             workspace = NativeGenOptWorkspace.Create(settings.ProjectFolder, ScriptText, runsDirectory);
+
+            // The model as it was evaluated: the snapshot before the glazing systems are written into it.
+            Dictionary<string, string> hashes = Query.TasFileHashes(workspace.ProjectDirectory);
+            SourceHashes = hashes;
 
             List<TasGlazingOption> systems = GlazingOptions.Values.SelectMany(x => x).Where(x => !x.IsCurrent).GroupBy(x => x.PaneConstruction, StringComparer.Ordinal).Select(x => x.First()).ToList();
             if (systems.Count > 0)
