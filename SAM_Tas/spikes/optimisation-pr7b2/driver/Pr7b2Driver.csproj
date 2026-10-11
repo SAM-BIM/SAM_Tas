@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Native Optimisation PR7b-2 acceptance driver. NOT production code and NOT part of SAM_Tas.sln: it is built by
+       hand (see ../README.md) against the SAM, SAM_Systems and SAM_Tas build folders of a sibling checkout. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <NoWarn>$(NoWarn);CS0618;MSB3270;MSB3277;CA1416</NoWarn>
+    <Root Condition="'$(Root)' == ''">$(MSBuildThisFileDirectory)..\..\..\..\..</Root>
+    <SamLibs>$(Root)\SAM\build</SamLibs>
+    <TasLibs>$(Root)\SAM_Tas\build</TasLibs>
+    <SysLibs>$(Root)\SAM_Systems\build</SysLibs>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SAM.Core"><HintPath>$(SamLibs)\SAM.Core.dll</HintPath></Reference>
+    <Reference Include="SAM.Geometry"><HintPath>$(SamLibs)\SAM.Geometry.dll</HintPath></Reference>
+    <Reference Include="SAM.Architectural"><HintPath>$(SamLibs)\SAM.Architectural.dll</HintPath></Reference>
+    <Reference Include="SAM.Analytical"><HintPath>$(SamLibs)\SAM.Analytical.dll</HintPath></Reference>
+    <Reference Include="SAM.Weather"><HintPath>$(SamLibs)\SAM.Weather.dll</HintPath></Reference>
+    <Reference Include="SAM.Math"><HintPath>$(SamLibs)\SAM.Math.dll</HintPath></Reference>
+    <Reference Include="SAM.Units"><HintPath>$(SamLibs)\SAM.Units.dll</HintPath></Reference>
+    <Reference Include="SAM.Core.Optimisation"><HintPath>$(SamLibs)\SAM.Core.Optimisation.dll</HintPath></Reference>
+    <Reference Include="SAM.Core.Systems"><HintPath>$(SysLibs)\SAM.Core.Systems.dll</HintPath></Reference>
+    <Reference Include="SAM.Analytical.Systems"><HintPath>$(SysLibs)\SAM.Analytical.Systems.dll</HintPath></Reference>
+    <Reference Include="SAM.Core.Tas"><HintPath>$(TasLibs)\SAM.Core.Tas.dll</HintPath></Reference>
+    <Reference Include="SAM.Weather.Tas"><HintPath>$(TasLibs)\SAM.Weather.Tas.dll</HintPath></Reference>
+    <Reference Include="SAM.Geometry.Tas"><HintPath>$(TasLibs)\SAM.Geometry.Tas.dll</HintPath></Reference>
+    <Reference Include="SAM.Analytical.Tas"><HintPath>$(TasLibs)\SAM.Analytical.Tas.dll</HintPath></Reference>
+    <Reference Include="SAM.Analytical.Tas.TPD"><HintPath>$(TasLibs)\SAM.Analytical.Tas.TPD.dll</HintPath></Reference>
+    <Reference Include="SAM.Analytical.Tas.GenOpt"><HintPath>$(TasLibs)\SAM.Analytical.Tas.GenOpt.dll</HintPath></Reference>
+    <Reference Include="Interop.TBD"><HintPath>$(TasLibs)\Interop.TBD.dll</HintPath><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+    <Reference Include="Interop.TSD"><HintPath>$(TasLibs)\Interop.TSD.dll</HintPath><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+    <Reference Include="Interop.TPD"><HintPath>$(TasLibs)\Interop.TPD.dll</HintPath><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+    <Reference Include="Interop.TCD"><HintPath>$(TasLibs)\Interop.TCD.dll</HintPath><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+  </ItemGroup>
+</Project>
