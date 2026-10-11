@@ -14,20 +14,16 @@ namespace SAM.Analytical.Tas.GenOpt
         /// <summary>
         /// The SHA-256 (lower-case hex) of every top-level Tas file of <paramref name="folder"/> that TasGenExecute
         /// discovers (<see cref="NativeGenOptWorkspace.IsTasFile"/>: T3D, TBD, TPD, TSD, TWD), by file name
-        /// (case-insensitive). "Apply best design" compares them with the run's (<see cref="TasModelRunner.SourceHashes"/>)
-        /// to refuse files that changed after the optimisation ran. Only read.
+        /// (case-insensitive), Energy Simulation's sizing copies left out as the run snapshot leaves them out
+        /// (<see cref="TasProjectFiles(string)"/>). "Apply best design" compares them with the run's
+        /// (<see cref="TasModelRunner.SourceHashes"/>) to refuse files that changed after the optimisation ran. Only read.
         /// </summary>
         public static Dictionary<string, string> TasFileHashes(string folder)
         {
-            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
-            {
-                throw new DirectoryNotFoundException("The Tas project folder does not exist: '" + folder + "'.");
-            }
-
             Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string path in Directory.GetFiles(folder, "*", SearchOption.TopDirectoryOnly).Where(NativeGenOptWorkspace.IsTasFile).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            foreach (string name in TasProjectFiles(folder).Files)
             {
-                result[Path.GetFileName(path)] = FileHash(path);
+                result[name] = FileHash(Path.Combine(folder, name));
             }
 
             return result;

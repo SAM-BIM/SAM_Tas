@@ -878,15 +878,15 @@ namespace SAM.Analytical.Tas.GenOpt
 
         /// <summary>
         /// The hashes of the project's Tas files now: the held ones read through their holds (no one else can open them),
-        /// the others as usual.
+        /// the others as usual. The same files as <see cref="Query.TasFileHashes"/> (sizing copies left out).
         /// </summary>
         private Dictionary<string, string> LiveHashes(IEnumerable<FileStream> holds)
         {
             Dictionary<string, FileStream> held = holds.ToDictionary(x => Path.GetFileName(x.Name), StringComparer.OrdinalIgnoreCase);
             Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string path in Directory.GetFiles(projectFolder, "*", SearchOption.TopDirectoryOnly).Where(NativeGenOptWorkspace.IsTasFile))
+            foreach (string name in Query.TasProjectFiles(projectFolder).Files)
             {
-                string name = Path.GetFileName(path);
+                string path = Path.Combine(projectFolder, name);
                 if (held.TryGetValue(name, out FileStream stream))
                 {
                     stream.Position = 0;
