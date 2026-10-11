@@ -4,7 +4,7 @@
 # Native Optimisation PR7b-2: licensed acceptance matrix of the "tas-model" engine (and PR9's open cases)
 
 Branch `feature/optimisation-pr7b2-acceptance` â†’ base `sow/2026-Q4` (cut from `28b59fcb`, the Sizing closeout). Record
-date: 2026-10-11. **This is the record of record.** Companion: SAM-BIM/SAM_UI, same branch name (the opt-in harness's
+date: 2026-10-11. **This is the record of record** (SAM-BIM/SAM_Tas#95). Companion: SAM-BIM/SAM_UI#223, same branch name (the opt-in harness's
 new cases; short record `documentation/NativeOptimisation-PR7b2-Acceptance.md`). The two PRs are independent: no product
 code changes in either, so either can merge first.
 
@@ -12,7 +12,7 @@ code changes in either, so either can merge first.
 
 Acceptance run and recorded. **No product code changed.** One defect found (D1 below) that needs an **owner decision**
 before any fix, because every fix option changes behaviour the owner approved on 2026-10-11 (Sizing option (a)). Four
-cases could not run for lack of an input (listed with the exact input). Open, not merged; CI and owner review next.
+cases could not run for lack of an input (listed with the exact input). SAM-BIM/SAM_Tas#95 and SAM-BIM/SAM_UI#223 open, not merged; CI and owner review next.
 
 ## Coverage matrix (reconciled)
 
