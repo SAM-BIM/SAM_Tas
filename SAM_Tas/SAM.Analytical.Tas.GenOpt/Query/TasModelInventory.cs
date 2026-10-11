@@ -17,7 +17,8 @@ namespace SAM.Analytical.Tas.GenOpt
         /// read-only, closed and released): the TBD's internal conditions (thermostat profiles) and the transparent
         /// constructions its building elements use (found through the elements, past the <c>GetConstruction(i)</c> null
         /// gaps), the TSD's annual heating and cooling demand, and the TPD's plant rooms, controllers and stored annual
-        /// results. The folder must hold at most one TBD, TSD and TPD (the files TasGenExecute discovers).
+        /// results. The folder must hold at most one TBD, TSD and TPD (the files TasGenExecute discovers); Energy
+        /// Simulation's sizing copies of the TBD are not counted and not opened (<see cref="TasProjectFiles(string)"/>).
         /// </summary>
         /// <param name="projectFolder">The Tas project folder. Only read.</param>
         public static TasModelInventory TasModelInventory(string projectFolder)
@@ -65,18 +66,29 @@ namespace SAM.Analytical.Tas.GenOpt
             return result;
         }
 
+        /// <summary>
+        /// The project's one file of <paramref name="extension"/> (full path), or null; Energy Simulation's sizing copies
+        /// are not the project's (<see cref="TasProjectFiles(string)"/>). Refuses a folder whose project file of that type
+        /// cannot be identified: more than one, or a TBD named like a sizing copy whose primary is missing.
+        /// </summary>
         internal static string SingleFile(string projectFolder, string extension)
         {
-            List<string> paths = Directory.GetFiles(projectFolder, "*", SearchOption.TopDirectoryOnly)
-                .Where(x => string.Equals(Path.GetExtension(x), extension, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (paths.Count > 1)
+            TasProjectFiles tasProjectFiles = TasProjectFiles(projectFolder);
+            List<string> unmatched = tasProjectFiles.UnmatchedSizingNames.Where(x => string.Equals(Path.GetExtension(x), extension, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (unmatched.Count > 0)
             {
-                throw new InvalidOperationException("The Tas project folder holds " + paths.Count + " " + extension + " files (" + string.Join(", ", paths.Select(Path.GetFileName)) + "); the tas-model engine needs at most one.");
+                throw new InvalidOperationException("The Tas project folder holds " + string.Join(", ", unmatched) + ", named like Energy Simulation's sizing copies of " + string.Join(", ", unmatched.Select(SizingCopyPrimary)) + ", which " + (unmatched.Count == 1 ? "is" : "are") + " not in the folder, so the project's " + extension + " cannot be identified; the tas-model engine does not guess.");
             }
 
-            return paths.FirstOrDefault();
+            List<string> names = tasProjectFiles.Files
+                .Where(x => string.Equals(Path.GetExtension(x), extension, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (names.Count > 1)
+            {
+                throw new InvalidOperationException("The Tas project folder holds " + names.Count + " " + extension + " files (" + string.Join(", ", names) + (tasProjectFiles.SizingCopies.Count == 0 ? string.Empty : "; sizing copies " + string.Join(", ", tasProjectFiles.SizingCopies) + " not counted") + "); the tas-model engine needs at most one.");
+            }
+
+            return names.Count == 0 ? null : Path.Combine(projectFolder, names[0]);
         }
 
         private static void ReadTbd(string path, List<TasInternalConditionInfo> internalConditions, List<TasGlazingConstructionInfo> glazingConstructions)

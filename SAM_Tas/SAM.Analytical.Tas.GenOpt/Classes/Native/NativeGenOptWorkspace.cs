@@ -23,7 +23,8 @@ namespace SAM.Analytical.Tas.GenOpt
     /// document exactly as the GenOpt-format writer writes it, plus the source folder's top-level Tas files of the types
     /// TasGenExecute itself discovers. Those types are TasGenComm's <c>TasFiles.TasExtension</c>: T3D, TBD, TPD, TSD
     /// and TWD. Runtime artifacts of earlier runs, such as Variables.txt, Output.txt, Error.txt, GenOpt files and
-    /// <c>tmp-genopt-run-*</c> folders, are never carried over.
+    /// <c>tmp-genopt-run-*</c> folders, are never carried over, nor are Energy Simulation's sizing copies of the TBD
+    /// (<see cref="Query.TasProjectFiles(string)"/>), which stay untouched in the source folder.
     /// </para>
     /// <para>
     /// Runs never share folders, so separate runs can coexist (Gate T T7). No registry value is touched.
@@ -95,15 +96,9 @@ namespace SAM.Analytical.Tas.GenOpt
 
             new ScriptFile(scriptText).Save(Path.Combine(result.ProjectDirectory, ScriptFileName));
 
-            foreach (string path in Directory.GetFiles(sourceDirectory, "*", SearchOption.TopDirectoryOnly).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            foreach (string name in Query.TasProjectFiles(sourceDirectory).Files)
             {
-                if (!IsTasFile(path))
-                {
-                    continue;
-                }
-
-                string name = Path.GetFileName(path);
-                System.IO.File.Copy(path, Path.Combine(result.ProjectDirectory, name), false);
+                System.IO.File.Copy(Path.Combine(sourceDirectory, name), Path.Combine(result.ProjectDirectory, name), false);
                 projectFiles.Add(name);
             }
 
