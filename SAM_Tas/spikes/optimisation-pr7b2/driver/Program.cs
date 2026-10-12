@@ -13,6 +13,12 @@
 //          copies the evaluation's model.tbd/tsd/tpd to <work>, writes the controllers, simulates every plant room with the
 //          generated script's call, SAVES, then reads the saved TPD with SAM_Tas SystemEnergyCentreResults and compares
 //          with Output.txt. kinds: energy | cost | co2 | -
+//   simulate <folder> <work> <arg3> <script|create> <arg7>   (follow-up 2026-10-12)
+//          copies the folder's single TBD/TSD/TPD to <work> as model.*, points them at each other as the generated script
+//          does, then PlantRoom.SimulateEx(1, 8760, arg3, pollutant, 10, flags, arg7, 0) for every plant room, printing its
+//          return value, duration and the annual consumption/CO2 sums (not saved). flags "script" = Load+Pipe (the
+//          generated script's), "create" = Load+Pipe+Duct+SimEvents+Cont (SAM_Tas Create.TPD's). Script: 0 script 0;
+//          Create.TPD: 15 create 1.
 // "pool" = SAM default library + My glazing systems (TCD); "permissive" = no Ug/light limits.
 
 using SAM.Analytical;
@@ -43,6 +49,7 @@ internal static class Program
             case "readers": return Readers(args[1], args[2].Split(','));
             case "plant": return Plant(args[1], args[2], args[3], args[4].Split(','));
             case "zones": return Zones(args[1]);
+            case "simulate": return Simulate(args[1], args[2], int.Parse(args[3], CultureInfo.InvariantCulture), args[4], int.Parse(args[5], CultureInfo.InvariantCulture));
         }
 
         string folder = args[1];
@@ -490,6 +497,71 @@ internal static class Program
     }
 
     private static string P(TasSetpointProfile p) => p == null ? "-" : p.Type + "/f" + R(p.Factor) + "/" + R(p.Setpoint) + "/h" + p.ChangedHours;
+
+    private static int Simulate(string folder, string work, int arg3, string flags, int arg7)
+    {
+        Directory.CreateDirectory(work);
+        foreach (string extension in new[] { "tbd", "tsd", "tpd" })
+        {
+            string source = Directory.GetFiles(folder, "*." + extension).Single();
+            File.Copy(source, Path.Combine(work, "model." + extension), true);
+            Console.WriteLine(extension + " " + Path.GetFileName(source) + " sha256 " + SAM.Analytical.Tas.GenOpt.Query.FileHash(source));
+        }
+
+        string tbdPath = Path.Combine(work, "model.tbd");
+        string tsdPath = Path.Combine(work, "model.tsd");
+        TSD.TSDDocument tsdFix = new TSD.TSDDocument();
+        tsdFix.open(tsdPath);
+        tsdFix.SimulationData.buildingPath = tbdPath;
+        tsdFix.save();
+        tsdFix.close();
+        Marshal.FinalReleaseComObject(tsdFix);
+
+        int data = (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe;
+        if (flags == "create")
+        {
+            data += (int)TPD.tpdSimulationData.tpdSimulationDataDuct + (int)TPD.tpdSimulationData.tpdSimulationDataSimEvents + (int)TPD.tpdSimulationData.tpdSimulationDataCont;
+        }
+
+        TPD.TPDDoc document = new TPD.TPDDoc();
+        document.Open(Path.Combine(work, "model.tpd"));
+        try
+        {
+            TPD.EnergyCentre energyCentre = document.EnergyCentre;
+            energyCentre.GetTSDData(1).FixTSDPath(tsdPath);
+            for (int i = 1; i <= energyCentre.GetPlantRoomCount(); i++)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                object result = energyCentre.GetPlantRoom(i).SimulateEx(1, 8760, arg3, energyCentre.ExternalPollutant.Value, 10.0, data, arg7, 0);
+                Console.WriteLine("plant room " + i + " '" + energyCentre.GetPlantRoom(i).Name + "' SimulateEx(1, 8760, " + arg3 + ", pollutant, 10, " + data + ", " + arg7 + ", 0) returned " + (result ?? "(null)") + " in " + watch.Elapsed.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture) + " s");
+            }
+
+            TPD.WrResultSet resultSet = (TPD.WrResultSet)energyCentre.GetResultSet(TPD.tpdResultsPeriod.tpdResultsPeriodAnnual, 0, 0, 0, null);
+            foreach (TPD.tpdResultVectorType type in new[] { TPD.tpdResultVectorType.tpdConsumption, TPD.tpdResultVectorType.tpdCo2 })
+            {
+                double sum = 0;
+                for (int i = 1; i <= resultSet.GetVectorSize(type); i++)
+                {
+                    Array values = (Array)((TPD.WrResultItem)resultSet.GetResultItem(type, i)).GetValues();
+                    if (values != null && values.Length != 0)
+                    {
+                        sum += (double)values.GetValue(0);
+                    }
+                }
+
+                Console.WriteLine("annual " + type + " " + R(sum));
+            }
+
+            resultSet.Dispose();
+        }
+        finally
+        {
+            try { document.Close(); } catch (COMException e) { Console.WriteLine("TPD close fault ignored (F2): " + e.Message); }
+            Marshal.FinalReleaseComObject(document);
+        }
+
+        return 0;
+    }
 
     private static string R(double? v) => v == null ? "-" : v.Value.ToString("R", CultureInfo.InvariantCulture);
 }
