@@ -9,7 +9,8 @@ SAM-BIM/SAM_Tas#95, whose follow-up section holds the evidence).
 
 ## Current status
 
-Fixed, regression-tested, licensed-verified. SAM-BIM/SAM_Tas#96 open for owner review; not merged.
+Fixed, regression-tested, licensed-verified; tightened on review (2026-10-12) to a **success allowlist** (below).
+SAM-BIM/SAM_Tas#96 open for owner review; not merged.
 
 ## Defect (measured)
 
@@ -29,21 +30,32 @@ So the arguments are not the cause; this TPD cannot size its plant here (a fixtu
 ## Fix
 
 `Create.TasScript` generates `PlantSimulated(plantRoomName, status)` and passes every plant room's `SimulateEx` answer
-to it before the results are read. It applies SAM_Tas's existing, measured policy (`SAM.Core.Tas.SimulationDiagnostic`,
-already used by SAM_Tas' own TPD simulation): an answer containing one of its **measured failure fragments** throws
-`Plant room "<name>" was not simulated: Tas answered "<status>".` (TasGenExecute writes it to Error.txt, the evaluation
-fails, the kernel's existing failure handling applies); every answer — success, silence, or one not yet measured — is
-written to `tas-model-trace.txt`. The fragment list is generated from `SimulationDiagnostic.KnownFailureFragments`, so the
-script and SAM_Tas cannot drift apart. No other block of the script changes; building-only scripts are unchanged.
+to it before the results are read. The answer is trimmed, then:
 
-**Decision (assumption for review):** an unmeasured answer is traced, not refused, exactly as `SimulationDiagnostic`
-decides for SAM_Tas's own simulation route; only "Done" has been observed as success. Refusing anything but "Done" would be
-stricter but could refuse valid runs on a TAS version answering differently.
+1. it contains one of `SAM.Core.Tas.SimulationDiagnostic`'s **measured failure fragments** → throws
+   `Plant room "<name>" was not simulated: Tas answered "<answer>".`;
+2. otherwise, unless it equals (case-insensitively) one of `SimulationDiagnostic`'s **measured success answers** ("Done") →
+   throws `Plant room "<name>" did not report success: Tas answered "<answer>" | nothing; accepted: "Done".`;
+3. every answer is written to `tas-model-trace.txt`.
+
+A throw goes to Error.txt, the evaluation fails and the kernel's existing failure handling applies. Both lists are
+generated from `SimulationDiagnostic.KnownSuccessAnswers`/`KnownFailureFragments`, so the script and SAM_Tas cannot drift
+apart, and a failure fragment wins over a success word ("Done, sizing failed" is a failure), as in `Classify`. No other
+block of the script changes; building-only scripts are unchanged.
+
+**Decision (review, 2026-10-12): allowlist, not "refuse only measured failures".** The first version followed
+`SimulationDiagnostic`'s own policy, which accepts silence and unknown answers — but that class states the policy is safe
+only because "the decisive gate is the complete ZoneTemperature reconciliation". The tas-model script has no such gate:
+whenever the plant did not run, the result set still holds the TPD's previous results, which look like valid numbers
+(D2). So silence or an unknown answer must fail the evaluation. "Done" is validated as `SimulateEx`'s success answer:
+Systems Demo, plant-only and building+plant chains, every argument set tried (below). A TAS version answering success
+differently would be refused loudly with its answer in the message — visible and fixed by adding the measured answer to
+`SimulationDiagnostic`; the opposite error (accepting a failure) would be silent.
 
 ## Files changed
 
 - `SAM.Analytical.Tas.GenOpt/Create/TasScript.cs` — the helper, the call, the remarks.
-- `SAM.Analytical.Tas.GenOpt.Tests/TasScriptTests.cs` — 11 cases (below); `Helpers/TasScriptCompiler.cs` — `Load`, which
+- `SAM.Analytical.Tas.GenOpt.Tests/TasScriptTests.cs` — 18 cases (below); `Helpers/TasScriptCompiler.cs` — `Load`, which
   compiles and loads a generated helper so a test can run it.
 - `SAM.Analytical.Tas.GenOpt.Tests/Golden/TasModel/controller.csx`, `everything.csx` — the two plant snapshots
   (regenerated with `SAM_TAS_UPDATE_SNAPSHOTS=1`; `setpoints.csx`/`glazing.csx` unchanged).
@@ -53,23 +65,34 @@ stricter but could refuse valid runs on a TAS version answering differently.
 
 - Regression tests run the script's **own generated** `PlantSimulated` (extracted, compiled at C# 7.0, invoked): the four
   measured failures refuse with the exact message; every `SimulationDiagnostic` fragment refuses; "Done", " Done ",
-  "", null and an unmeasured answer are traced, not refused; every plant room is checked before `GetResultSet`;
-  building-only scripts carry no check.
-- Mutation: with `TasScript.cs` reverted to `28b59fcb`, 13 of the new/affected tests fail (12, then the tightened
-  fragment test); restored, all pass.
-- `SAM.Analytical.Tas.GenOpt.Tests` **363/363** (352 before + 11), on GenOpt DLL `1C606D32` (deterministic rebuild).
+  "done", "DONE\r\n" and every `SimulationDiagnostic` success answer are accepted and traced; null, "", "   ",
+  "Simulation finished", "Not done" and "Done." refuse with the exact "did not report success" message; "Done, sizing
+  failed" is a failure; every plant room is checked before `GetResultSet`; building-only scripts carry no check.
+- Mutation (first version): with `TasScript.cs` reverted to `28b59fcb`, 13 tests fail; restored, all pass.
+- Mutation (allowlist): with the generator reverted to the fail-open `cf50b665`, the 6 silence/unknown cases and both
+  plant snapshots fail (test bin verified to load the mutant DLL `D506FED0`; a first `--no-build` attempt still loaded
+  the allowlist DLL and is void); restored (test bin `99D92EF7`), all pass.
+- `SAM.Analytical.Tas.GenOpt.Tests` **370/370** (352 before + 18) on GenOpt `99D92EF7`; first version 363/363.
 - Licensed (Tas 2.0.0.1, this workstation, copies only, one Tas operation at a time, bounded): CS Test at 10 °C now
   fails with `Plant room "Main PlantRoom" was not simulated: Tas answered "Sizing Flow Failed".`; a golden-section Run on
   it stops with outcome **EvaluationFailed** after 2 evaluations (8 s), no best point, nothing to apply; **Systems Demo
   control** P1 (HeatPumpController 3): 27 387.7943115234 kWh / 3 932.8885345459 kgCO2e, **bit-identical** to the PR7b-2
   run before the fix, trace `plant room "Plant Room" simulated: Done`. No Tas process left; sources' hashes unchanged.
+- Licensed, allowlist build (`99D92EF7`), targeted (the success path changed): Demo P1 again bit-identical
+  (27 387.7943115234 / 3 932.8885345459, `Done`); Demo building + plant chain (HJ definition, Test at its start point
+  20, 24, 3) **bit-identical on all four outputs** to PR7b-2's HJ first evaluation (27 387.8365478516, 15 227.8941594962,
+  2 978.52016448265, 3 932.89582824707; `Done`); It3B still refused ("Sizing Flow Failed"). No Tas process left.
   Evidence (local): `C:\TasOut\pr7b-2\followup-2026-10-12` (`EXPECTATIONS.md`, `simulate\`, `runs\`, `runs-d2\`,
-  `build\genopt-d2-final.trx`, `build\mutation-d2.log`) and `C:\TasOut\pr7b-2\steps.log`.
+  `runs-d2b\`, `build\genopt-d2-final.trx`, `build\genopt-d2b-final.trx`, `build\mutation-d2*.log`) and
+  `C:\TasOut\pr7b-2\steps.log`.
 
 ## Risks / not covered
 
-- An answer TAS has not yet been seen to give on failure still passes (traced). The building stage's `tbdDocument.simulate`
-  return is not checked either; it has never been observed to fail silently and is not changed here.
+- A recorded output can still be NaN after "Done" (the evaluator accepts NaN; a NaN objective never wins, a NaN recorded
+  output is shown as NaN). Not observed after "Done"; not changed here.
+- The building stage's `tbdDocument.simulate` returns an `int` that is not checked. It writes a fresh `model.tsd` (no TSD
+  is copied in that chain), so a run that did not happen leaves no TSD and the evaluation fails when it is opened; a
+  partially written TSD is the residual case. The success value is not measured, so it is not changed here.
 - The It3B TPD's "Sizing Flow Failed" on this workstation is not explained (it simulated on the owner's machine when
   created). Not optimisation code.
 

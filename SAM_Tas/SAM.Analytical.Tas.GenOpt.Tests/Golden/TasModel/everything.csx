@@ -149,16 +149,24 @@ double ResultSum(TPD.WrResultSet resultSet, TPD.tpdResultVectorType type)
     return sum;
 }
 
-// SimulateEx answers a status. A measured failure (SAM_Tas SimulationDiagnostic's fragments) fails the evaluation: the
-// result set would hold what the TPD held before (PR7b-2 D2: "Sizing Flow Failed" gave 0.25 kWh and NaN). Any other
-// answer is kept in the trace.
+// SimulateEx answers a status, and the result set holds what the TPD held before whenever the simulation did not run
+// (PR7b-2 D2: "Sizing Flow Failed" gave 0.25 kWh and NaN). The script has no other proof that it ran, so only an
+// answer SAM_Tas SimulationDiagnostic has measured as success is accepted; a measured failure, an unknown answer or
+// no answer fails the evaluation. Every answer is traced.
 void PlantSimulated(string plantRoomName, string status)
 {
     trace.Add("plant room \"" + plantRoomName + "\" simulated: " + status);
+    string[] successes = new string[] { "Done" };
     string[] failures = new string[] { "has no components", "has errors", "failed to open", "failed", "error", "cannot", "unable", "invalid", "missing" };
-    if (status != null && failures.Any(x => status.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))
+    string answer = status == null ? string.Empty : status.Trim();
+    if (failures.Any(x => answer.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))
     {
-        throw new Exception("Plant room \"" + plantRoomName + "\" was not simulated: Tas answered \"" + status.Trim() + "\".");
+        throw new Exception("Plant room \"" + plantRoomName + "\" was not simulated: Tas answered \"" + answer + "\".");
+    }
+
+    if (!successes.Any(x => string.Equals(answer, x, StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new Exception("Plant room \"" + plantRoomName + "\" did not report success: Tas answered " + (answer.Length == 0 ? "nothing" : "\"" + answer + "\"") + "; accepted: \"" + string.Join("\", \"", successes) + "\".");
     }
 }
 

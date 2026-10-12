@@ -254,7 +254,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
         /// <summary>
         /// PR7b-2 D2: a SAM-created TPD whose plant cannot size answers "Sizing Flow Failed" from SimulateEx in 0.14 s; the
         /// script discarded the answer and returned the TPD's old results (0.25 kWh, CO2 NaN) as a successful evaluation.
-        /// The other three are SAM_Tas SimulationDiagnostic's measured failures.
+        /// The other three are SAM_Tas SimulationDiagnostic's measured failures. Only measured success is accepted (below).
         /// </summary>
         [TestCase("Sizing Flow Failed")]
         [TestCase("Plant Room Has Errors")]
@@ -277,18 +277,48 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             }
         }
 
-        /// <summary>As SAM_Tas' own TPD simulation: only a measured failure refuses; success, silence and anything not yet
-        /// measured go to the trace.</summary>
+        /// <summary>The measured success answer ("Done": the Systems Demo's SimulateEx, PR7b-2) is accepted and traced.</summary>
         [TestCase("Done")]
         [TestCase(" Done ")]
-        [TestCase("")]
-        [TestCase(new object[] { null })]
-        [TestCase("Simulation finished")]
-        public void Success_silence_or_an_unmeasured_status_is_traced_not_refused(string status)
+        [TestCase("done")]
+        [TestCase("DONE\r\n")]
+        public void The_measured_success_answer_is_accepted_and_traced(string status)
         {
             Assert.That(() => PlantSimulated("Plant Room", status, out _), Throws.Nothing);
             PlantSimulated("Plant Room", status, out List<string> trace);
             Assert.That(trace, Is.EqualTo(new[] { "plant room \"Plant Room\" simulated: " + status }));
+        }
+
+        [Test]
+        public void Every_success_answer_of_SimulationDiagnostic_is_accepted()
+        {
+            List<string> answers = SAM.Core.Tas.SimulationDiagnostic.KnownSuccessAnswers.ToList();
+            Assert.That(answers, Is.Not.Empty);
+            foreach (string answer in answers)
+            {
+                Assert.That(() => PlantSimulated("Plant Room", answer, out _), Throws.Nothing, answer);
+            }
+        }
+
+        /// <summary>
+        /// The script has no other proof that the plant was simulated (the result set keeps the TPD's previous results), so
+        /// silence and an answer never measured as success fail the evaluation instead of passing stale numbers.
+        /// </summary>
+        [TestCase(null, "nothing")]
+        [TestCase("", "nothing")]
+        [TestCase("   ", "nothing")]
+        [TestCase("Simulation finished", "\"Simulation finished\"")]
+        [TestCase("Not done", "\"Not done\"")]
+        [TestCase("Done.", "\"Done.\"")]
+        public void Silence_or_an_unmeasured_answer_fails_the_evaluation(string status, string shown)
+        {
+            Assert.That(() => PlantSimulated("Main PlantRoom", status, out _), Throws.Exception.With.Message.EqualTo("Plant room \"Main PlantRoom\" did not report success: Tas answered " + shown + "; accepted: \"Done\"."));
+        }
+
+        [Test]
+        public void An_answer_with_a_failure_fragment_is_a_failure_even_if_it_starts_like_success()
+        {
+            Assert.That(() => PlantSimulated("Plant Room", "Done, sizing failed", out _), Throws.Exception.With.Message.EqualTo("Plant room \"Plant Room\" was not simulated: Tas answered \"Done, sizing failed\"."));
         }
 
         [Test]

@@ -48,8 +48,8 @@ namespace SAM.Analytical.Tas.GenOpt
         /// profiles; zone occupant sensible gain and resultant temperature for overheating), close, release.</item>
         /// <item>Plant, when a variable or output needs it: without a building simulation, re-point the TSD's building
         /// path at the evaluation's TBD first (F1); open the TPD, FixTSDPath, write every controller setpoint as a double,
-        /// simulate every plant room as the Systems Demo does (a status with one of <see cref="SAM.Core.Tas.SimulationDiagnostic"/>'s
-        /// measured failure fragments fails the evaluation; every status is traced), read every annual result, dispose the result set, release
+        /// simulate every plant room as the Systems Demo does (only a status <see cref="SAM.Core.Tas.SimulationDiagnostic"/> has
+        /// measured as success is accepted; anything else fails the evaluation; every status is traced), read every annual result, dispose the result set, release
         /// the TPD (no Save: the evaluation copy is discarded; F2's shutdown crash happens after the results are read).</item>
         /// <item>Write <c>Result</c> and <c>Y1..Ym</c> (the outputs, objective first), then the read-back values.</item>
         /// </list>
@@ -406,16 +406,24 @@ namespace SAM.Analytical.Tas.GenOpt
                     Line("    return sum;");
                     Line("}");
                     Line();
-                    Line("// SimulateEx answers a status. A measured failure (SAM_Tas SimulationDiagnostic's fragments) fails the evaluation: the");
-                    Line("// result set would hold what the TPD held before (PR7b-2 D2: \"Sizing Flow Failed\" gave 0.25 kWh and NaN). Any other");
-                    Line("// answer is kept in the trace.");
+                    Line("// SimulateEx answers a status, and the result set holds what the TPD held before whenever the simulation did not run");
+                    Line("// (PR7b-2 D2: \"Sizing Flow Failed\" gave 0.25 kWh and NaN). The script has no other proof that it ran, so only an");
+                    Line("// answer SAM_Tas SimulationDiagnostic has measured as success is accepted; a measured failure, an unknown answer or");
+                    Line("// no answer fails the evaluation. Every answer is traced.");
                     Line("void PlantSimulated(string plantRoomName, string status)");
                     Line("{");
                     Line("    trace.Add(\"plant room \\\"\" + plantRoomName + \"\\\" simulated: \" + status);");
+                    Line("    string[] successes = new string[] { " + string.Join(", ", SAM.Core.Tas.SimulationDiagnostic.KnownSuccessAnswers.Select(Literal)) + " };");
                     Line("    string[] failures = new string[] { " + string.Join(", ", SAM.Core.Tas.SimulationDiagnostic.KnownFailureFragments.Select(Literal)) + " };");
-                    Line("    if (status != null && failures.Any(x => status.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))");
+                    Line("    string answer = status == null ? string.Empty : status.Trim();");
+                    Line("    if (failures.Any(x => answer.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))");
                     Line("    {");
-                    Line("        throw new Exception(\"Plant room \\\"\" + plantRoomName + \"\\\" was not simulated: Tas answered \\\"\" + status.Trim() + \"\\\".\");");
+                    Line("        throw new Exception(\"Plant room \\\"\" + plantRoomName + \"\\\" was not simulated: Tas answered \\\"\" + answer + \"\\\".\");");
+                    Line("    }");
+                    Line();
+                    Line("    if (!successes.Any(x => string.Equals(answer, x, StringComparison.OrdinalIgnoreCase)))");
+                    Line("    {");
+                    Line("        throw new Exception(\"Plant room \\\"\" + plantRoomName + \"\\\" did not report success: Tas answered \" + (answer.Length == 0 ? \"nothing\" : \"\\\"\" + answer + \"\\\"\") + \"; accepted: \\\"\" + string.Join(\"\\\", \\\"\", successes) + \"\\\".\");");
                     Line("    }");
                     Line("}");
                     Line();
