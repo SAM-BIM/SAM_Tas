@@ -72,6 +72,33 @@ committed golden is unchanged.
   `PeakHTGLoad[W/m2] 42.93`). Both **RESULT PASS**; no Tas process left.
 - PR CI (`build`, `spdx`): see the PR.
 
+## Tested content, local versus GitHub checks, reproduction
+
+- PR SAM-BIM/SAM_Tas#98, base `sow/2026-Q4`. **Validated content SHA `36fb21d4c632d65a543a31ab32d905c6cbadea52`**, built
+  against SAM `b28daa77` (SAM-BIM/SAM#192); later commits are record-only. The final PR head and its GitHub checks are named in
+  the PR description.
+- "Validation" above is **local** (this laptop, VS 18 MSBuild, .NET 8, licensed Tas) unless it says "PR CI"; the GitHub
+  checks are `build` (which runs the benchmark, TM59 and GenOpt suites offline) and `spdx`.
+- Reproduce (SAM built first from its PR branch; MSBuild = `C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe`):
+
+  ```
+  MSBuild SAM_Tas.sln -restore -p:Configuration=Release -m
+  dotnet test SAM_Tas/SAM.Analytical.Tas.TM59.Tests/SAM.Analytical.Tas.TM59.Tests.csproj -c Release            # 1132/1132
+  dotnet test benchmark/SAM.Analytical.Tas.Benchmark.Tests/SAM.Analytical.Tas.Benchmark.Tests.csproj -c Release --filter "TestCategory!=Simulation"   # 23/23
+  dotnet test SAM_Tas/SAM.Analytical.Tas.GenOpt.Tests/SAM.Analytical.Tas.GenOpt.Tests.csproj -c Release --filter "TestCategory!=Simulation"          # 426/426
+  ```
+
+- Licensed confirmation (machine-local, not committed; prerequisites: licensed Tas, the two #92 TSD copies). Probe source
+  `C:\TasOut\units-fix\probe` (references this checkout's `build\`), built with `dotnet build -c Release -o ..\bin`, run on
+  copies in `C:\TasOut\units-fix\demo` and `\sam`:
+
+  ```
+  UnitsProbe.exe confirm "C:\TasOut\units-fix\demo\Systems Training.tsd" 15227840.66370964 2978532.5259896517 38727.40625
+  UnitsProbe.exe confirm "C:\TasOut\units-fix\sam\000000_SAM_AnalyticalModel.tsd" 0 2523751.8729965687 -
+  ```
+
+  Logs: `C:\TasOut\units-fix\demo-confirm.log`, `sam-confirm.log` (both `RESULT PASS`).
+
 ## Unresolved issues and risks
 
 - Merge **after** SAM_Tas_Grasshopper: its pre-change component would divide the new kWh by 1000 again.
