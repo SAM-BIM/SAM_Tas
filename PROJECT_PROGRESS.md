@@ -1,5 +1,15 @@
 # Project Progress - SAM_Tas (2026-Q4)
 
+## Q4 Tas result units correction closeout - 2026-10-12
+
+- SAM-BIM/SAM_Tas#98 merged as `92bfad33c9812d0be4190fc18dfc1bb18d63adaa`, approved head `72c4f3feb3e20702db4fd9232b5ba241b2c76303` (validated content SHA `36fb21d4`; later commits record-only). Owner-approved; merged last. The TSD converter now stores building consumption in kWh and peaks in kW and stamps `ResultUnitsVersion = 1`; the benchmark reads through SAM's helper so legacy and new results publish identical kWh/kW (golden unchanged). GenOpt untouched.
+- Coordinated set (option A of SAM_Tas#92, owner-approved 2026-10-12): SAM#192 -> `be9c00cadb237cdc5a64351dce90dd7731be438c` (head `9268ccb7`), SAM_Tas_Grasshopper#13 -> `8054867fc317135e30792defe9796addfd12cef2` (head `d57b150c`), SAM_OpenStudio#26 -> `e0f9d17cc392a7217694d3ed8805c187c9d4a58b` (head `310bcffc`), SAM_Tas#98 -> `92bfad33c9812d0be4190fc18dfc1bb18d63adaa` (head `72c4f3fe`). Merge commits, each pinned to its approved full head SHA, in the approved order SAM -> Grasshopper/OpenStudio -> SAM_Tas the same day.
+- Validation (recorded in the PR record): TM59 1132/1132, benchmark 23/23, GenOpt 426/426, mutation 5/5 killed; licensed converter confirmation 2/2 on copies of the #92 TSDs, bit-identical to the hourly sum/max / 1000. Merged-Q4 CI: Build `38251433825` success at `92bfad33`. PR checks build/spdx green on the exact head; no review findings.
+- Dependency CI: each downstream PR CI was rerun after SAM#192 merged and its task branch was deleted; the logs show `Cloning SAM-BIM/SAM @ sow/2026-Q4` (Grasshopper run `38247874467` attempt 2, OpenStudio run `38247876785` attempt 2, SAM_Tas run `38247884982` attempt 3, all success on the unchanged approved heads).
+- Compatibility: results carry `ResultUnitsVersion = 1` (consumption kWh, peaks kW). Unmarked results are read by exact recorded `Source` (`SAM.Analytical.Tas` = legacy Wh/W, divided once; `SAM.Analytical.OpenStudio` = kWh/kW); any other producer or marker gives unknown units, which DesignExplorer shows as empty cells. Persisted results are not migrated. Limitation: generic parameter views and external scripts reading the raw parameter see Wh/W on old unmarked Tas results and kWh/kW on new ones; scripts that applied their own /1000 to Tas values must stop doing so for newly corrected results. Details: SAM `documentation/TasResultUnits-PR.md`.
+- Cleanup: remote task branch `fix/tas-result-units-kwh` deleted with a lease on the approved head after confirming it was in `sow/2026-Q4` and no open PR used it; local branch deleted and the checkout returned to `sow/2026-Q4` (clean, equal to origin). No other branch touched.
+- Remaining: none. Next: PR10 packaging and installed-build validation; not started.
+
 ## Branch
 
 `sow/2026-Q4` - bootstrapped 2026-10-06 from `master` `28ac11a7`. Frozen Q3 record: `sow/2026-Q3` @ `7d4ff52f` (not modified).
