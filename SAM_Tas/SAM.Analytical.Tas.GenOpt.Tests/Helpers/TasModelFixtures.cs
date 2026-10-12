@@ -5,6 +5,7 @@ using SAM.Core.Optimisation;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace SAM.Analytical.Tas.GenOpt.Tests.Helpers
 {
@@ -50,7 +51,71 @@ namespace SAM.Analytical.Tas.GenOpt.Tests.Helpers
                 PlantEnergy = 27387.79,
                 PlantCost = 7363.17,
                 PlantCO2 = 3932.89,
+                // As read from the Demo TBD (PR7b-2 D1, 2026-10-12): tbdDesignSizingOnly, sized again by every simulation.
+                ZoneSizing = new[]
+                {
+                    new TasZoneSizing("B1_Office 1", TasZoneSizing.DesignSizingOnly, 1593.755126953125, TasZoneSizing.DesignSizingOnly, 963.8809204101562),
+                    new TasZoneSizing("B1_Office 2", TasZoneSizing.DesignSizingOnly, 1484.2064208984375, TasZoneSizing.DesignSizingOnly, 870.9940185546875),
+                },
             };
+        }
+
+        /// <summary>
+        /// ModelA.sam's folder after Energy Simulation with Sizing on (the default; PR7b-2 D1, read 2026-10-12): every zone
+        /// tbdNoSizing with the capacities Sizing fixed; Cell 1 heating 21 °C (24-hour, setback 16), cooling 25 °C.
+        /// </summary>
+        public static TasModelInventory ModelASizingOn()
+        {
+            TasModelInventory result = ModelA();
+            result.ZoneSizing = new[]
+            {
+                new TasZoneSizing("Cell 1", TasZoneSizing.NoSizing, 1586.5380859375, TasZoneSizing.NoSizing, 2947.120849609375),
+                new TasZoneSizing("Cell 2", TasZoneSizing.NoSizing, 1525.4364013671875, TasZoneSizing.NoSizing, 2671.56298828125),
+            };
+            return result;
+        }
+
+        /// <summary>The same folder after Energy Simulation with Sizing off (read 2026-10-12): every zone tbdSizing.</summary>
+        public static TasModelInventory ModelASizingOff()
+        {
+            TasModelInventory result = ModelA();
+            result.ZoneSizing = new[]
+            {
+                new TasZoneSizing("Cell 1", TasZoneSizing.Sizing, 209632.09375, TasZoneSizing.Sizing, 48761.8203125),
+                new TasZoneSizing("Cell 2", TasZoneSizing.Sizing, 118919.2890625, TasZoneSizing.Sizing, 16023.6904296875),
+            };
+            return result;
+        }
+
+        private static TasModelInventory ModelA()
+        {
+            float[] heating = Enumerable.Range(0, 24).Select(h => h >= 7 && h < 19 ? 21f : 16f).ToArray();
+            float[] cooling = Enumerable.Range(0, 24).Select(h => h >= 7 && h < 19 ? 25f : 28f).ToArray();
+            return new TasModelInventory(
+                "000000_SAM_AnalyticalModel.tbd",
+                "000000_SAM_AnalyticalModel.tsd",
+                null,
+                new[]
+                {
+                    new TasInternalConditionInfo("Cell 1", null, 1, new TasSetpointProfile(TasSetpointProfileType.Hourly, 1, 21, 12, heating), new TasSetpointProfile(TasSetpointProfileType.Hourly, 1, 25, 12, cooling)),
+                    new TasInternalConditionInfo("Cell 1 - HDD", null, 1, new TasSetpointProfile(TasSetpointProfileType.Value, 1, 21), null),
+                    new TasInternalConditionInfo("Cell 2", null, 1, new TasSetpointProfile(TasSetpointProfileType.Hourly, 1, 21, 12, heating), new TasSetpointProfile(TasSetpointProfileType.Hourly, 1, 25, 12, cooling)),
+                    new TasInternalConditionInfo("Cell 2 - HDD", null, 1, new TasSetpointProfile(TasSetpointProfileType.Value, 1, 21), null),
+                },
+                new[]
+                {
+                    new TasGlazingConstructionInfo(SamGlazing, new[] { "Windows: SIM_EXT_GLZ -pane", "Windows: SIM_EXT_GLZ_6364C1DA -pane" }, 0.4001609981060028, 1.2433900833129883, 0.803563117980957),
+                });
+        }
+
+        /// <summary>
+        /// <paramref name="tasModelInventory"/> with its zones sized in every simulation (tbdDesignSizingOnly, as the Systems
+        /// Demo), so its TBD targets are offered and applied (PR7b-2 D1); an inventory without zone sizing refuses them.
+        /// </summary>
+        public static TasModelInventory Sized(this TasModelInventory tasModelInventory)
+        {
+            tasModelInventory.ZoneSizing = new[] { new TasZoneSizing("Zone 1", TasZoneSizing.DesignSizingOnly, 1000, TasZoneSizing.DesignSizingOnly, 1000) };
+            return tasModelInventory;
         }
 
         public static TasModelInventory SamModel()
@@ -69,7 +134,15 @@ namespace SAM.Analytical.Tas.GenOpt.Tests.Helpers
                 new[]
                 {
                     new TasGlazingConstructionInfo(SamGlazing, new[] { "GLAZING 1", "GLAZING 2" }, 0.4001609981060028, 1.2433900833129883, 0.803563117980957),
-                });
+                })
+            {
+                // Sized in every simulation (as after Energy Simulation with Sizing off), so its TBD targets are offered.
+                ZoneSizing = new[]
+                {
+                    new TasZoneSizing("Kitchen", TasZoneSizing.Sizing, 0, TasZoneSizing.Sizing, 0),
+                    new TasZoneSizing("Store", TasZoneSizing.Sizing, 0, TasZoneSizing.Sizing, 0),
+                },
+            };
         }
 
         /// <summary>The PR7a-2 pool (values as calculated; generic names), in source order.</summary>

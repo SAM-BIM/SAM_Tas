@@ -16,7 +16,8 @@ namespace SAM.Analytical.Tas.GenOpt
     /// Runs a "tas-model" definition: the model is changed and read by a generated TasGenExecute script, driven by the
     /// SAM.Math kernel through the same evaluator and workspace as the "tas-script" route (Gate T protocol).
     /// <para>The constructor does everything that needs no process, so a definition that cannot run fails before any
-    /// folder is created: it checks the definition against <see cref="Query.TasModelCapabilities"/> and the model's
+    /// folder is created: it refuses TBD targets when the model's zones are not sized in every simulation (OPT617,
+    /// <see cref="Query.TasModelSizingRefusal"/>, PR7b-2 D1), checks the definition against <see cref="Query.TasModelCapabilities"/> and the model's
     /// catalogue (names not in the model are OPT609), resolves every glazing choice to its options, maps the method
     /// onto the kernel (<see cref="Convert.ToSAM_TasModelKernel"/>) and generates the script
     /// (<see cref="Create.TasScript"/>).</para>
@@ -26,6 +27,9 @@ namespace SAM.Analytical.Tas.GenOpt
     /// </summary>
     public sealed class TasModelRunner
     {
+        /// <summary>The refusal of a TBD target on a model whose zones are not sized in every simulation (PR7b-2 D1).</summary>
+        public const string SizingRefusalCode = "OPT617";
+
         private readonly TasModelRunSettings settings;
 
         /// <param name="optimisationDefinition">The definition (engine "tas-model").</param>
@@ -40,6 +44,20 @@ namespace SAM.Analytical.Tas.GenOpt
             }
 
             Inventory = settings.Inventory ?? Query.TasModelInventory(settings.ProjectFolder);
+
+            // PR7b-2 D1: TBD targets need zones sized in every simulation; said here, before the catalogue check would
+            // only report them as "not in this model". Each evaluation checks the TBD itself again (Create.TasScript).
+            string sizingRefusal = Query.TasModelSizingRefusal(Inventory);
+            List<OptimisationDiagnostic> sizing = optimisationDefinition.Variables
+                .Select((x, i) => new { Variable = x, Index = i })
+                .Where(x => sizingRefusal != null && TasModelKind.IsBuildingTarget(x.Variable?.Target?.Kind))
+                .Select(x => new OptimisationDiagnostic(DiagnosticSeverity.Error, SizingRefusalCode, "variables[" + x.Index + "].target", "“" + x.Variable.Name + "” changes the TBD. " + sizingRefusal, "Remove the zone setpoint and glazing variables, or run Energy Simulation with Sizing off first."))
+                .ToList();
+            if (sizing.Count > 0)
+            {
+                throw new TasOptimisationDefinitionException(sizing);
+            }
+
             List<TasGlazingSystem> pool = (settings.GlazingPool ?? Enumerable.Empty<TasGlazingSystem>()).Where(x => x != null).ToList();
             Catalogue = Query.TasModelCatalogue(Inventory, pool, settings.GlazingFilter);
             Diagnostics = optimisationDefinition.Diagnostics(Query.TasModelCapabilities(), Catalogue).AsReadOnly();

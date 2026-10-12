@@ -647,7 +647,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 {
                     new TasGlazingConstructionInfo(TasModelFixtures.SamGlazing, new[] { "GLAZING 1", "GLAZING 2" }, 0.4001609981060028, 1.2433900833129883, 0.803563117980957),
                     new TasGlazingConstructionInfo("Windows: Rooflight -pane", new[] { "ROOF 1" }, 0.5, 1.5, 0.6),
-                });
+                }).Sized();
                 List<TasModelDesignChange> changes = Query.TasModelDesignChanges(TasModelFixtures.Read(TasScriptTests.Glazing), new double[] { 3 }, AttachedGlazingOptions());
                 const string pane = "Windows: Triple low-e a5191c -pane";
 
@@ -704,7 +704,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 TasModelInventory before = new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, null, new[]
                 {
                     new TasGlazingConstructionInfo(TasModelFixtures.SamGlazing, new[] { "GLAZING 1" }, 0.4001609981060028, 1.2433900833129883, 0.803563117980957),
-                });
+                }).Sized();
                 Dictionary<string, IReadOnlyList<TasGlazingOption>> options = AttachedGlazingOptions();
                 TasGlazingSystem triple = options["Glazing"][2].System;
                 triple.ApertureConstruction = new ApertureConstruction(triple.Guid, triple.Name, ApertureType.Window, new[] { new ConstructionLayer("Low-e 6mm", 0.006) }, null);
@@ -755,6 +755,119 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                 {
                     Environment.SetEnvironmentVariable("SAM_TAS_GENOPT_STUB_SPEC", null);
                 }
+            }
+        }
+
+        // ---- PR7b-2 D1: Apply of a TBD change only on zones sized in every simulation (a direct caller of the applier)
+
+        private static TasModelInventory Fixed(TasModelInventory inventory)
+        {
+            inventory.ZoneSizing = new[] { new TasZoneSizing("B1_Office 1", TasZoneSizing.NoSizing, 1593.75, TasZoneSizing.NoSizing, 963.88) };
+            return inventory;
+        }
+
+        private static TasModelDesignApplier Refusing(string project, IReadOnlyDictionary<string, string> hashes, TasModelInventory inventory)
+        {
+            return new TasModelDesignApplier(project, inventory, hashes)
+            {
+                TbdWriter = (path, list) => throw new AssertionException("nothing may be written"),
+                TpdWriter = (path, list) => throw new AssertionException("nothing may be written"),
+                InventoryReader = staging => throw new AssertionException("nothing may be read back"),
+            };
+        }
+
+        [Test]
+        public void Apply_refuses_a_setpoint_change_on_a_model_with_fixed_capacities_before_anything_is_copied()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => Refusing(project, hashes, Fixed(Inventory())).Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+
+                Assert.That(exception.Message, Does.StartWith("Zone setpoints and glazing cannot be optimised on this model: its TBD holds zone heating/cooling capacities fixed by Energy Simulation's Sizing (zone “B1_Office 1”)."));
+                Assert.That(exception.Message, Does.EndWith(" Nothing was changed."));
+                Assert.That(exception.ProjectChanged, Is.False);
+                Assert.That(Query.TasFileHashes(project), Is.EqualTo(hashes));
+                Assert.That(Directory.Exists(Path.Combine(project, TasModelDesignApplier.WorkFolderName)), Is.False, "no work folder");
+            }
+        }
+
+        [Test]
+        public void Apply_refuses_a_glazing_change_on_a_model_with_fixed_capacities()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = folder.Folder("project");
+                System.IO.File.WriteAllText(Path.Combine(project, "000000_SAM_AnalyticalModel.tbd"), "tbd");
+                TasModelInventory inventory = TasModelFixtures.ModelASizingOn();
+                List<TasModelDesignChange> changes = Query.TasModelDesignChanges(TasModelFixtures.Read(TasScriptTests.Glazing), new double[] { 3 }, AttachedGlazingOptions());
+
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => Refusing(project, Query.TasFileHashes(project), inventory).Apply(changes));
+                Assert.That(exception.Message, Does.Contain("(2 zones: “Cell 1”, “Cell 2”)"));
+            }
+        }
+
+        [Test]
+        public void Apply_refuses_a_mixed_change_whole_so_the_controller_is_not_written_alone()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => Refusing(project, hashes, Fixed(Inventory())).Apply(Changes(TasScriptTests.Everything, 21, -1)));
+                Assert.That(exception.Message, Does.StartWith("Zone setpoints and glazing cannot be optimised on this model"));
+                Assert.That(Query.TasFileHashes(project), Is.EqualTo(hashes));
+                Assert.That(Directory.Exists(Path.Combine(project, TasModelDesignApplier.WorkFolderName)), Is.False, "no work folder");
+            }
+        }
+
+        [Test]
+        public void Apply_of_a_controller_change_on_a_model_with_fixed_capacities_is_written()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                Dictionary<string, string> hashes = Query.TasFileHashes(project);
+                TasModelDesignApplier applier = new TasModelDesignApplier(project, Fixed(Inventory()), hashes)
+                {
+                    TbdWriter = (path, list) => throw new AssertionException("no TBD change"),
+                    TpdWriter = (path, list) =>
+                    {
+                        System.IO.File.AppendAllText(path, " written");
+                        return list.Select(x => new TasModelAppliedValue(x, "3", x.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture), true)).ToList();
+                    },
+                    InventoryReader = staging => Fixed(Inventory(controller: -1)),
+                };
+
+                TasModelApplyResult result = applier.Apply(Changes(TasScriptTests.Controller, -1));
+                Assert.That(result.FilesReplaced, Is.EqualTo(new[] { Tpd }));
+                Assert.That(System.IO.File.ReadAllText(Path.Combine(project, Tbd)), Is.EqualTo("tbd"), "the TBD is untouched");
+            }
+        }
+
+        [Test]
+        public void Apply_refuses_a_TBD_change_when_the_inventory_has_no_zone_sizing()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                TasModelInventory inventory = Inventory();
+                inventory.ZoneSizing = null;
+                TasModelApplyException exception = Assert.Throws<TasModelApplyException>(() => Refusing(project, Query.TasFileHashes(project), inventory).Apply(Changes(TasScriptTests.Setpoints, 21.25, 26.5)));
+                Assert.That(exception.Message, Does.Contain("is not known (not read)"));
+            }
+        }
+
+        [Test]
+        public void A_TBD_target_already_at_its_best_value_needs_no_write_and_is_not_refused()
+        {
+            using (TestFolder folder = new TestFolder())
+            {
+                string project = Project(folder);
+                TasModelApplyResult result = Refusing(project, Query.TasFileHashes(project), Fixed(Inventory())).Apply(Changes(TasScriptTests.Setpoints, 20, 24));
+                Assert.That(result.FilesReplaced, Is.Null.Or.Empty);
+                Assert.That(result.Values.All(x => !x.Changed), Is.True);
             }
         }
 
@@ -811,7 +924,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                         new TasPlantControllerInfo("HeatPumpController", "tpdTempSensor", controller),
                         new TasPlantControllerInfo("Controller 2", "tpdLoadSensor", 0.5),
                     }),
-                });
+                }).Sized();
         }
 
         private static TasModelInventory SamInventory(float[] cooling)
@@ -820,7 +933,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             return new TasModelInventory("000000_SAM_AnalyticalModel.tbd", null, null, new[]
             {
                 new TasInternalConditionInfo("Studio 1_0", "S54_Rehearsal - Studio 1_0", 1, new TasSetpointProfile(TasSetpointProfileType.Value, 1, -50), new TasSetpointProfile(TasSetpointProfileType.Hourly, 1, setpoint, cooling.Count(x => x == setpoint), cooling)),
-            });
+            }).Sized();
         }
 
         /// <summary>The glazing case's options with SAM window systems attached (as the runner resolves them from a SAM UI pool).</summary>
