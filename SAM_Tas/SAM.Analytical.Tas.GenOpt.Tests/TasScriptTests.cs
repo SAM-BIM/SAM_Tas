@@ -251,6 +251,83 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             Assert.That(TasScriptCompiler.Errors(script), Is.Empty);
         }
 
+        /// <summary>
+        /// PR7b-2 D2: a SAM-created TPD whose plant cannot size answers "Sizing Flow Failed" from SimulateEx in 0.14 s; the
+        /// script discarded the answer and returned the TPD's old results (0.25 kWh, CO2 NaN) as a successful evaluation.
+        /// The other three are SAM_Tas SimulationDiagnostic's measured failures.
+        /// </summary>
+        [TestCase("Sizing Flow Failed")]
+        [TestCase("Plant Room Has Errors")]
+        [TestCase("Plant room has no components")]
+        [TestCase("Failed to open the TSD file")]
+        public void A_measured_plant_simulation_failure_fails_the_evaluation(string status)
+        {
+            Assert.That(() => PlantSimulated("Main PlantRoom", status, out _), Throws.Exception.With.Message.EqualTo("Plant room \"Main PlantRoom\" was not simulated: Tas answered \"" + status + "\"."));
+        }
+
+        [Test]
+        public void Every_failure_fragment_of_SimulationDiagnostic_fails_the_evaluation()
+        {
+            List<string> fragments = SAM.Core.Tas.SimulationDiagnostic.KnownFailureFragments.ToList();
+            Assert.That(fragments, Is.Not.Empty);
+            foreach (string fragment in fragments)
+            {
+                string status = "x " + fragment.ToUpperInvariant() + " x";
+                Assert.That(() => PlantSimulated("Plant Room", status, out _), Throws.Exception.With.Message.EqualTo("Plant room \"Plant Room\" was not simulated: Tas answered \"" + status + "\"."), fragment);
+            }
+        }
+
+        /// <summary>As SAM_Tas' own TPD simulation: only a measured failure refuses; success, silence and anything not yet
+        /// measured go to the trace.</summary>
+        [TestCase("Done")]
+        [TestCase(" Done ")]
+        [TestCase("")]
+        [TestCase(new object[] { null })]
+        [TestCase("Simulation finished")]
+        public void Success_silence_or_an_unmeasured_status_is_traced_not_refused(string status)
+        {
+            Assert.That(() => PlantSimulated("Plant Room", status, out _), Throws.Nothing);
+            PlantSimulated("Plant Room", status, out List<string> trace);
+            Assert.That(trace, Is.EqualTo(new[] { "plant room \"Plant Room\" simulated: " + status }));
+        }
+
+        [Test]
+        public void Every_plant_room_simulation_is_checked_before_the_results_are_read()
+        {
+            foreach (string script in new[] { Script("controller", Controller), Script("everything", Everything) })
+            {
+                Assert.That(script, Does.Contain("    PlantSimulated(simulated.Name, simulated.SimulateEx(1, 8760, 0, "));
+                Assert.That(script.IndexOf("PlantSimulated(simulated.Name", StringComparison.Ordinal), Is.LessThan(script.IndexOf("energyCentre.GetResultSet(", StringComparison.Ordinal)));
+            }
+
+            Assert.That(Script("setpoints", Setpoints), Does.Not.Contain("PlantSimulated"));
+        }
+
+        /// <summary>Runs the controller script's own <c>PlantSimulated</c>, compiled on its own with a trace list.</summary>
+        private static void PlantSimulated(string plantRoomName, string status, out List<string> trace)
+        {
+            string script = Script("controller", Controller);
+            int start = script.IndexOf("void PlantSimulated(", StringComparison.Ordinal);
+            if (start < 0)
+            {
+                throw new InvalidOperationException("The controller script has no PlantSimulated.");
+            }
+
+            int end = script.IndexOf("\n}\n", start, StringComparison.Ordinal) + 2;
+            string source = "using System; using System.Collections.Generic; using System.Linq;\npublic static class Probe\n{\npublic static List<string> trace = new List<string>();\npublic static "
+                + script.Substring(start, end - start) + "\n}";
+            Type probe = TasScriptCompiler.Load(source).GetType("Probe");
+            trace = (List<string>)probe.GetField("trace").GetValue(null);
+            try
+            {
+                probe.GetMethod("PlantSimulated").Invoke(null, new object[] { plantRoomName, status });
+            }
+            catch (System.Reflection.TargetInvocationException exception)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            }
+        }
+
         private static string SnapshotDirectory([CallerFilePath] string sourceFile = null)
         {
             string fromSource = Path.Combine(Path.GetDirectoryName(sourceFile), "Golden", "TasModel");

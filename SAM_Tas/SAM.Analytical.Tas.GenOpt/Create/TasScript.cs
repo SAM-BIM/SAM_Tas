@@ -48,7 +48,8 @@ namespace SAM.Analytical.Tas.GenOpt
         /// profiles; zone occupant sensible gain and resultant temperature for overheating), close, release.</item>
         /// <item>Plant, when a variable or output needs it: without a building simulation, re-point the TSD's building
         /// path at the evaluation's TBD first (F1); open the TPD, FixTSDPath, write every controller setpoint as a double,
-        /// simulate every plant room as the Systems Demo does, read every annual result, dispose the result set, release
+        /// simulate every plant room as the Systems Demo does (a status with one of <see cref="SAM.Core.Tas.SimulationDiagnostic"/>'s
+        /// measured failure fragments fails the evaluation; every status is traced), read every annual result, dispose the result set, release
         /// the TPD (no Save: the evaluation copy is discarded; F2's shutdown crash happens after the results are read).</item>
         /// <item>Write <c>Result</c> and <c>Y1..Ym</c> (the outputs, objective first), then the read-back values.</item>
         /// </list>
@@ -405,6 +406,19 @@ namespace SAM.Analytical.Tas.GenOpt
                     Line("    return sum;");
                     Line("}");
                     Line();
+                    Line("// SimulateEx answers a status. A measured failure (SAM_Tas SimulationDiagnostic's fragments) fails the evaluation: the");
+                    Line("// result set would hold what the TPD held before (PR7b-2 D2: \"Sizing Flow Failed\" gave 0.25 kWh and NaN). Any other");
+                    Line("// answer is kept in the trace.");
+                    Line("void PlantSimulated(string plantRoomName, string status)");
+                    Line("{");
+                    Line("    trace.Add(\"plant room \\\"\" + plantRoomName + \"\\\" simulated: \" + status);");
+                    Line("    string[] failures = new string[] { " + string.Join(", ", SAM.Core.Tas.SimulationDiagnostic.KnownFailureFragments.Select(Literal)) + " };");
+                    Line("    if (status != null && failures.Any(x => status.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))");
+                    Line("    {");
+                    Line("        throw new Exception(\"Plant room \\\"\" + plantRoomName + \"\\\" was not simulated: Tas answered \\\"\" + status.Trim() + \"\\\".\");");
+                    Line("    }");
+                    Line("}");
+                    Line();
                 }
             }
 
@@ -573,7 +587,8 @@ namespace SAM.Analytical.Tas.GenOpt
                 Line("// The Systems Demo's simulation call, for every plant room.");
                 Line("for (int i = 1; i <= energyCentre.GetPlantRoomCount(); i++)");
                 Line("{");
-                Line("    energyCentre.GetPlantRoom(i).SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0);");
+                Line("    TPD.PlantRoom simulated = energyCentre.GetPlantRoom(i);");
+                Line("    PlantSimulated(simulated.Name, simulated.SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0));");
                 Line("}");
                 Line();
                 Line("Lap(\"PlantSimulation\");");

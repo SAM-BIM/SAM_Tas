@@ -81,6 +81,19 @@ double ResultSum(TPD.WrResultSet resultSet, TPD.tpdResultVectorType type)
     return sum;
 }
 
+// SimulateEx answers a status. A measured failure (SAM_Tas SimulationDiagnostic's fragments) fails the evaluation: the
+// result set would hold what the TPD held before (PR7b-2 D2: "Sizing Flow Failed" gave 0.25 kWh and NaN). Any other
+// answer is kept in the trace.
+void PlantSimulated(string plantRoomName, string status)
+{
+    trace.Add("plant room \"" + plantRoomName + "\" simulated: " + status);
+    string[] failures = new string[] { "has no components", "has errors", "failed to open", "failed", "error", "cannot", "unable", "invalid", "missing" };
+    if (status != null && failures.Any(x => status.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))
+    {
+        throw new Exception("Plant room \"" + plantRoomName + "\" was not simulated: Tas answered \"" + status.Trim() + "\".");
+    }
+}
+
 // ---- 1. Copy the workspace files into the evaluation folder (the workspace snapshot is never written).
 string tbdPath = Path.Combine(cwd, "model.tbd");
 string tsdPath = Path.Combine(cwd, "model.tsd");
@@ -110,7 +123,8 @@ Lap("TpdEdit");
 // The Systems Demo's simulation call, for every plant room.
 for (int i = 1; i <= energyCentre.GetPlantRoomCount(); i++)
 {
-    energyCentre.GetPlantRoom(i).SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0);
+    TPD.PlantRoom simulated = energyCentre.GetPlantRoom(i);
+    PlantSimulated(simulated.Name, simulated.SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0));
 }
 
 Lap("PlantSimulation");
