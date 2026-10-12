@@ -3,13 +3,13 @@
 
 # Native Optimisation: no zone setpoint or glazing optimisation on frozen Sizing capacities (PR7b-2 D1, option (a))
 
-Branch `feature/optimisation-sizing-guard` → base `sow/2026-Q4` (cut from `28b59fcb`). Record date: 2026-10-12. Owner
+Branch `feature/optimisation-sizing-guard` → base `sow/2026-Q4` (cut from `28b59fcb`). Record date: 2026-10-12. This is SAM-BIM/SAM_Tas#97; companion SAM-BIM/SAM_UI#224. Owner
 decision (2026-10-12): **D1 option (a) for V1**; per-candidate re-sizing (option (b)) deferred to V2. Defect and options:
-`NATIVE_OPTIMISATION_PR7B2.md` (SAM-BIM/SAM_Tas#95). Companion: SAM-BIM/SAM_UI PR on the same branch name (window text).
+`NATIVE_OPTIMISATION_PR7B2.md` (SAM-BIM/SAM_Tas#95). Companion: SAM-BIM/SAM_UI#224 (window text; depends on this PR).
 
 ## Current status
 
-Implemented, regression- and mutation-tested, licensed-checked. Open for owner review; not merged.
+Implemented, regression- and mutation-tested, licensed-checked. SAM-BIM/SAM_Tas#97 open for owner review; not merged.
 
 ## The rule (measured, not assumed)
 
@@ -82,9 +82,15 @@ Unchanged: plant-controller-only scripts (`controller.csx` identical), Energy Si
   = its Energy Simulation TSD (203 901.699810553 kWh); L6 Systems Demo → offered, B1 15 227.8941594962 and P1
   27 387.7943115234 / 3 932.8885345459 bit-identical to PR7b-2; L7 Demo with all 26 zones `tbdNoSizing` → only its 6
   controllers, P1 still 27 387.7943115234, setpoints OPT617. No Tas process left.
+- Evidence (local): `C:\TasOut\pr7b-2\d1-guard` (`EXPECTATIONS.md`, `inputs\` with hashes, `runs\`, `apply\`, `build\`
+  with the trx files and mutation logs, the mutation scripts) and `C:\TasOut\pr7b-2\steps.log` (`capprobe-*`, `d1-zones-*`,
+  `D1-L*`). The checks used the PR7b-2 spike driver (`capprobe`, committed in SAM_Tas#95) extended locally with
+  `forge-sized`, `applytbd` and `setsizing` and the sizing lines in `catalogue`; that source (`C:\TasOut\pr7b-2\driver\Program.cs`)
+  uses this PR's API, so it goes into the spike folder only after this PR merges.
+- Trial merge with SAM-BIM/SAM_Tas#96 (local branch, discarded): no conflict; the merged result passes **426/426**.
 
 ## Next step
 
 Owner review; CI; merge only with owner approval (merge commit, `--match-head-commit`): this PR first, then the SAM_UI
-companion after its CI is rerun against the merged SAM_Tas Q4; then the `PROJECT_PROGRESS.md` closeouts. If
+companion (SAM_UI#224) after its CI is rerun against the merged SAM_Tas Q4; then the `PROJECT_PROGRESS.md` closeouts. If
 SAM-BIM/SAM_Tas#96 merges first, this branch takes Q4 and regenerates the plant snapshots (both change `everything.csx`).
