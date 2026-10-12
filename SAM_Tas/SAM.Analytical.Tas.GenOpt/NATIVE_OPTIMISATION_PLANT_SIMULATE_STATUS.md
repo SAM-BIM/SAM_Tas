@@ -4,12 +4,12 @@
 # Native Optimisation: a failed plant simulation fails the evaluation (PR7b-2 defect D2)
 
 Branch `feature/optimisation-plant-simulate-status` → base `sow/2026-Q4` (cut from `28b59fcb`). Record date:
-2026-10-12. Found by the PR7b-2 licensed acceptance follow-up (record of record: `NATIVE_OPTIMISATION_PR7B2.md`,
+2026-10-12. This is SAM-BIM/SAM_Tas#96. Found by the PR7b-2 licensed acceptance follow-up (record of record: `NATIVE_OPTIMISATION_PR7B2.md`,
 SAM-BIM/SAM_Tas#95, whose follow-up section holds the evidence).
 
 ## Current status
 
-Fixed, regression-tested, licensed-verified. Open for owner review; not merged.
+Fixed, regression-tested, licensed-verified. SAM-BIM/SAM_Tas#96 open for owner review; not merged.
 
 ## Defect (measured)
 
