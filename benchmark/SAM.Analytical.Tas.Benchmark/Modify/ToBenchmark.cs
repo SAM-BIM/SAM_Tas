@@ -22,10 +22,11 @@ namespace SAM.Analytical.Tas.Benchmark
         /// </summary>
         /// <remarks>
         /// Units are emitted with explicit tokens to the SAME canonical magnitudes as the OpenStudio
-        /// producer (B1b), so the two documents are directly comparable. The TAS model result stores
-        /// annual consumption in <b>Wh</b> and model peak loads in <b>W</b> (the SAM_Tas convention;
-        /// the GH results reader divides by 1000 for display) — the mapping converts these to
-        /// <b>kWh</b>/<b>kW</b>. Per-space loads and design loads are already in <b>W</b> and are
+        /// producer (B1b), so the two documents are directly comparable. The model annual consumption
+        /// (<b>kWh</b>) and model peak loads (<b>kW</b>) are read through SAM's
+        /// <c>Query.TryGetConsumptionOrPeakLoad</c>, which returns kWh/kW for a marked result as stored
+        /// and converts a result SAM_Tas wrote before the units correction (unmarked, Wh/W) exactly once;
+        /// a result whose units are not known is emitted as unavailable. Per-space loads and design loads are already in <b>W</b> and are
         /// emitted unscaled; hours are hour-of-year in 0..8759. A measurement that is present, finite
         /// and in range is <c>available</c>; anything missing or out of range is <c>available:false</c>
         /// with a null value. A measured zero stays a value of 0. Peak load and its hour are coupled:
@@ -103,22 +104,22 @@ namespace SAM.Analytical.Tas.Benchmark
         {
             // Qualified as Analytical.* — SAM.Analytical.Tas ALSO defines an
             // AnalyticalModelSimulationResultParameter (different members), and the bare name would
-            // bind to it from this namespace. TAS model consumption is Wh and model peak loads are W;
-            // convert to the schema's kWh/kW.
+            // bind to it from this namespace. Consumption in kWh and peak loads in kW, whichever units
+            // the result was written in (see Kilo).
             (MetricValue heatingLoad, MetricValue heatingHour) = Peak(
-                Kilo(Double(modelResult, Analytical.AnalyticalModelSimulationResultParameter.PeakHeatingLoad)),
+                Kilo(modelResult, Analytical.AnalyticalModelSimulationResultParameter.PeakHeatingLoad),
                 Integer(modelResult, Analytical.AnalyticalModelSimulationResultParameter.PeakHeatingHour),
                 MetricUnit.Kilowatt);
 
             (MetricValue coolingLoad, MetricValue coolingHour) = Peak(
-                Kilo(Double(modelResult, Analytical.AnalyticalModelSimulationResultParameter.PeakCoolingLoad)),
+                Kilo(modelResult, Analytical.AnalyticalModelSimulationResultParameter.PeakCoolingLoad),
                 Integer(modelResult, Analytical.AnalyticalModelSimulationResultParameter.PeakCoolingHour),
                 MetricUnit.Kilowatt);
 
             return new BenchmarkModelResult
             {
-                ConsumptionHeating = NonNegative(Kilo(Double(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionHeating)), MetricUnit.KilowattHour),
-                ConsumptionCooling = NonNegative(Kilo(Double(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionCooling)), MetricUnit.KilowattHour),
+                ConsumptionHeating = NonNegative(Kilo(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionHeating), MetricUnit.KilowattHour),
+                ConsumptionCooling = NonNegative(Kilo(modelResult, Analytical.AnalyticalModelSimulationResultParameter.ConsumptionCooling), MetricUnit.KilowattHour),
                 PeakHeatingLoad = heatingLoad,
                 PeakHeatingHour = heatingHour,
                 PeakCoolingLoad = coolingLoad,
@@ -201,10 +202,19 @@ namespace SAM.Analytical.Tas.Benchmark
                 && string.Equals(value, loadType.ToString(), StringComparison.Ordinal);
         }
 
-        /// <summary>Wh→kWh / W→kW: divides by 1000, preserving null.</summary>
-        private static double? Kilo(double? value)
+        /// <summary>
+        /// A model consumption in kWh or peak load in kW, or null: SAM's
+        /// <c>Query.TryGetConsumptionOrPeakLoad</c> does the only conversion (a legacy unmarked TAS
+        /// result, Wh/W, ÷1000 once) and refuses a result whose units are not known.
+        /// </summary>
+        private static double? Kilo(AnalyticalModelSimulationResult modelResult, Analytical.AnalyticalModelSimulationResultParameter parameter)
         {
-            return value.HasValue ? value.Value / 1000.0 : (double?)null;
+            if (modelResult != null && modelResult.TryGetConsumptionOrPeakLoad(parameter, out double value) && IsFinite(value))
+            {
+                return value;
+            }
+
+            return null;
         }
 
         private static MetricValue NonNegative(double? value, MetricUnit unit)

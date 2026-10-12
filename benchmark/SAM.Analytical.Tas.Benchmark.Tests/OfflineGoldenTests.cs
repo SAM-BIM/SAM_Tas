@@ -11,9 +11,9 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
 {
     /// <summary>
     /// Offline producer coverage with no TAS install: the TAS SAM results → B1a benchmark document
-    /// mapping (including the Wh→kWh / W→kW model conversion), the route/engine provenance, full
+    /// mapping (including the legacy Wh→kWh / W→kW model reading), the route/engine provenance, full
     /// schema validation and byte-stable serialization against a committed golden. The model-level
-    /// results are built in TAS storage units (Wh/W) so the mapping's unit conversion is exercised
+    /// results are built in the legacy TAS units (Wh/W) so the units query's conversion is exercised
     /// and the emitted magnitudes match the OpenStudio producer.
     /// </summary>
     [TestFixture]
@@ -29,7 +29,7 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
         {
             BenchmarkModelResult model = Golden().Model;
 
-            // Wh/W in, kWh/kW out: the mapping divides the TAS model values by 1000.
+            // Legacy Wh/W in, kWh/kW out: the units query divides the unmarked TAS values by 1000, once.
             AssertAvailable(model.ConsumptionHeating, BenchmarkFixture.AnnualHeatingWh / 1000.0, MetricUnit.KilowattHour);
             AssertAvailable(model.ConsumptionCooling, BenchmarkFixture.AnnualCoolingWh / 1000.0, MetricUnit.KilowattHour);
             AssertAvailable(model.PeakHeatingLoad, BenchmarkFixture.ModelPeakHeatingW / 1000.0, MetricUnit.Kilowatt);

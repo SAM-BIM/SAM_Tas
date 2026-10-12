@@ -21,10 +21,11 @@ namespace SAM.Analytical.Tas.Benchmark
     /// the mapping a pure function of SAM-neutral inputs and lets it be exercised with no TAS install.
     /// </para>
     /// <para>
-    /// Unit note (mirrors the SAM_Tas GH results reader): the TAS
-    /// <see cref="AnalyticalModelSimulationResult"/> stores annual consumption in <b>Wh</b> and model
-    /// peak loads in <b>W</b>; the mapping converts these to the schema's canonical <b>kWh</b>/<b>kW</b>
-    /// (÷1000). Per-space loads are already in <b>W</b> and are emitted unscaled.
+    /// Unit note: the TAS <see cref="AnalyticalModelSimulationResult"/> stores annual consumption in
+    /// <b>kWh</b> and model peak loads in <b>kW</b>, marked with <c>ResultUnitsVersion</c> 1; one written
+    /// before the units correction (no marker) holds <b>Wh</b>/<b>W</b>. The mapping reads both through
+    /// SAM's <c>Query.TryGetConsumptionOrPeakLoad</c>, so the emitted kWh/kW are the same. Per-space loads
+    /// are already in <b>W</b> and are emitted unscaled.
     /// </para>
     /// </summary>
     public sealed class TasBenchmarkContext
@@ -84,8 +85,8 @@ namespace SAM.Analytical.Tas.Benchmark
         public List<string> Notes { get; } = new List<string>();
 
         /// <summary>
-        /// The model-level result supplying annual consumption and coincident peaks (Wh/W as TAS
-        /// stores them). Null for a failure document, in which case those metrics are unavailable.
+        /// The model-level result supplying annual consumption and coincident peaks (kWh/kW, or Wh/W if
+        /// written before the units correction). Null for a failure document, in which case those metrics are unavailable.
         /// Per-space results are NOT carried here: the mapping reads them from the source model's
         /// adjacency cluster (the TAS route relates each <see cref="SpaceSimulationResult"/> to its
         /// space), which is robust to the TAS zone-GUID keying of a result's own <c>Reference</c>.

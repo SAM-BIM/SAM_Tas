@@ -174,7 +174,7 @@ namespace SAM.Analytical.Tas.Benchmark
             if (tsdExists)
             {
                 // The workflow attaches per-space results but NOT the model-level annual energy —
-                // read that explicitly (Wh/W; ToBenchmark converts to kWh/kW).
+                // read that explicitly (kWh/kW, marked; ToBenchmark reads it through SAM's units query).
                 context.ModelResult = SAM.Analytical.Tas.Convert.ToSAM_AnalyticalModelSimulationResult(tsdPath, resultModel);
             }
 
