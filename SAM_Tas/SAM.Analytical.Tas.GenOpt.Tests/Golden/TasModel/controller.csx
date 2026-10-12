@@ -30,6 +30,14 @@ double Variable(string name)
     return variable.VariableValue;
 }
 
+// The objective must be a number. A successful simulation status alone does not make a valid result: NaN or an
+// infinity would be compared by the optimiser, so the evaluation fails instead. Recorded outputs are reported as
+// they are (tas-model has no constraints).
+void RefuseNonFinite(string name, double value)
+{
+    if (double.IsNaN(value) || double.IsInfinity(value)) throw new Exception("The objective \"" + name + "\" is " + value.ToString(System.Globalization.CultureInfo.InvariantCulture) + ", not a number, so this simulation has no result to compare.");
+}
+
 // COM arrays (the TSD's daily arrays are 1-based SAFEARRAYs): enumerate them, never index them.
 float[] Floats(object values)
 {
@@ -81,6 +89,27 @@ double ResultSum(TPD.WrResultSet resultSet, TPD.tpdResultVectorType type)
     return sum;
 }
 
+// SimulateEx answers a status, and the result set holds what the TPD held before whenever the simulation did not run
+// (PR7b-2 D2: "Sizing Flow Failed" gave 0.25 kWh and NaN). The script has no other proof that it ran, so only an
+// answer SAM_Tas SimulationDiagnostic has measured as success is accepted; a measured failure, an unknown answer or
+// no answer fails the evaluation. Every answer is traced.
+void PlantSimulated(string plantRoomName, string status)
+{
+    trace.Add("plant room \"" + plantRoomName + "\" simulated: " + status);
+    string[] successes = new string[] { "Done" };
+    string[] failures = new string[] { "has no components", "has errors", "failed to open", "failed", "error", "cannot", "unable", "invalid", "missing" };
+    string answer = status == null ? string.Empty : status.Trim();
+    if (failures.Any(x => answer.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))
+    {
+        throw new Exception("Plant room \"" + plantRoomName + "\" was not simulated: Tas answered \"" + answer + "\".");
+    }
+
+    if (!successes.Any(x => string.Equals(answer, x, StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new Exception("Plant room \"" + plantRoomName + "\" did not report success: Tas answered " + (answer.Length == 0 ? "nothing" : "\"" + answer + "\"") + "; accepted: \"" + string.Join("\", \"", successes) + "\".");
+    }
+}
+
 // ---- 1. Copy the workspace files into the evaluation folder (the workspace snapshot is never written).
 string tbdPath = Path.Combine(cwd, "model.tbd");
 string tsdPath = Path.Combine(cwd, "model.tsd");
@@ -110,7 +139,8 @@ Lap("TpdEdit");
 // The Systems Demo's simulation call, for every plant room.
 for (int i = 1; i <= energyCentre.GetPlantRoomCount(); i++)
 {
-    energyCentre.GetPlantRoom(i).SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0);
+    TPD.PlantRoom simulated = energyCentre.GetPlantRoom(i);
+    PlantSimulated(simulated.Name, simulated.SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0));
 }
 
 Lap("PlantSimulation");
@@ -127,6 +157,7 @@ Lap("TpdClose");
 // ---- 5. Outputs: the objective as Result and Y1, then the recorded outputs, then the read-back values.
 outputs["t.Total"] = total.Elapsed.TotalSeconds;
 File.WriteAllLines(Path.Combine(cwd, "tas-model-trace.txt"), trace);
+RefuseNonFinite("Cost", plantCost);
 ScriptOutput.SetValue("Result", plantCost);
 ScriptOutput.SetValue("Y1", plantCost);
 ScriptOutput.SetValue("Y2", plantCO2);

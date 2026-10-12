@@ -32,6 +32,14 @@ double Variable(string name)
     return variable.VariableValue;
 }
 
+// The objective must be a number. A successful simulation status alone does not make a valid result: NaN or an
+// infinity would be compared by the optimiser, so the evaluation fails instead. Recorded outputs are reported as
+// they are (tas-model has no constraints).
+void RefuseNonFinite(string name, double value)
+{
+    if (double.IsNaN(value) || double.IsInfinity(value)) throw new Exception("The objective \"" + name + "\" is " + value.ToString(System.Globalization.CultureInfo.InvariantCulture) + ", not a number, so this simulation has no result to compare.");
+}
+
 // COM arrays (the TSD's daily arrays are 1-based SAFEARRAYs): enumerate them, never index them.
 float[] Floats(object values)
 {
@@ -176,6 +184,7 @@ Lap("TsdRead");
 // ---- 5. Outputs: the objective as Result and Y1, then the recorded outputs, then the read-back values.
 outputs["t.Total"] = total.Elapsed.TotalSeconds;
 File.WriteAllLines(Path.Combine(cwd, "tas-model-trace.txt"), trace);
+RefuseNonFinite("Heating demand", heatingDemand);
 ScriptOutput.SetValue("Result", heatingDemand);
 ScriptOutput.SetValue("Y1", heatingDemand);
 ScriptOutput.SetValue("Y2", coolingDemand);
