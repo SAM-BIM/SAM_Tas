@@ -1,5 +1,14 @@
 # Project Progress - SAM_Tas (2026-Q4)
 
+## Q4 agent instructions rollout closeout - 2026-10-12
+
+- SAM-BIM/SAM_Tas#99 merged as `c6dfe516593d4590cd20b78b6d01975b66327dc9` (merge commit pinned to approved head `297bd7c155bda7b208902026c9c80e96711889a7`; base `sow/2026-Q4` `347e9efe521db6e985a92bf1f9bd2a404ce2850d`; validated content `9fa32480942563b26542f93d7176bde6252adf50`). Owner-authorized 2026-10-12 after an independent review (`AGENT_ROLLOUT_REVIEW_2026-10-12.md`, local to the owner's workspace, not committed).
+- Docs only: AGENTS.md, CLAUDE.md, plus the rollout record `Documentation/Agent-Continuity-Rollout-Q4.md`. No product code, build, workflow, dependency pin or tool changed; this closeout is the only `PROJECT_PROGRESS.md` change.
+- Validation: local documentation checks and commands are in `Documentation/Agent-Continuity-Rollout-Q4.md` (`git diff --check`, file scope, UTF-8/LF/no BOM, import). Hosted checks at the approved head: build success (run 38257834039); spdx success (run 38257834052). Dependency selection: dependency clones in the build log: SAM @ sow/2026-Q4, SAM_gbXML @ sow/2026-Q4, SAM_Mollier @ sow/2026-Q4, SAM_Psychrometrics @ sow/2026-Q4, SAM_SolarCalculator @ sow/2026-Q4, SAM_Systems @ sow/2026-Q4, SAM_Validation @ sow/2026-Q4, SAM_Windows @ sow/2026-Q4.
+- Cleanup: remote docs/agent-instructions-rollout-q4 deleted with an expected-SHA lease on 297bd7c155bda7b208902026c9c80e96711889a7 after confirming it is contained in sow/2026-Q4 and no open PR uses it as head or base; the local branch and its worktree are preserved (worktree in use). Other branches, worktrees and the frozen quarters were not touched.
+- Remaining gaps: no agent-client behaviour or token benchmark has been run.
+- Exact next step: Continue from the shared `AGENTS.md`. Open item carried from the pilots: verify on each installed agent client, in a fresh Q4 session, that it follows the instructions without loading the full progress history, and record the result.
+
 ## Q4 Tas result units correction closeout - 2026-10-12
 
 - SAM-BIM/SAM_Tas#98 merged as `92bfad33c9812d0be4190fc18dfc1bb18d63adaa`, approved head `72c4f3feb3e20702db4fd9232b5ba241b2c76303` (validated content SHA `36fb21d4`; later commits record-only). Owner-approved; merged last. The TSD converter now stores building consumption in kWh and peaks in kW and stamps `ResultUnitsVersion = 1`; the benchmark reads through SAM's helper so legacy and new results publish identical kWh/kW (golden unchanged). GenOpt untouched.
