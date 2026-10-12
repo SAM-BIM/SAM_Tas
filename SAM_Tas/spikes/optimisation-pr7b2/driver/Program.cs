@@ -19,6 +19,10 @@
 //          return value, duration and the annual consumption/CO2 sums (not saved). flags "script" = Load+Pipe (the
 //          generated script's), "create" = Load+Pipe+Duct+SimEvents+Cont (SAM_Tas Create.TPD's). Script: 0 script 0;
 //          Create.TPD: 15 create 1.
+//   capprobe <tbd> <work> <zone> <heatingCapacityW>   (D1 detector, 2026-10-12)
+//          copies the TBD to <work>\model.tbd; when the capacity is >= 0 sets that zone's maxHeatingLoad to it (sizing flags
+//          untouched); simulates days 1-365 as the generated script does; prints every zone's sizing flags and capacities
+//          before and after simulate and the TSD's annual heating demand. Answers whether simulate re-sizes a zone.
 // "pool" = SAM default library + My glazing systems (TCD); "permissive" = no Ug/light limits.
 
 using SAM.Analytical;
@@ -50,6 +54,7 @@ internal static class Program
             case "plant": return Plant(args[1], args[2], args[3], args[4].Split(','));
             case "zones": return Zones(args[1]);
             case "simulate": return Simulate(args[1], args[2], int.Parse(args[3], CultureInfo.InvariantCulture), args[4], int.Parse(args[5], CultureInfo.InvariantCulture));
+            case "capprobe": return CapProbe(args[1], args[2], args[3], double.Parse(args[4], CultureInfo.InvariantCulture));
         }
 
         string folder = args[1];
@@ -561,6 +566,85 @@ internal static class Program
         }
 
         return 0;
+    }
+
+    private static int CapProbe(string source, string work, string zoneName, double capacity)
+    {
+        Directory.CreateDirectory(work);
+        string tbdPath = Path.Combine(work, "model.tbd");
+        string tsdPath = Path.Combine(work, "model.tsd");
+        File.Copy(source, tbdPath, true);
+        if (File.Exists(tsdPath))
+        {
+            File.Delete(tsdPath);
+        }
+
+        Console.WriteLine("TBD " + source + " sha256 " + SAM.Analytical.Tas.GenOpt.Query.FileHash(source));
+        TBD.TBDDocument document = new TBD.TBDDocument();
+        try
+        {
+            document.open(tbdPath);
+            TBD.Building building = document.Building;
+            ZoneLines(building, "before");
+            if (capacity >= 0)
+            {
+                int found = 0;
+                for (int i = 0; building.GetZone(i) != null; i++)
+                {
+                    TBD.zone zone = building.GetZone(i);
+                    if (zone.name != zoneName) continue;
+                    zone.maxHeatingLoad = (float)capacity;
+                    found++;
+                }
+
+                if (found != 1) throw new Exception("zone " + zoneName + " found " + found + " times");
+                Console.WriteLine("set '" + zoneName + "' maxHeatingLoad = " + R(capacity) + " (flags unchanged)");
+            }
+
+            document.save();
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            object result = document.simulate(1, 365, 0, 1, 0, 0, tsdPath, 1, 0);
+            for (int i = 0; i < 1200 && IsLocked(tsdPath); i++) System.Threading.Thread.Sleep(100);
+            Console.WriteLine("simulate returned " + result + " in " + watch.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s");
+            ZoneLines(building, "after simulate");
+        }
+        finally
+        {
+            try { document.close(); } catch (COMException) { }
+            Marshal.FinalReleaseComObject(document);
+        }
+
+        TSD.TSDDocument tsd = new TSD.TSDDocument();
+        try
+        {
+            tsd.openReadOnly(tsdPath);
+            TSD.BuildingData buildingData = tsd.SimulationData.GetBuildingData();
+            double heating = ((System.Collections.IEnumerable)buildingData.GetAnnualBuildingResult((int)TSD.tsdBuildingArray.heatingProfile)).Cast<object>().Sum(x => (double)System.Convert.ToSingle(x)) / 1000;
+            Console.WriteLine("annual heating demand " + R(heating) + " kWh");
+        }
+        finally
+        {
+            try { tsd.close(); } catch (COMException) { }
+            Marshal.FinalReleaseComObject(tsd);
+        }
+
+        return 0;
+    }
+
+    private static void ZoneLines(TBD.Building building, string when)
+    {
+        for (int i = 0; building.GetZone(i) != null; i++)
+        {
+            TBD.zone zone = building.GetZone(i);
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0}: zone '{1}' sizeHeating {2} maxHeatingLoad {3} sizeCooling {4} maxCoolingLoad {5}", when, zone.name, zone.sizeHeating, R(zone.maxHeatingLoad), zone.sizeCooling, R(zone.maxCoolingLoad)));
+        }
+    }
+
+    private static bool IsLocked(string path)
+    {
+        if (!File.Exists(path)) return true;
+        try { using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { } return false; }
+        catch (IOException) { return true; }
     }
 
     private static string R(double? v) => v == null ? "-" : v.Value.ToString("R", CultureInfo.InvariantCulture);
