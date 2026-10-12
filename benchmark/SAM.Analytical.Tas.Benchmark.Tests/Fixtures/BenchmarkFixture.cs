@@ -13,11 +13,13 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
     /// <summary>
     /// Deterministic fixtures for the TAS producer tests, built entirely from SAM core objects with
     /// no TAS COM: a one-space <see cref="AnalyticalModel"/> (fixed GUID, area and volume), a
-    /// model-level <see cref="AnalyticalModelSimulationResult"/> carrying annual energies/peaks in the
-    /// TAS storage units (<b>Wh</b>/<b>W</b>), and per-space <see cref="SpaceSimulationResult"/>
-    /// objects carrying peak loads, hours, unmet hours and design loads (<b>W</b>). The mapping
-    /// converts the model-level Wh/W to the schema's kWh/kW, so the golden magnitudes match the
-    /// OpenStudio producer (B1b) exactly — the whole point of the benchmark.
+    /// model-level <see cref="AnalyticalModelSimulationResult"/> carrying annual energies/peaks, and
+    /// per-space <see cref="SpaceSimulationResult"/> objects carrying peak loads, hours, unmet hours
+    /// and design loads (<b>W</b>). The model-level result comes in both forms SAM_Tas has written:
+    /// <see cref="ModelResult"/> as before the units correction (no marker, <b>Wh</b>/<b>W</b>; the
+    /// committed golden was produced from it) and <see cref="MarkedModelResult"/> as SAM_Tas writes it
+    /// now (<b>kWh</b>/<b>kW</b>, <c>ResultUnitsVersion</c> 1). Both map to the same kWh/kW, so the
+    /// golden magnitudes match the OpenStudio producer (B1b) exactly — the whole point of the benchmark.
     /// </summary>
     public static class BenchmarkFixture
     {
@@ -36,8 +38,9 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
 
         public const double SpaceVolume = 60.0;
 
-        // TAS storage units: consumption in Wh, model peaks in W. After the mapping's ÷1000 these
-        // become 1234.5 kWh / 678.25 kWh and 3.6 kW / 2.4 kW — the same magnitudes as B1b.
+        // The legacy (unmarked) TAS units: consumption in Wh, model peaks in W. Read through SAM's
+        // units query these are 1234.5 kWh / 678.25 kWh and 3.6 kW / 2.4 kW — the same magnitudes as
+        // B1b, and what the marked result stores.
         public const double AnnualHeatingWh = 1_234_500.0;
 
         public const double AnnualCoolingWh = 678_250.0;
@@ -138,7 +141,30 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
                 new ProfileLibrary("Benchmark Profile Library"));
         }
 
-        /// <summary>The TAS model-level result (Wh/W), as <c>ToSAM_AnalyticalModelSimulationResult</c> would produce it.</summary>
+        /// <summary>
+        /// The same TAS model-level result as SAM_Tas writes it after the units correction: kWh/kW,
+        /// marked with <c>ResultUnitsVersion</c> 1, as <c>ToSAM_AnalyticalModelSimulationResult</c>
+        /// produces it now (value ÷ 1000, computed once in the converter).
+        /// </summary>
+        public static AnalyticalModelSimulationResult MarkedModelResult()
+        {
+            AnalyticalModelSimulationResult result = new AnalyticalModelSimulationResult(SpaceName, TasSource, "fixture.tsd");
+            result.SetValue(AnalyticalModelSimulationResultParameter.ConsumptionHeating, AnnualHeatingWh / 1000);
+            result.SetValue(AnalyticalModelSimulationResultParameter.ConsumptionCooling, AnnualCoolingWh / 1000);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakHeatingLoad, ModelPeakHeatingW / 1000);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakHeatingHour, PeakHeatingHour);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakCoolingLoad, ModelPeakCoolingW / 1000);
+            result.SetValue(AnalyticalModelSimulationResultParameter.PeakCoolingHour, PeakCoolingHour);
+            result.SetValue(AnalyticalModelSimulationResultParameter.FloorArea, FloorArea);
+            result.SetValue(AnalyticalModelSimulationResultParameter.Volume, SpaceVolume);
+            result.SetResultUnitsVersion();
+            return result;
+        }
+
+        /// <summary>
+        /// The TAS model-level result as SAM_Tas wrote it before the units correction (Wh/W, no
+        /// marker): a persisted legacy result. The committed golden is produced from it.
+        /// </summary>
         public static AnalyticalModelSimulationResult ModelResult()
         {
             AnalyticalModelSimulationResult result = new AnalyticalModelSimulationResult(SpaceName, TasSource, "fixture.tsd");

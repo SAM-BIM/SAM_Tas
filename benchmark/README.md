@@ -64,8 +64,11 @@ benchmark-tas --model <model.json> --weather <weather.epw> --tbd <run.tbd> --out
 
 ## Units
 
-TAS stores annual consumption in **Wh** and model peak loads in **W**; the mapping converts these
-to the schema's canonical **kWh**/**kW**. Per-space peak/design loads are already **W** and are
+SAM_Tas stores annual consumption in **kWh** and model peak loads in **kW**, marked with
+`ResultUnitsVersion` 1; a result written before the units correction (SAM_Tas#92 option A) has no
+marker and holds **Wh**/**W**. The mapping reads both through SAM's
+`Query.TryGetConsumptionOrPeakLoad`, so the published kWh/kW are the same; a result whose units are
+not known is emitted as unavailable. Per-space peak/design loads are already **W** and are
 emitted unscaled; hours are hour-of-year in `0..8759`. A present, finite, in-range measurement is
 `available`; anything missing is `available:false` with a `null` value; a measured zero stays `0`.
 
