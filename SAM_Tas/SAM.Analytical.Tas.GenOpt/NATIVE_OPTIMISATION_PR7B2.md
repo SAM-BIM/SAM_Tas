@@ -12,14 +12,17 @@ code changes in either, so either can merge first.
 
 Acceptance run and recorded; follow-up 2026-10-12 below. **No product code changed in this PR.** Two defects:
 
-- **D1** (owner decision): with Sizing on, building-side results do not survive Energy Simulation after Apply. The
-  follow-up **measured glazing too** (G1: heating +14.3%), so D1 covers every TBD target on a sized TBD, not only setpoints.
+- **D1**: with Sizing on, building-side results do not survive Energy Simulation after Apply. The follow-up **measured
+  glazing too** (G1: heating +14.3%), so D1 covers every TBD target on a sized TBD, not only setpoints. **Owner decision
+  2026-10-12: option (a) for V1** — implemented in SAM-BIM/SAM_Tas#97 (four SAM_Tas layers) and SAM-BIM/SAM_UI#224 (the
+  window's explanation); option (b) deferred to V2.
 - **D2** (fixed in its own PR, SAM-BIM/SAM_Tas#96): the generated script ignored `SimulateEx`'s status, so a plant
   simulation that failed ("Sizing Flow Failed", on a SAM-created TPD) was a successful evaluation with stale numbers.
+  #96 accepts only the measured success ("Done") and also fails a NaN or infinite objective.
 
 Not runnable for lack of an input: multi-plant-room TPD (no production route makes one), internal glazing, larger user
 glazing pool; controller on a SAM model's own TPD reached the engine but that TPD cannot size on this workstation.
-SAM-BIM/SAM_Tas#95, SAM-BIM/SAM_UI#223 and SAM-BIM/SAM_Tas#96 open, not merged; owner review next.
+SAM-BIM/SAM_Tas#95, SAM-BIM/SAM_UI#223, SAM-BIM/SAM_Tas#96, SAM-BIM/SAM_Tas#97 and SAM-BIM/SAM_UI#224 open, not merged.
 
 ## Coverage matrix (reconciled)
 
@@ -122,10 +125,11 @@ can mislead: G1's ranking held but its values did not; H2 rewarded unmet heating
   limit: ModelA heating ~17×); results found that way hold for Sizing-off simulations only. This is the documented V1
   limitation.
 
-**Owner decision requested (exact):** "D1: approve option (a) for V1 — SAM_Tas refuses heating-setpoint, cooling-setpoint
-and glazing targets, and Apply of such changes, when any TBD zone has Sizing's fixed capacities (`tbdNoSizing`, capacity
-> 0), with the V1 limitation documented that Sizing-off optimisation is a different design problem; plant controller
-targets unaffected; option (b) deferred to V2."
+**Owner decision (2026-10-12): option (a) for V1 approved**; option (b) deferred to V2. Implemented in SAM-BIM/SAM_Tas#97
+and SAM-BIM/SAM_UI#224. Validating the detector there narrowed the rule (driver `capprobe`, copies): `tbdDesignSizingOnly`
+and `tbdSizing` zones are sized again by every simulation (a 50 W cap is restored) and stay allowed — so a Sizing-on
+project whose zones are unheated (`tbdDesignSizingOnly`, e.g. `SAM_zoningAM`) is safe — while `tbdNoSizing` is frozen
+**at any capacity**, and unmeasured types (`tbdMixed`, `tbdLoadPerArea`) or an unread sizing refuse too.
 
 ## Follow-up 2026-10-12 (same workstation, same builds)
 
@@ -235,11 +239,10 @@ rebuilds are not byte-reproducible); none of the follow-up runs used them. Rebui
 
 ## Next step
 
-1. Owner review of this record and **a decision on D1** (options above; glazing now measured, so (a) would cover setpoints
-   and glazing).
-2. Review SAM-BIM/SAM_Tas#96 (D2 fix; independent).
-3. Merge this PR, the SAM_UI companion and #96 only with owner approval (independent; merge commits with
-   `--match-head-commit`), then the `PROJECT_PROGRESS.md` closeouts on `sow/2026-Q4`.
-4. Then the D1 fix PR as decided, and the owner's order: Tas units correction, SAM_Deploy PR10. Inputs still needed:
+1. D1 decided (option (a)); owner review of SAM-BIM/SAM_Tas#97 + SAM-BIM/SAM_UI#224 and of SAM-BIM/SAM_Tas#96.
+2. Merge with owner approval only (merge commits, `--match-head-commit`): SAM_UI#223 and this PR (records/tests, any time),
+   SAM_Tas#96, SAM_Tas#97, then SAM_UI#224 after its CI is rerun against the merged SAM_Tas Q4; then the
+   `PROJECT_PROGRESS.md` closeouts on `sow/2026-Q4`.
+3. Then the owner's order: Tas units correction, SAM_Deploy PR10. Inputs still needed:
    a multi-plant-room TPD (row 8), a model with internal glazing (row 9), a user glazing library of 8+ systems (row 5), a
    SAM-created TPD that simulates here (row 2 positive case).
