@@ -58,7 +58,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             TasModelInventory inventory = new TasModelInventory("a.tbd", null, null, new[]
             {
                 new TasInternalConditionInfo("Lab", null, 1, new TasSetpointProfile(TasSetpointProfileType.Value, 1, 19), new TasSetpointProfile(TasSetpointProfileType.Value, 1, 22)),
-            });
+            }).Sized();
 
             OptimisationCatalogueEntry heating = Query.TasModelCatalogue(inventory).Variables.Single(x => x.Target.Kind == TasModelKind.HeatingSetpoint);
             Assert.That(heating.Minimum, Is.EqualTo(16));

@@ -119,8 +119,15 @@ namespace SAM.Analytical.Tas.GenOpt
                 throw new TasModelApplyException("The Tas files changed after the optimisation ran (" + string.Join("; ", differences) + "), so the best design may not suit them. Nothing was changed: run the optimisation again on the current model.");
             }
 
-            // 2. What needs writing, and where.
+            // 2. What needs writing, and where. A TBD change only on zones sized in every simulation (PR7b-2 D1): the
+            // inventory the run was checked against here, the TBD itself again when it is written (WriteTbd).
             List<TasModelDesignChange> building = changes.Where(x => x.IsBuilding && !IsUnchanged(x, inventory)).ToList();
+            string sizingRefusal = building.Count > 0 ? Query.TasModelSizingRefusal(inventory) : null;
+            if (sizingRefusal != null)
+            {
+                throw new TasModelApplyException(sizingRefusal + " Nothing was changed.");
+            }
+
             List<TasModelDesignChange> plant = changes.Where(x => x.IsController && !IsUnchanged(x, inventory)).ToList();
             Dictionary<TasModelDesignChange, TasModelAppliedValue> values = new Dictionary<TasModelDesignChange, TasModelAppliedValue>();
             foreach (TasModelDesignChange change in changes.Where(x => IsUnchanged(x, inventory)))
@@ -357,6 +364,19 @@ namespace SAM.Analytical.Tas.GenOpt
         /// </summary>
         public static List<TasModelAppliedValue> WriteTbd(string tbdPath, IReadOnlyList<TasModelDesignChange> changes)
         {
+            // PR7b-2 D1: the file itself, before anything is written into it (glazing systems included).
+            TBD.TBDDocument check = new TBD.TBDDocument();
+            try
+            {
+                check.openReadOnly(tbdPath);
+                Query.RefuseFixedCapacities(check.Building);
+            }
+            finally
+            {
+                check.close();
+                Marshal.FinalReleaseComObject(check);
+            }
+
             List<TasGlazingOption> systems = (changes ?? new List<TasModelDesignChange>())
                 .Where(x => x.IsGlazing && x.GlazingOption != null && !x.GlazingOption.IsCurrent)
                 .Select(x => x.GlazingOption)

@@ -262,7 +262,7 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
                     new TasInternalConditionInfo("Office Weekend", "Office", 17, new TasSetpointProfile(TasSetpointProfileType.Value, 1, 12), new TasSetpointProfile(TasSetpointProfileType.Value, 1, 150)),
                 },
                 new TasGlazingConstructionInfo[0],
-                new TasPlantRoomInfo[0]);
+                new TasPlantRoomInfo[0]).Sized();
         }
     }
 }

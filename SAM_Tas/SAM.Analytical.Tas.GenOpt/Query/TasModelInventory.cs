@@ -14,9 +14,9 @@ namespace SAM.Analytical.Tas.GenOpt
     {
         /// <summary>
         /// Reads what a Tas project folder offers to the "tas-model" engine (licensed Tas, COM; every document is opened
-        /// read-only, closed and released): the TBD's internal conditions (thermostat profiles) and the transparent
-        /// constructions its building elements use (found through the elements, past the <c>GetConstruction(i)</c> null
-        /// gaps), the TSD's annual heating and cooling demand, and the TPD's plant rooms, controllers and stored annual
+        /// read-only, closed and released): the TBD's internal conditions (thermostat profiles), its zones' capacity sizing
+        /// (PR7b-2 D1) and the transparent constructions its building elements use (found through the elements, past the
+        /// <c>GetConstruction(i)</c> null gaps), the TSD's annual heating and cooling demand, and the TPD's plant rooms, controllers and stored annual
         /// results. The folder must hold at most one TBD, TSD and TPD (the files TasGenExecute discovers); Energy
         /// Simulation's sizing copies of the TBD are not counted and not opened (<see cref="TasProjectFiles(string)"/>).
         /// </summary>
@@ -36,9 +36,11 @@ namespace SAM.Analytical.Tas.GenOpt
 
             List<TasInternalConditionInfo> internalConditions = new List<TasInternalConditionInfo>();
             List<TasGlazingConstructionInfo> glazingConstructions = new List<TasGlazingConstructionInfo>();
+            List<TasZoneSizing> zoneSizing = null;
             if (tbd != null)
             {
-                ReadTbd(tbd, internalConditions, glazingConstructions);
+                zoneSizing = new List<TasZoneSizing>();
+                ReadTbd(tbd, internalConditions, glazingConstructions, zoneSizing);
             }
 
             List<TasPlantRoomInfo> plantRooms = new List<TasPlantRoomInfo>();
@@ -61,6 +63,7 @@ namespace SAM.Analytical.Tas.GenOpt
                 PlantEnergy = values.PlantEnergy,
                 PlantCost = values.PlantCost,
                 PlantCO2 = values.PlantCO2,
+                ZoneSizing = zoneSizing?.AsReadOnly(),
             };
 
             return result;
@@ -91,13 +94,14 @@ namespace SAM.Analytical.Tas.GenOpt
             return names.Count == 0 ? null : Path.Combine(projectFolder, names[0]);
         }
 
-        private static void ReadTbd(string path, List<TasInternalConditionInfo> internalConditions, List<TasGlazingConstructionInfo> glazingConstructions)
+        private static void ReadTbd(string path, List<TasInternalConditionInfo> internalConditions, List<TasGlazingConstructionInfo> glazingConstructions, List<TasZoneSizing> zoneSizing)
         {
             TBD.TBDDocument document = new TBD.TBDDocument();
             try
             {
                 document.openReadOnly(path);
                 TBD.Building building = document.Building;
+                zoneSizing.AddRange(ZoneSizing(building));
                 for (int i = 0; ; i++)
                 {
                     TBD.InternalCondition internalCondition = building.GetIC(i);

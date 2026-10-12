@@ -41,6 +41,9 @@ namespace SAM.Analytical.Tas.GenOpt
         /// ranges and, for a glazing choice, its options. Only what the engine can run is listed, so the window and the AI
         /// text never offer anything else:
         /// <list type="bullet">
+        /// <item>TBD targets (setpoints, glazing) only when every TBD zone is sized in every simulation; with capacities
+        /// fixed by Energy Simulation's Sizing, an unmeasured sizing type or the sizing not read, none is listed
+        /// (<see cref="TasModelSizingRefusal"/>, PR7b-2 D1, owner decision option (a)).</item>
         /// <item>Zone heating / cooling setpoint per internal condition (owner decision 1 of PR7a), when the thermostat
         /// profile is a value or 24-hour profile with factor 1; heating not when it says "no heating" (≤ −50 °C), cooling not
         /// when it says "no cooling" (≥ 150 °C); the heating-design-day conditions ("… - HDD") are not listed.</item>
@@ -65,7 +68,10 @@ namespace SAM.Analytical.Tas.GenOpt
             List<OptimisationCatalogueEntry> outputs = new List<OptimisationCatalogueEntry>();
             List<TasGlazingSystem> pool = (glazingPool ?? Enumerable.Empty<TasGlazingSystem>()).Where(x => x != null).ToList();
 
-            if (tasModelInventory.HasBuilding)
+            // TBD targets only when every zone is sized in every simulation (PR7b-2 D1). Why not is the catalogue's source,
+            // so whatever shows the catalogue (the AI assistant's text: "AVAILABLE (…)") says it.
+            string sizingRefusal = tasModelInventory.HasBuilding ? TasModelSizingRefusal(tasModelInventory) : null;
+            if (tasModelInventory.HasBuilding && sizingRefusal == null)
             {
                 foreach (TasInternalConditionInfo internalCondition in tasModelInventory.InternalConditions)
                 {
@@ -167,7 +173,7 @@ namespace SAM.Analytical.Tas.GenOpt
                 outputs.Add(new OptimisationCatalogueEntry("Annual plant CO2", new OptimisationMeasure(TasModelKind.AnnualPlantCO2), "Annual plant CO2 emission, every category (TPD annual results)", OptimisationQuantity.Carbon, "kgCO2e", tasModelInventory.PlantCO2));
             }
 
-            return new OptimisationCatalogue(variables, outputs, "read from the Tas model");
+            return new OptimisationCatalogue(variables, outputs, sizingRefusal == null ? "read from the Tas model" : "read from the Tas model. " + sizingRefusal);
         }
 
         /// <summary>The current heating setpoint when it can be changed: supported profile, not "no heating" (≤ −50 °C).</summary>

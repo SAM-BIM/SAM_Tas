@@ -40,7 +40,8 @@ namespace SAM.Analytical.Tas.GenOpt
         /// <para>Chain (PR7a's order, which left no lock and no process behind):</para>
         /// <list type="number">
         /// <item>Copy the workspace TBD/TSD/TPD into the evaluation folder (the snapshot is never written).</item>
-        /// <item>Building, when a variable targets the TBD (or there is no TSD to read): open the TBD, write every
+        /// <item>Building, when a variable targets the TBD (or there is no TSD to read): open the TBD; with a TBD target,
+        /// refuse unless every zone is sized in every simulation (the file itself, PR7b-2 D1); write every
         /// setpoint (value profile: its value; 24-hour profile: the hours at the setpoint; factor 1 only; exact names) and
         /// glazing choice (the option's pane construction assigned to every element using the target glazing; frames
         /// kept), read back, save, simulate days 1–365, save, close, release.</item>
@@ -270,6 +271,31 @@ namespace SAM.Analytical.Tas.GenOpt
                     Line();
                 }
 
+                if (definition.Variables.Any(x => TasModelKind.IsBuildingTarget(x.Target.Kind)))
+                {
+                    Line("// PR7b-2 D1: a TBD target only on zones Tas sizes in every simulation (tbdSizing, tbdDesignSizingOnly). A zone with");
+                    Line("// fixed capacities (tbdNoSizing, as Energy Simulation's Sizing leaves them) keeps them here, while the next Energy");
+                    Line("// Simulation sizes them again for the changed design; any other or unknown sizing is refused too.");
+                    Line("void RefuseFixedCapacities(TBD.Building building)");
+                    Line("{");
+                    Line("    var zones = new List<string>();");
+                    Line("    int count = 0;");
+                    Line("    for (int i = 0; ; i++)");
+                    Line("    {");
+                    Line("        TBD.zone zone = building.GetZone(i);");
+                    Line("        if (zone == null) break;");
+                    Line("        count++;");
+                    Line("        bool heating = zone.sizeHeating == (int)TBD.SizingType.tbdSizing || zone.sizeHeating == (int)TBD.SizingType.tbdDesignSizingOnly;");
+                    Line("        bool cooling = zone.sizeCooling == (int)TBD.SizingType.tbdSizing || zone.sizeCooling == (int)TBD.SizingType.tbdDesignSizingOnly;");
+                    Line("        if (!heating || !cooling) zones.Add(\"\\\"\" + zone.name + \"\\\" (heating \" + zone.sizeHeating + \", cooling \" + zone.sizeCooling + \")\");");
+                    Line("    }");
+                    Line();
+                    Line("    if (count == 0) throw new Exception(\"The TBD has no zone, so its sizing cannot be checked; zone setpoints and glazing are not changed.\");");
+                    Line("    if (zones.Count > 0) throw new Exception(\"Zone setpoints and glazing are not changed: the TBD's zone capacities are not sized in every simulation (\" + string.Join(\", \", zones.Take(3)) + (zones.Count > 3 ? \" and \" + (zones.Count - 3) + \" more\" : string.Empty) + \"; 0 = fixed by Energy Simulation's Sizing), so the result would not hold after the next Energy Simulation.\");");
+                    Line("}");
+                    Line();
+                }
+
                 if (definition.Variables.Any(x => x.Target.Kind == TasModelKind.HeatingSetpoint || x.Target.Kind == TasModelKind.CoolingSetpoint))
                 {
                     Line("// Zone setpoint of one internal condition (exact name): heating = thermostat lower limit (ticLL), cooling = upper");
@@ -474,6 +500,11 @@ namespace SAM.Analytical.Tas.GenOpt
                 Line("TBD.TBDDocument tbdDocument = new TBD.TBDDocument();");
                 Line("tbdDocument.open(tbdPath);");
                 Line("TBD.Building tbdBuilding = tbdDocument.Building;");
+                if (definition.Variables.Any(x => TasModelKind.IsBuildingTarget(x.Target.Kind)))
+                {
+                    Line("RefuseFixedCapacities(tbdBuilding);");
+                }
+
                 for (int i = 0; i < definition.Variables.Count; i++)
                 {
                     DesignVariable designVariable = definition.Variables[i];

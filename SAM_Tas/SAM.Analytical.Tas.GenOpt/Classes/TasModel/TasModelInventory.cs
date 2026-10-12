@@ -63,6 +63,15 @@ namespace SAM.Analytical.Tas.GenOpt
         /// <summary>Annual plant CO2 stored in the TPD (kg); null when unknown.</summary>
         public double? PlantCO2 { get; set; }
 
+        /// <summary>
+        /// Every TBD zone's capacity sizing (<see cref="Query.TasModelInventory(string)"/> reads it); null when not read,
+        /// which refuses TBD targets (<see cref="Query.TasModelSizingRefusal"/>, PR7b-2 D1).
+        /// </summary>
+        public IReadOnlyList<TasZoneSizing> ZoneSizing { get; set; }
+
+        /// <summary>The state of the zone capacities (<see cref="Query.CapacitySizing"/>): TBD targets need <see cref="TasCapacitySizing.SizedEverySimulation"/>.</summary>
+        public TasCapacitySizing CapacitySizing => Query.CapacitySizing(ZoneSizing);
+
         /// <summary>True when the project can run a building simulation (it has a TBD).</summary>
         public bool HasBuilding => !string.IsNullOrEmpty(TbdFileName);
 

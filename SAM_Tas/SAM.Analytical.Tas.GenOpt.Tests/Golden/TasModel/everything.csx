@@ -65,6 +65,27 @@ void WaitToUnlock(string path)
     throw new Exception("File still locked after 120 s: " + Path.GetFileName(path));
 }
 
+// PR7b-2 D1: a TBD target only on zones Tas sizes in every simulation (tbdSizing, tbdDesignSizingOnly). A zone with
+// fixed capacities (tbdNoSizing, as Energy Simulation's Sizing leaves them) keeps them here, while the next Energy
+// Simulation sizes them again for the changed design; any other or unknown sizing is refused too.
+void RefuseFixedCapacities(TBD.Building building)
+{
+    var zones = new List<string>();
+    int count = 0;
+    for (int i = 0; ; i++)
+    {
+        TBD.zone zone = building.GetZone(i);
+        if (zone == null) break;
+        count++;
+        bool heating = zone.sizeHeating == (int)TBD.SizingType.tbdSizing || zone.sizeHeating == (int)TBD.SizingType.tbdDesignSizingOnly;
+        bool cooling = zone.sizeCooling == (int)TBD.SizingType.tbdSizing || zone.sizeCooling == (int)TBD.SizingType.tbdDesignSizingOnly;
+        if (!heating || !cooling) zones.Add("\"" + zone.name + "\" (heating " + zone.sizeHeating + ", cooling " + zone.sizeCooling + ")");
+    }
+
+    if (count == 0) throw new Exception("The TBD has no zone, so its sizing cannot be checked; zone setpoints and glazing are not changed.");
+    if (zones.Count > 0) throw new Exception("Zone setpoints and glazing are not changed: the TBD's zone capacities are not sized in every simulation (" + string.Join(", ", zones.Take(3)) + (zones.Count > 3 ? " and " + (zones.Count - 3) + " more" : string.Empty) + "; 0 = fixed by Energy Simulation's Sizing), so the result would not hold after the next Energy Simulation.");
+}
+
 // Zone setpoint of one internal condition (exact name): heating = thermostat lower limit (ticLL), cooling = upper
 // limit (ticUL). A value profile's value changes (setback and schedule kept); in a 24-hour profile the hours at the
 // setpoint (heating: highest, cooling: lowest) change and the other hours are kept. Factor 1 only.
@@ -190,6 +211,7 @@ Lap("Copy");
 TBD.TBDDocument tbdDocument = new TBD.TBDDocument();
 tbdDocument.open(tbdPath);
 TBD.Building tbdBuilding = tbdDocument.Building;
+RefuseFixedCapacities(tbdBuilding);
 SetSetpoint(tbdBuilding, "Office Weekday", true, Variable("V1"), "V1");
 Lap("TbdEdit");
 tbdDocument.save();
