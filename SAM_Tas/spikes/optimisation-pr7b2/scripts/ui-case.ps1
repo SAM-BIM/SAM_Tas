@@ -1,4 +1,4 @@
-﻿# One licensed SAM_UI harness run (TasModelApplyAcceptanceHarness) with a process monitor, a bounded wait, registry
+# One licensed SAM_UI harness run (TasModelApplyAcceptanceHarness) with a process monitor, a bounded wait, registry
 # export before/after and restore of HKCU\Software\EDSL. Never two at once (lock).
 param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Cases, [Parameter(Mandatory)][string]$Sam,
       [string]$Direct = 'off', [string]$Heating = '', [string]$Cooling = '', [string]$Sizing = 'on', [int]$TimeoutMin = 45)
@@ -32,11 +32,12 @@ try {
   do { $left = Get-Process -Name TBD,TSD,TPD,TCD,TAS3D,TasGenExecute -ErrorAction SilentlyContinue; if (-not $left) { break }; Start-Sleep 1 } while ((Get-Date) -lt $deadline)
   Start-Sleep 5; Set-Content $stop 'stop'; $mon.WaitForExit(10000) | Out-Null; $left = Get-Process -Name TBD,TSD,TPD,TCD,TAS3D,TasGenExecute -ErrorAction SilentlyContinue
   reg export 'HKCU\Software\EDSL' "$out\reg-after.reg" /y | Out-Null
-  & cmd /c "reg import `"$root\reg\edsl-before.reg`" 2>nul" | Out-Null
+  # Restore the state of just before THIS run (not an older global baseline: the user may have used Tas since).
+  & cmd /c "reg import `"$out\reg-before.reg`" 2>nul" | Out-Null
   reg export 'HKCU\Software\EDSL' "$out\reg-restored.reg" /y | Out-Null
-  $restored = (Get-FileHash "$out\reg-restored.reg").Hash -eq (Get-FileHash "$root\reg\edsl-before.reg").Hash
+  $restored = (Get-FileHash "$out\reg-restored.reg").Hash -eq (Get-FileHash "$out\reg-before.reg").Hash
   $crashes = @(Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=$start} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'TPD\.exe|TSD\.exe|TBD\.exe|TasGenExecute|tas3d|TCD\.exe' })
-  "{0} END ui {1} exit={2} timedOut={3} {4:0} s; Tas processes left: {5}; crash events: {6}; registry restored to edsl-before: {7}" -f (Get-Date).ToString('s'), $Name, $(if ($timedOut) { 'killed' } else { $p.ExitCode }), $timedOut, ((Get-Date) - $start).TotalSeconds, $(if ($left) { ($left | % { "$($_.Name) $($_.Id)" }) -join ', ' } else { 'none' }), $crashes.Count, $restored | Tee-Object -Append "$root\steps.log"
+  "{0} END ui {1} exit={2} timedOut={3} {4:0} s; Tas processes left: {5}; crash events: {6}; registry restored to its pre-run state: {7}" -f (Get-Date).ToString('s'), $Name, $(if ($timedOut) { 'killed' } else { $p.ExitCode }), $timedOut, ((Get-Date) - $start).TotalSeconds, $(if ($left) { ($left | % { "$($_.Name) $($_.Id)" }) -join ', ' } else { 'none' }), $crashes.Count, $restored | Tee-Object -Append "$root\steps.log"
   Get-Content "$out\dotnet.out.txt" | Select-String 'Passed!|Failed!|Total tests|error' | % Line
 }
 finally { Remove-Item $lock -ErrorAction SilentlyContinue }
