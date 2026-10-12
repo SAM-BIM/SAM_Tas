@@ -49,9 +49,11 @@ namespace SAM.Analytical.Tas.GenOpt
         /// profiles; zone occupant sensible gain and resultant temperature for overheating), close, release.</item>
         /// <item>Plant, when a variable or output needs it: without a building simulation, re-point the TSD's building
         /// path at the evaluation's TBD first (F1); open the TPD, FixTSDPath, write every controller setpoint as a double,
-        /// simulate every plant room as the Systems Demo does, read every annual result, dispose the result set, release
+        /// simulate every plant room as the Systems Demo does (only a status <see cref="SAM.Core.Tas.SimulationDiagnostic"/> has
+        /// measured as success is accepted; anything else fails the evaluation; every status is traced), read every annual result, dispose the result set, release
         /// the TPD (no Save: the evaluation copy is discarded; F2's shutdown crash happens after the results are read).</item>
-        /// <item>Write <c>Result</c> and <c>Y1..Ym</c> (the outputs, objective first), then the read-back values.</item>
+        /// <item>Write <c>Result</c> and <c>Y1..Ym</c> (the outputs, objective first), then the read-back values; a NaN or
+        /// infinite objective fails the evaluation instead (recorded outputs are written as they are).</item>
         /// </list>
         /// </summary>
         /// <param name="optimisationDefinition">A definition runnable on <see cref="Query.TasModelCapabilities"/>.</param>
@@ -231,6 +233,14 @@ namespace SAM.Analytical.Tas.GenOpt
                     Line();
                 }
 
+                Line("// The objective must be a number. A successful simulation status alone does not make a valid result: NaN or an");
+                Line("// infinity would be compared by the optimiser, so the evaluation fails instead. Recorded outputs are reported as");
+                Line("// they are (tas-model has no constraints).");
+                Line("void RefuseNonFinite(string name, double value)");
+                Line("{");
+                Line("    if (double.IsNaN(value) || double.IsInfinity(value)) throw new Exception(\"The objective \\\"\" + name + \"\\\" is \" + value.ToString(System.Globalization.CultureInfo.InvariantCulture) + \", not a number, so this simulation has no result to compare.\");");
+                Line("}");
+                Line();
                 Line("// COM arrays (the TSD's daily arrays are 1-based SAFEARRAYs): enumerate them, never index them.");
                 Line("float[] Floats(object values)");
                 Line("{");
@@ -431,6 +441,27 @@ namespace SAM.Analytical.Tas.GenOpt
                     Line("    return sum;");
                     Line("}");
                     Line();
+                    Line("// SimulateEx answers a status, and the result set holds what the TPD held before whenever the simulation did not run");
+                    Line("// (PR7b-2 D2: \"Sizing Flow Failed\" gave 0.25 kWh and NaN). The script has no other proof that it ran, so only an");
+                    Line("// answer SAM_Tas SimulationDiagnostic has measured as success is accepted; a measured failure, an unknown answer or");
+                    Line("// no answer fails the evaluation. Every answer is traced.");
+                    Line("void PlantSimulated(string plantRoomName, string status)");
+                    Line("{");
+                    Line("    trace.Add(\"plant room \\\"\" + plantRoomName + \"\\\" simulated: \" + status);");
+                    Line("    string[] successes = new string[] { " + string.Join(", ", SAM.Core.Tas.SimulationDiagnostic.KnownSuccessAnswers.Select(Literal)) + " };");
+                    Line("    string[] failures = new string[] { " + string.Join(", ", SAM.Core.Tas.SimulationDiagnostic.KnownFailureFragments.Select(Literal)) + " };");
+                    Line("    string answer = status == null ? string.Empty : status.Trim();");
+                    Line("    if (failures.Any(x => answer.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))");
+                    Line("    {");
+                    Line("        throw new Exception(\"Plant room \\\"\" + plantRoomName + \"\\\" was not simulated: Tas answered \\\"\" + answer + \"\\\".\");");
+                    Line("    }");
+                    Line();
+                    Line("    if (!successes.Any(x => string.Equals(answer, x, StringComparison.OrdinalIgnoreCase)))");
+                    Line("    {");
+                    Line("        throw new Exception(\"Plant room \\\"\" + plantRoomName + \"\\\" did not report success: Tas answered \" + (answer.Length == 0 ? \"nothing\" : \"\\\"\" + answer + \"\\\"\") + \"; accepted: \\\"\" + string.Join(\"\\\", \\\"\", successes) + \"\\\".\");");
+                    Line("    }");
+                    Line("}");
+                    Line();
                 }
             }
 
@@ -604,7 +635,8 @@ namespace SAM.Analytical.Tas.GenOpt
                 Line("// The Systems Demo's simulation call, for every plant room.");
                 Line("for (int i = 1; i <= energyCentre.GetPlantRoomCount(); i++)");
                 Line("{");
-                Line("    energyCentre.GetPlantRoom(i).SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0);");
+                Line("    TPD.PlantRoom simulated = energyCentre.GetPlantRoom(i);");
+                Line("    PlantSimulated(simulated.Name, simulated.SimulateEx(1, 8760, 0, energyCentre.ExternalPollutant.Value, 10.0, (int)TPD.tpdSimulationData.tpdSimulationDataLoad + (int)TPD.tpdSimulationData.tpdSimulationDataPipe, 0, 0));");
                 Line("}");
                 Line();
                 Line("Lap(\"PlantSimulation\");");
@@ -642,6 +674,7 @@ namespace SAM.Analytical.Tas.GenOpt
                     string value = Expression(outputs[i].Measure);
                     if (i == 0)
                     {
+                        Line("RefuseNonFinite(" + Literal(outputs[i].Name) + ", " + value + ");");
                         Line("ScriptOutput.SetValue(\"" + TasScriptResultName + "\", " + value + ");");
                     }
 

@@ -251,6 +251,177 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             Assert.That(TasScriptCompiler.Errors(script), Is.Empty);
         }
 
+        /// <summary>
+        /// PR7b-2 D2: a SAM-created TPD whose plant cannot size answers "Sizing Flow Failed" from SimulateEx in 0.14 s; the
+        /// script discarded the answer and returned the TPD's old results (0.25 kWh, CO2 NaN) as a successful evaluation.
+        /// The other three are SAM_Tas SimulationDiagnostic's measured failures. Only measured success is accepted (below).
+        /// </summary>
+        [TestCase("Sizing Flow Failed")]
+        [TestCase("Plant Room Has Errors")]
+        [TestCase("Plant room has no components")]
+        [TestCase("Failed to open the TSD file")]
+        public void A_measured_plant_simulation_failure_fails_the_evaluation(string status)
+        {
+            Assert.That(() => PlantSimulated("Main PlantRoom", status, out _), Throws.Exception.With.Message.EqualTo("Plant room \"Main PlantRoom\" was not simulated: Tas answered \"" + status + "\"."));
+        }
+
+        [Test]
+        public void Every_failure_fragment_of_SimulationDiagnostic_fails_the_evaluation()
+        {
+            List<string> fragments = SAM.Core.Tas.SimulationDiagnostic.KnownFailureFragments.ToList();
+            Assert.That(fragments, Is.Not.Empty);
+            foreach (string fragment in fragments)
+            {
+                string status = "x " + fragment.ToUpperInvariant() + " x";
+                Assert.That(() => PlantSimulated("Plant Room", status, out _), Throws.Exception.With.Message.EqualTo("Plant room \"Plant Room\" was not simulated: Tas answered \"" + status + "\"."), fragment);
+            }
+        }
+
+        /// <summary>The measured success answer ("Done": the Systems Demo's SimulateEx, PR7b-2) is accepted and traced.</summary>
+        [TestCase("Done")]
+        [TestCase(" Done ")]
+        [TestCase("done")]
+        [TestCase("DONE\r\n")]
+        public void The_measured_success_answer_is_accepted_and_traced(string status)
+        {
+            Assert.That(() => PlantSimulated("Plant Room", status, out _), Throws.Nothing);
+            PlantSimulated("Plant Room", status, out List<string> trace);
+            Assert.That(trace, Is.EqualTo(new[] { "plant room \"Plant Room\" simulated: " + status }));
+        }
+
+        [Test]
+        public void Every_success_answer_of_SimulationDiagnostic_is_accepted()
+        {
+            List<string> answers = SAM.Core.Tas.SimulationDiagnostic.KnownSuccessAnswers.ToList();
+            Assert.That(answers, Is.Not.Empty);
+            foreach (string answer in answers)
+            {
+                Assert.That(() => PlantSimulated("Plant Room", answer, out _), Throws.Nothing, answer);
+            }
+        }
+
+        /// <summary>
+        /// The script has no other proof that the plant was simulated (the result set keeps the TPD's previous results), so
+        /// silence and an answer never measured as success fail the evaluation instead of passing stale numbers.
+        /// </summary>
+        [TestCase(null, "nothing")]
+        [TestCase("", "nothing")]
+        [TestCase("   ", "nothing")]
+        [TestCase("Simulation finished", "\"Simulation finished\"")]
+        [TestCase("Not done", "\"Not done\"")]
+        [TestCase("Done.", "\"Done.\"")]
+        public void Silence_or_an_unmeasured_answer_fails_the_evaluation(string status, string shown)
+        {
+            Assert.That(() => PlantSimulated("Main PlantRoom", status, out _), Throws.Exception.With.Message.EqualTo("Plant room \"Main PlantRoom\" did not report success: Tas answered " + shown + "; accepted: \"Done\"."));
+        }
+
+        [Test]
+        public void An_answer_with_a_failure_fragment_is_a_failure_even_if_it_starts_like_success()
+        {
+            Assert.That(() => PlantSimulated("Plant Room", "Done, sizing failed", out _), Throws.Exception.With.Message.EqualTo("Plant room \"Plant Room\" was not simulated: Tas answered \"Done, sizing failed\"."));
+        }
+
+        [Test]
+        public void Every_plant_room_simulation_is_checked_before_the_results_are_read()
+        {
+            foreach (string script in new[] { Script("controller", Controller), Script("everything", Everything) })
+            {
+                Assert.That(script, Does.Contain("    PlantSimulated(simulated.Name, simulated.SimulateEx(1, 8760, 0, "));
+                Assert.That(script.IndexOf("PlantSimulated(simulated.Name", StringComparison.Ordinal), Is.LessThan(script.IndexOf("energyCentre.GetResultSet(", StringComparison.Ordinal)));
+            }
+
+            Assert.That(Script("setpoints", Setpoints), Does.Not.Contain("PlantSimulated"));
+        }
+
+        /// <summary>
+        /// PR7b-2 D1 review: a successful status alone does not make a valid result. A NaN or infinite objective would be
+        /// compared by the optimiser (a NaN objective never wins, but it steers golden section and Hooke-Jeeves), so the
+        /// generated script fails the evaluation instead; recorded outputs are written as they are (tas-model has no constraints).
+        /// </summary>
+        [TestCase(double.NaN, "NaN")]
+        [TestCase(double.PositiveInfinity, "Infinity")]
+        [TestCase(double.NegativeInfinity, "-Infinity")]
+        public void A_non_finite_objective_fails_the_evaluation(double value, string text)
+        {
+            Assert.That(() => RefuseNonFinite("Annual plant energy", value), Throws.Exception.With.Message.EqualTo("The objective \"Annual plant energy\" is " + text + ", not a number, so this simulation has no result to compare."));
+        }
+
+        [TestCase(0.0)]
+        [TestCase(-5.5)]
+        [TestCase(1e300)]
+        [TestCase(double.Epsilon)]
+        public void A_finite_objective_is_written(double value)
+        {
+            Assert.That(() => RefuseNonFinite("Annual plant energy", value), Throws.Nothing);
+        }
+
+        [Test]
+        public void Every_script_checks_its_objective_before_writing_Result()
+        {
+            foreach ((string name, string json, string call) in new[]
+            {
+                ("setpoints", Setpoints, "RefuseNonFinite(\"Heating demand\", heatingDemand);"),
+                ("controller", Controller, "RefuseNonFinite(\"Cost\", plantCost);"),
+                ("glazing", Glazing, "RefuseNonFinite(\"Overheating\", overheating[0]);"),
+                ("everything", Everything, "RefuseNonFinite(\"Energy\", plantEnergy);"),
+            })
+            {
+                string script = Script(name, json);
+                int check = script.IndexOf(call, StringComparison.Ordinal);
+                Assert.That(check, Is.GreaterThan(0), name);
+                Assert.That(check, Is.LessThan(script.IndexOf("ScriptOutput.SetValue(\"Result\"", StringComparison.Ordinal)), name);
+                Assert.That(check, Is.GreaterThan(script.IndexOf("File.WriteAllLines(Path.Combine(cwd, \"tas-model-trace.txt\"), trace);", StringComparison.Ordinal)), name + ": the trace (with the plant status) is written first");
+                Assert.That(script.Split(new[] { "RefuseNonFinite(\"" }, StringSplitOptions.None).Length - 1, Is.EqualTo(1), name + ": only the objective is checked");
+            }
+        }
+
+        /// <summary>Runs the everything script's own <c>RefuseNonFinite</c>, compiled on its own.</summary>
+        private static void RefuseNonFinite(string name, double value)
+        {
+            string script = Script("everything", Everything);
+            int start = script.IndexOf("void RefuseNonFinite(", StringComparison.Ordinal);
+            if (start < 0)
+            {
+                throw new InvalidOperationException("The script has no RefuseNonFinite.");
+            }
+
+            int end = script.IndexOf("\n}\n", start, StringComparison.Ordinal) + 2;
+            Type probe = TasScriptCompiler.Load("using System;\npublic static class Probe\n{\npublic static " + script.Substring(start, end - start) + "\n}").GetType("Probe");
+            try
+            {
+                probe.GetMethod("RefuseNonFinite").Invoke(null, new object[] { name, value });
+            }
+            catch (System.Reflection.TargetInvocationException exception)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            }
+        }
+
+        /// <summary>Runs the controller script's own <c>PlantSimulated</c>, compiled on its own with a trace list.</summary>
+        private static void PlantSimulated(string plantRoomName, string status, out List<string> trace)
+        {
+            string script = Script("controller", Controller);
+            int start = script.IndexOf("void PlantSimulated(", StringComparison.Ordinal);
+            if (start < 0)
+            {
+                throw new InvalidOperationException("The controller script has no PlantSimulated.");
+            }
+
+            int end = script.IndexOf("\n}\n", start, StringComparison.Ordinal) + 2;
+            string source = "using System; using System.Collections.Generic; using System.Linq;\npublic static class Probe\n{\npublic static List<string> trace = new List<string>();\npublic static "
+                + script.Substring(start, end - start) + "\n}";
+            Type probe = TasScriptCompiler.Load(source).GetType("Probe");
+            trace = (List<string>)probe.GetField("trace").GetValue(null);
+            try
+            {
+                probe.GetMethod("PlantSimulated").Invoke(null, new object[] { plantRoomName, status });
+            }
+            catch (System.Reflection.TargetInvocationException exception)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            }
+        }
+
         private static string SnapshotDirectory([CallerFilePath] string sourceFile = null)
         {
             string fromSource = Path.Combine(Path.GetDirectoryName(sourceFile), "Golden", "TasModel");
