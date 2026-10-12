@@ -92,6 +92,41 @@ regression test on an inventory that reports fixed capacities; (b) later only if
 code was changed here because each option reverses part of an approved decision. Until decided, the defaults (Sizing on)
 can mislead: G1's ranking held but its values did not; H2 rewarded unmet heating load (+82% after Energy Simulation).
 
+**Architecture review (2026-10-12): (a) vs (b), with the detector measured.**
+
+- **Detector for (a), measured on copies** (driver `zones`, `followup-2026-10-12\d1-detector`): SAM Energy Simulation with
+  Sizing **on** leaves every zone `sizeHeating/sizeCooling = 0` (`tbdNoSizing`) with fixed capacities (Cell 1 1 586.5 W);
+  Sizing **off** leaves `2` (`tbdSizing`: Tas sizes inside every simulation; Cell 1 209 632 W, hence the ~17× heating);
+  the Tas-authored Systems Demo has `1` (`tbdDesignSizingOnly`). Rule: **a TBD has frozen capacities when any zone has
+  `tbdNoSizing` with a capacity > 0** — read-only, folder-only, it leaves the Demo and Sizing-off projects untouched.
+  Over-refusal: a Tas-authored TBD whose engineer fixed capacities on purpose is refused too (documented limitation).
+- **(a) placement:** SAM_Tas only (all engine and Apply callers are SAM_Tas GenOpt and SAM_UI): `TasModelInventory`
+  reports the fixed-capacity zones; `TasModelCatalogue` does not offer TBD targets (setpoints, glazing) with that note;
+  `TasModelRunner`/capabilities refuse a definition with a TBD target on such an inventory (definitions can be reused
+  or hand-written); the Apply plan refuses a TBD change when the folder's TBD has fixed capacities (re-read at plan time).
+  Apply already takes only the current window run's best point, bound to the source hashes, so no earlier run can reach
+  it through the UI; the plan-time check is defence in depth for any other caller. SAM_UI: a check line and the AI text.
+  Plant controllers stay offered. About 1–1.5 days; low regression risk (additive refusal, COM-free tests, 3 short
+  licensed reads plus one window journey).
+- **(b) cost:** `Query.Sizing` is several `tBDDocument.sizing(0)` passes (prepare; one per distinct " - HDD" lower limit
+  when positive gains are excluded; Air_Glass on `_AIR` elements), per-zone oversizing factors from the **SAM model**,
+  the optional system sizing method from its adjacency cluster, and settings from the Energy Simulation **dialog** that
+  are **not stored in the Tas folder**. Re-sizing each candidate therefore needs those inputs captured and persisted with
+  the run, the " - HDD" conditions kept consistent with every setpoint, and either a second implementation of the chain
+  inside the C# 7 script (drift risk) or a SAM-side evaluation stage before TasGenExecute (architecture change; Tas COM
+  in the SAM process). Several design-day passes per evaluation (estimate 2–5× evaluation time; not measured), and a new
+  licensed matrix to show Energy Simulation 2 = best on both routes and every sizing setting. About 2–3 weeks; medium-high
+  regression risk (every TBD evaluation changes).
+- **User impact of (a):** on default folders (Sizing on) building-side optimisation is not offered; plant controllers are.
+  "Run Energy Simulation with Sizing off" makes it available but is **not equivalent** (Tas then sizes plant without
+  limit: ModelA heating ~17×); results found that way hold for Sizing-off simulations only. This is the documented V1
+  limitation.
+
+**Owner decision requested (exact):** "D1: approve option (a) for V1 — SAM_Tas refuses heating-setpoint, cooling-setpoint
+and glazing targets, and Apply of such changes, when any TBD zone has Sizing's fixed capacities (`tbdNoSizing`, capacity
+> 0), with the V1 limitation documented that Sizing-off optimisation is a different design problem; plant controller
+targets unaffected; option (b) deferred to V2."
+
 ## Follow-up 2026-10-12 (same workstation, same builds)
 
 Expectations written before the runs: `C:\TasOut\pr7b-2\followup-2026-10-12\EXPECTATIONS.md`. Builds: the PR7b-2
@@ -127,11 +162,13 @@ SAM_Tas Create.TPD's own; the Systems Demo answers "Done" under both (27 387.79 
 its plant on this workstation (fixture; it simulated when created on the owner's machine), and the script ignored the
 failure → **D2**.
 
-**D2** (fixed in SAM-BIM/SAM_Tas#96, record `NATIVE_OPTIMISATION_PLANT_SIMULATE_STATUS.md`): the script now refuses a
-plant room whose status carries one of SAM_Tas `SimulationDiagnostic`'s measured failure fragments, and traces every
-status. Licensed on #96's build: CS fails with `Plant room "Main PlantRoom" was not simulated: Tas answered "Sizing Flow
-Failed".`; a golden-section Run stops with EvaluationFailed after 2 evaluations (8 s), no best point; Systems Demo P1
-**bit-identical** to before (27 387.7943115234 / 3 932.8885345459). GenOpt 363/363 there; mutation caught.
+**D2** (fixed in SAM-BIM/SAM_Tas#96, record `NATIVE_OPTIMISATION_PLANT_SIMULATE_STATUS.md`): the script now accepts a
+plant room's status only when it is SAM_Tas `SimulationDiagnostic`'s measured success ("Done"); a measured failure,
+silence or an unknown answer fails the evaluation (tightened on review from "refuse measured failures only", because the
+script has no results reconciliation to catch a silent failure); every status is traced. Licensed on #96: CS refused
+(`… was not simulated: Tas answered "Sizing Flow Failed".`); a golden-section Run stops with EvaluationFailed after 2
+evaluations (8 s), no best point; Systems Demo P1 and the building + plant chain **bit-identical** to before. GenOpt
+370/370 there; mutation caught.
 
 **MPR:** SAM_Tas `Create.TPD` always writes a single "Main PlantRoom" (`Create/TPD.cs`), so no production route makes a
 multi-plant-room TPD; it needs an owner-supplied file.
