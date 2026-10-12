@@ -6,7 +6,7 @@
 
 ## Last updated
 
-2026-10-11 (native Optimisation PR9 "Apply best design" closeout, SAM_Tas#93; sizing-copies fix closeout, SAM_Tas#94).
+2026-10-11 (native Optimisation PR9 "Apply best design" closeout, SAM_Tas#93; sizing-copies fix closeout, SAM_Tas#94); 2026-10-12 (PR7b-2 closeout, SAM_Tas#95/#96/#97).
 
 ## Current status
 
@@ -113,6 +113,24 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
   (`feature/native-genopt-tas-evaluator`: GenOpt compatibility adapter + `TasGenExecuteObjectiveEvaluator` + workspace
   isolation + licensed acceptance).
   - **Update:** D1–D4 were resolved and SAM PR2 merged as SAM#183 (`0989ad81`). PR3 merged as #86 (see below).
+
+## Native Optimisation PR7b-2: licensed acceptance, D1 guard and D2 protections (2026-10-12)
+
+- **Status:** SAM_Tas side complete, closed. Merged into `sow/2026-Q4`, each as a merge commit pinned to its approved head (`--match-head-commit`), in this order:
+  - SAM-BIM/SAM_Tas#95 (`feature/optimisation-pr7b2-acceptance`, head `d95702bf`): merge `e59e21dafdcfde48a3e155a41528e22129be482c`. Acceptance record `NATIVE_OPTIMISATION_PR7B2.md` and the spike driver; no product code.
+  - SAM-BIM/SAM_Tas#96 (`feature/optimisation-plant-simulate-status`, head `6a4aac27`): merge `f42405e34b16e94c9034cddc5e3a68ad95fea688`. Q4 build green.
+  - SAM-BIM/SAM_Tas#97 (`feature/optimisation-sizing-guard`, validated head `a793ac1a`, which is the approved `0c9284ab` plus a routine merge of Q4 containing #96): merge `ba9d97a30e3f28ae6b90cb29f296ec3c35a5033b`. Q4 build green.
+- **Owner decisions (approved 2026-10-12):**
+  - **D1 (guarded V1 limitation):** zone setpoint and glazing optimisation are refused when the main TBD has frozen or unverified sizing states (enforced at discovery, validation OPT617, the generated script and Apply). Sizing off is not an equivalent workaround. Proper support for frozen-capacity models (option b, per-candidate re-sizing) is deferred to V2.
+  - **D2:** a plant simulation is accepted only on a measured success status ("Done"; failures, silence and unknown answers fail the evaluation), and a NaN or infinite objective fails the evaluation. The non-finite-objective case is unit-tested only; no licensed coverage is claimed for it.
+  - **Deferred acceptance (kept explicit, no support claimed beyond evidence):** multiple plant rooms, internal glazing, an 8+ glazing library and a working SAM-created TPD (the owner's It3B TPD cannot size its plant on this workstation).
+- **Integrated validation (the actual combined D1+D2 code):** #97's branch was merged with Q4 containing #96 (clean, no conflicts; the diff against the approved head is only #95/#96 content), `SAM_Tas.sln` rebuilt in Release (GenOpt DLL `581DA53E...`), then `SAM.Analytical.Tas.GenOpt.Tests` **426/426**; the test bin was verified to load that DLL hash. PR CI `build` and `spdx` green on `a793ac1a`; Q4 `build` green after each of `e59e21da`, `f42405e3` and `ba9d97a3`. The earlier trial merge (426/426) was historical evidence only.
+- **Files changed (product):** `Create/TasScript.cs` (status allowlist, objective check, `RefuseFixedCapacities`), the catalogue/validation/Apply guard layers, golden snapshots, tests; records `NATIVE_OPTIMISATION_PR7B2.md`, `NATIVE_OPTIMISATION_PLANT_SIMULATE_STATUS.md`, `NATIVE_OPTIMISATION_SIZING_GUARD.md`.
+- **Unresolved issues, risks:**
+  - V1 limitations above: folders from Energy Simulation with Sizing on (heated models) offer no zone setpoint or glazing optimisation; a deliberately fixed `tbdNoSizing` TBD is refused too.
+  - The building stage's `tbdDocument.simulate` return value is unchecked (a run that does not happen leaves no TSD, so the evaluation fails anyway). A NaN in a recorded non-objective output is shown, never optimised.
+  - The SAM_UI companion SAM_UI#224 cannot be validated against Q4 by CI while this PR's remote branch `feature/optimisation-sizing-guard` exists: the workflow clones a dependency branch of the same name first. Its tree equals Q4's (`e5f14d7f`).
+- **Next step:** the SAM_UI#224 CI rerun against merged Q4 and merge; then the separate coordinated Tas units correction, then SAM_Deploy PR10 (not started).
 
 ## Native Optimisation: Energy Simulation's sizing copies (2026-10-11)
 
