@@ -9,6 +9,8 @@ set of four PRs; the design, compatibility table and merge order are recorded in
 
 ## Current status
 
+PRs of the set: SAM-BIM/SAM#192 (1, marker and query), SAM-BIM/SAM_Tas_Grasshopper#13 (2), SAM-BIM/SAM_OpenStudio#26 (2), SAM-BIM/SAM_Tas#98 (3, last).
+
 PR open, **not merged**. Depends on the SAM PR (`fix/tas-result-units-kwh`: `ResultUnitsVersion`,
 `Query.TryGetConsumptionOrPeakLoad`, `Modify.SetResultUnitsVersion`); its CI builds against SAM's same-named branch until
 that merges. Awaiting final-head CI and **owner review**.
