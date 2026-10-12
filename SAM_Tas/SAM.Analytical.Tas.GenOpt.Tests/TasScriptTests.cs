@@ -333,6 +333,70 @@ namespace SAM.Analytical.Tas.GenOpt.Tests
             Assert.That(Script("setpoints", Setpoints), Does.Not.Contain("PlantSimulated"));
         }
 
+        /// <summary>
+        /// PR7b-2 D1 review: a successful status alone does not make a valid result. A NaN or infinite objective would be
+        /// compared by the optimiser (a NaN objective never wins, but it steers golden section and Hooke-Jeeves), so the
+        /// generated script fails the evaluation instead; recorded outputs are written as they are (tas-model has no constraints).
+        /// </summary>
+        [TestCase(double.NaN, "NaN")]
+        [TestCase(double.PositiveInfinity, "Infinity")]
+        [TestCase(double.NegativeInfinity, "-Infinity")]
+        public void A_non_finite_objective_fails_the_evaluation(double value, string text)
+        {
+            Assert.That(() => RefuseNonFinite("Annual plant energy", value), Throws.Exception.With.Message.EqualTo("The objective \"Annual plant energy\" is " + text + ", not a number, so this simulation has no result to compare."));
+        }
+
+        [TestCase(0.0)]
+        [TestCase(-5.5)]
+        [TestCase(1e300)]
+        [TestCase(double.Epsilon)]
+        public void A_finite_objective_is_written(double value)
+        {
+            Assert.That(() => RefuseNonFinite("Annual plant energy", value), Throws.Nothing);
+        }
+
+        [Test]
+        public void Every_script_checks_its_objective_before_writing_Result()
+        {
+            foreach ((string name, string json, string call) in new[]
+            {
+                ("setpoints", Setpoints, "RefuseNonFinite(\"Heating demand\", heatingDemand);"),
+                ("controller", Controller, "RefuseNonFinite(\"Cost\", plantCost);"),
+                ("glazing", Glazing, "RefuseNonFinite(\"Overheating\", overheating[0]);"),
+                ("everything", Everything, "RefuseNonFinite(\"Energy\", plantEnergy);"),
+            })
+            {
+                string script = Script(name, json);
+                int check = script.IndexOf(call, StringComparison.Ordinal);
+                Assert.That(check, Is.GreaterThan(0), name);
+                Assert.That(check, Is.LessThan(script.IndexOf("ScriptOutput.SetValue(\"Result\"", StringComparison.Ordinal)), name);
+                Assert.That(check, Is.GreaterThan(script.IndexOf("File.WriteAllLines(Path.Combine(cwd, \"tas-model-trace.txt\"), trace);", StringComparison.Ordinal)), name + ": the trace (with the plant status) is written first");
+                Assert.That(script.Split(new[] { "RefuseNonFinite(\"" }, StringSplitOptions.None).Length - 1, Is.EqualTo(1), name + ": only the objective is checked");
+            }
+        }
+
+        /// <summary>Runs the everything script's own <c>RefuseNonFinite</c>, compiled on its own.</summary>
+        private static void RefuseNonFinite(string name, double value)
+        {
+            string script = Script("everything", Everything);
+            int start = script.IndexOf("void RefuseNonFinite(", StringComparison.Ordinal);
+            if (start < 0)
+            {
+                throw new InvalidOperationException("The script has no RefuseNonFinite.");
+            }
+
+            int end = script.IndexOf("\n}\n", start, StringComparison.Ordinal) + 2;
+            Type probe = TasScriptCompiler.Load("using System;\npublic static class Probe\n{\npublic static " + script.Substring(start, end - start) + "\n}").GetType("Probe");
+            try
+            {
+                probe.GetMethod("RefuseNonFinite").Invoke(null, new object[] { name, value });
+            }
+            catch (System.Reflection.TargetInvocationException exception)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            }
+        }
+
         /// <summary>Runs the controller script's own <c>PlantSimulated</c>, compiled on its own with a trace list.</summary>
         private static void PlantSimulated(string plantRoomName, string status, out List<string> trace)
         {

@@ -52,13 +52,21 @@ Systems Demo, plant-only and building+plant chains, every argument set tried (be
 differently would be refused loudly with its answer in the message — visible and fixed by adding the measured answer to
 `SimulationDiagnostic`; the opposite error (accepting a failure) would be silent.
 
+**Non-finite objective (D1 owner review, 2026-10-12).** A successful status alone does not make a valid result. The
+evaluator accepts `NaN`/`Infinity` as values; a NaN objective never wins (`NativeGenOptOutcome`) but golden section and
+Hooke–Jeeves compare against it. The script now calls a generated `RefuseNonFinite(objectiveName, value)` after the trace
+is written and before `Result`: a NaN or infinite **objective** throws `The objective "<name>" is NaN|Infinity|-Infinity,
+not a number, so this simulation has no result to compare.` and the evaluation fails. Recorded outputs are written as they
+are (a NaN there is shown, never optimised); the tas-model engine has no constraints (OPT414), so there is nothing else to
+check. No measured fixture yields a non-finite objective after "Done", so this is covered by tests, not by a licensed case.
+
 ## Files changed
 
-- `SAM.Analytical.Tas.GenOpt/Create/TasScript.cs` — the helper, the call, the remarks.
-- `SAM.Analytical.Tas.GenOpt.Tests/TasScriptTests.cs` — 18 cases (below); `Helpers/TasScriptCompiler.cs` — `Load`, which
+- `SAM.Analytical.Tas.GenOpt/Create/TasScript.cs` — the two helpers, their calls, the remarks.
+- `SAM.Analytical.Tas.GenOpt.Tests/TasScriptTests.cs` — 26 cases (below); `Helpers/TasScriptCompiler.cs` — `Load`, which
   compiles and loads a generated helper so a test can run it.
-- `SAM.Analytical.Tas.GenOpt.Tests/Golden/TasModel/controller.csx`, `everything.csx` — the two plant snapshots
-  (regenerated with `SAM_TAS_UPDATE_SNAPSHOTS=1`; `setpoints.csx`/`glazing.csx` unchanged).
+- `SAM.Analytical.Tas.GenOpt.Tests/Golden/TasModel/*.csx` — the four snapshots (regenerated with
+  `SAM_TAS_UPDATE_SNAPSHOTS=1`: the plant check in `controller`/`everything`, the objective check in all four).
 - This record.
 
 ## Validation
@@ -72,7 +80,12 @@ differently would be refused loudly with its answer in the message — visible a
 - Mutation (allowlist): with the generator reverted to the fail-open `cf50b665`, the 6 silence/unknown cases and both
   plant snapshots fail (test bin verified to load the mutant DLL `D506FED0`; a first `--no-build` attempt still loaded
   the allowlist DLL and is void); restored (test bin `99D92EF7`), all pass.
-- `SAM.Analytical.Tas.GenOpt.Tests` **370/370** (352 before + 18) on GenOpt `99D92EF7`; first version 363/363.
+- `SAM.Analytical.Tas.GenOpt.Tests` **370/370** (352 before + 18) on GenOpt `99D92EF7`; first version 363/363;
+  re-verified 370/370 at head `9b6823c2` (2026-10-12, D1 owner review).
+- Objective check: the script's own `RefuseNonFinite` refuses NaN, +Infinity and −Infinity with the exact message and
+  accepts 0, −5.5, 1e300 and `double.Epsilon`; every chain shape checks its objective once, after the trace, before
+  `Result`. **378/378** (+8) on GenOpt `6A1F74F0`. Mutation: call removed → 5 fail; NaN accepted → 5 fail (each mutant's
+  test bin verified by hash; restored `6A1F74F0`).
 - Licensed (Tas 2.0.0.1, this workstation, copies only, one Tas operation at a time, bounded): CS Test at 10 °C now
   fails with `Plant room "Main PlantRoom" was not simulated: Tas answered "Sizing Flow Failed".`; a golden-section Run on
   it stops with outcome **EvaluationFailed** after 2 evaluations (8 s), no best point, nothing to apply; **Systems Demo
@@ -85,18 +98,23 @@ differently would be refused loudly with its answer in the message — visible a
   Evidence (local): `C:\TasOut\pr7b-2\followup-2026-10-12` (`EXPECTATIONS.md`, `simulate\`, `runs\`, `runs-d2\`,
   `runs-d2b\`, `build\genopt-d2-final.trx`, `build\genopt-d2b-final.trx`, `build\mutation-d2*.log`) and
   `C:\TasOut\pr7b-2\steps.log`.
+- Licensed, with the objective check (`6A1F74F0`; steps `D2N3-*`, separate driver `C:\TasOut\pr7b-2\driver-d2` from #95's
+  `3e5182cc`, every run's `Script.txt` verified to hold `PlantSimulated` and `RefuseNonFinite`): Demo P1 and the HJ start
+  point again **bit-identical**, `Done` traced; It3B refused. Two earlier attempts (`D2N-*`, `D2N2-*`) ran the D1 build's
+  driver by mistake and are marked void in `steps.log`.
 
 ## Risks / not covered
 
-- A recorded output can still be NaN after "Done" (the evaluator accepts NaN; a NaN objective never wins, a NaN recorded
-  output is shown as NaN). Not observed after "Done"; not changed here.
+- A recorded (non-objective) output can still be NaN after "Done": it is shown as NaN and never optimised.
 - The building stage's `tbdDocument.simulate` returns an `int` that is not checked. It writes a fresh `model.tsd` (no TSD
   is copied in that chain), so a run that did not happen leaves no TSD and the evaluation fails when it is opened; a
-  partially written TSD is the residual case. The success value is not measured, so it is not changed here.
+  partially written TSD is the residual case. Measured since (D1 `capprobe`, four runs): `simulate` returned **−1** on
+  success; one value is not yet an allowlist, so it is not checked here (a candidate follow-up).
 - The It3B TPD's "Sizing Flow Failed" on this workstation is not explained (it simulated on the owner's machine when
   created). Not optimisation code.
 
 ## Next step
 
-Owner review; CI; merge (merge commit, `--match-head-commit`); then the `PROJECT_PROGRESS.md` closeout on
-`sow/2026-Q4`. Independent of SAM_Tas#95 and SAM_UI#223 (either order).
+Owner review; CI; merge only with owner approval (merge commit, `--match-head-commit`); then the `PROJECT_PROGRESS.md`
+closeout on `sow/2026-Q4`. Independent of SAM_Tas#95 and SAM_UI#223. The D1 guard PR (`feature/optimisation-sizing-guard`)
+also changes the generated script: merge this one first, then that branch takes Q4 and regenerates its snapshots.

@@ -51,7 +51,8 @@ namespace SAM.Analytical.Tas.GenOpt
         /// simulate every plant room as the Systems Demo does (only a status <see cref="SAM.Core.Tas.SimulationDiagnostic"/> has
         /// measured as success is accepted; anything else fails the evaluation; every status is traced), read every annual result, dispose the result set, release
         /// the TPD (no Save: the evaluation copy is discarded; F2's shutdown crash happens after the results are read).</item>
-        /// <item>Write <c>Result</c> and <c>Y1..Ym</c> (the outputs, objective first), then the read-back values.</item>
+        /// <item>Write <c>Result</c> and <c>Y1..Ym</c> (the outputs, objective first), then the read-back values; a NaN or
+        /// infinite objective fails the evaluation instead (recorded outputs are written as they are).</item>
         /// </list>
         /// </summary>
         /// <param name="optimisationDefinition">A definition runnable on <see cref="Query.TasModelCapabilities"/>.</param>
@@ -231,6 +232,14 @@ namespace SAM.Analytical.Tas.GenOpt
                     Line();
                 }
 
+                Line("// The objective must be a number. A successful simulation status alone does not make a valid result: NaN or an");
+                Line("// infinity would be compared by the optimiser, so the evaluation fails instead. Recorded outputs are reported as");
+                Line("// they are (tas-model has no constraints).");
+                Line("void RefuseNonFinite(string name, double value)");
+                Line("{");
+                Line("    if (double.IsNaN(value) || double.IsInfinity(value)) throw new Exception(\"The objective \\\"\" + name + \"\\\" is \" + value.ToString(System.Globalization.CultureInfo.InvariantCulture) + \", not a number, so this simulation has no result to compare.\");");
+                Line("}");
+                Line();
                 Line("// COM arrays (the TSD's daily arrays are 1-based SAFEARRAYs): enumerate them, never index them.");
                 Line("float[] Floats(object values)");
                 Line("{");
@@ -634,6 +643,7 @@ namespace SAM.Analytical.Tas.GenOpt
                     string value = Expression(outputs[i].Measure);
                     if (i == 0)
                     {
+                        Line("RefuseNonFinite(" + Literal(outputs[i].Name) + ", " + value + ");");
                         Line("ScriptOutput.SetValue(\"" + TasScriptResultName + "\", " + value + ");");
                     }
 
