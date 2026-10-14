@@ -49,6 +49,27 @@ namespace SAM.Analytical.Tas
             T3DImportPlan plan = new T3DImportPlan();
             T3DImportReport report = plan.Report;
 
+            // AddSurface takes one outer loop. A panel with a hole that is not an aperture - a slab round a stair void,
+            // the void itself an Air panel - would be imported whole, over whatever fills the hole: the zones above and
+            // below then get double floor area and too much volume. Split such panels into hole-free pieces first, as the
+            // gbXML route does before writing (Campus: SplitByInternalEdges); the first piece keeps the panel's GUID.
+            List<Panel> panels_Model = adjacencyCluster.GetPanels() ?? new List<Panel>();
+            int holed = 0;
+            foreach (Panel panel_Model in panels_Model)
+            {
+                List<IClosedPlanar3D> internalEdges = panel_Model?.GetFace3D(false)?.GetInternalEdge3Ds();
+                if (internalEdges != null && internalEdges.Count != 0)
+                {
+                    holed++;
+                }
+            }
+
+            if (holed != 0)
+            {
+                adjacencyCluster = adjacencyCluster.SplitByInternalEdges(Core.Tolerance.Distance);
+                report.Notes.Add(string.Format("{0} panel(s) with non-aperture holes were split into hole-free pieces ({1} panel(s) became {2}), as the gbXML route does, so no surface is imported over what fills its hole.", holed, panels_Model.Count, adjacencyCluster.GetPanels().Count));
+            }
+
             plan.Name = analyticalModel.Name;
             plan.Description = analyticalModel.Description;
 
@@ -300,6 +321,16 @@ namespace SAM.Analytical.Tas
             // A zone none of whose panels could be imported would only upset TAS: dropped, and every surface's zone index rewritten.
             RemoveEmptyZones(plan);
 
+            // A model whose panels carry physical thicknesses, with some elements still on their construction's: say which.
+            if (plan.Elements.Exists(x => x.PhysicalThickness))
+            {
+                List<string> names_Construction = plan.Elements.FindAll(x => !x.PhysicalThickness && !x.Ghost).ConvertAll(x => x.Name);
+                if (names_Construction.Count != 0)
+                {
+                    report.Notes.Add(string.Format("Element(s) {0}: their panels carry no physical thickness, so the width is the construction's.", string.Join(", ", names_Construction.ConvertAll(x => "'" + x + "'"))));
+                }
+            }
+
             report.Zones = plan.Zones.Count;
             report.Elements = plan.Elements.Count;
             report.Windows = plan.Windows.Count;
@@ -479,6 +510,16 @@ namespace SAM.Analytical.Tas
                 ? "panel:" + panel.Guid.ToString("N")
                 : string.Format(CultureInfo.InvariantCulture, "{0}|ground={1}|ghost={2}", construction == null ? "type:" + panel.PanelType : construction.Guid.ToString("N"), ground, ghost);
 
+            // The element width is the geometric thickness TAS draws and, with building-element widths on, offsets the
+            // zones by. A panel that knows the physical thickness of the element it is the mid-surface of (e.g. a Rhino
+            // solid's) carries it: panels of one construction at different physical thicknesses need different elements,
+            // because TAS holds the width on the element, not the surface.
+            double physicalThickness = ghost ? double.NaN : PhysicalThickness(panel);
+            if (!double.IsNaN(physicalThickness) && !options.ElementPerPanel)
+            {
+                key += string.Format(CultureInfo.InvariantCulture, "|thickness={0:F4}", physicalThickness);
+            }
+
             if (elements.TryGetValue(key, out T3DElementSpec result))
             {
                 return result;
@@ -498,7 +539,7 @@ namespace SAM.Analytical.Tas
             if (elementNames.Contains(name))
             {
                 string name_Qualified = name + "_" + ShortHash(key);
-                report.Notes.Add(string.Format("Element name '{0}' is already taken by another element (a different construction, or the same construction used {1}); this element is named '{2}'.", name, ground ? "on the ground" : ghost ? "as air" : "otherwise", name_Qualified));
+                report.Notes.Add(string.Format("Element name '{0}' is already taken by another element (a different construction, or the same construction used {1}); this element is named '{2}'.", name, ground ? "on the ground" : ghost ? "as air" : !double.IsNaN(physicalThickness) ? string.Format(CultureInfo.InvariantCulture, "at another physical thickness - this one {0:0.###} m", physicalThickness) : "otherwise", name_Qualified));
                 name = name_Qualified;
             }
 
@@ -506,18 +547,26 @@ namespace SAM.Analytical.Tas
             result.Name = name;
             result.Description = construction == null ? null : construction.Guid.ToString("D");
 
-            // Width: the construction's default thickness, else its layers' - the rule Query.UpdateT3D applies.
-            double width = double.NaN;
+            // Width: the panel's physical thickness when it has one; otherwise the construction's default thickness, else its
+            // layers' - the rule Query.UpdateT3D applies. The two are independent: the construction (the TBD's thermal layers)
+            // is never changed to match the geometric width, nor the width to match the layers.
+            double width_Construction = double.NaN;
             if (construction != null)
             {
-                width = construction.GetValue<double>(Analytical.ConstructionParameter.DefaultThickness);
-                if (double.IsNaN(width) || width == 0)
+                width_Construction = construction.GetValue<double>(Analytical.ConstructionParameter.DefaultThickness);
+                if (double.IsNaN(width_Construction) || width_Construction == 0)
                 {
-                    width = construction.GetThickness(false);
+                    width_Construction = construction.GetThickness(false);
                 }
             }
 
+            double width = double.IsNaN(physicalThickness) ? width_Construction : physicalThickness;
             result.Width = double.IsNaN(width) ? 0 : width;
+            result.PhysicalThickness = !double.IsNaN(physicalThickness);
+            if (result.PhysicalThickness)
+            {
+                report.Notes.Add(string.Format(CultureInfo.InvariantCulture, "Element '{0}': width {1:0.###} m is the physical thickness of its panels' source element{2}.", name, physicalThickness, double.IsNaN(width_Construction) ? string.Empty : string.Format(CultureInfo.InvariantCulture, "; its construction's layers total {0:0.###} m and are left as they are for the thermal model", width_Construction)));
+            }
 
             // Colour.
             global::System.Drawing.Color color = global::System.Drawing.Color.Empty;
@@ -810,7 +859,24 @@ namespace SAM.Analytical.Tas
                 level = global::System.Math.Min(level, point3D.Z);
             }
 
-            result.Level = level == double.MaxValue ? 0 : level;
+            // TAS refuses a window type whose level is negative - by any amount, measured down to -1e-17 - and every opening on it
+            // is then lost. A ground-floor door at z = 0 routinely comes out a rounding error below zero. The level only describes the
+            // type (the opening polygon places the opening), so it is never negative; a real drop below zero is noted, not hidden.
+            if (level == double.MaxValue)
+            {
+                level = 0;
+            }
+            else if (level <= 0)
+            {
+                if (level < -options.Tolerance)
+                {
+                    plan.Report.Notes.Add(string.Format(CultureInfo.InvariantCulture, "Window type '{0}': its opening starts {1:F3} m below zero, a window level TAS refuses; the type's level was set to 0 (the opening polygon still places the opening).", name.Trim(), -level));
+                }
+
+                level = 0;
+            }
+
+            result.Level = level;
 
             windows[key] = result;
             plan.Windows.Add(result);
@@ -830,6 +896,18 @@ namespace SAM.Analytical.Tas
             {
                 return null;
             }
+        }
+
+        // The physical thickness of the element the panel is the mid-surface of [m], or NaN when it carries none (an older model, a
+        // panel not made from a solid) or a value no element can have.
+        private static double PhysicalThickness(Panel panel)
+        {
+            if (panel == null || !panel.TryGetValue(Analytical.PanelSourceParameter.PhysicalThickness, out double physicalThickness))
+            {
+                return double.NaN;
+            }
+
+            return double.IsNaN(physicalThickness) || double.IsInfinity(physicalThickness) || physicalThickness <= 0 ? double.NaN : physicalThickness;
         }
 
         // A stable 32-bit FNV-1a hash as eight hex digits: a name discriminator, not a security measure, so nothing that a FIPS-only

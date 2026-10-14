@@ -548,6 +548,85 @@ namespace SAM.Analytical.Tas.TM59.Tests
             });
         }
 
+        // The reference box with the given physical thickness on each wall (south, east, north, west); NaN leaves a wall without one.
+        private static AnalyticalModel BoxWithPhysicalThickness(params double[] walls)
+        {
+            AnalyticalModel model = SyntheticModels.Box();
+            AdjacencyCluster cluster = model.AdjacencyCluster;
+            List<Panel> panels = cluster.GetPanels().Where(x => x.PanelType == PanelType.WallExternal).OrderBy(x => x.GetBoundingBox().Min.Y).ThenByDescending(x => x.GetBoundingBox().Min.X).ToList();
+            for (int i = 0; i < panels.Count && i < walls.Length; i++)
+            {
+                if (!double.IsNaN(walls[i]))
+                {
+                    panels[i].SetValue(PanelSourceParameter.PhysicalThickness, walls[i]);
+                    cluster.AddObject(panels[i]);
+                }
+            }
+
+            return new AnalyticalModel(model, cluster);
+        }
+
+        [Test]
+        public void Plan_Elements_WidthIsThePanelsPhysicalThickness_AndTheConstructionIsUntouched()
+        {
+            // An architect's 0.25 m walls with a 0.30 m thermal construction: the T3D element is 0.25 m; the construction keeps its layers.
+            T3DImportPlan plan = BoxWithPhysicalThickness(0.25, 0.25, 0.25, 0.25).T3DImportPlan();
+            T3DElementSpec wall = plan.Elements.Single(x => x.Description == SyntheticModels.WallConstruction.Guid.ToString("D"));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(wall.Name, Is.EqualTo("EXT_WALL"), "one thickness: the construction's own name");
+                Assert.That(wall.Width, Is.EqualTo(0.25).Within(1e-9));
+                Assert.That(wall.PhysicalThickness, Is.True);
+                Assert.That(SyntheticModels.WallConstruction.GetThickness(false), Is.EqualTo(0.30).Within(1e-9), "the thermal construction is not changed");
+                Assert.That(plan.Elements.Single(x => x.Name == "EXT_ROOF").Width, Is.EqualTo(0.35).Within(1e-9), "no physical thickness: the construction's");
+                Assert.That(plan.Report.Notes, Has.One.Contains("'EXT_WALL': width 0.25 m is the physical thickness").And.Contains("layers total 0.3 m"));
+                Assert.That(plan.Report.Notes, Has.One.Contains("'EXT_ROOF'").And.Contains("'GRD_FLOOR'").And.Contains("carry no physical thickness"));
+            });
+        }
+
+        [Test]
+        public void Plan_OneConstructionAtTwoPhysicalThicknesses_IsTwoElementsOfOneConstruction()
+        {
+            // TAS holds the width on the element, so a 0.30 m south wall and 0.20 m other walls of one construction cannot share one.
+            T3DImportPlan plan = BoxWithPhysicalThickness(0.30, 0.20, 0.20, 0.20).T3DImportPlan();
+            List<T3DElementSpec> walls = plan.Elements.Where(x => x.Description == SyntheticModels.WallConstruction.Guid.ToString("D")).ToList();
+            Func<double, string> elementKey = width => walls.Single(x => Math.Abs(x.Width - width) < 1e-9).Key;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(walls.Select(x => Math.Round(x.Width, 6)), Is.EquivalentTo(new[] { 0.30, 0.20 }));
+                Assert.That(walls.Select(x => x.Name), Has.One.EqualTo("EXT_WALL").And.One.Match("^EXT_WALL_[0-9A-F]{8}$"), "the second told apart by the stable suffix the ground split uses");
+                Assert.That(plan.Surfaces.Count(x => x.ElementKey == elementKey(0.30)), Is.EqualTo(1));
+                Assert.That(plan.Surfaces.Count(x => x.ElementKey == elementKey(0.20)), Is.EqualTo(3));
+                Assert.That(plan.Report.Notes, Has.One.Contains("at another physical thickness"));
+            });
+        }
+
+        [Test]
+        public void Plan_PanelsWithoutPhysicalThickness_KeepTheConstructionWidth_AndSayNothingAboutIt()
+        {
+            // An older model, or panels not made from solids: unchanged behaviour.
+            T3DImportPlan plan = SyntheticModels.Box().T3DImportPlan();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(plan.Elements.Single(x => x.Name == "EXT_WALL").Width, Is.EqualTo(0.30).Within(1e-9));
+                Assert.That(plan.Elements.Any(x => x.PhysicalThickness), Is.False);
+                Assert.That(plan.Report.Notes, Has.None.Contains("physical thickness"));
+            });
+        }
+
+        [TestCase(0.0)]
+        [TestCase(-0.2)]
+        [TestCase(double.NaN)]
+        public void Plan_AnUnusablePhysicalThickness_FallsBackToTheConstruction(double value)
+        {
+            T3DImportPlan plan = BoxWithPhysicalThickness(value, value, value, value).T3DImportPlan();
+
+            Assert.That(plan.Elements.Single(x => x.Description == SyntheticModels.WallConstruction.Guid.ToString("D")).Width, Is.EqualTo(0.30).Within(1e-9));
+        }
+
         [Test]
         public void Plan_EveryPolygon_IsAnOpenThreeByNLoopWhoseNormalPointsOutOfItsZone()
         {
@@ -971,6 +1050,90 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 Assert.That(rooflight.PositionType, Is.EqualTo(1));
                 Assert.That(Points(plan.Surfaces.Single(x => x.Openings.Any(o => o.WindowKey == rooflight.Key)).Openings.Single().Coordinates).All(x => Math.Abs(x.Z - 3) < 1e-9), Is.True, "on the roof plane");
             });
+        }
+
+        [Test]
+        public void Plan_ASlabWithAStairVoidFilledByAir_IsSplitAroundTheVoid_SoNoFloorIsImportedTwice()
+        {
+            // Imported whole (AddSurface takes one outer loop), the slab lay over the Air panel in its hole: on the real house the
+            // landing got 15.5 + 3.325 m² of floor and the hall and landing ~5 m³ each too much. The gbXML route splits first.
+            AnalyticalModel model = SyntheticModels.StackedZonesWithStairVoid();
+            Guid slabGuid = model.AdjacencyCluster.GetPanels().Single(x => x.PanelType == PanelType.FloorInternal).Guid;
+            T3DImportPlan plan = model.T3DImportPlan();
+
+            List<T3DSurfaceSpec> internals = plan.Surfaces.Where(x => x.Kind == T3DSurfaceKind.Internal).ToList();
+            double area(T3DSurfaceSpec surface) => Points(surface.Coordinates).NewellNormal().Length / 2;
+            List<T3DSurfaceSpec> air = internals.Where(x => plan.Elements.Single(e => e.Key == x.ElementKey).Ghost).ToList();
+            List<T3DSurfaceSpec> slab = internals.Except(air).ToList();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(air, Has.Count.EqualTo(1));
+                Assert.That(area(air[0]), Is.EqualTo(2).Within(1e-6), "the Air panel fills the void");
+                Assert.That(slab, Has.Count.GreaterThan(1), "the holed slab is split into hole-free pieces");
+                Assert.That(slab.Sum(area), Is.EqualTo(18).Within(1e-6), "the slab pieces cover the slab, never the void");
+                Assert.That(slab.Count(x => x.PanelGuid == slabGuid), Is.EqualTo(1), "the first piece keeps the slab's GUID");
+                Assert.That(plan.Report.Notes, Has.One.Contains("split into hole-free pieces"));
+                Assert.That(plan.Report.Notes, Has.None.Contains("internal edge(s) (non-aperture holes) ignored"));
+            });
+        }
+
+        // A box whose south wall runs from z0 to z0 + 3, with a 1 x 2 m door starting at doorBottom.
+        private static AnalyticalModel BoxWithDoorFrom(double z0, double doorBottom)
+        {
+            Space space = new Space("Box", P(2.5, 2, z0 + 1.5));
+            List<Panel> panels = SyntheticModels.BoxPanels(0, 5, 0, 4, z0, z0 + 3, SyntheticModels.FloorConstruction, PanelType.SlabOnGrade, SyntheticModels.RoofConstruction, PanelType.Roof, SyntheticModels.WallConstruction, PanelType.WallExternal);
+            panels[2].AddAperture(Analytical.Create.Aperture(SyntheticModels.DoorConstruction, SyntheticModels.Quad(P(1, 0, doorBottom), P(2, 0, doorBottom), P(2, 0, doorBottom + 2), P(1, 0, doorBottom + 2))));
+
+            AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
+            adjacencyCluster.AddObject(space);
+            foreach (Panel panel in panels)
+            {
+                adjacencyCluster.AddObject(panel);
+                adjacencyCluster.AddRelation(space, panel);
+            }
+
+            return new AnalyticalModel(SyntheticModels.Box(), adjacencyCluster);
+        }
+
+        [TestCase(-1e-17)]
+        [TestCase(-1e-12)]
+        [TestCase(-0.0)]
+        public void Plan_WindowLevel_ARoundingErrorBelowZero_IsZero_AndNotNoted(double doorBottom)
+        {
+            // TAS's AddWindow refuses any negative level (measured down to -1e-17); a ground-floor door at z = 0 routinely
+            // comes out a rounding error below zero, and was then lost with every opening on it.
+            T3DImportPlan plan = BoxWithDoorFrom(0, doorBottom).T3DImportPlan();
+            T3DWindowSpec door = plan.Windows.Single();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(door.Level, Is.EqualTo(0));
+                Assert.That(double.IsNegative(door.Level), Is.False, "not even negative zero");
+                Assert.That(plan.Report.Notes, Has.None.Contains("below zero"));
+                Assert.That(plan.Report.Openings, Is.EqualTo(1));
+            });
+        }
+
+        [Test]
+        public void Plan_WindowLevel_AnOpeningReallyBelowZero_IsZero_AndNoted_ButItsPolygonStaysPut()
+        {
+            T3DImportPlan plan = BoxWithDoorFrom(-1, -0.5).T3DImportPlan();
+            T3DWindowSpec door = plan.Windows.Single();
+            List<Point3D> opening = Points(plan.Surfaces.Single(x => x.Openings.Count != 0).Openings.Single().Coordinates);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(door.Level, Is.EqualTo(0), "TAS refuses a negative level");
+                Assert.That(plan.Report.Notes, Has.One.Contains("0.500 m below zero"));
+                Assert.That(opening.Min(x => x.Z), Is.EqualTo(-0.5).Within(1e-9), "the opening polygon, which places the door, is unchanged");
+            });
+        }
+
+        [Test]
+        public void Plan_WindowLevel_AboveZero_IsTheOpeningsLowestPoint()
+        {
+            Assert.That(BoxWithDoorFrom(0, 0.25).T3DImportPlan().Windows.Single().Level, Is.EqualTo(0.25).Within(1e-9));
         }
 
         [TestCase(0.0, 0.5, TestName = "Plan_NorthAngle_Zero_IsTheHalfDegreeTasNeeds")]

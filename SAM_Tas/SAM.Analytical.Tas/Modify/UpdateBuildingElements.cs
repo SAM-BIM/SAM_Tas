@@ -191,21 +191,29 @@ namespace SAM.Analytical.Tas
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
 
-                TBD.Construction construction;
-                if (!constructionByName.TryGetValue(name, out construction))
+                TBD.Construction ConstructionByName(string name_Element)
                 {
-                    List<TBD.Construction> constructions_Temp = constructions.FindAll(x => !string.IsNullOrWhiteSpace(x?.name) && name.EndsWith(x.name));
+                    if (constructionByName.TryGetValue(name_Element, out TBD.Construction construction_Name))
+                    {
+                        return construction_Name;
+                    }
+
+                    List<TBD.Construction> constructions_Temp = constructions.FindAll(x => !string.IsNullOrWhiteSpace(x?.name) && name_Element.EndsWith(x.name));
                     if(constructions_Temp == null || constructions_Temp.Count == 0)
                     {
-                        constructions_Temp = constructions.FindAll(x => !string.IsNullOrWhiteSpace(x?.name) && x.name.EndsWith(name));
+                        constructions_Temp = constructions.FindAll(x => !string.IsNullOrWhiteSpace(x?.name) && x.name.EndsWith(name_Element));
                     }
 
                     if(constructions_Temp != null && constructions_Temp.Count != 0)
                     {
-                        constructions_Temp.Sort((x, y) => System.Math.Abs(x.name.Length - name.Length).CompareTo(System.Math.Abs(y.name.Length - name.Length)));
-                        construction = constructions_Temp.First();
+                        constructions_Temp.Sort((x, y) => System.Math.Abs(x.name.Length - name_Element.Length).CompareTo(System.Math.Abs(y.name.Length - name_Element.Length)));
+                        return constructions_Temp.First();
                     }
+
+                    return null;
                 }
+
+                TBD.Construction construction = ConstructionByName(name);
 
                 if (construction == null)
                 {
@@ -233,6 +241,19 @@ namespace SAM.Analytical.Tas
                                 break;
                             }
                         }
+                    }
+                }
+
+                if (construction == null)
+                {
+                    //An element the direct T3D route split off one construction - used on and off the ground, as
+                    //air, or at another physical thickness - is named after it with the plan's stable
+                    //discriminator, "SIM_INT_SLD_FLR_D45F6E1D", which no construction is named. Its construction
+                    //is the one the base name finds; without this the element was left with none.
+                    System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(name, "^(?<base>.+)_[0-9A-F]{8}$");
+                    if (match.Success)
+                    {
+                        construction = ConstructionByName(match.Groups["base"].Value);
                     }
                 }
 

@@ -61,6 +61,12 @@ namespace SAM.Analytical.Tas
 
         /// <summary>The width [m] TAS offsets by when widths are on; 0 switches this element's width off.</summary>
         public double Width { get; set; }
+
+        /// <summary>
+        /// True when <see cref="Width"/> is the physical thickness of the panels' source element
+        /// (<c>PanelSourceParameter.PhysicalThickness</c>); false when it is the construction's thickness.
+        /// </summary>
+        public bool PhysicalThickness { get; set; }
         public bool Transparent { get; set; }
         public bool InternalShadows { get; set; }
 
