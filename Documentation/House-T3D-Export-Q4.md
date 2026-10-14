@@ -1,6 +1,6 @@
 # House model: direct T3D export and physical thickness — Q4 (2026-10-14)
 
-Status: implemented on `feature/panels-by-solid-q4`; draft PR, owner review required. Not merged.
+Status: implemented on `feature/panels-by-solid-q4` in two commits: the direct export and the physical thickness, then UseBEWidths ON matching and the OpeningProperties diagnostics. Draft PR, owner review required. Not merged.
 Base: `sow/2026-Q4` at `4cb3094cc7c8efea168f37d5f04897be2e9415bc`.
 PR: the live draft PR for this branch in `SAM-BIM/SAM_Tas`. Its description holds the tested SHA, the final head and the hosted checks.
 
@@ -48,9 +48,32 @@ TAS refused two door window types (`Doors: SIM_EXT_SLD <guid>`), and their openi
    - This also fixes the existing ground/air split, which had the same latent gap.
    - Every name that matched before still matches first, unchanged.
 
+5. **Widths ON: every post-export match missed (2026-10-14, second commit).** With `UseBEWidths` ON, TAS treats each SAM polygon as its element's centre line and moves every zone surface half the element width into the zone. For example, an external wall 0.25 m wide lands 0.125 m in from the panel.
+   - `Modify.UpdateIds` matched TBD surfaces to SAM panels, then apertures, by point-in-face within 1 mm. So nothing matched: 0 panel and 0 aperture stamps.
+   - Then `UpdateApertureDefinitions` skipped all 50 parts ("carry no building element stamp"), and `SetApertureTypes` stopped all 25 at gate 3.
+   - Identity was never lost. The per-aperture TBD elements keep the SAM aperture GUID in their names until the rebind, and the TBD apertures carry their zone-surface references. Only the geometric matcher could not see them.
+   - Fixes:
+     - **Aperture surface by name** (`Query.ApertureByElementName`). `UpdateIds` first decodes the SAM aperture GUID from the pane/frame element name (`Windows: SIM_EXT_GLZ <guid> -pane`), within the space's own apertures. Its host is then the panel holding it. Geometry is the fallback, unchanged.
+     - **TBD aperture by stamp** (`Query.PaneStampMatch`). `SetApertureTypes` first matches the pane surface a TBD aperture was read from against the SAM apertures' pane stamps. Geometry is the fallback, unchanged.
+     - **Opaque surface off its panel by its half width** (`Query.OffsetMatch`). This applies only when the exact test finds nothing: parallel (2°), at most half the element's width plus tolerance away, inside the panel once projected. The nearest one wins. A zero-width element (Air) is bounded by the widest half width in its zone, because TAS moves it with the surfaces round it.
+     - **No centroid translation on a direct TBD.** Its zones carry `[SpaceGuid]`, and it keeps SAM coordinates. With widths ON, its shrunken shell gave a false few-cm shift.
+   - No tolerance was raised globally. Nothing changes for a surface the exact test matches.
+6. **Stair-void Air surface stamped onto the slab, both modes.** `Face3D.InRange` tests the outer boundary only, so the GF Hall's Air surface (#5) was stamped onto the holed UF slab, and the Air panel was never stamped. `Query.InRangeOutsideHoles` excludes a point inside a hole and is used by both panel tests.
+   - Widths OFF stamps change only here: slab = UF Landing #18 / GF Hall #4; Air = UF Landing #19 / GF Hall #5.
+   - TBD geometry, volumes and constructions are unchanged.
+7. **OpeningProperties are optional.** An aperture without them (a fixed window, an ordinary door) requests no control and is valid.
+   - Gate 4 is no longer an `ISSUE:` line per aperture (the house gave 25 warnings). It is counted in the one summary line: `25 TBD apertures seen, 25 matched to their SAM aperture, 25 with no OpeningProperties (...)`.
+   - Unmatched apertures, a missing building element, a refused write and an undelivered schedule stay `ISSUE:` lines.
+   - The summary is `Query.ApertureTypesSummary` (COM-free). No OpeningProperties are invented, and no aperture geometry, type or construction changes.
+
 ## Files
 
 - `SAM.Analytical.Tas/Query/T3DImportPlan.cs` — level ≥ 0, hole split, physical-thickness width and element split, notes.
+- `SAM.Analytical.Tas/Modify/UpdateIds.cs` — aperture surface by element-name identity first; no centroid translation on a direct TBD.
+- `SAM.Analytical.Tas/Modify/SetApertureTypes.cs` — TBD aperture by pane stamp first; no per-aperture note for missing OpeningProperties.
+- `SAM.Analytical.Tas/Query/Match.cs` — `OffsetMatch` fallback for building-element widths; `InRangeOutsideHoles`.
+- `SAM.Analytical.Tas/Query/ApertureByElementName.cs`, `PaneStampMatch.cs`, `ApertureTypesSummary.cs` — new, COM-free.
+- `SAM.Analytical.Tas.TM59.Tests/BuildingElementWidthsMatchTests.cs` — 22 new tests.
 - `SAM.Analytical.Tas/Classes/T3DImportPlan.cs` — `T3DElementSpec.PhysicalThickness`.
 - `SAM.Analytical.Tas/Modify/UpdateBuildingElements.cs` — base-name fallback for discriminated element names.
 - `SAM.Analytical.Tas/DIRECT_T3D_ROUTE.md` — mapping rules updated.
@@ -94,13 +117,46 @@ Element widths before and after, house model (the TBD constructions are byte-for
 - Zones are named after the SAM spaces (`GF Hall`, ..., `Attic Unconditioned`) when seed spaces are supplied. Without seeds they are `Cell 1..11`.
 - With seeds and `SetDefaultApertureConstruction`: 8 internal doors are `Doors: SIM_INT_SLD`, and the front door `Doors: SIM_EXT_SLD`.
 
+### Widths ON matching and OpeningProperties (second commit, 2026-10-14)
+
+Same house input as above (`house.input.sam` from the Rhino harness, SHA-256 prefix `11FFF70C131B`), run through the real `WorkflowCalculator` with the harness: `workflow <house.json> <dir> direct [widths] name=house`. Output is under `C:\t3dv\h1014` (machine-local).
+
+| | Widths OFF | Widths ON, before | Widths ON, after |
+|---|---|---|---|
+| Conversion | success, 11 zones, 57 surfaces, 25 openings, 0 skipped | same | same |
+| TBD floor / volume | 226.688 m² / 564.169 m³ | 209.270 / 481.784 | 209.270 m² / **481.784 m³** |
+| Panel + aperture stamps (`UpdateIds`) | 81 + 66 | **0 + 0** | 81 + 66, **identical to OFF** (zone names, surface numbers) |
+| Aperture parts rebound to shared definitions | 50 / 50 | **0** (50 unstamped) | 50 / 50 |
+| TBD apertures matched (`SetApertureTypes`) | 25 / 25 | **0** (25 at gate 3) | 25 / 25 |
+| `ISSUE:` lines from aperture types | 0 (was 25 × gate 4) | 26 | **0** |
+| Elements / widths | 14 after rebind; 0.25 / 0.10 / 0.15 / 0.20 / 0.20 / 0.20 | — | identical |
+
+Per-zone volumes, OFF → ON (m³):
+- GF Living 56.672 → 48.692; GF Kitchen/Dining 56.672 → 48.692; GF Hall 46.500 → 39.900; GF Study 33.422 → 27.972; GF Bathroom 33.422 → 27.972.
+- UF Bedroom 1 50.436 → 43.512; UF Bedroom 3 50.436 → 43.512; UF Landing 46.112 → 39.900; UF Bedroom 2 38.907 → 33.152; UF Bathroom 38.907 → 33.152.
+- Attic Unconditioned 112.683 → 95.328.
+
+Further checks:
+- **Constructions independent of widths.** `inputs` OFF vs ON TBD: every construction and material property is identical (1184 construction lines; only TAS-minted GUIDs differ). The new OFF TBD against yesterday's accepted OFF TBD (`run4`): 5476 identical, 174 expected (GUIDs), **0 unexpected**.
+- **Opening controls, both modes** (`workflow loadsensitive <dir> direct [widths]`: 2 operable windows, 1 with a night-closed schedule):
+  - 5/5 matched, 2 updated, 1 schedule requested and 1 read back;
+  - the same elements carry the same controls, `Opening Cd0.448 F1` and `Opening Cd0.395 F1 S00FFFE`.
+- **gbXML route unaffected:** house 25/25 matched and 50/50 rebound; load-sensitive 5/5, 2 updated, schedule read back.
+- Licensed `synthetic`: 104 / 0.
+- Tests:
+  - `BuildingElementWidthsMatchTests` 22 / 0;
+  - full `SAM.Analytical.Tas.TM59.Tests` **1166 / 0**;
+  - `benchmark/SAM.Analytical.Tas.Benchmark.Tests` 23 / 0.
+- Stamp comparison: a machine-local PowerShell extractor over `house.result.json`, with zone GUIDs mapped to space names and slot order ignored. Not committed.
+
 ## Limitations / open
 
-- **Widths ON** is not the workflow default (`UseWidths = false`, `DIRECT_T3D_ROUTE.md` Q1). It gives net volumes from these mid-plane panels: GF Living 17.39 m² × 2.8 m = 48.692 m³, against 18.891 m² × 3.0 m between mid-planes. But:
-  - the existing post-export aperture steps then miss every opening ("gate 3: no SAM aperture face contains its internal point"), because the T3D geometry is offset;
-  - the workflow already warns about this for widths ON.
-
-  Making mid-plane models default to widths ON is an **owner decision** and is not changed here.
+- **Widths ON** is not the workflow default (`UseWidths = false`, `DIRECT_T3D_ROUTE.md` Q1).
+  - It gives net volumes from these mid-plane panels: GF Living 17.39 m² × 2.8 m = 48.692 m³, against 18.891 m² × 3.0 m between mid-planes.
+  - Its aperture and host matching now works (above). Making mid-plane models default to widths ON is an **owner decision** and is not changed here.
+  - The widths-ON workflow note still describes SAM panels as inner surfaces. That is true of older models, not of PhysicalThickness mid-plane models. It is informational (no `ISSUE:`), and its wording is left for that decision.
+- `OffsetMatch` assumes TAS offsets a surface by at most half its element's width, which is what was measured here. A surface pair closer together than that and parallel would resolve to the nearer panel.
+- The Grasshopper acceptance definition was not re-run in Rhino and no working copy with a widths switch was made. The validation used the workflow harness on the same model. No assemblies were deployed.
 - TAS GUI: the T3D and TBD were created, re-opened and exported through TAS COM on this machine. They were not opened interactively in the TAS3D window.
 - Not run: hosted CI. The GenOpt tests are untouched.
 

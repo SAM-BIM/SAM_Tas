@@ -136,8 +136,13 @@ namespace SAM.Analytical.Tas
                     //difference of the two sides' SHARED-zone panel bounding-box centroids - the same
                     //compensation Modify.SetApertureTypes applies for the same reason. Null when either side
                     //has no panels: the match below is then exactly what it was before this compensation.
+                    //Not on a TBD the direct SAM -> T3D route made (its zones carry the [SpaceGuid] description): that
+                    //TBD keeps SAM's own coordinates (DIRECT_T3D_ROUTE.md, gating: TBD min = SAM min), so there is no
+                    //shift to compensate. With UseBEWidths ON its shell is also SHRUNK by each element's half width,
+                    //unequally top and bottom, and the centroid difference would then be a false translation of a few
+                    //centimetres that moved every point off its panel.
                     Vector3D translation = null;
-                    AdjacencyCluster adjacencyCluster_TBD = building.ToSAM();
+                    AdjacencyCluster adjacencyCluster_TBD = zonesBySpaceGuid_Description.Count != 0 ? null : building.ToSAM();
                     if (adjacencyCluster_TBD != null)
                     {
                         List<Space> spaces_SAM_Shared = spaces.FindAll(x => x != null && zonesBySpaceGuid.ContainsKey(x.Guid));
@@ -184,9 +189,36 @@ namespace SAM.Analytical.Tas
                             continue;
                         }
 
+                        //This space's apertures by GUID, each with its host, for the identity match below.
+                        Dictionary<System.Guid, Aperture> apertures_Space = new Dictionary<System.Guid, Aperture>();
+                        Dictionary<System.Guid, Panel> hosts_Space = new Dictionary<System.Guid, Panel>();
+                        foreach (Panel panel_Space in panels_Space)
+                        {
+                            List<Aperture> apertures_Panel = panel_Space?.Apertures;
+                            if (apertures_Panel == null)
+                            {
+                                continue;
+                            }
+
+                            foreach (Aperture aperture_Panel in apertures_Panel)
+                            {
+                                if (aperture_Panel != null)
+                                {
+                                    apertures_Space[aperture_Panel.Guid] = aperture_Panel;
+                                    hosts_Space[aperture_Panel.Guid] = panel_Space;
+                                }
+                            }
+                        }
+
                         foreach (TBD.IZoneSurface zoneSurface in zoneSurfaces)
                         {
-                            Panel panel = zoneSurface.Match(panels_Space, zone.GUID, tolerance, translation);
+                            //An aperture surface whose element still names its SAM aperture is identified by that,
+                            //wherever TAS put it (see Query.ApertureByElementName); geometry is the fallback.
+                            TBD.buildingElement buildingElement_Surface = zoneSurface.buildingElement;
+                            AperturePart aperturePart = AperturePart.Undefined;
+                            Aperture aperture = buildingElement_Surface == null ? null : Query.ApertureByElementName(buildingElement_Surface.name, buildingElement_Surface.BEType, apertures_Space, out aperturePart);
+
+                            Panel panel = aperture != null ? hosts_Space[aperture.Guid] : zoneSurface.Match(panels_Space, zone.GUID, tolerance, translation);
                             if(panel == null)
                             {
                                 continue;
@@ -200,7 +232,16 @@ namespace SAM.Analytical.Tas
                             List<Aperture> apertures = panel.Apertures;
                             if (apertures != null && apertures.Count != 0)
                             {
-                                Aperture aperture = zoneSurface.Match(apertures, zone.GUID, out AperturePart aperturePart, tolerance, translation);
+                                if (aperture == null)
+                                {
+                                    aperture = zoneSurface.Match(apertures, zone.GUID, out aperturePart, tolerance, translation);
+                                }
+                                else
+                                {
+                                    //The panel copy, which is what is re-stamped and put back below.
+                                    aperture = panel.GetAperture(aperture.Guid) ?? aperture;
+                                }
+
                                 if (aperture != null)
                                 {
                                     //The physical stamp is COLLECTED here and written after the pass, so both

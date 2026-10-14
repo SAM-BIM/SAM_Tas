@@ -297,14 +297,149 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    if (face3D.InRange(point3D, tolerance))
+                    if (InRangeOutsideHoles(face3D, point3D, tolerance))
                     {
                         return panel;
                     }
                 }
             }
 
-            return null;
+            //Building-element widths. With TAS's UseBEWidths ON a surface is not where its SAM panel is: TAS
+            //treats the polygon as the element's centre line and moves each zone's surface half the element
+            //width into the zone (measured on the house model: an external wall 0.25 m wide lands 0.125 m in
+            //from the panel). Nothing within tolerance of the panel then, so - only once the exact test above
+            //has found nothing - a surface parallel to a panel, at most half its own element's width (plus
+            //tolerance) away from it and inside it once projected onto it, belongs to it. Of several, the
+            //nearest. With widths OFF the surfaces are on the panels and the exact test decides, as before.
+            //A zero-width element (Air) has no centre line of its own: TAS moves it with the zone's offset surfaces round it
+            //(house model: the stair-void Air surface sits with the 0.20 m slab's half width). Its bound is then the widest
+            //half width in its zone.
+            double halfWidth = zoneSurface.buildingElement == null ? 0 : zoneSurface.buildingElement.width / 2.0;
+            if (halfWidth <= tolerance)
+            {
+                List<TBD.IZoneSurface> zoneSurfaces_Zone = zoneSurface.zone?.ZoneSurfaces();
+                if (zoneSurfaces_Zone != null)
+                {
+                    foreach (TBD.IZoneSurface zoneSurface_Zone in zoneSurfaces_Zone)
+                    {
+                        TBD.buildingElement buildingElement_Zone = zoneSurface_Zone?.buildingElement;
+                        if (buildingElement_Zone != null && buildingElement_Zone.width / 2.0 > halfWidth)
+                        {
+                            halfWidth = buildingElement_Zone.width / 2.0;
+                        }
+                    }
+                }
+            }
+
+            if (halfWidth <= tolerance)
+            {
+                return null;
+            }
+
+            Panel result = null;
+            double distance_Min = double.MaxValue;
+            foreach (TBD.IRoomSurface roomSurface in roomSurfaces)
+            {
+                Polygon3D polygon3D = Geometry.Tas.Convert.ToSAM(roomSurface?.GetPerimeter()?.GetFace());
+                Point3D point3D = polygon3D?.InternalPoint3D();
+                Vector3D normal = polygon3D?.GetPlane()?.Normal;
+                if (point3D == null || normal == null)
+                {
+                    continue;
+                }
+
+                if (translation != null)
+                {
+                    point3D = point3D.GetMoved(translation) as Point3D;
+                    if (point3D == null)
+                    {
+                        continue;
+                    }
+                }
+
+                foreach (Panel panel in panels)
+                {
+                    Panel panel_Offset = OffsetMatch(panel, point3D, normal, halfWidth + tolerance, tolerance, out double distance);
+                    if (panel_Offset != null && distance < distance_Min)
+                    {
+                        result = panel_Offset;
+                        distance_Min = distance;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// <paramref name="panel"/> when a TAS surface at <paramref name="point3D"/> with normal <paramref name="normal"/> lies on
+        /// it offset by up to <paramref name="maxDistance"/> along its normal - the building-element-width offset TAS applies with
+        /// UseBEWidths ON - else null. Parallel normals (either sense) and the point, projected onto the panel, inside it within
+        /// <paramref name="tolerance"/>. COM-free, so the rule is unit-tested.
+        /// </summary>
+        public static Panel OffsetMatch(Panel panel, Point3D point3D, Vector3D normal, double maxDistance, double tolerance, out double distance)
+        {
+            distance = double.NaN;
+
+            Face3D face3D = panel?.GetFace3D(false);
+            Plane plane = face3D?.GetPlane();
+            if (plane == null || point3D == null || normal == null)
+            {
+                return null;
+            }
+
+            Vector3D normal_Unit = normal.Unit;
+            Vector3D normal_Panel = plane.Normal?.Unit;
+            if (normal_Unit == null || normal_Panel == null || Math.Abs(normal_Unit.DotProduct(normal_Panel)) < Math.Cos(Core.Tolerance.Angle))
+            {
+                return null;
+            }
+
+            distance = plane.Distance(point3D);
+            if (double.IsNaN(distance) || distance > maxDistance)
+            {
+                return null;
+            }
+
+            Point3D point3D_Projected = plane.Closest(point3D);
+            if (point3D_Projected == null || !InRangeOutsideHoles(face3D, point3D_Projected, tolerance))
+            {
+                return null;
+            }
+
+            return panel;
+        }
+
+        /// <summary>
+        /// <see cref="Face3D.InRange(Point3D, double)"/> - on the face's plane and within its outer boundary, within
+        /// <paramref name="tolerance"/> - and NOT inside one of its holes. <c>Face3D.InRange</c> tests the outer boundary only, so a
+        /// surface filling a hole was matched to the holed panel: on the house model the GF Hall's stair-void Air surface was
+        /// stamped onto the UF slab round it, and the Air panel itself was never stamped. A point on a hole's edge, within
+        /// tolerance, still counts as on the face.
+        /// </summary>
+        public static bool InRangeOutsideHoles(Face3D face3D, Point3D point3D, double tolerance)
+        {
+            if (face3D == null || point3D == null || !face3D.InRange(point3D, tolerance))
+            {
+                return false;
+            }
+
+            List<Geometry.Planar.IClosed2D> internalEdge2Ds = face3D.InternalEdge2Ds;
+            if (internalEdge2Ds == null || internalEdge2Ds.Count == 0)
+            {
+                return true;
+            }
+
+            Geometry.Planar.Point2D point2D = face3D.GetPlane().Convert(point3D);
+            foreach (Geometry.Planar.IClosed2D internalEdge2D in internalEdge2Ds)
+            {
+                if (internalEdge2D != null && internalEdge2D.Inside(point2D, tolerance) && !internalEdge2D.On(point2D, tolerance))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public static Aperture Match(this TBD.IZoneSurface zoneSurface, List<Aperture> apertures, out AperturePart aperturePart, double tolerance = Core.Tolerance.MacroDistance)
