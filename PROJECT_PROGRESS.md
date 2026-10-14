@@ -1,5 +1,16 @@
 # Project Progress - SAM_Tas (2026-Q4)
 
+## Q4 direct T3D export and BEWidths matching closeout - 2026-10-14
+
+- **PR**: SAM-BIM/SAM_Tas#100 -> `sow/2026-Q4`, **merged 2026-10-14**, merge commit `4b253dc7c1304a8580e956dbe8a8c11acffc66d8`, head `e6888ebbd97e090bc803300991e5b0cba4383bc9`.
+- **Status**: complete. Post-merge Build (Windows) succeeded on `4b253dc7` (GitHub). PR-head CI (build, spdx) was green on `e6888ebb` before merge; its CI used the same-named SAM branch whose head was the content merged as SAM#194.
+- **Work**: direct T3D export of the house model with physical thickness preserved; apertures and panels matched with UseBEWidths ON (`Query.Match`, `PaneStampMatch`, `ApertureByElementName`, `ApertureTypesSummary`, `UpdateIds`, `UpdateBuildingElements`, `SetApertureTypes`, `T3DImportPlan`); OpeningProperties optional. Tests: `BuildingElementWidthsMatchTests`, `DirectT3DRouteTests`. Records: `Documentation/House-T3D-Export-Q4.md`, `DIRECT_T3D_ROUTE.md`.
+- Manual Rhino/Grasshopper/TAS acceptance PASSED on 2026-10-14 (owner-run, machine-local, not committed): 11 correctly named TAS zones, 57 surfaces, 25/25 apertures matched, 50 aperture parts rebound, UseBEWidths ON volume 481.784 m³, no TAS validation errors, no unnecessary OpeningProperties warnings, PhysicalThickness preserved independently of TBD constructions.
+- Merge order (sequential, merge commits, each pinned to its verified head SHA): SAM#194 `755bc514` → SAM_OCCT#76 `79d0332e` → SAM_OCCT#77 `3e688afc` → SAM_Tas#100 `4b253dc7`. `sow/2026-Q4` has no branch protection or required reviews; none bypassed. No review or codex comments existed on any of the four PRs. PRs were drafts and were marked ready immediately before merge.
+- Remote task branches deleted with lease guards after verifying head SHA, full merge and no open PRs: SAM `feature/panels-by-solid-q4`, SAM_OCCT `fix/sew-under-split-q4` and `feature/air-panels-attic-q4`, SAM_Tas `feature/panels-by-solid-q4`. Local branches left in place (upstream gone).
+- Unresolved (non-blocking): the informational wording "SAM panels are the physical inner surfaces" (SAM_Tas `WorkflowCalculator.cs` UseWidths note and `DIRECT_T3D_ROUTE.md`) is misleading for mid-surface panels; deliberately not changed during the merge. Small follow-up PR. The 19 pre-existing SAM_OCCT native integration failures remain documented and were not reinvestigated.
+- **Next step**: none required for this stream. Optional wording follow-up PR (see above).
+
 ## Q4 agent instructions rollout closeout - 2026-10-12
 
 - SAM-BIM/SAM_Tas#99 merged as `c6dfe516593d4590cd20b78b6d01975b66327dc9` (merge commit pinned to approved head `297bd7c155bda7b208902026c9c80e96711889a7`; base `sow/2026-Q4` `347e9efe521db6e985a92bf1f9bd2a404ce2850d`; validated content `9fa32480942563b26542f93d7176bde6252adf50`). Owner-authorized 2026-10-12 after an independent review (`AGENT_ROLLOUT_REVIEW_2026-10-12.md`, local to the owner's workspace, not committed).
