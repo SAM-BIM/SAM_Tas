@@ -341,6 +341,34 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
         /// floor at z = 3. <paramref name="upperFirst"/> lists the upper space first, so the shared panel's
         /// first zone is the one above it.
         /// </summary>
+        /// <summary>
+        /// <see cref="StackedZones"/> with a 1 x 2 m stair void (x 1..2, y 1..3) in the shared slab: the slab carries the void as
+        /// a hole, and an Air panel (no construction) fills it, related to both zones - what SAM's solid conversion produces
+        /// for a real stair. Slab 18 m², Air 2 m², lower and upper each 60 m³.
+        /// </summary>
+        public static AnalyticalModel StackedZonesWithStairVoid()
+        {
+            AnalyticalModel model = StackedZones();
+            AdjacencyCluster adjacencyCluster = model.AdjacencyCluster;
+            List<Space> spaces = adjacencyCluster.GetSpaces();
+
+            Panel slab = adjacencyCluster.GetPanels().Find(x => x.PanelType == PanelType.FloorInternal);
+            Plane plane = new Plane(P(0, 0, 3), new Vector3D(0, 0, 1));
+            Geometry.Planar.Polygon2D outer = new Geometry.Planar.Polygon2D(new[] { new Geometry.Planar.Point2D(0, 0), new Geometry.Planar.Point2D(5, 0), new Geometry.Planar.Point2D(5, 4), new Geometry.Planar.Point2D(0, 4) });
+            Geometry.Planar.Polygon2D hole = new Geometry.Planar.Polygon2D(new[] { new Geometry.Planar.Point2D(1, 1), new Geometry.Planar.Point2D(2, 1), new Geometry.Planar.Point2D(2, 3), new Geometry.Planar.Point2D(1, 3) });
+            Panel slab_Holed = Analytical.Create.Panel(slab.Guid, slab, plane.Convert(Geometry.Planar.Create.Face2D(outer, new[] { hole })));
+            adjacencyCluster.AddObject(slab_Holed);
+
+            Panel air = Analytical.Create.Panel(null, PanelType.Air, plane.Convert(new Geometry.Planar.Face2D(hole)));
+            adjacencyCluster.AddObject(air);
+            foreach (Space space in spaces)
+            {
+                adjacencyCluster.AddRelation(space, air);
+            }
+
+            return new AnalyticalModel(model, adjacencyCluster);
+        }
+
         public static AnalyticalModel StackedZones(bool upperFirst = false)
         {
             Space lower = new Space("Lower", P(2.5, 2, 1.5));

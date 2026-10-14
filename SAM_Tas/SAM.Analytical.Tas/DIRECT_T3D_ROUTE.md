@@ -59,7 +59,10 @@ parameter would have let a new overload capture existing callers.
   description = `[SpaceGuid]=<guid>` (TAS's own `Zone.GUID` is read-only through COM). The zone is `external` for an `ExternalSpace`. A space whose panels
   could not be imported gets no zone (reported).
 * **Elements** - one per SAM `Construction` (plus a split where the same construction is used on and off the ground, or as air, so ground is never
-  wrong), named after it; width = `DefaultThickness` else the layers' thickness; colour, transparency, internal shadows, BE type, ground, ghost,
+  wrong, or at another physical thickness), named after it; a split-off element gets the stable suffix `_XXXXXXXX`, which
+  `Modify.UpdateBuildingElements` strips to find its TBD construction. Width = the panels' `PanelSourceParameter.PhysicalThickness` (the
+  geometric thickness of the source element, e.g. a Rhino solid; 2026-10-14) when they carry one, else `DefaultThickness`, else the layers'
+  thickness. The physical thickness never changes the construction: the TBD layers stay the thermal model. Colour, transparency, internal shadows, BE type, ground, ghost,
   floor-area flag follow the rules `Query.UpdateT3D` applies on the gbXML route; the construction GUID rides in the element description. A generic
   `Wall` / `Floor` construction gets its BE type from how the panel is used (the gbXML route inherits TAS's choice from the gbXML surface type).
 * **Surfaces** - shade (`PanelType.Shade` or no space) -> `AddShadeSurface`; one space -> `AddSurface` (adiabatic per
@@ -68,7 +71,12 @@ parameter would have let a new overload capture existing callers.
   shell; an open shell cannot say which way is out, so the panel's own normal is used and the report says so.
 * **Openings** - each aperture is emitted immediately after its host (`AddOpening` attaches to the surface added last), snapped onto the host
   plane and wound the same way. **Window types are one window object per aperture** (see "Where the specification was wrong").
-* Polygons with holes: `AddSurface` takes one outer loop; the outer loop is imported and the hole is reported.
+  A window type's `level` is the opening's lowest point, never below 0: TAS's `AddWindow` refuses any negative level (measured down to
+  -1e-17) and every opening on that type is then lost - a ground-floor door at z = 0 routinely comes out a rounding error below zero. The
+  opening polygon, not the level, places the opening; a real drop below zero is noted (2026-10-14).
+* Polygons with holes: `AddSurface` takes one outer loop, so a panel with non-aperture holes is first split into hole-free pieces with
+  `AdjacencyCluster.SplitByInternalEdges`, as the gbXML route does (the first piece keeps the panel GUID). Imported whole, a slab round a
+  stair void lay over the Air panel filling it: double floor area and ~5 m3 too much volume in each zone either side (2026-10-14).
 
 ## Workflow integration and what was gated
 
@@ -111,7 +119,7 @@ relative**.
 | --- | --- | --- |
 | One window type per `ApertureConstruction`, not per aperture | **TAS folds every opening of one window object on one host surface into one TBD zone surface**: three 3.33 m2 windows on one wall became one 10 m2 window (frame 1.12 + pane 8.88). That keeps the area but loses "N apertures keep N pane and N frame surfaces" - the identity Stage 3 (`APERTURE_*.md`) is built on - and a per-aperture frame percentage, which is an attribute of the window object. Also the window-per-construction building elements carried hash-suffixed names no construction matched (3 GLAZING elements got no construction) | **One window object per aperture by default**, named `Windows: <name> <aperture GUID> ` (trailing space: TAS appends `-pane`/`-frame` directly) so the existing name decoding and the shared-definition collapse work unchanged. `ToT3DOptions.SharedWindowTypes = true` gives the specification's design and its consequences; it is covered by a licensed test that shows the fold |
 | `Query.OpeningType(aperture)` gives the opening type | it throws `NotImplementedException` (the legacy `ToT3D(Aperture)` is dead code) | own mapping: door 2, roof 1, else 0 for `AddWindow`; `positionType` from the host (wall window 0 / door 2, roof 1, floor 4) as `UpdateT3D` does. `AddWindow` accepts 0-2 only (3 returns null; `positionType` 4 is settable afterwards, 3 is not) |
-| Widths default ON (TAS importer default) | with widths ON TAS treats polygons as centre lines and shrinks every zone 10-12 % | default `UseWidths = false`, the same default as `WorkflowSettings.UseWidths`, so the SAM polygons are the geometry (see Q1) |
+| Widths default ON (TAS importer default) | with widths ON TAS treats polygons as centre lines and shrinks every zone 10-12 % | default `UseWidths = false`, the same default as `WorkflowSettings.UseWidths`, so the SAM polygons are the geometry (see Q1). With widths ON every surface is offset from its panel, so the post-export steps match by identity first (aperture GUID in the element name; pane stamps) and by a half-width offset test second; see `Documentation/House-T3D-Export-Q4.md` items 5-7 (2026-10-14) |
 | `doc.Create()`'s default `Zone` zone set "doesn't reach the TBD" | it reaches the TBD as an empty zone **group** called `Zone` | deleted before the SAM zone set is made |
 | Put the space GUID in the zone description | confirmed - it survives T3D -> TBD and `SAMZoneMetadata.Compose` (which `UpdateZone` runs) preserves it | `[SpaceGuid]=<guid>` segment; `UpdateIds` resolves by it first |
 | Remaining `UpdateIds`/`UpdateAdiabatic`/... "re-check" | see the gating table | gated, each with evidence |

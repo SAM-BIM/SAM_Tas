@@ -105,6 +105,7 @@ namespace SAM.Analytical.Tas
             // Build once; replaces a per-aperture AdjacencyCluster.Apertures(point, ...) call that
             // re-walked every panel each time (O(apertures * panels) on a 625-zone TM59 model).
             List<Tuple<BoundingBox3D, Aperture>> aperturesIndex = adjacencyCluster.AperturesWithBoundingBoxes();
+            List<Aperture> apertures_SAM = aperturesIndex?.ConvertAll(x => x.Item2) ?? [];
 
             //One COM pass over the building's reusable definitions, for the whole match. Without it every
             //opening child re-read every aperture type and every schedule in the building.
@@ -113,6 +114,8 @@ namespace SAM.Analytical.Tas
             List<TBD.ApertureType> result = new List<TBD.ApertureType>();
 
             int count_Seen = 0;
+            int count_Matched = 0;
+            int count_NoOpeningProperties = 0;
             int count_Updated = 0;
             int count_ScheduleRequested = 0;
             int count_ScheduleWritten = 0;
@@ -143,27 +146,41 @@ namespace SAM.Analytical.Tas
                         continue;
                     }
 
-                    Point3D point3D = aperture_Temp.GetFace3D()?.GetInternalPoint3D(tolerance);
-                    if (point3D == null)
-                    {
-                        AddGateNote(notes, counts_Gate, counts_GateReported, "2 geometry", string.Format("{0} (pane {1}): its geometry yields no internal point to match with. Gate 2 - the geometry match could not even be attempted.", identity_Temp, GUID));
-                        continue;
-                    }
-
-                    //THE PRODUCTION SELECTION, UNCHANGED. Query.Apertures already tests the aperture FACE -
-                    //the bounding box inside it is only a pre-filter - and returns the first face-level
-                    //match. Nothing below alters which aperture is chosen.
-                    Aperture aperture = aperturesIndex?.Apertures(point3D, 1, Core.Tolerance.MacroDistance)?.FirstOrDefault();
+                    //IDENTITY FIRST: the pane surface this TBD aperture was read from (zone + surface number, stamped
+                    //by Convert.ToSAM) against the pane surfaces Modify.UpdateIds stamped on the SAM apertures. It
+                    //does not depend on where TAS put the surface - with UseBEWidths ON every pane is offset from
+                    //SAM's by half its wall's width and no geometric match lands (house model: 0 of 25).
+                    Aperture aperture = Query.PaneStampMatch(aperture_Temp, apertures_SAM);
+                    Point3D point3D = null;
 
                     if (aperture == null)
                     {
-                        AddGateNote(notes, counts_Gate, counts_GateReported, "3 no SAM aperture", string.Format("{0} (pane {1}): no SAM aperture face contains its internal point {2} within {3} m. Gate 3 - the TBD side and the SAM side are not aligned here: an offset between the two models, an aperture missing from the SAM side, or a pane point falling outside every SAM aperture face.", identity_Temp, GUID, point3D, Core.Tolerance.MacroDistance));
+                        point3D = aperture_Temp.GetFace3D()?.GetInternalPoint3D(tolerance);
+                        if (point3D == null)
+                        {
+                            AddGateNote(notes, counts_Gate, counts_GateReported, "2 geometry", string.Format("{0} (pane {1}): it matched no SAM aperture's pane stamp and its geometry yields no internal point to match with. Gate 2 - the geometry match could not even be attempted.", identity_Temp, GUID));
+                            continue;
+                        }
+
+                        //THE GEOMETRIC SELECTION, UNCHANGED, for a SAM aperture with no pane stamp. Query.Apertures
+                        //tests the aperture FACE - the bounding box inside it is only a pre-filter - and returns the
+                        //first face-level match.
+                        aperture = aperturesIndex?.Apertures(point3D, 1, Core.Tolerance.MacroDistance)?.FirstOrDefault();
+                    }
+
+                    if (aperture == null)
+                    {
+                        AddGateNote(notes, counts_Gate, counts_GateReported, "3 no SAM aperture", string.Format("{0} (pane {1}): no SAM aperture carries its pane stamp and no SAM aperture face contains its internal point {2} within {3} m. Gate 3 - the TBD side and the SAM side are not aligned here: Updating Ids did not stamp the aperture, an offset between the two models, an aperture missing from the SAM side, or a pane point falling outside every SAM aperture face.", identity_Temp, GUID, point3D, Core.Tolerance.MacroDistance));
                         continue;
                     }
 
+                    count_Matched++;
+
+                    //OpeningProperties are optional: a fixed window or an ordinary door states none, asks for no
+                    //aperture control, and is valid. Counted for the summary line, never listed per aperture.
                     if(!aperture.TryGetValue(Analytical.ApertureParameter.OpeningProperties, out IOpeningProperties openingProperties) || openingProperties == null)
                     {
-                        AddGateNote(notes, counts_Gate, counts_GateReported, "4 no opening properties", string.Format("{0} (pane {1}) matched SAM aperture '{2}' ({3}), but that aperture carries no OpeningProperties, so there is no aperture control to write. Gate 4 - the SAM-side opening properties.", identity_Temp, GUID, aperture.Name, aperture.Guid));
+                        count_NoOpeningProperties++;
                         continue;
                     }
 
@@ -240,8 +257,9 @@ namespace SAM.Analytical.Tas
 
                     //This is the ONLY place the candidate set is examined, and it is examined for the record,
                     //never to select: it establishes whether the first-match rule above had a choice to get
-                    //wrong before anything about that rule is changed.
-                    List<Aperture> apertures_Candidate = aperturesIndex?.Apertures(point3D, int.MaxValue, Core.Tolerance.MacroDistance);
+                    //wrong before anything about that rule is changed. Only where geometry selected - a stamp
+                    //match had no choice to make.
+                    List<Aperture> apertures_Candidate = point3D == null ? null : aperturesIndex?.Apertures(point3D, int.MaxValue, Core.Tolerance.MacroDistance);
                     if (apertures_Candidate != null && apertures_Candidate.Count > 1)
                     {
                         notes.Add(NotePrefix_Issue + string.Format("{0}: {1} SAM aperture faces contain its internal point, so the first-match rule had a choice. Production selected '{2}' ({3}); the full candidate list is {4}. The export was NOT changed by this - it is reported so the selection can be checked against the model.", identity_Temp, apertures_Candidate.Count, aperture.Name, aperture.Guid, string.Join(", ", apertures_Candidate.ConvertAll(x => string.Format("'{0}' ({1})", x?.Name, x?.Guid)))));
@@ -251,21 +269,7 @@ namespace SAM.Analytical.Tas
 
             //Inserted at the front so the summary is the first thing a reader sees, and so a run in which
             //nothing was requested says so rather than saying nothing.
-            List<string> notes_Summary = [];
-            notes_Summary.Add(string.Format("Aperture types: {0} TBD apertures seen, {1} updated, {2} opening(s) requested an availability schedule, {3} of those read a schedule back off the TBD profile.", count_Seen, count_Updated, count_ScheduleRequested, count_ScheduleWritten));
-
-            foreach (KeyValuePair<string, int> keyValuePair in counts_Gate)
-            {
-                counts_GateReported.TryGetValue(keyValuePair.Key, out int reported);
-                notes_Summary.Add(string.Format("{0}Aperture types: {1} aperture(s) stopped at gate {2}{3}.", keyValuePair.Value == 0 ? string.Empty : NotePrefix_Issue, keyValuePair.Value, keyValuePair.Key, reported < keyValuePair.Value ? string.Format("; {0} listed individually above, the remaining {1} are counted only", reported, keyValuePair.Value - reported) : string.Empty));
-            }
-
-            if (count_ScheduleRequested != count_ScheduleWritten)
-            {
-                notes_Summary.Add(NotePrefix_Issue + string.Format("Aperture types: {0} of {1} requested availability schedules did NOT read one back off the TBD. The per-aperture lines above name which opening, and at which gate.", count_ScheduleRequested - count_ScheduleWritten, count_ScheduleRequested));
-            }
-
-            notes.InsertRange(0, notes_Summary);
+            notes.InsertRange(0, Query.ApertureTypesSummary(count_Seen, count_Matched, count_NoOpeningProperties, count_Updated, count_ScheduleRequested, count_ScheduleWritten, counts_Gate, counts_GateReported));
 
             return result;
         }
