@@ -1,0 +1,46 @@
+using Mono.Cecil;
+using Mono.Cecil.Cil;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+
+// usage: ilhash <assembly.dll> <out.tsv>
+// One line per method: FullName <TAB> kind(public|nonpublic) <TAB> sha256(normalised IL: opcode + resolved operand text) <TAB> instructionCount
+var resolver = new DefaultAssemblyResolver();
+resolver.AddSearchDirectory(Path.GetDirectoryName(Path.GetFullPath(args[0])));
+var module = ModuleDefinition.ReadModule(args[0], new ReaderParameters { AssemblyResolver = resolver, ReadSymbols = false });
+var lines = new List<string>();
+string N(string x) => x == null ? null : Regex.Replace(Regex.Replace(Regex.Replace(Regex.Replace(x, @"__\d+_(\d+)", "__N_$1"), @"DisplayClass\d+_(\d+)", "DisplayClassN_$1"), @"d__\d+", "d__N"), @"<>o__\d+", "<>o__N");
+IEnumerable<TypeDefinition> All(IEnumerable<TypeDefinition> types) { foreach (var t in types) { yield return t; foreach (var n in All(t.NestedTypes)) yield return n; } }
+foreach (var type in All(module.Types))
+{
+    foreach (var m in type.Methods)
+    {
+        string hash = "-"; int count = 0;
+        if (m.HasBody)
+        {
+            var sb = new StringBuilder();
+            foreach (var i in m.Body.Instructions)
+            {
+                count++;
+                sb.Append(i.OpCode.Name).Append(' ');
+                if (i.Operand is Instruction t) sb.Append("->").Append(m.Body.Instructions.IndexOf(t));
+                else if (i.Operand is Instruction[] ts) sb.Append(string.Join(",", ts.Select(x => m.Body.Instructions.IndexOf(x))));
+                else if (i.Operand is MemberReference mr) sb.Append(N(mr.FullName));
+                else if (i.Operand is TypeReference tr) sb.Append(N(tr.FullName));
+                else if (i.Operand is VariableDefinition vd) sb.Append("v").Append(vd.Index);
+                else if (i.Operand is ParameterDefinition pd) sb.Append("p").Append(pd.Index);
+                else if (i.Operand != null) sb.Append(i.Operand.ToString());
+                sb.Append('\n');
+            }
+            foreach (var h in m.Body.ExceptionHandlers) sb.Append("eh ").Append(h.HandlerType).Append(' ').Append(h.CatchType?.FullName).Append('\n');
+            hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+        }
+        bool pub = m.IsPublic && type.IsPublic || (m.IsPublic && type.IsNestedPublic);
+        if (Environment.GetEnvironmentVariable("DUMP") is string dm && m.FullName.Contains(dm) && m.HasBody) { File.WriteAllText(Environment.GetEnvironmentVariable("DUMPOUT"), string.Join("\n", m.Body.Instructions.Select(i => i.OpCode.Name + " " + (i.Operand is Instruction ? "" : N((i.Operand as MemberReference)?.FullName ?? (i.Operand as TypeReference)?.FullName ?? i.Operand?.ToString()))))); }
+        lines.Add($"{N(m.FullName)}\t{(pub ? "public" : "nonpublic")}\t{hash}\t{count}");
+    }
+}
+lines.Sort(StringComparer.Ordinal);
+File.WriteAllLines(args[1], lines);
+Console.WriteLine($"{args[0]}: {lines.Count} methods");
