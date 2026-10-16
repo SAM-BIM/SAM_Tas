@@ -1,7 +1,7 @@
 # Unified Diagnostics, Phase 4B (SAM_Tas integration) - PR record
 
 Base: `sow/2026-Q4` (`0589f0d`). Branch: `feature/tas-diagnostics-phase4b-q4`. Dependencies: SAM `sow/2026-Q4` (`6167d47`, `SAM.Core.Diagnostic`, `Diagnostics`, `DiagnosticSeverity`, `DiagnosticDetail`); no SAM, SAM_OCCT, SAM_OpenStudio or SAM_Tas_Grasshopper change.
-Validated content SHA: `920257bacfe6dfb4553b5aa1ed0bdd5515e34259` (all code and tests). Record-only commits follow; the final PR head and hosted checks are in the PR description.
+Validated content SHA: `98db09943d51653023688e269ca3e9f08f8b0623` (all code and tests; `920257b` was the first code commit, `98db099` adds the `AddNotes(null)` compatibility correction below). Record-only commits follow; the final PR head and hosted checks are in the PR description.
 Draft. Merge needs owner approval (AGENTS.md). `PROJECT_PROGRESS.md` is not touched (post-merge closeout only).
 
 ## Status
@@ -71,7 +71,7 @@ Independent of the unit tests. Tools and outputs are committed under `Documentat
 Not possible here: byte comparison of the generated `.t3d/.tbd/.tpd/.tsd` files and numerical results. They need TAS (Windows COM) - see "Windows / EDSL acceptance". Item 1 shows the code that writes them is unchanged.
 
 ## Tests
-New: `SAM.Analytical.Tas.TM59.Tests/DiagnosticsAdapterTests.cs` (40 test cases, 5 fixtures) and `SAM.Analytical.Tas.GenOpt.Tests/DiagnosticsAdapterTests.cs` (6 tests). They use real objects: `SimulationEvidence` runs over real files (completed, missing output, TAS error log, call failed, in place, every native-answer kind), real `Create.Log`, `T3DImportReport`s from the real `T3DImportPlan` over the synthetic models, the real `WorkflowCalculator.Calculate` refusal gates, the real `TasScriptDiagnostics` and a real `TasOptimisationDefinitionException`. They cover: severity preservation and unknown severity; code, message, subject, index and order; Summary within Standard within Detailed (Information) and Warning/Error retained at every level; legacy strings pinned as literals and unchanged by the adapters; null, empty, malformed and failed inputs; non-mutation and determinism; public-surface and code-stability checks; "no severity from text" (a step note that says "failed ... error" without the marker stays Information; an `ISSUE` note that says "all fine" is a Warning).
+New: `SAM.Analytical.Tas.TM59.Tests/DiagnosticsAdapterTests.cs` (41 test cases, 5 fixtures) and `SAM.Analytical.Tas.GenOpt.Tests/DiagnosticsAdapterTests.cs` (6 tests). They use real objects: `SimulationEvidence` runs over real files (completed, missing output, TAS error log, call failed, in place, every native-answer kind), real `Create.Log`, `T3DImportReport`s from the real `T3DImportPlan` over the synthetic models, the real `WorkflowCalculator.Calculate` refusal gates, the real `TasScriptDiagnostics` and a real `TasOptimisationDefinitionException`. They cover: severity preservation and unknown severity; code, message, subject, index and order; Summary within Standard within Detailed (Information) and Warning/Error retained at every level; legacy strings pinned as literals and unchanged by the adapters; null, empty, malformed and failed inputs; non-mutation and determinism; public-surface and code-stability checks; "no severity from text" (a step note that says "failed ... error" without the marker stays Information; an `ISSUE` note that says "all fine" is a Warning).
 
 **Mutation checks** (`mutation-results.txt`): 16 deliberate faults (a refusal downgraded to Warning, later refusals dropped, an unrecognised answer made Information, Log undefined made Information, skipped entries made Information, an unsuccessful conversion not reported, the issue marker ignored, severity inferred from text, a workflow refusal downgraded, the funnel altering the legacy text, diagnostics not cleared, a released code changed, GenOpt warning/undefined downgraded) were each applied, built and run; **all 16 are caught** by at least one test that is executable on Linux. The sources were restored and verified by SHA-256.
 
@@ -79,10 +79,10 @@ New: `SAM.Analytical.Tas.TM59.Tests/DiagnosticsAdapterTests.cs` (40 test cases, 
 ### Local (Ubuntu 24.04, .NET SDK 8.0.131, Debug; machine-local, not hosted CI)
 There is no Windows or .NET Framework MSBuild here, so a **local build shim outside the repository** was used (`Directory.Build.targets` in the parent folder, removing the `COMReference` items, linking instead of embedding the `Interop.*` assemblies - embedded interop types need Windows type equivalence - and skipping `PreparationBoundaryTests.cs`, which the Ubuntu Roslyn mis-compiles). SAM and the sibling repositories (`SAM_gbXML`, `SAM_Systems`, `SAM_Mollier`, `SAM_SolarCalculator`, all `sow/2026-Q4`) were built as in CI; SAM needed one local, uncommitted line rewrite in a scratch copy (`new([...])` in `AddTransferAirDoorsByPartF.cs`, same Roslyn issue). No repository file was changed for this.
 
-| Check | Base `0589f0d` | Head `920257b` |
+| Check | Base `0589f0d` | Head `98db099` |
 |---|---|---|
 | Build (7 SAM_Tas libraries, Debug) | 0 errors | 0 errors |
-| `SAM.Analytical.Tas.TM59.Tests` | 1139 total, 1125 passed, 14 failed | **1179 total, 1162 passed, 17 failed** = +40 new |
+| `SAM.Analytical.Tas.TM59.Tests` | 1139 total, 1125 passed, 14 failed | **1180 total, 1163 passed, 17 failed** = +41 new |
 | `SAM.Analytical.Tas.GenOpt.Tests` | 426 total, 375 passed, 51 failed | **432 total, 381 passed, 51 failed** = +6 new |
 
 The failures are **environmental, identical on base**: 14 TM59 (4 `NullReferenceException` in `SetProjectDirectory`, which needs the Windows registry; 1 `NullReferenceException` in `GbXMLRouteIdentityAcceptanceTests`; 8 `SAM_Systems` air-handling fixtures, "no cooling coil could be drawn"; 1 undeletable-file test that does not hold when running as root) and 51 GenOpt (48 need `TasGenExecute.exe`, which is not installed; 3 are Windows file-sharing and timing tests). The head's failing set is the base's 14 plus **3 new gate tests** (`ARefusedRun_...("canonical-missing" | "canonical-is-target" | "canonical-copy-fails")`) that fail on this machine for the same registry reason as the 4 existing `WorkflowCanonicalTBDTests` (`SetProjectDirectory` runs before those gates). To still execute them, a scratch copy had that one registry call commented out: there all `WorkflowDiagnosticsTests` (including these 3) passed and the existing canonical tests behave as on base except `Calculate_WhereTheTwoPathsDifferOnlyInSpelling...` (Windows path semantics). That scratch result is evidence, not a substitute for the Windows run. Lists: `test-results-summary.txt`.
@@ -98,7 +98,7 @@ See the PR description for the checks on the final head (`build` = Windows 2022 
 ## Grasshopper and compatibility
 - **No Grasshopper contract change.** Nothing in `SAM_Tas_Grasshopper` or any component, GUID, name, parameter, order, access, default, output or version changed; no `diagnosticDetail_` input, no new balloon. The adapters are not consumed by any component yet.
 - The only consumer of the changed class in `SAM_Tas_Grasshopper` is `Modify/RunWorkflow.cs`, which does `notes.AddRange(workflowCalculator.Notes)`: `Notes` is the same read-only text list with identical content and order (pinned by tests and by the IL comparison).
-- The one deliberate API addition on an existing class is `WorkflowCalculator.GetDiagnostics`. One tolerated difference: `AddNotes` ignores a `null` step list, whereas `notes.AddRange(null)` threw; the three step producers always return a non-null list (`notes = []` on entry).
+- The one deliberate API addition on an existing class is `WorkflowCalculator.GetDiagnostics`. There is no behavioural difference left in the notes path: `AddNotes` replaces `notes.AddRange(stepNotes)` and a `null` step list still throws `ArgumentNullException` with parameter name `collection` (the exception `List<T>.AddRange(null)` throws, verified by running it on .NET 8; the BCL implementation throws the same on .NET Framework), before anything is added to `Notes` or the diagnostics. Pinned by `ANullStepNoteList_ThrowsWhatNotesAddRangeAlwaysThrew_BeforeAnythingIsAdded`, which also checks that existing notes and diagnostics are unchanged after the failed call and that the calculator stays usable; removing the throw makes that test fail.
 - Library filtering: `GetDiagnostics(DiagnosticDetail)`, `ToDiagnostics(..., DiagnosticDetail)`.
 
 ## Decisions and assumptions
@@ -122,7 +122,7 @@ Modified: `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs` (private fi
 Untouched: every exporter, converter, TPD, TM59 and Weather/Geometry source, all `.csproj`, workflows, `AGENTS.md`, `PROJECT_PROGRESS.md`.
 
 ## Windows / EDSL acceptance (exact requirements, none done)
-1. Hosted `build` green on the final head, in particular `SAM.Analytical.Tas.TM59.Tests` (1179 test cases; the Linux-only environmental failures above are not expected on Windows) and `GenOpt.Tests` (432).
+1. Hosted `build` green on the final head, in particular `SAM.Analytical.Tas.TM59.Tests` (1180 test cases; the Linux-only environmental failures above are not expected on Windows) and `GenOpt.Tests` (432).
 2. Licensed TAS, same model, base vs this branch, direct and gbXML routes: the generated `.t3d`, `.tbd`, `.tpd` byte-identical after normalising only the known run metadata (timestamps, GUID assignment), `.tsd` results equal, `WorkflowCalculator.Notes` text and order identical.
 3. Grasshopper: open a saved definition with the Tas components - loads, no update mark, `RunWorkflow` runtime messages unchanged.
 

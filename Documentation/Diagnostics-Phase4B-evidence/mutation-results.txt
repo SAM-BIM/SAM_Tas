@@ -18,3 +18,4 @@ M13 workflow diagnostics not cleared per run ............................ killed
 M14 released code value changed ......................................... killed: 1 test
 M15 GenOpt warning mapped to Information ................................ killed: 3 tests
 M16 GenOpt undefined severity mapped to Information ..................... killed: 4 tests
+M17 AddNotes(null) silently ignored again (compatibility correction, 98db099) ... killed: 1 test (ANullStepNoteList_ThrowsWhatNotesAddRangeAlwaysThrew_BeforeAnythingIsAdded)

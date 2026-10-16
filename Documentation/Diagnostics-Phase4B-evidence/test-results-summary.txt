@@ -2,7 +2,7 @@ Local Linux run (Ubuntu 24.04, .NET SDK 8.0.131, Debug, with the local build shi
 
 SAM.Analytical.Tas.TM59.Tests
   base 0589f0d: total 1139, passed 1125, failed 14
-  head 920257b: total 1179, passed 1162, failed 17
+  head 98db099: total 1180, passed 1163, failed 17
 
   failing on both: 14
   failing only on head: ['ARefusedRun_IsAnError_AtEveryDetailLevel_AndTheLegacyNoteIsUnchanged("canonical-copy-fails",null)', 'ARefusedRun_IsAnError_AtEveryDetailLevel_AndTheLegacyNoteIsUnchanged("canonical-is-target",null)', 'ARefusedRun_IsAnError_AtEveryDetailLevel_AndTheLegacyNoteIsUnchanged("canonical-missing",null)']
@@ -26,7 +26,7 @@ SAM.Analytical.Tas.TM59.Tests
 
 SAM.Analytical.Tas.GenOpt.Tests
   base 0589f0d: total 426, passed 375, failed 51
-  head 920257b: total 432, passed 381, failed 51
+  head 98db099: total 432, passed 381, failed 51
 
   failing on both: 51
   failing only on head: []
