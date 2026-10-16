@@ -1,0 +1,5 @@
+Windows test results, Release, dotnet test, 2026-10-16 (machine-local run; trx files kept in C:\TasOut\diagnostics-phase4b\{baseline,pr-head}\)
+baseline SAM.Analytical.Tas.TM59.Tests: total=1166 executed=1166 passed=1166 failed=0 notExecuted=0
+baseline SAM.Analytical.Tas.GenOpt.Tests: total=426 executed=426 passed=426 failed=0 notExecuted=0
+pr-head SAM.Analytical.Tas.TM59.Tests: total=1207 executed=1207 passed=1207 failed=0 notExecuted=0
+pr-head SAM.Analytical.Tas.GenOpt.Tests: total=432 executed=432 passed=432 failed=0 notExecuted=0

@@ -1,0 +1,12 @@
+== SAM.Analytical.Tas.GenOpt: base 912 methods, identical IL 912, CHANGED 0, REMOVED 0, ADDED 2
+== SAM.Analytical.Tas.TM59: base 128 methods, identical IL 128, CHANGED 0, REMOVED 0, ADDED 0
+== SAM.Analytical.Tas.TPD: base 1355 methods, identical IL 1355, CHANGED 0, REMOVED 0, ADDED 0
+== SAM.Analytical.Tas: base 1866 methods, identical IL 1862, CHANGED 4, REMOVED 0, ADDED 7
+   CHANGED SAM.Analytical.AnalyticalModel SAM.Analytical.Tas.WorkflowCalculator::Calculate(SAM.Analytical.AnalyticalModel,System.Boolean)
+   CHANGED System.Void SAM.Analytical.Tas.WorkflowCalculator::.ctor()
+   CHANGED System.Void SAM.Analytical.Tas.WorkflowCalculator::.ctor(SAM.Analytical.Tas.WorkflowSettings)
+   CHANGED System.Void SAM.Analytical.Tas.WorkflowCalculator::.ctor(System.Text.Json.Nodes.JsonObject)
+== SAM.Core.Tas: base 204 methods, identical IL 204, CHANGED 0, REMOVED 0, ADDED 2
+== SAM.Geometry.Tas: base 15 methods, identical IL 15, CHANGED 0, REMOVED 0, ADDED 0
+== SAM.Weather.Tas: base 39 methods, identical IL 39, CHANGED 0, REMOVED 0, ADDED 0
+TOTAL identical 4515, changed 4, removed 0, added 11

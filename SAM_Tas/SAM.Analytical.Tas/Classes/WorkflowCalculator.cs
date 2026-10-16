@@ -37,6 +37,7 @@ namespace SAM.Analytical.Tas
         private string currentStepName;
         private readonly List<KeyValuePair<string, double>> timings = new List<KeyValuePair<string, double>>();
         private readonly List<string> notes = new List<string>();
+        private readonly List<Core.Diagnostic> diagnostics = new List<Core.Diagnostic>();
 
         public IReadOnlyList<KeyValuePair<string, double>> Timings => timings;
 
@@ -49,6 +50,81 @@ namespace SAM.Analytical.Tas
         /// their own progress UI.
         /// </summary>
         public IReadOnlyList<string> Notes => notes;
+
+        /// <summary>
+        /// The structured form of <see cref="Notes"/> for the last run: one <see cref="Core.Diagnostic"/> per note, in the same order, so
+        /// <see cref="Core.Diagnostic.SourceIndex"/> is the note's index in <see cref="Notes"/>. <see cref="Notes"/> itself is unchanged and remains
+        /// the legacy text.
+        /// <para>
+        /// <b>Where the severity comes from.</b> Each note this class writes itself carries the severity the producing site chose (a run refused
+        /// before or during the workflow is an Error; a decision, assumption or totals line is Information). The notes the steps return
+        /// (<c>Modify.UpdateBuildingElements</c>, <c>Modify.UpdateApertureDefinitions</c>, <c>Modify.SetApertureTypes</c> and the direct T3D report's skipped
+        /// entries) are mapped by the contract those producers document: a note that starts with <see cref="Modify.NotePrefix_Issue"/> is an issue
+        /// and becomes a Warning; the other lines of those steps are one-line outcomes and become Information at <see cref="Core.DiagnosticDetail.Summary"/>.
+        /// Nothing is classified by what the text says. For an issue the marker is dropped from <see cref="Core.Diagnostic.Message"/>, because the severity now
+        /// carries it; the marker stays in <see cref="Notes"/>. <see cref="Core.Diagnostic.Subject"/> is the workflow step that wrote the note.
+        /// </para>
+        /// <para>
+        /// Warnings and Errors are kept at every <paramref name="diagnosticDetail"/>; only Information is narrowed. The default,
+        /// <see cref="Core.DiagnosticDetail.Detailed"/>, drops nothing, which is what <see cref="Notes"/> shows. Empty before the first run.
+        /// </para>
+        /// </summary>
+        /// <param name="diagnosticDetail">The level the result is collected at.</param>
+        public Core.Diagnostics GetDiagnostics(Core.DiagnosticDetail diagnosticDetail = Core.DiagnosticDetail.Detailed)
+        {
+            Core.Diagnostics result = new Core.Diagnostics(diagnosticDetail);
+            foreach (Core.Diagnostic diagnostic in diagnostics)
+            {
+                result.Add(diagnostic);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The one place a note is written: the text goes to <see cref="Notes"/> exactly as given, and its structured record to the diagnostics, in step.
+        /// </summary>
+        private void AddNote(string note, Core.DiagnosticSeverity severity, Core.DiagnosticDetail detail, string code, string subject = null)
+        {
+            int index = notes.Count;
+            notes.Add(note);
+
+            string message = note;
+            if (Query.IsIssueNote(message))
+            {
+                message = message.Substring(Modify.NotePrefix_Issue.Length);
+            }
+
+            diagnostics.Add(new Core.Diagnostic(severity, detail, subject ?? currentStepName ?? "Workflow", message, code, index));
+        }
+
+        /// <summary>
+        /// Adds the notes a step returned, by the documented contract of those steps: <see cref="Modify.NotePrefix_Issue"/> marks an issue (Warning), any
+        /// other line is a one-line outcome (Information, Summary).
+        /// <para>
+        /// Replaces <c>notes.AddRange(stepNotes)</c>, so a null list behaves as it did: <see cref="System.ArgumentNullException"/> with parameter name
+        /// <c>collection</c>, thrown before anything is added to <see cref="Notes"/> or the diagnostics.
+        /// </para>
+        /// </summary>
+        private void AddNotes(IEnumerable<string> stepNotes)
+        {
+            if (stepNotes == null)
+            {
+                throw new System.ArgumentNullException("collection");
+            }
+
+            foreach (string note in stepNotes)
+            {
+                if (Query.IsIssueNote(note))
+                {
+                    AddNote(note, Core.DiagnosticSeverity.Warning, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowIssue);
+                }
+                else
+                {
+                    AddNote(note, Core.DiagnosticSeverity.Info, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowNote);
+                }
+            }
+        }
 
         public WorkflowSettings WorkflowSettings { get; set; }
 
@@ -188,6 +264,7 @@ namespace SAM.Analytical.Tas
             //A calculator instance can be re-run; each run reports only its own notes. Cleared ahead of the
             //validation gate below, so a run rejected there leaves no previous run's notes visible either.
             notes.Clear();
+            diagnostics.Clear();
 
             Started?.Invoke(this, new System.EventArgs());
 
@@ -206,7 +283,7 @@ namespace SAM.Analytical.Tas
             // caller has to. Refused BEFORE any file is touched.
             if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_TBD_Canonical) && !string.IsNullOrWhiteSpace(WorkflowSettings.Path_gbXML))
             {
-                notes.Add("This run was given both a gbXML to convert and a canonical TBD to start from, which are contradictory instructions - one says the geometry must be converted, the other that it already is. Nothing was run. Supply one or the other.");
+                AddNote("This run was given both a gbXML to convert and a canonical TBD to start from, which are contradictory instructions - one says the geometry must be converted, the other that it already is. Nothing was run. Supply one or the other.", Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused, "Workflow");
 
                 Ended?.Invoke(this, new System.EventArgs());
 
@@ -218,7 +295,7 @@ namespace SAM.Analytical.Tas
             // reason, before any file is touched.
             if (!string.IsNullOrWhiteSpace(WorkflowSettings.Path_TBD_Canonical) && WorkflowSettings.T3DRoute == T3DRoute.Direct)
             {
-                notes.Add("This run was asked to convert the geometry directly (T3DRoute.Direct) and also to start from a canonical TBD, which are contradictory instructions - one says the geometry must be converted, the other that it already is. Nothing was run. Supply one or the other.");
+                AddNote("This run was asked to convert the geometry directly (T3DRoute.Direct) and also to start from a canonical TBD, which are contradictory instructions - one says the geometry must be converted, the other that it already is. Nothing was run. Supply one or the other.", Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused, "Workflow");
 
                 Ended?.Invoke(this, new System.EventArgs());
 
@@ -382,7 +459,7 @@ namespace SAM.Analytical.Tas
             {
                 if (!System.IO.File.Exists(WorkflowSettings.Path_TBD_Canonical))
                 {
-                    notes.Add(string.Format("The canonical TBD '{0}' this run was to start from does not exist, so there is nothing to warm start from and nothing was run. Convert the model in full instead.", WorkflowSettings.Path_TBD_Canonical));
+                    AddNote(string.Format("The canonical TBD '{0}' this run was to start from does not exist, so there is nothing to warm start from and nothing was run. Convert the model in full instead.", WorkflowSettings.Path_TBD_Canonical), Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused, "Workflow");
 
                     Ended?.Invoke(this, new System.EventArgs());
 
@@ -394,7 +471,7 @@ namespace SAM.Analytical.Tas
                 //last one left behind - the cumulative mutation the canonical baseline exists to prevent.
                 if (string.Equals(System.IO.Path.GetFullPath(WorkflowSettings.Path_TBD_Canonical), System.IO.Path.GetFullPath(WorkflowSettings.Path_TBD), System.StringComparison.OrdinalIgnoreCase))
                 {
-                    notes.Add(string.Format("The canonical TBD and this run's TBD are the same file ('{0}'), so warm starting would write to the baseline every later run depends on. Nothing was run - give the run its own TBD path.", WorkflowSettings.Path_TBD));
+                    AddNote(string.Format("The canonical TBD and this run's TBD are the same file ('{0}'), so warm starting would write to the baseline every later run depends on. Nothing was run - give the run its own TBD path.", WorkflowSettings.Path_TBD), Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused, "Workflow");
 
                     Ended?.Invoke(this, new System.EventArgs());
 
@@ -409,14 +486,14 @@ namespace SAM.Analytical.Tas
                 }
                 catch (System.Exception exception)
                 {
-                    notes.Add(string.Format("The canonical TBD '{0}' could not be copied to '{1}', so this run has no TBD to work on and nothing was run: {2}", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD, exception.Message));
+                    AddNote(string.Format("The canonical TBD '{0}' could not be copied to '{1}', so this run has no TBD to work on and nothing was run: {2}", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD, exception.Message), Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused);
 
                     Ended?.Invoke(this, new System.EventArgs());
 
                     return null;
                 }
 
-                notes.Add(string.Format("This run started from the canonical TBD '{0}', copied to '{1}'. The geometry, constructions, apertures and shading calculation it carries were not recomputed; the ventilation state, the zone identities and the full-year simulation were.", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD));
+                AddNote(string.Format("This run started from the canonical TBD '{0}', copied to '{1}'. The geometry, constructions, apertures and shading calculation it carries were not recomputed; the ventilation state, the zone identities and the full-year simulation were.", WorkflowSettings.Path_TBD_Canonical, WorkflowSettings.Path_TBD), Core.DiagnosticSeverity.Info, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowNote);
             }
 
             if (route_gbXML || route_Direct)
@@ -514,15 +591,15 @@ namespace SAM.Analytical.Tas
                         // volumes differ (real model, Studio: 261.8 vs 288.8 m3). With widths OFF both reproduce SAM's own volumes exactly.
                         if (WorkflowSettings.UseWidths)
                         {
-                            notes.Add("Direct T3D conversion with UseWidths: TAS treats every SAM polygon as a centre line and offsets floors and roofs as well as walls, so zone volumes are smaller than on the gbXML route (which keeps the full zone height) and than SAM's own. SAM panels are the physical inner surfaces; UseWidths = false reproduces SAM's volumes on both routes.");
+                            AddNote("Direct T3D conversion with UseWidths: TAS treats every SAM polygon as a centre line and offsets floors and roofs as well as walls, so zone volumes are smaller than on the gbXML route (which keeps the full zone height) and than SAM's own. SAM panels are the physical inner surfaces; UseWidths = false reproduces SAM's volumes on both routes.", Core.DiagnosticSeverity.Info, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowNote);
                         }
 
                         if (report_T3D != null)
                         {
-                            notes.Add(string.Format("Direct T3D conversion: {0}.", report_T3D));
+                            AddNote(string.Format("Direct T3D conversion: {0}.", report_T3D), Core.DiagnosticSeverity.Info, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowNote);
                             foreach (string skipped in report_T3D.Skipped)
                             {
-                                notes.Add(Modify.NotePrefix_Issue + "Direct T3D conversion: " + skipped);
+                                AddNote(Modify.NotePrefix_Issue + "Direct T3D conversion: " + skipped, Core.DiagnosticSeverity.Warning, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowIssue);
                             }
                         }
 
@@ -530,7 +607,7 @@ namespace SAM.Analytical.Tas
                         // a T3D that is missing surfaces. The same return-null refusal the other gates use.
                         if (!converted)
                         {
-                            notes.Add(Modify.NotePrefix_Issue + "Direct T3D conversion: the SAM model could not be converted into a T3D, so nothing further was run.");
+                            AddNote(Modify.NotePrefix_Issue + "Direct T3D conversion: the SAM model could not be converted into a T3D, so nothing further was run.", Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused);
 
                             Ended?.Invoke(this, new System.EventArgs());
 
@@ -605,7 +682,7 @@ namespace SAM.Analytical.Tas
 
                 Step("Updating Building Elements");
                 Modify.UpdateBuildingElements(tBDDocument, result, out List<string> notes_BuildingElements);
-                notes.AddRange(notes_BuildingElements);
+                AddNotes(notes_BuildingElements);
 
                 adjacencyCluster = result.AdjacencyCluster;
                 Step("Updating Ids");
@@ -619,7 +696,7 @@ namespace SAM.Analytical.Tas
                     // matters wherever a construction is not symmetric (a paint film on one face only).
                     Step("Aligning Reversed Surfaces");
                     Modify.UpdateReversed(tBDDocument.Building, adjacencyCluster, out int count_Reversed);
-                    notes.Add(string.Format("Aligning reversed surfaces: {0} internal surface(s) moved to SAM's convention (the earlier space in the model unreversed, the later one reversed).", count_Reversed));
+                    AddNote(string.Format("Aligning reversed surfaces: {0} internal surface(s) moved to SAM's convention (the earlier space in the model unreversed, the later one reversed).", count_Reversed), Core.DiagnosticSeverity.Info, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowNote);
                 }
 
                 if (perApertureElements)
@@ -636,7 +713,7 @@ namespace SAM.Analytical.Tas
                     // so the step is gated on the gbXML route that does.
                     Step("Reusing Aperture Definitions");
                     Modify.UpdateApertureDefinitions(tBDDocument.Building, adjacencyCluster, result.MaterialLibrary, out List<string> notes_ApertureDefinitions);
-                    notes.AddRange(notes_ApertureDefinitions);
+                    AddNotes(notes_ApertureDefinitions);
                 }
 
                 Step("Updating Thermal Parameters");
@@ -662,7 +739,7 @@ namespace SAM.Analytical.Tas
                 {
                     Step("Updating Aperture Types");
                     Modify.SetApertureTypes(tBDDocument.Building, adjacencyCluster, out List<string> notes_ApertureTypes, Tolerance.MacroDistance);
-                    notes.AddRange(notes_ApertureTypes);
+                    AddNotes(notes_ApertureTypes);
                 }
 
                 if (WorkflowSettings.AddIZAMs)
@@ -699,14 +776,14 @@ namespace SAM.Analytical.Tas
                     string refusal_IzamSurvivor = Query.IzamSurvivorRefusal(true, tBDDocument.Building?.GetIZAM(0) != null);
                     if (refusal_IzamSurvivor != null)
                     {
-                        notes.Add(refusal_IzamSurvivor);
+                        AddNote(refusal_IzamSurvivor, Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.WorkflowRefused);
 
                         Ended?.Invoke(this, new System.EventArgs());
 
                         return null;
                     }
 
-                    notes.Add("Removing IZAMs: none remain.");
+                    AddNote("Removing IZAMs: none remain.", Core.DiagnosticSeverity.Info, Core.DiagnosticDetail.Standard, TasDiagnosticCodes.WorkflowNote);
                 }
 
                 if (WorkflowSettings.RemoveMechanicalVentilationGains)
@@ -715,7 +792,7 @@ namespace SAM.Analytical.Tas
 
                     List<string> internalConditionNames = Modify.RemoveVentilationGains(tBDDocument, adjacencyCluster);
 
-                    notes.Add(
+                    AddNote(
                         string.Format(
                             "Removing Mechanical Ventilation Gains: ticV zeroed on {0} internal condition(s){1}. "
                             + "Infiltration (ticI) and natural ventilation (aperture types and opening schedules) "
@@ -723,7 +800,10 @@ namespace SAM.Analytical.Tas
                             internalConditionNames == null ? 0 : internalConditionNames.Count,
                             internalConditionNames == null || internalConditionNames.Count == 0
                                 ? string.Empty
-                                : string.Concat(": ", string.Join(", ", internalConditionNames))));
+                                : string.Concat(": ", string.Join(", ", internalConditionNames))),
+                        Core.DiagnosticSeverity.Info,
+                        Core.DiagnosticDetail.Summary,
+                        TasDiagnosticCodes.WorkflowNote);
                 }
 
                 sAMTBDDocument.Save();

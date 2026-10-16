@@ -1,0 +1,72 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.Loader;
+
+// apidiff <buildDirA> <buildDirB> <outPrefix> <dll>...
+// Dumps every public/protected member signature of each dll from each build dir (each in its own load context),
+// then reports removed (in A not B), added (in B not A).
+public static class Program
+{
+    static HashSet<string> Dump(string dir, string dll)
+    {
+        var alc = new AssemblyLoadContext(dir, false);
+        alc.Resolving += (c, name) =>
+        {
+            string p = Path.Combine(dir, name.Name + ".dll");
+            if (File.Exists(p)) return c.LoadFromAssemblyPath(p);
+            return null;
+        };
+        Assembly asm = alc.LoadFromAssemblyPath(Path.Combine(dir, dll));
+        Type[] types;
+        try { types = asm.GetTypes(); } catch (ReflectionTypeLoadException e) { types = e.Types.Where(t => t != null).ToArray(); Console.WriteLine($"  [{dll}] partial type load: {e.Types.Count(t => t == null)} unloadable"); }
+        var set = new HashSet<string>();
+        BindingFlags bf = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        foreach (Type t in types)
+        {
+            if (!(t.IsPublic || t.IsNestedPublic || t.IsNestedFamily || t.IsNestedFamORAssem)) continue;
+            string tn = t.FullName;
+            set.Add("TYPE " + tn + " : " + (t.BaseType?.FullName ?? "") + " [" + string.Join(",", SafeInterfaces(t)) + "]" + (t.IsAbstract ? " abstract" : "") + (t.IsSealed ? " sealed" : ""));
+            foreach (MemberInfo m in t.GetMembers(bf))
+            {
+                bool vis = m switch
+                {
+                    MethodBase mb => mb.IsPublic || mb.IsFamily || mb.IsFamilyOrAssembly,
+                    FieldInfo f => f.IsPublic || f.IsFamily || f.IsFamilyOrAssembly,
+                    PropertyInfo p => (p.GetMethod != null && (p.GetMethod.IsPublic || p.GetMethod.IsFamily)) || (p.SetMethod != null && (p.SetMethod.IsPublic || p.SetMethod.IsFamily)),
+                    EventInfo e => e.AddMethod != null && (e.AddMethod.IsPublic || e.AddMethod.IsFamily),
+                    _ => false
+                };
+                if (!vis) continue;
+                if (m is MemberInfo && m.MemberType == MemberTypes.NestedType) continue;
+                string sig;
+                try { sig = m.ToString(); } catch { sig = m.Name + " <sig unavailable>"; }
+                bool isStatic = m switch { MethodBase mb => mb.IsStatic, FieldInfo f => f.IsStatic, _ => false };
+                set.Add($"{tn} :: {m.MemberType} {(isStatic ? "static " : "")}{sig}");
+            }
+        }
+        return set;
+    }
+
+    static IEnumerable<string> SafeInterfaces(Type t) { try { return t.GetInterfaces().Select(i => i.FullName).OrderBy(x => x); } catch { return new[] { "?" }; } }
+
+    public static int Main(string[] args)
+    {
+        string a = args[0], b = args[1], prefix = args[2];
+        int removedTotal = 0, addedTotal = 0;
+        foreach (string dll in args.Skip(3))
+        {
+            var sa = Dump(a, dll); var sb = Dump(b, dll);
+            var removed = sa.Except(sb).OrderBy(x => x).ToList();
+            var added = sb.Except(sa).OrderBy(x => x).ToList();
+            File.WriteAllLines($"{prefix}.{dll}.removed.txt", removed);
+            File.WriteAllLines($"{prefix}.{dll}.added.txt", added);
+            Console.WriteLine($"{dll}: members A={sa.Count} B={sb.Count} removed={removed.Count} added={added.Count}");
+            removedTotal += removed.Count; addedTotal += added.Count;
+        }
+        Console.WriteLine($"TOTAL removed={removedTotal} added={addedTotal}");
+        return 0;
+    }
+}

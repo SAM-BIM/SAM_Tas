@@ -1,0 +1,21 @@
+Mutation checks of the adapters (local Linux; each mutation was applied to the source, rebuilt, the focused tests run, and the source restored;
+the restored files were verified by SHA-256 against the pre-mutation copy). "also fails" counts the 3 gate tests that cannot execute on Linux
+(they need the Windows registry and fail on every run, before and after) so a kill is only claimed from tests that otherwise pass.
+
+M1  evidence refusal downgraded Error -> Warning ........................ killed: 7 tests (Error, retention at every level, legacy text)
+M2  evidence refusals after the first dropped ........................... killed: 2 tests
+M3  unrecognised TAS answer downgraded Warning -> Information ........... killed: 1 test
+M4  evidence note text altered (trailing '.') ........................... killed: 1 test
+M5  Log record of undefined type mapped to Information .................. killed: 1 test
+M6  Log error mapped to Warning ......................................... killed: 3 tests
+M7  T3D skipped entry mapped to Information ............................. killed: 4 tests
+M8  T3D unsuccessful conversion no longer an Error ...................... killed: 1 test
+M9  step-note issue marker ignored (issue becomes Information) .......... killed: 3 tests (+3 gate tests that cannot run here)
+M10 severity inferred from message text ("failed", "error") ............. killed: 1 test (+3 gate tests that cannot run here)
+M11 workflow refusal gate downgraded Error -> Warning ................... killed: 1 test (+3 gate tests that cannot run here)
+M12 workflow funnel changes the legacy note text ........................ killed: 3 tests (+3 gate tests that cannot run here)
+M13 workflow diagnostics not cleared per run ............................ killed: 1 test (+3 gate tests that cannot run here)
+M14 released code value changed ......................................... killed: 1 test
+M15 GenOpt warning mapped to Information ................................ killed: 3 tests
+M16 GenOpt undefined severity mapped to Information ..................... killed: 4 tests
+M17 AddNotes(null) silently ignored again (compatibility correction, 98db099) ... killed: 1 test (ANullStepNoteList_ThrowsWhatNotesAddRangeAlwaysThrew_BeforeAnythingIsAdded)

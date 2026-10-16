@@ -1,0 +1,101 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using SAM.Analytical;
+using SAM.Analytical.Tas;
+using SAM.Analytical.Tas.DirectT3D.Validation;
+
+// usage: plandump <out.txt>
+// Deterministic text dump of the direct SAM -> T3D import plan (everything handed to TAS) for every synthetic model, GUIDs renumbered by first appearance.
+internal static class Program
+{
+    static Dictionary<Guid, int> guids = new Dictionary<Guid, int>();
+    static string G(Guid g) { if (!guids.TryGetValue(g, out int n)) guids[g] = n = guids.Count; return "G" + n; }
+
+    static void Dump(StringBuilder sb, object o, string indent, int depth, HashSet<object> seen)
+    {
+        if (o == null) { sb.Append("null"); return; }
+        Type t = o.GetType();
+        if (o is string s) { sb.Append('"').Append(s).Append('"'); return; }
+        if (o is Guid g) { sb.Append(G(g)); return; }
+        if (o is double d) { sb.Append(d.ToString("R", CultureInfo.InvariantCulture)); return; }
+        if (o is float f) { sb.Append(f.ToString("R", CultureInfo.InvariantCulture)); return; }
+        if (t.IsPrimitive || t.IsEnum || o is decimal) { sb.Append(System.Convert.ToString(o, CultureInfo.InvariantCulture)); return; }
+        if (depth > 6) { sb.Append("<depth>"); return; }
+        if (!t.IsValueType) { if (!seen.Add(o)) { sb.Append("<seen>"); return; } }
+        if (o is IDictionary dict)
+        {
+            sb.Append("{\n");
+            var items = new List<(string, object)>();
+            foreach (DictionaryEntry e in dict) { var sk = new StringBuilder(); Dump(sk, e.Key, "", depth + 1, new HashSet<object>()); items.Add((sk.ToString(), e.Value)); }
+            foreach (var (k, v) in items.OrderBy(x => x.Item1, StringComparer.Ordinal)) { sb.Append(indent + "  " + k + " => "); Dump(sb, v, indent + "  ", depth + 1, seen); sb.Append('\n'); }
+            sb.Append(indent + "}"); return;
+        }
+        if (o is IEnumerable en)
+        {
+            sb.Append("[\n");
+            int i = 0;
+            foreach (object x in en) { sb.Append(indent + "  [" + i++ + "] "); Dump(sb, x, indent + "  ", depth + 1, seen); sb.Append('\n'); }
+            sb.Append(indent + "]"); return;
+        }
+        sb.Append(t.Name).Append(" {\n");
+        foreach (PropertyInfo p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetIndexParameters().Length == 0 && p.CanRead).OrderBy(p => p.Name, StringComparer.Ordinal))
+        {
+            object v; try { v = p.GetValue(o); } catch (Exception ex) { v = "<" + ex.GetType().Name + ">"; }
+            sb.Append(indent + "  " + p.Name + " = "); Dump(sb, v, indent + "  ", depth + 1, seen); sb.Append('\n');
+        }
+        foreach (FieldInfo p in t.GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(p => p.Name, StringComparer.Ordinal))
+        {
+            sb.Append(indent + "  " + p.Name + " = "); Dump(sb, p.GetValue(o), indent + "  ", depth + 1, seen); sb.Append('\n');
+        }
+        sb.Append(indent + "}");
+    }
+
+    static int Main(string[] args)
+    {
+        var models = new List<(string, Func<AnalyticalModel>, ToT3DOptions)>
+        {
+            ("Box", () => SyntheticModels.Box(), null),
+            ("Box_window", () => SyntheticModels.Box(true), null),
+            ("Box_3windows", () => SyntheticModels.Box(3), null),
+            ("Box_3windows_shared", () => SyntheticModels.Box(3), new ToT3DOptions { SharedWindowTypes = true }),
+            ("TwoZones", () => SyntheticModels.TwoZones(), null),
+            ("TwoZones_adiabatic", () => SyntheticModels.TwoZones(true), null),
+            ("StackedZones", () => SyntheticModels.StackedZones(), null),
+            ("StackedZones_upperFirst", () => SyntheticModels.StackedZones(true), null),
+            ("StackedZonesWithStairVoid", () => SyntheticModels.StackedZonesWithStairVoid(), null),
+            ("BoxWithDoorAndRooflight", () => SyntheticModels.BoxWithDoorAndRooflight(), null),
+            ("Grid_3x3", () => SyntheticModels.Grid(3, 3), null),
+            ("AdiabaticWallWithWindow", () => SyntheticModels.AdiabaticWallWithWindow(), null),
+            ("BoxWithShade", () => SyntheticModels.BoxWithShade(), null),
+            ("BoxWithShade_noShades", () => SyntheticModels.BoxWithShade(), new ToT3DOptions { ImportShades = false }),
+            ("Box_widthsOff", () => SyntheticModels.Box(), new ToT3DOptions { UseWidths = false }),
+        };
+        var sb = new StringBuilder();
+        foreach (var (name, make, options) in models)
+        {
+            guids.Clear();
+            sb.Append("=== ").Append(name).Append('\n');
+            T3DImportPlan plan = options == null ? make().T3DImportPlan() : make().T3DImportPlan(options);
+            var section = new StringBuilder();
+            Dump(section, plan, "", 0, new HashSet<object>(ReferenceEqualityComparer.Instance));
+            var map = new Dictionary<string, string>();
+            string norm = System.Text.RegularExpressions.Regex.Replace(section.ToString(), @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|(?<=aperture:)[0-9a-fA-F]{32}", m =>
+            {
+                string key = m.Value.Replace("-", "").ToLowerInvariant();
+                if (!map.TryGetValue(key, out string v)) map[key] = v = "<guid" + map.Count + ">";
+                return v;
+            });
+            sb.Append(norm);
+            sb.Append('\n');
+        }
+        File.WriteAllText(args[0], sb.ToString());
+        Console.WriteLine("wrote " + args[0] + " (" + sb.Length + " chars)");
+        return 0;
+    }
+}

@@ -1,0 +1,86 @@
+Local Linux run (Ubuntu 24.04, .NET SDK 8.0.131, Debug, with the local build shim described in the PR record). NOT hosted CI, NOT Windows.
+
+SAM.Analytical.Tas.TM59.Tests
+  base 0589f0d: total 1139, passed 1125, failed 14
+  head 98db099: total 1180, passed 1163, failed 17
+
+  failing on both: 14
+  failing only on head: ['ARefusedRun_IsAnError_AtEveryDetailLevel_AndTheLegacyNoteIsUnchanged("canonical-copy-fails",null)', 'ARefusedRun_IsAnError_AtEveryDetailLevel_AndTheLegacyNoteIsUnchanged("canonical-is-target",null)', 'ARefusedRun_IsAnError_AtEveryDetailLevel_AndTheLegacyNoteIsUnchanged("canonical-missing",null)']
+  failing only on base: []
+
+  names failing on base (environment: no Windows registry, SAM_Systems fixture, running as root):
+    ABranchOutsideItsUnitsOwnAirSystem_IsRefused
+    AGraphWithABranch_ThatDoesNotDeclareIt_IsRefused
+    Calculate_GivenACanonicalTBDThatDoesNotExist_IsRefusedByName
+    Calculate_RefusedWarmStart_ReportsOnlyItsOwnReason
+    Calculate_WhereTheCanonicalTBDIsTheRunsOwnTBD_IsRefusedRatherThanOverwritingTheBaseline
+    Calculate_WhereTheTwoPathsDifferOnlyInSpelling_IsStillTheSameFile
+    ErrorLog_StaleAndUndeletable_IsExcludedByTimestampNotIgnored
+    OneDocument_BindsGuidanceCoolingToTheCooledUnitsAirSystemOnly
+    TheBranch_IsLeftOutOfTheVentilationIntent_WhichIsExactlyB0s
+    TheCooledUnit_OperatesAtSamsCoolingAirFlow_NotItsDesign
+    TheDutyCarriers_AreExactlyB0s_AndNeverACopyOfARecirculationDamper
+    TheGbXMLRoute_AssociatesEachResultToItsOwnScenario
+    TheGuidanceCoolingGrounding_TakesTheCoolingPathForTheCooledAirSystemOnly
+    TheVentilationIntent_IsExactlyTheUncooledDocuments
+
+SAM.Analytical.Tas.GenOpt.Tests
+  base 0589f0d: total 426, passed 375, failed 51
+  head 98db099: total 432, passed 381, failed 51
+
+  failing on both: 51
+  failing only on head: []
+  failing only on base: []
+
+  names failing on base (environment: no Windows registry, SAM_Systems fixture, running as root):
+    A_failing_evaluation_stops_the_choice_with_no_best_option
+    A_project_file_open_in_another_program_at_replacement_is_refused_and_kept
+    A_run_records_the_hashes_of_the_files_it_evaluated
+    AppendedOutput_TheLastResultLineWins
+    Cancellation_BeforeTheRun_StartsNoEvaluation
+    Cancellation_LetsTheRunningEvaluationFinish_AndStartsNoOther
+    Controller_setpoint_runs_golden_section_end_to_end_and_test_one_simulation
+    EveryEvaluation_GetsAFreshFolder_TheProjectAsArgs0_AndItAsCwd
+    ExistingRoute_RunsWithoutSAMCoreOptimisation
+    FailureClass_IsReportedAsAnEvaluationFailure("commaDecimal","comma")
+    FailureClass_IsReportedAsAnEvaluationFailure("compileError","CS1002")
+    FailureClass_IsReportedAsAnEvaluationFailure("errorFile","injected script exception")
+    FailureClass_IsReportedAsAnEvaluationFailure("exitCode","E0434352")
+    FailureClass_IsReportedAsAnEvaluationFailure("malformedResult","not a number")
+    FailureClass_IsReportedAsAnEvaluationFailure("missingResult","no 'Result::' line")
+    FailureOnce_IsRetriedOnce_InAFreshFolder_WithTheSameSimulationNumber
+    FailureTwice_StopsTheRun_NoFurtherEvaluation
+    Glazing_choice_runs_every_option_end_to_end
+    MultipleOutputs_AreRecorded_OnlyTheFirstIsMinimised
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e1-hj-quad-1d")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e1-hj-quad-2d")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e1-hj-quad-3d")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e10-gs-absdiff")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e12-multi-output")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e2-infeasible-pattern")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e2-optimum-on-bound")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e2-start-on-bound")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e3-flat")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e4-flat-maxequalresults-2")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e5-maxite-7")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e7-fail-first")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e7-fail-later")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e7-fail-once-first")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e7-fail-once-later")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e8-step-negative")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e8-step-zero")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e9-mesh-3-1-2-1")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e9-step-reductions-1")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("e9-step-reductions-2")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("ec-cross-zero")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("ec-float-equal-points")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("ec-negative-zero-start")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("ec-plateau")
+    NativeAdapter_ReplaysJavaGenOptTrace_BitForBit("ec-tiny-values")
+    NativeRun_DoesNotTouchTheTasManagerRegistry
+    No_other_program_can_open_a_project_file_for_writing_while_it_is_replaced
+    Progress_IsForwardedFromTheKernel
+    Run_EqualsTheFormRun_EvaluationForEvaluation("systems-demo-golden-section.json")
+    Run_EqualsTheFormRun_EvaluationForEvaluation("systems-demo-hooke-jeeves.json")
+    UnitsOfExecution_DoesNotChangeTheSequentialRun
+    VariablesTxt_HoldsTheKernelCoordinates
