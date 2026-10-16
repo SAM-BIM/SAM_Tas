@@ -2,10 +2,10 @@
 
 Base: `sow/2026-Q4` (`0589f0d`). Branch: `feature/tas-diagnostics-phase4b-q4`. Dependencies: SAM `sow/2026-Q4` (`6167d47`, `SAM.Core.Diagnostic`, `Diagnostics`, `DiagnosticSeverity`, `DiagnosticDetail`); no SAM, SAM_OCCT, SAM_OpenStudio or SAM_Tas_Grasshopper change.
 Validated content SHA: `98db09943d51653023688e269ca3e9f08f8b0623` (all code and tests; `920257b` was the first code commit, `98db099` adds the `AddNotes(null)` compatibility correction below). Record-only commits follow; the final PR head and hosted checks are in the PR description.
-Draft. Merge needs owner approval (AGENTS.md). `PROJECT_PROGRESS.md` is not touched (post-merge closeout only).
+Windows / EDSL acceptance was run on `c1bf097f0e3ece0fb89941b7e8ac97f290c784b1` (the code head; the commit that adds this section is documentation only). Owner approved the acceptance and the merge on 2026-10-16. `PROJECT_PROGRESS.md` is not touched (post-merge closeout only).
 
 ## Status
-Implementation complete. Local Linux build, tests, IL comparison and plan comparison done (below). **Hosted Windows CI, Windows-only native tests and licensed EDSL TAS acceptance are not run by this record** - see "Not run" and "Windows / EDSL acceptance".
+Implementation complete. Local Linux build, tests, IL comparison and plan comparison done (below). **Windows acceptance done 2026-10-16 (section "Windows / EDSL acceptance - result"): hosted `build` and `spdx` green on `c1bf097f`, 1207 TM59 + 432 GenOpt tests pass on Windows, licensed-TAS A/B against baseline `0589f0da` identical, Grasshopper definitions load unchanged (not solved).**
 
 ## Investigation: what the TAS diagnostic producers really are
 TAS does **not** have OpenStudio's single typed diagnostic. It has eight different mechanisms; only some carry a structured severity. Read from the source of `SAM.Core.Tas`, `SAM.Analytical.Tas`, `.TPD`, `.TM59`, `.GenOpt`.
@@ -90,9 +90,9 @@ The failures are **environmental, identical on base**: 14 TM59 (4 `NullReference
 ### Hosted CI
 See the PR description for the checks on the final head (`build` = Windows 2022 rebuild of all repositories plus `SAM.Analytical.Tas.TM59.Tests` and `SAM.Analytical.Tas.GenOpt.Tests`; `spdx`). Those run the 3 gate tests for real.
 
-### Not run
-- Windows-only native TAS tests and any licensed EDSL TAS run (BLOCKED here: no Windows, no TAS).
-- Byte comparison of generated `.t3d/.tbd/.tpd/.tsd` and numerical results (BLOCKED, same reason; replaced by the IL and plan comparisons above).
+### Not run on Linux (superseded: all of this was run on Windows, see "Windows / EDSL acceptance - result")
+- Windows-only native TAS tests and any licensed EDSL TAS run (BLOCKED on Linux: no Windows, no TAS).
+- Byte comparison of generated `.t3d/.tbd/.tpd/.tsd` and numerical results (BLOCKED on Linux; replaced there by the IL and plan comparisons above). Note: raw TAS files are never byte-identical between two runs of the same build (TAS mints GUIDs and timestamps), so the Windows run compares dumps and series instead.
 - Interactive Grasshopper/Rhino canvas, saved `.gh/.ghx` loading. SAM_Tas has no Grasshopper project; `SAM_Tas_Grasshopper` was only read (`d827409`).
 
 ## Grasshopper and compatibility
@@ -121,10 +121,29 @@ New: `SAM_Tas/SAM.Core.Tas/Classes/TasDiagnosticCodes.cs`, `SAM_Tas/SAM.Core.Tas
 Modified: `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs` (private field and two private methods, `GetDiagnostics`, 17 call sites).
 Untouched: every exporter, converter, TPD, TM59 and Weather/Geometry source, all `.csproj`, workflows, `AGENTS.md`, `PROJECT_PROGRESS.md`.
 
-## Windows / EDSL acceptance (exact requirements, none done)
-1. Hosted `build` green on the final head, in particular `SAM.Analytical.Tas.TM59.Tests` (1180 test cases; the Linux-only environmental failures above are not expected on Windows) and `GenOpt.Tests` (432).
-2. Licensed TAS, same model, base vs this branch, direct and gbXML routes: the generated `.t3d`, `.tbd`, `.tpd` byte-identical after normalising only the known run metadata (timestamps, GUID assignment), `.tsd` results equal, `WorkflowCalculator.Notes` text and order identical.
+## Windows / EDSL acceptance - requirements (as set before the run)
+1. Hosted `build` green on the final head, in particular `SAM.Analytical.Tas.TM59.Tests` and `GenOpt.Tests`; the Linux-only environmental failures above are not expected on Windows.
+2. Licensed TAS, same model, base vs this branch, direct and gbXML routes: generated `.t3d`, `.tbd`, `.tpd` equal after normalising only the known run metadata (timestamps, GUID assignment), `.tsd` results equal, `WorkflowCalculator.Notes` text and order identical.
 3. Grasshopper: open a saved definition with the Tas components - loads, no update mark, `RunWorkflow` runtime messages unchanged.
 
+## Windows / EDSL acceptance - result (2026-10-16, tested code head `c1bf097f`, baseline `0589f0da`)
+Run directly on the owner's Windows 11 workstation (Tas 2.0.0.1 licensed, Rhino 8.35.26251.13001, .NET SDK 10.0.401, VS 18 MSBuild), baseline and head in separate git worktrees, Release x64. Full report: `Documentation/Diagnostics-Phase4B-evidence/windows-acceptance-report.md`; compact numbers: `windows-comparison-summary.txt`, `windows-test-results-summary.txt`. **Machine-local, not committed** (kept under `C:\TasOut\diagnostics-phase4b` on that workstation): all generated `.tbd/.t3d/.tsd/.tpd` files, trx files, build logs, Rhino snapshots. Committed here are only text summaries and the small probe sources (as `.txt`/`.md`).
+
+| Gate | Result |
+|---|---|
+| Hosted CI on `c1bf097f` | `build` SUCCESS, `spdx` SUCCESS |
+| `SAM.Analytical.Tas.TM59.Tests` | baseline 1166/1166, head 1207/1207 passed (+41); 0 failed, 0 skipped |
+| `SAM.Analytical.Tas.GenOpt.Tests` | baseline 426/426, head 432/432 passed (+6); 0 failed, 0 skipped |
+| `WorkflowCalculator.Notes`, 8 real routes + 3 refusal gates | byte-identical text and order |
+| Real TAS, 8 scenarios (ModelA and a naturally ventilated 3-zone model; gbXML and direct T3D; UseWidths off/on; PhysicalThickness stamped; simulated) | `.t3d` and `.tbd` dumps identical; TBD property compare 0 differences, 0 unexpected input differences (only 48 TAS-minted GUIDs, the same 48 as baseline vs baseline); TSD 0 of 64 (96 for the 3-zone model) series differ, bit-identical over 8760 h |
+| TPD in place (Systems Training fixture) | same native answer, evidence, 832 TSD series bit-identical, 19 annual energy-centre results identical |
+| Structured diagnostics on real runs | all checks pass: legacy text and `SourceIndex` order preserved, Summary within Standard within Detailed, all Warnings/Errors kept at every level, ISSUE notes never Info, refusals Error, `AddNotes(null)` throws before any change |
+| Public API (10 SAM_Tas assemblies) | 0 members removed or changed, 26 added |
+| Grasshopper (Rhino 8, unsolved) | `test3-acceptance.gh` (43 objects) and `2Falts-Model4.ghx` (46 objects, 4 Tas components): baseline and head structurally identical, 0 placeholders, obsolete flags identical to baseline |
+
+Normalisation used (nothing numeric or structural): GUID values masked in text dumps; for `2Falts-Model4.ghx` wire-source GUIDs reduced to counts, because the file holds one third-party object (Woods Bagot "False Start Toggle", not installed) that Grasshopper drops on load, and `GH_Group` instance GUIDs are re-minted on every load (also baseline vs baseline).
+
+**Remaining limitation:** the Grasshopper definitions were opened and compared but NOT solved (`RunWorkflow` writes TAS files), so runtime messages and solved outputs of the components are not covered by this evidence; the guarantee for them rests on the unchanged `SAM_Tas_Grasshopper`, the IL and public-API comparisons and the identical `Notes`. Also: ModelA requests no opening schedules; only the 3-zone model exercises them. Side effects of the run on that workstation (resource files re-copied into `%APPDATA%\SAM`, temporary DLL swap in the Rhino install, restored and hash-verified) are listed in the report.
+
 ## Next step
-Owner review of the draft PR; after merge a docs-only `PROJECT_PROGRESS.md` closeout on `sow/2026-Q4` (`[skip ci]`). Separate, owner-decided follow-ups: wire the adapters into the Tas Grasshopper components (optional hidden `diagnosticDetail_`, canvas balloons), structured identity at the T3D report and step-note producers. Recommended for the next piece: Opus, high effort, new session, Plan mode.
+Owner approved the Windows acceptance and the merge on 2026-10-16. After the merge: a docs-only `PROJECT_PROGRESS.md` closeout on `sow/2026-Q4` (`[skip ci]`) recording the merge SHA, these results and the unsolved-Grasshopper limitation. Separate, owner-decided follow-ups: wire the adapters into the Tas Grasshopper components (optional hidden `diagnosticDetail_`, canvas balloons), structured identity at the T3D report and step-note producers. Recommended for the next piece: Opus, high effort, new session, Plan mode.

@@ -1,0 +1,135 @@
+using System;
+using System.IO;
+using System.Linq;
+using SAM.Analytical;
+using SAM.Analytical.Tas;
+public static class Program
+{
+    [STAThread]
+    public static int Main(string[] args)
+    {
+        if (args[0] == "tpd") return Tpd(args[1], args[2], false);
+        if (args[0] == "tpdresults") return TpdResults(args[1], args[2]);
+        string dir = args[0]; Directory.CreateDirectory(dir);
+        string tbd = Path.Combine(dir, "gate.tbd");
+        File.WriteAllText(Path.Combine(dir, "same.tbd"), "x");
+        var settings = new WorkflowSettings[] {
+            new WorkflowSettings { Path_TBD = tbd, Path_TBD_Canonical = Path.Combine(dir, "x.tbd"), Path_gbXML = Path.Combine(dir, "x.xml") },
+            new WorkflowSettings { Path_TBD = tbd, Path_TBD_Canonical = Path.Combine(dir, "missing.tbd") },
+            new WorkflowSettings { Path_TBD = Path.Combine(dir, "same.tbd"), Path_TBD_Canonical = Path.Combine(dir, "same.tbd") } };
+        for (int i = 0; i < settings.Length; i++)
+        {
+            var c = new WorkflowCalculator(settings[i]);
+            var r = c.Calculate(new AnalyticalModel("m", null, null, null, null));
+            File.WriteAllLines(Path.Combine(dir, "gate" + (i + 1) + ".notes.txt"), c.Notes);
+            Console.WriteLine("gate" + (i + 1) + " result=" + (r == null ? "NULL" : "ok") + " notes=" + c.Notes.Count);
+        }
+        return 0;
+    }
+    static int Tpd(string src, string dir, bool diag)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.GetFiles(src)) File.Copy(f, Path.Combine(dir, Path.GetFileName(f)), true);
+        string tpd = Directory.GetFiles(dir, "*.tpd")[0];
+        {
+            string tbdPath = Path.Combine(dir, "model.tbd"), tsdPath = Path.Combine(dir, "model.tsd");
+            TSD.TSDDocument tsdFix = new TSD.TSDDocument();
+            tsdFix.open(tsdPath);
+            tsdFix.SimulationData.buildingPath = tbdPath;
+            tsdFix.save();
+            tsdFix.close();
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(tsdFix);
+            TPD.TPDDoc relinkDoc = new TPD.TPDDoc();
+            relinkDoc.Open(tpd);
+            relinkDoc.EnergyCentre.GetTSDData(1).FixTSDPath(tsdPath);
+            relinkDoc.Save();
+            try { relinkDoc.Close(); } catch (System.Runtime.InteropServices.COMException) { }
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(relinkDoc);
+        }
+        SAM.Core.Tas.SimulationEvidence ev;
+        bool ok = SAM.Analytical.Tas.TPD.Modify.Simulate(tpd, 0, 8759, out ev);
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("returned=" + ok);
+        sb.AppendLine("Completed=" + ev.Completed + " CallReturned=" + ev.CallReturned + " ResultsReconciled=" + ev.ResultsReconciled + " NativeDiagnosticKind=" + ev.NativeDiagnosticKind);
+        sb.AppendLine("NativeDiagnostic=" + (ev.NativeDiagnostic ?? "<null>"));
+        sb.AppendLine("Refusals=" + ev.Refusals.Count);
+        foreach (string r in ev.Refusals) sb.AppendLine("  R: " + r);
+        sb.AppendLine("Notes=" + ev.Notes.Count);
+        foreach (string n in ev.Notes) sb.AppendLine("  N: " + n);
+        sb.AppendLine("ToString=" + ev.ToString());
+
+        File.WriteAllText(Path.Combine(dir, "evidence.txt"), sb.ToString());
+        Console.WriteLine(sb.ToString());
+        return ok ? 0 : 1;
+    }
+    static int TpdResults(string path, string outFile)
+    {
+        // reflection so the same exe runs against either build
+        System.Reflection.Assembly tpdAsm = typeof(SAM.Analytical.Tas.TPD.Modify).Assembly;
+        Type queryType = tpdAsm.GetType("SAM.Core.Tas.TPD.Query");
+        Type dataType = null, periodType = null;
+        foreach (System.Reflection.Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type[] ts; try { ts = a.GetTypes(); } catch (System.Reflection.ReflectionTypeLoadException ex) { ts = ex.Types.Where(q => q != null).ToArray(); }
+            foreach (Type t in ts.Where(x => x.IsEnum))
+            {
+                if (t.Name == "SystemEnergyCentreDataType") dataType = t;
+                if (t.Name == "ResultPeriod" && periodType == null) periodType = t;
+            }
+        }
+        // ResultPeriod may live in a different assembly than expected: locate through the method signature
+        System.Reflection.MethodInfo m = queryType.GetMethods().First(x => x.Name == "SystemEnergyCentreResults" && x.GetParameters()[0].ParameterType == typeof(string));
+        periodType = m.GetParameters()[1].ParameterType;
+        dataType = m.GetParameters()[2].ParameterType.GetGenericArguments()[0];
+        object annual = Enum.Parse(periodType, "Annual");
+        Type listOf = typeof(System.Collections.Generic.List<>).MakeGenericType(dataType);
+        object list = Activator.CreateInstance(listOf);
+        foreach (object v in Enum.GetValues(dataType))
+        {
+            if (v.ToString() == "Undefined") continue;
+            listOf.GetMethod("Add").Invoke(list, new[] { v });
+        }
+        object result = m.Invoke(null, new object[] { path, annual, list, null, false, false, false });
+        var sb = new System.Text.StringBuilder();
+        if (result == null) { sb.AppendLine("null result"); }
+        else
+        {
+            int n = 0;
+            foreach (object item in (System.Collections.IEnumerable)result)
+            {
+                n++;
+                sb.AppendLine("RESULT " + item.GetType().Name + " " + item);
+                foreach (System.Reflection.PropertyInfo p in item.GetType().GetProperties())
+                {
+                    if (p.Name == "DateTime" || p.Name == "Guid") continue;
+                    try
+                    {
+                        object val = p.GetValue(item);
+                        if (val is System.Collections.IEnumerable en && !(val is string))
+                        {
+                            int k = 0;
+                            foreach (object sub in en)
+                            {
+                                var parts = new System.Collections.Generic.List<string>();
+                                foreach (System.Reflection.PropertyInfo sp in sub.GetType().GetProperties())
+                                {
+                                    if (sp.Name == "Guid" || sp.Name == "DateTime") continue;
+                                    object sv = null; try { sv = sp.GetValue(sub); } catch { }
+                                    parts.Add(sp.Name + "=" + (sv is double dd ? dd.ToString("R", System.Globalization.CultureInfo.InvariantCulture) : (sv is System.Collections.IEnumerable e2 && !(sv is string) ? "[" + string.Join(",", e2.Cast<object>().Select(o => o is double d3 ? d3.ToString("R", System.Globalization.CultureInfo.InvariantCulture) : o?.ToString())) + "]" : sv?.ToString())));
+                                }
+                                sb.AppendLine("   " + p.Name + "[" + (k++) + "] " + string.Join(" ; ", parts));
+                            }
+                        }
+                        else sb.AppendLine("   " + p.Name + " = " + (val is double d ? d.ToString("R", System.Globalization.CultureInfo.InvariantCulture) : val));
+                    }
+                    catch { }
+                }
+            }
+            sb.AppendLine("count=" + n);
+        }
+        File.WriteAllText(outFile, sb.ToString());
+        Console.WriteLine(sb.ToString().Length + " chars; first lines:");
+        Console.WriteLine(string.Join("\n", sb.ToString().Split('\n').Take(12)));
+        return 0;
+    }
+}

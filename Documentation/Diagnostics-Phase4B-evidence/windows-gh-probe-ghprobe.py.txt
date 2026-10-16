@@ -1,0 +1,101 @@
+#! python2
+# Opens COPIES of saved Grasshopper definitions inside Rhino 8 WITHOUT solving them (document stays disabled and is
+# never added to the canvas), then writes a structural snapshot per file: every object's component GUID, instance GUID,
+# name, nickname, obsolete flag, placeholder flag, every parameter (name, nickname, access, optional, instance GUID) and
+# every wire (source instance GUIDs); plus the SAM assemblies that were actually loaded (proves WHICH DLLs were in the process).
+import System
+import Rhino
+
+outdir = System.Environment.GetEnvironmentVariable("GHPROBE_OUTDIR")
+inputs = System.Environment.GetEnvironmentVariable("GHPROBE_INPUTS").split(";")
+
+def prog(s):
+    System.IO.File.AppendAllText(System.IO.Path.Combine(outdir, "progress.txt"), s + System.Environment.NewLine)
+
+def snapshot(path):
+    lines = []
+    def w(s):
+        lines.append(s)
+    try:
+        prog("start " + path)
+        gh = Rhino.RhinoApp.GetPlugInObject("Grasshopper")
+        prog("got gh plugin object")
+        w("grasshopper plugin object: %s" % (gh is not None))
+        try:
+            gh.LoadEditor()
+        except Exception as e:
+            w("LoadEditor: %s" % e)
+        prog("LoadEditor returned")
+        import Grasshopper
+        import clr
+        clr.AddReference("GH_IO")
+        from GH_IO.Serialization import GH_Archive
+        from Grasshopper.Kernel import GH_Document
+        # read the archive directly (GH_DocumentIO.Open raises modal 'IO messages' / 'Unrecognized Objects' dialogs)
+        arch = GH_Archive()
+        prog("before read")
+        if path.lower().endswith(".ghx"):
+            ok = arch.Deserialize_Xml(System.IO.File.ReadAllText(path))
+        else:
+            ok = arch.ReadFromFile(path)
+        w("archive read ok: %s" % ok)
+        prog("after read " + str(ok))
+        doc = GH_Document()
+        ok2 = arch.ExtractObject(doc, "Definition")
+        w("extract ok: %s" % ok2)
+        prog("after extract " + str(ok2))
+        if doc is not None:
+            doc.Enabled = False
+            objs = list(doc.Objects)
+            w("objects: %d" % len(objs))
+            rows = []
+            for o in objs:
+                t = o.GetType()
+                r = []
+                r.append("OBJ %s | comp=%s | name=%s | nick=%s | type=%s | asm=%s | obsolete=%s | placeholder=%s" % (
+                    o.InstanceGuid, o.ComponentGuid, o.Name, o.NickName, t.FullName, t.Assembly.GetName().Name,
+                    o.Obsolete, ("Placeholder" in t.Name)))
+                comp = o if hasattr(o, "Params") else None
+                if comp is not None:
+                    for kind, plist in (("IN", comp.Params.Input), ("OUT", comp.Params.Output)):
+                        for i, p in enumerate(plist):
+                            srcs = ",".join(sorted([str(s.InstanceGuid) for s in p.Sources])) if kind == "IN" else ""
+                            r.append("  %s[%d] %s | nick=%s | access=%s | optional=%s | guid=%s | srcs=%s" % (
+                                kind, i, p.Name, p.NickName, p.Access, p.Optional, p.InstanceGuid, srcs))
+                elif hasattr(o, "Sources"):
+                    r.append("  PARAMSRC %s" % ",".join(sorted([str(s.InstanceGuid) for s in o.Sources])))
+                rows.append((str(o.InstanceGuid), "\n".join(r)))
+            rows.sort()
+            for k, v in rows:
+                w(v)
+            nmsg = 0
+            for o in objs:
+                try:
+                    for lvl in (Grasshopper.Kernel.GH_RuntimeMessageLevel.Error, Grasshopper.Kernel.GH_RuntimeMessageLevel.Warning, Grasshopper.Kernel.GH_RuntimeMessageLevel.Remark):
+                        for m in o.RuntimeMessages(lvl):
+                            nmsg += 1
+                            w("MSG %s %s %s" % (o.InstanceGuid, lvl, m))
+                except Exception as e:
+                    pass
+            w("runtime messages after load (unsolved): %d" % nmsg)
+        asms = []
+        for a in System.AppDomain.CurrentDomain.GetAssemblies():
+            n = a.GetName().Name
+            if n.startswith("SAM.") and ("Tas" in n or n in ("SAM.Core", "SAM.Analytical", "SAM.Math")):
+                try:
+                    asms.append("ASM %s %s" % (n, a.Location))
+                except Exception:
+                    asms.append("ASM %s <dynamic>" % n)
+        for s in sorted(asms):
+            w(s)
+    except Exception as e:
+        w("EXCEPTION: %s" % e)
+    return lines
+
+for p in inputs:
+    if not p:
+        continue
+    name = System.IO.Path.GetFileName(p)
+    lines = snapshot(p)
+    System.IO.File.WriteAllLines(System.IO.Path.Combine(outdir, name + ".snapshot.txt"), lines)
+System.IO.File.WriteAllText(System.IO.Path.Combine(outdir, "DONE.txt"), "done")

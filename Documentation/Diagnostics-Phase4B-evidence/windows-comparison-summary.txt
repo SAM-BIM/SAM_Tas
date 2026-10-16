@@ -1,0 +1,167 @@
+== byte hashes and notes comparison (8 route scenarios S1-S6 shown; S7/S8 see report)
+=== S1-ModelA-gbxml
+baseline: route=GbXML result=ok notes=9
+pr-head: route=GbXML result=ok notes=9
+baseline-control: route=GbXML result=ok notes=9
+notes baseline==pr-head (byte)
+notes baseline==control
+  model.input.sam base=11d5d9950cbd pr=6de8a79f7eba ctl=f3dcf9f33337 DIFF
+  model.xml base=e664db424ea3 pr=f2c19674802f ctl=006f680013b4 DIFF
+  model.t3d base=8a0ddbe1f5f0 pr=1e5833c158e3 ctl=4b952d9a1969 DIFF
+  model.tbd base=9a4b1c39cbed pr=4559bf8d6a99 ctl=463ef1988759 DIFF
+  model.tsd base=b101d5548a03 pr=6498750d71b7 ctl=0b5e15e2fd95 DIFF
+  model_HDDCDD.tbd base=ab1138cc04f7 pr=16ccafef9fe5 ctl=f1efb982e27b DIFF
+  model_Uncapped.tbd base=10ad9762951b pr=dacfa1adc4c8 ctl=bb0226435908 DIFF
+  model.result.json base=7d7e309c9574 pr=b1d19c6755c6 ctl=e514875fb941 DIFF
+=== S2-ModelA-direct
+baseline: route=Direct result=ok notes=10
+pr-head: route=Direct result=ok notes=10
+baseline-control: route=Direct result=ok notes=10
+notes baseline==pr-head (byte)
+notes baseline==control
+  model.input.sam base=14a95c65f596 pr=6c1c85c2d352 ctl=f4deabc83d73 DIFF
+  model.t3d base=8838296be1de pr=1484cba2067c ctl=69a4322d957c DIFF
+  model.tbd base=7173e9bd03f2 pr=377fbfecd902 ctl=2da2a478a8a0 DIFF
+  model.tsd base=5466527a7021 pr=64de3baf99e8 ctl=333428adab29 DIFF
+  model_HDDCDD.tbd base=9af3850f3748 pr=10822c9685ea ctl=98358c595fac DIFF
+  model_Uncapped.tbd base=935d1333dc4a pr=a16c534fe594 ctl=8a46b22bbce4 DIFF
+  model.result.json base=26bafd70cc34 pr=40c9716cb026 ctl=7e6581e0109b DIFF
+=== S3-LoadSens-gbxml
+baseline: route=GbXML result=ok notes=5
+pr-head: route=GbXML result=ok notes=5
+notes baseline==pr-head (byte)
+  model.input.sam base=10336833eac6 pr=561b11404df3 ctl=- DIFF
+  model.xml base=63afd6617fec pr=2ac3d1d01099 ctl=- DIFF
+  model.t3d base=db995b1c76ae pr=fbe2681054c3 ctl=- DIFF
+  model.tbd base=c9462cce709f pr=fb84eecab8b1 ctl=- DIFF
+  model.tsd base=0116f348a01e pr=72bf47ff2194 ctl=- DIFF
+  model_HDDCDD.tbd base=be0dfab5b551 pr=32a5ee0fcaba ctl=- DIFF
+  model_Uncapped.tbd base=8e9c9aa2dd51 pr=9b927605fca3 ctl=- DIFF
+  model.result.json base=c5803bd3edaf pr=76dbd4be9d20 ctl=- DIFF
+=== S4-LoadSens-direct
+baseline: route=Direct result=ok notes=6
+pr-head: route=Direct result=ok notes=6
+notes baseline==pr-head (byte)
+  model.input.sam base=a86e7fdd8597 pr=b8d89d7be7d5 ctl=- DIFF
+  model.t3d base=da2deec0f993 pr=be5950afeaa8 ctl=- DIFF
+  model.tbd base=a2ea5e7bc9ba pr=b57eb678006f ctl=- DIFF
+  model.tsd base=774f7ff7862d pr=08c01ed1f62a ctl=- DIFF
+  model_HDDCDD.tbd base=05d0e378cd52 pr=c29ea9e00ac1 ctl=- DIFF
+  model_Uncapped.tbd base=458902fc31c1 pr=10ed93a7e390 ctl=- DIFF
+  model.result.json base=f351970ab37d pr=6d7390182613 ctl=- DIFF
+=== S5-ModelA-direct-widths
+baseline: route=Direct result=ok notes=11
+pr-head: route=Direct result=ok notes=11
+notes baseline==pr-head (byte)
+  model.input.sam base=0022a446ff1c pr=32aef43a96d4 ctl=- DIFF
+  model.t3d base=2a1c0baaf066 pr=33d9f8b69c47 ctl=- DIFF
+  model.tbd base=23c1e7a928ff pr=cf596cbea6fe ctl=- DIFF
+  model.tsd base=e6e7faaa3e83 pr=608a53b06d5a ctl=- DIFF
+  model_HDDCDD.tbd base=e45a1dd9f91d pr=a84b1dfe099b ctl=- DIFF
+  model_Uncapped.tbd base=1c0079527043 pr=dfdbba369428 ctl=- DIFF
+  model.result.json base=f0db5616044f pr=516a4b00aece ctl=- DIFF
+=== S6-ModelA-gbxml-nosim
+baseline: route=GbXML result=ok notes=9
+pr-head: route=GbXML result=ok notes=9
+notes baseline==pr-head (byte)
+  model.input.sam base=8cc1a21ff55e pr=91680aba62c2 ctl=- DIFF
+  model.xml base=9e7d475cd836 pr=9dfa09986e46 ctl=- DIFF
+  model.t3d base=3308b125a730 pr=2971f6db64e6 ctl=- DIFF
+  model.tbd base=3cdf383b0be4 pr=75254a836379 ctl=- DIFF
+  model_HDDCDD.tbd base=ae14d7f460b8 pr=670ad4af6bbd ctl=- DIFF
+  model_Uncapped.tbd base=871ba00a2f5a pr=7f5c826a9f24 ctl=- DIFF
+  model.result.json base=f84959c20974 pr=102a3dbadaf2 ctl=- DIFF
+
+== semantic dump comparison
+S1-ModelA-gbxml tbd.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml tbd.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml t3d.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml t3d.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml model_HDDCDD.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml model_HDDCDD.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml model_Uncapped.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S1-ModelA-gbxml model_Uncapped.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct tbd.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct tbd.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct t3d.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct t3d.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct model_HDDCDD.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct model_HDDCDD.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct model_Uncapped.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S2-ModelA-direct model_Uncapped.dump.txt baseline-vs-baseline-control: RAW-IDENTICAL; after GUID-masking differing lines=0
+S3-LoadSens-gbxml tbd.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S3-LoadSens-gbxml t3d.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S3-LoadSens-gbxml model_HDDCDD.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S3-LoadSens-gbxml model_Uncapped.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S4-LoadSens-direct tbd.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S4-LoadSens-direct t3d.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S4-LoadSens-direct model_HDDCDD.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S4-LoadSens-direct model_Uncapped.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S5-ModelA-direct-widths tbd.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S5-ModelA-direct-widths t3d.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S5-ModelA-direct-widths model_HDDCDD.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S5-ModelA-direct-widths model_Uncapped.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S6-ModelA-gbxml-nosim tbd.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S6-ModelA-gbxml-nosim t3d.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S6-ModelA-gbxml-nosim model_HDDCDD.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+S6-ModelA-gbxml-nosim model_Uncapped.dump.txt baseline-vs-pr-head: RAW-IDENTICAL; after GUID-masking differing lines=0
+
+== public API diff baseline vs head
+SAM.Analytical.Tas.dll: members A=1874 B=1878 removed=0 added=4
+SAM.Core.Tas.dll: members A=423 B=443 removed=0 added=20
+SAM.Core.Tas.UKBR.dll: members A=564 B=564 removed=0 added=0
+SAM.Geometry.Tas.dll: members A=44 B=44 removed=0 added=0
+SAM.Weather.Tas.dll: members A=178 B=178 removed=0 added=0
+SAM.Analytical.Tas.TPD.dll: members A=3903 B=3903 removed=0 added=0
+SAM.Analytical.Tas.TM59.dll: members A=129 B=129 removed=0 added=0
+SAM.Analytical.Tas.GenOpt.dll: members A=1079 B=1081 removed=0 added=2
+SAM.Analytical.Tas.SAP.dll: members A=165 B=165 removed=0 added=0
+SAM.Analytical.Tas.Benchmark.dll: members A=67 B=67 removed=0 added=0
+TOTAL removed=0 added=26
+
+== input hashes
+20d3dbe3e7dafd1497a52fb2bfc86ee5b1c9b7a4cc2ecf653c7a56021d85b14c *inputs/cibse2021.twd
+cec857af8eddf218966dd5f7be0dc48708c7dac1e92c32616e4aa767e1aaa3c8 *inputs/ModelA-Tas.sam
+0234e4816206ff3e52f74504bcfeaf11bab1bf042573adcf555d12447b68ee64 *../inputs/ModelA-PT.sam
+05b8964b89692a99a3ab1dc16279b5a230f444e182080cd13071f6678c0260d3 *../inputs/ModelA-PT.sam
+bf3c0c7db6ed2ed358baa970cea31590d87382c10b7254a4c7d4cb6f9df7e4f3 *inputs/tpd-fixture/model.tbd
+c7178b65a993b6dba8b0b9b5f56ad393332b2002f7e132af08c01736fcf1ff2f *inputs/tpd-fixture/model.tpd
+40fe49817ede65436cad1beb80508c9df4cda9ba64d56ed672efaf45c778b5a6 *inputs/tpd-fixture/model.tsd
+
+== TSD comparisons (summary lines)
+tsd-S1-ModelA-gbxml-baseline-vs-baseline-control.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S1-ModelA-gbxml-baseline-vs-pr-head.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S2-ModelA-direct-baseline-vs-baseline-control.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S2-ModelA-direct-baseline-vs-pr-head.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S3-LoadSens-gbxml-baseline-vs-pr-head.stdout.txt: 0 of 96 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S4-LoadSens-direct-baseline-vs-pr-head.stdout.txt: 0 of 96 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S5-ModelA-direct-widths-baseline-vs-pr-head.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S7-ModelA-PT-direct-baseline-vs-baseline-control.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S7-ModelA-PT-direct-baseline-vs-pr-head.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S8-ModelA-PT-direct-widths-baseline-vs-baseline-control.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-S8-ModelA-PT-direct-widths-baseline-vs-pr-head.stdout.txt: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-TPD-baseline-vs-baseline-control.stdout.txt: 0 of 832 (zone, array) series differ in at least one hour; the rest are bit-identical.
+tsd-TPD-baseline-vs-pr-head.stdout.txt: 0 of 832 (zone, array) series differ in at least one hour; the rest are bit-identical.
+
+== TBD input comparison (counts)
+inputs-S1-ModelA-gbxml-baseline-vs-baseline-control.stdout.txt:  identical 1566; different, expected 48; different, UNEXPECTED 0;
+inputs-S1-ModelA-gbxml-baseline-vs-pr-head.stdout.txt:  identical 1566; different, expected 48; different, UNEXPECTED 0;
+inputs-S2-ModelA-direct-baseline-vs-baseline-control.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+inputs-S2-ModelA-direct-baseline-vs-pr-head.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+inputs-S3-LoadSens-gbxml-baseline-vs-pr-head.stdout.txt:  identical 2088; different, expected 48; different, UNEXPECTED 0;
+inputs-S4-LoadSens-direct-baseline-vs-pr-head.stdout.txt:  identical 2088; different, expected 48; different, UNEXPECTED 0;
+inputs-S5-ModelA-direct-widths-baseline-vs-pr-head.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+inputs-S6-ModelA-gbxml-nosim-baseline-vs-pr-head.stdout.txt:  identical 1566; different, expected 48; different, UNEXPECTED 0;
+inputs-S7-ModelA-PT-direct-baseline-vs-baseline-control.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+inputs-S7-ModelA-PT-direct-baseline-vs-pr-head.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+inputs-S8-ModelA-PT-direct-widths-baseline-vs-baseline-control.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+inputs-S8-ModelA-PT-direct-widths-baseline-vs-pr-head.stdout.txt:  identical 1573; different, expected 48; different, UNEXPECTED 0;
+
+== S7/S8 (PhysicalThickness stamped; direct route; widths off/on)
+S7-ModelA-PT-direct: notes baseline==head: identical; tbd dump: identical; t3d dump: identical; tsd: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.; inputs:  identical 1573; different, UNEXPECTED 0;UNEXPECTED:;
+S8-ModelA-PT-direct-widths: notes baseline==head: identical; tbd dump: identical; t3d dump: identical; tsd: 0 of 64 (zone, array) series differ in at least one hour; the rest are bit-identical.; inputs:  identical 1573; different, UNEXPECTED 0;UNEXPECTED:;
+
+== TPD evidence/results
+evidence (masked) baseline==head==control; tpd-results.txt identical on all three (DateTime/Guid excluded)
+
+== Grasshopper snapshot comparison (Rhino 8.35, unsolved): see windows-acceptance-report.md section 7

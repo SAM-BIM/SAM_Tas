@@ -1,0 +1,236 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using SAM.Analytical;
+using SAM.Analytical.Tas;
+using SAM.Core;
+
+namespace DiagProbe
+{
+    public static class Program
+    {
+        static int failures = 0;
+        static void Check(bool ok, string what)
+        {
+            Console.WriteLine((ok ? "PASS  " : "FAIL  ") + what);
+            if (!ok) failures++;
+        }
+
+        static string Line(Diagnostic d) => string.Join("|", d.Code, d.Severity, d.Detail, d.Subject, d.SourceIndex, d.Message?.Replace("\r", "\\r").Replace("\n", "\\n"));
+
+        [STAThread]
+        public static int Main(string[] args)
+        {
+            string mode = args[0];
+            if (mode == "gates") return Gates(args[1]);
+            if (mode == "route") return Route(args);
+            if (mode == "tpd") return Tpd(args[1], args[2]);
+            if (mode == "prep-pt") return PrepPt(args[1], args[2]);
+            return 2;
+        }
+
+        static void CheckDiagnostics(WorkflowCalculator calc, string outDir, string stem, bool resultNull)
+        {
+            string[] notesBefore = calc.Notes.ToArray();
+            Diagnostics all = calc.GetDiagnostics(DiagnosticDetail.Detailed);
+            Diagnostics std = calc.GetDiagnostics(DiagnosticDetail.Standard);
+            Diagnostics sum = calc.GetDiagnostics(DiagnosticDetail.Summary);
+            Diagnostics def = calc.GetDiagnostics();
+            File.WriteAllLines(Path.Combine(outDir, stem + ".diag-detailed.txt"), all.Select(Line));
+            File.WriteAllLines(Path.Combine(outDir, stem + ".diag-standard.txt"), std.Select(Line));
+            File.WriteAllLines(Path.Combine(outDir, stem + ".diag-summary.txt"), sum.Select(Line));
+
+            Check(calc.Notes.SequenceEqual(notesBefore), "GetDiagnostics does not change Notes");
+            Check(def.Select(Line).SequenceEqual(all.Select(Line)), "default detail == Detailed");
+            Check(all.Count == calc.Notes.Count, $"one diagnostic per note ({all.Count} vs {calc.Notes.Count})");
+            var list = all.ToList();
+            bool idx = true, msg = true;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (list[i].SourceIndex != i) idx = false;
+                string note = calc.Notes[i];
+                string expected = note.StartsWith(SAM.Analytical.Tas.Modify.NotePrefix_Issue) ? note.Substring(SAM.Analytical.Tas.Modify.NotePrefix_Issue.Length) : note;
+                if (list[i].Message != expected) msg = false;
+            }
+            Check(idx, "SourceIndex == Notes index (order preserved)");
+            Check(msg, "Message == legacy note text (issue marker only removed)");
+            Func<Diagnostics, HashSet<string>> set = d => new HashSet<string>(d.Select(Line));
+            Check(set(sum).IsSubsetOf(set(std)) && set(std).IsSubsetOf(set(all)), "Summary subset of Standard subset of Detailed");
+            Func<Diagnostics, string[]> we = d => d.Where(x => x.Severity != DiagnosticSeverity.Info).Select(Line).ToArray();
+            Check(we(all).SequenceEqual(we(std)) && we(all).SequenceEqual(we(sum)), $"all Warnings/Errors ({we(all).Length}) survive Summary/Standard/Detailed");
+            bool sev = true;
+            for (int i = 0; i < list.Count; i++)
+            {
+                bool issue = calc.Notes[i].StartsWith(SAM.Analytical.Tas.Modify.NotePrefix_Issue);
+                if (issue && list[i].Severity == DiagnosticSeverity.Info) sev = false;
+                if (!issue && list[i].Severity == DiagnosticSeverity.Warning) sev = false;
+            }
+            Check(sev, "ISSUE-marked notes never Info; unmarked never Warning");
+            Check(!resultNull || all.HasErrors, "a null (refused) result carries an Error");
+            Check(resultNull || !all.HasErrors, "a successful result carries no Error");
+            Console.WriteLine($"  diag counts detailed={all.Count} standard={std.Count} summary={sum.Count}; warnings={all.Count(x => x.Severity == DiagnosticSeverity.Warning)} errors={all.Count(x => x.Severity == DiagnosticSeverity.Error)}");
+        }
+
+        static int Route(string[] args)
+        {
+            string path_Model = args[1], directory = args[2];
+            T3DRoute route = string.Equals(args[3], "direct", StringComparison.OrdinalIgnoreCase) ? T3DRoute.Direct : T3DRoute.GbXML;
+            bool simulate = args.Contains("simulate"), widths = args.Contains("widths");
+            string stem = args.Select(x => x.StartsWith("name=") ? x.Substring(5) : null).FirstOrDefault(x => x != null) ?? "model";
+            string path_Weather = args.Select(x => x.StartsWith("weather=") ? x.Substring(8) : null).FirstOrDefault(x => x != null);
+            string weatherName = args.Select(x => x.StartsWith("weathername=") ? x.Substring(12) : null).FirstOrDefault(x => x != null);
+            Directory.CreateDirectory(directory);
+            AnalyticalModel model = SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Model)?.FirstOrDefault();
+            SAM.Weather.WeatherData weatherData = null;
+            if (path_Weather != null)
+            {
+                if (path_Weather.EndsWith(".twd", StringComparison.OrdinalIgnoreCase))
+                {
+                    var wds = SAM.Weather.Tas.Convert.ToSAM_WeatherDatas(path_Weather);
+                    weatherData = weatherName == null ? wds?.FirstOrDefault() : wds?.FirstOrDefault(x => x?.Name != null && x.Name.IndexOf(weatherName, StringComparison.OrdinalIgnoreCase) >= 0);
+                }
+                else
+                {
+                    AnalyticalModel wm = SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Weather)?.FirstOrDefault();
+                    wm?.TryGetValue(SAM.Analytical.AnalyticalModelParameter.WeatherData, out weatherData);
+                }
+                model.SetValue(SAM.Analytical.AnalyticalModelParameter.WeatherData, weatherData);
+            }
+            string path_TBD = Path.Combine(directory, stem + ".tbd"), path_gbXML = Path.Combine(directory, stem + ".xml");
+            foreach (string p in new[] { path_TBD, path_gbXML, Path.ChangeExtension(path_TBD, ".tsd"), Path.ChangeExtension(path_TBD, ".t3d") }) if (File.Exists(p)) File.Delete(p);
+            WorkflowSettings s = new WorkflowSettings { Path_TBD = path_TBD, T3DRoute = route, Simulate = simulate, Sizing = true, AddIZAMs = true, UnmetHours = simulate, UpdateZones = true, RemoveExistingTBD = true, UseWidths = widths, SimulateFrom = 1, SimulateTo = 365, WeatherData = weatherData };
+            if (route == T3DRoute.GbXML)
+            {
+                var g = SAM.Analytical.gbXML.Convert.TogbXML(model);
+                SAM.Core.gbXML.Create.gbXML(g, path_gbXML);
+                s.Path_gbXML = path_gbXML;
+            }
+            WorkflowCalculator calc = new WorkflowCalculator(s);
+            AnalyticalModel result = calc.Calculate(model);
+            File.WriteAllLines(Path.Combine(directory, stem + ".notes.txt"), calc.Notes);
+            Console.WriteLine($"route={route} result={(result == null ? "NULL" : "ok")} notes={calc.Notes.Count}");
+            CheckDiagnostics(calc, directory, stem, result == null);
+            Console.WriteLine(failures == 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED");
+            return failures == 0 ? 0 : 1;
+        }
+
+        static int PrepPt(string input, string output)
+        {
+            AnalyticalModel model = SAM.Core.Convert.ToSAM<AnalyticalModel>(input)?.FirstOrDefault();
+            AdjacencyCluster cluster = model.AdjacencyCluster;
+            int n = 0;
+            foreach (Panel panel in cluster.GetPanels())
+            {
+                double t;
+                switch (panel.PanelType)
+                {
+                    case PanelType.Wall: t = 0.25; break;
+                    case PanelType.Roof: t = 0.35; break;
+                    case PanelType.Air: continue;
+                    default: t = 0.30; break;
+                }
+                Panel copy = SAM.Analytical.Create.Panel(panel);
+                copy.SetValue(PanelSourceParameter.PhysicalThickness, t);
+                cluster.AddObject(copy);
+                n++;
+            }
+            model = new AnalyticalModel(model, cluster);
+            SAM.Core.Convert.ToFile(model, output, SAM.Core.SAMFileType.SAM);
+            Console.WriteLine("panels stamped with PhysicalThickness: " + n);
+            return 0;
+        }
+
+        static int Tpd(string src, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.GetFiles(src)) File.Copy(f, Path.Combine(dir, Path.GetFileName(f)), true);
+        string tpd = Directory.GetFiles(dir, "*.tpd")[0];
+        {
+            string tbdPath = Path.Combine(dir, "model.tbd"), tsdPath = Path.Combine(dir, "model.tsd");
+            TSD.TSDDocument tsdFix = new TSD.TSDDocument();
+            tsdFix.open(tsdPath);
+            tsdFix.SimulationData.buildingPath = tbdPath;
+            tsdFix.save();
+            tsdFix.close();
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(tsdFix);
+            TPD.TPDDoc relinkDoc = new TPD.TPDDoc();
+            relinkDoc.Open(tpd);
+            relinkDoc.EnergyCentre.GetTSDData(1).FixTSDPath(tsdPath);
+            relinkDoc.Save();
+            try { relinkDoc.Close(); } catch (System.Runtime.InteropServices.COMException) { }
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(relinkDoc);
+        }
+        SAM.Core.Tas.SimulationEvidence ev;
+        bool ok = SAM.Analytical.Tas.TPD.Modify.Simulate(tpd, 0, 8759, out ev);
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("returned=" + ok);
+        sb.AppendLine("Completed=" + ev.Completed + " CallReturned=" + ev.CallReturned + " ResultsReconciled=" + ev.ResultsReconciled + " NativeDiagnosticKind=" + ev.NativeDiagnosticKind);
+        sb.AppendLine("NativeDiagnostic=" + (ev.NativeDiagnostic ?? "<null>"));
+        sb.AppendLine("Refusals=" + ev.Refusals.Count);
+        foreach (string r in ev.Refusals) sb.AppendLine("  R: " + r);
+        sb.AppendLine("Notes=" + ev.Notes.Count);
+        foreach (string n in ev.Notes) sb.AppendLine("  N: " + n);
+        sb.AppendLine("ToString=" + ev.ToString());
+        foreach (SAM.Core.DiagnosticDetail d in new[] { SAM.Core.DiagnosticDetail.Detailed, SAM.Core.DiagnosticDetail.Standard, SAM.Core.DiagnosticDetail.Summary })
+        {
+            SAM.Core.Diagnostics ds = SAM.Core.Tas.Query.ToDiagnostics(ev, d);
+            sb.AppendLine("DIAG[" + d + "] count=" + ds.Count);
+            foreach (SAM.Core.Diagnostic x in ds) sb.AppendLine("  " + x.Code + "|" + x.Severity + "|" + x.Detail + "|" + x.SourceIndex + "|" + x.Message);
+        }
+        string before = ev.ToString();
+        SAM.Core.Tas.Query.ToDiagnostics(ev, SAM.Core.DiagnosticDetail.Detailed);
+        sb.AppendLine("evidence unchanged by adapter=" + (before == ev.ToString()));
+        File.WriteAllText(Path.Combine(dir, "evidence.txt"), sb.ToString());
+        Console.WriteLine(sb.ToString());
+        return ok ? 0 : 1;
+    }
+
+        static int Gates(string dir)
+        {
+            Directory.CreateDirectory(dir);
+            string tbd = Path.Combine(dir, "gate.tbd");
+            var c1 = new WorkflowCalculator(new WorkflowSettings { Path_TBD = tbd, Path_TBD_Canonical = Path.Combine(dir, "x.tbd"), Path_gbXML = Path.Combine(dir, "x.xml") });
+            var r1 = c1.Calculate(new AnalyticalModel("m", null, null, null, null));
+            File.WriteAllLines(Path.Combine(dir, "gate1.notes.txt"), c1.Notes);
+            Check(r1 == null && c1.Notes.Count == 1 && c1.Notes[0].StartsWith("This run was given both a gbXML"), "gate: gbXML + canonical refused, legacy text");
+            CheckDiagnostics(c1, dir, "gate1", true);
+
+            var c2 = new WorkflowCalculator(new WorkflowSettings { Path_TBD = tbd, Path_TBD_Canonical = Path.Combine(dir, "missing.tbd") });
+            var r2 = c2.Calculate(new AnalyticalModel("m", null, null, null, null));
+            File.WriteAllLines(Path.Combine(dir, "gate2.notes.txt"), c2.Notes);
+            Console.WriteLine("  gate2 notes: " + string.Join(" // ", c2.Notes));
+            CheckDiagnostics(c2, dir, "gate2", r2 == null);
+
+            File.WriteAllText(Path.Combine(dir, "same.tbd"), "x");
+            var c3 = new WorkflowCalculator(new WorkflowSettings { Path_TBD = Path.Combine(dir, "same.tbd"), Path_TBD_Canonical = Path.Combine(dir, "same.tbd") });
+            var r3 = c3.Calculate(new AnalyticalModel("m", null, null, null, null));
+            File.WriteAllLines(Path.Combine(dir, "gate3.notes.txt"), c3.Notes);
+            Console.WriteLine("  gate3 notes: " + string.Join(" // ", c3.Notes));
+            CheckDiagnostics(c3, dir, "gate3", r3 == null);
+
+            c1.Calculate(new AnalyticalModel("m", null, null, null, null));
+            Check(c1.Notes.Count == 1 && c1.GetDiagnostics().Count == 1, "re-run leaves only that run's note and diagnostic");
+
+            MethodInfo addNotes = typeof(WorkflowCalculator).GetMethod("AddNotes", BindingFlags.NonPublic | BindingFlags.Instance);
+            Check(addNotes != null, "private AddNotes exists");
+            int nb = c1.Notes.Count, db = c1.GetDiagnostics().Count;
+            try { addNotes.Invoke(c1, new object[] { null }); Check(false, "AddNotes(null) throws"); }
+            catch (TargetInvocationException e)
+            {
+                Check(e.InnerException is ArgumentNullException an && an.ParamName == "collection", "AddNotes(null) -> ArgumentNullException ParamName=collection");
+            }
+            Check(c1.Notes.Count == nb && c1.GetDiagnostics().Count == db, "AddNotes(null) modified nothing");
+            try { new List<string>().AddRange(null); } catch (ArgumentNullException e) { Check(e.ParamName == "collection", "legacy List.AddRange(null) ParamName=collection"); }
+            Console.WriteLine(failures == 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED");
+            return failures == 0 ? 0 : 1;
+        }
+    }
+}
+namespace DiagProbe
+{
+    public static class PtPrep
+    {
+    }
+}
