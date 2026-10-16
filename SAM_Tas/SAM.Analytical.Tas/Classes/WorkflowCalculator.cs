@@ -101,12 +101,16 @@ namespace SAM.Analytical.Tas
         /// <summary>
         /// Adds the notes a step returned, by the documented contract of those steps: <see cref="Modify.NotePrefix_Issue"/> marks an issue (Warning), any
         /// other line is a one-line outcome (Information, Summary).
+        /// <para>
+        /// Replaces <c>notes.AddRange(stepNotes)</c>, so a null list behaves as it did: <see cref="System.ArgumentNullException"/> with parameter name
+        /// <c>collection</c>, thrown before anything is added to <see cref="Notes"/> or the diagnostics.
+        /// </para>
         /// </summary>
         private void AddNotes(IEnumerable<string> stepNotes)
         {
             if (stepNotes == null)
             {
-                return;
+                throw new System.ArgumentNullException("collection");
             }
 
             foreach (string note in stepNotes)

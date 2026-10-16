@@ -728,6 +728,39 @@ namespace SAM.Analytical.Tas.TM59.Tests
         }
 
         [Test]
+        public void ANullStepNoteList_ThrowsWhatNotesAddRangeAlwaysThrew_BeforeAnythingIsAdded()
+        {
+            // Legacy: notes.AddRange(notes_BuildingElements) etc. A null list threw ArgumentNullException("collection") and added nothing.
+            ArgumentNullException legacy = Assert.Throws<ArgumentNullException>(() => new List<string> { "kept" }.AddRange((List<string>)null));
+            Assert.That(legacy.ParamName, Is.EqualTo("collection"), "fixture: the exception the replaced call threw");
+
+            WorkflowCalculator workflowCalculator = new WorkflowCalculator(new WorkflowSettings());
+            MethodInfo addNotes = typeof(WorkflowCalculator).GetMethod("AddNotes", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(addNotes, Is.Not.Null);
+
+            List<string> existing = new List<string> { "Building elements: 1 opening(s).", TasModify.NotePrefix_Issue + "Aperture types: one issue." };
+            addNotes.Invoke(workflowCalculator, new object[] { existing });
+
+            List<string> notesBefore = new List<string>(workflowCalculator.Notes);
+            List<string> diagnosticsBefore = DiagnosticsAssert.Keys(workflowCalculator.GetDiagnostics());
+            Assert.That(notesBefore, Is.EqualTo(existing), "fixture: the notes already held");
+            Assert.That(diagnosticsBefore, Has.Count.EqualTo(2));
+
+            TargetInvocationException thrown = Assert.Throws<TargetInvocationException>(() => addNotes.Invoke(workflowCalculator, new object[] { null }));
+
+            Assert.That(thrown.InnerException, Is.TypeOf<ArgumentNullException>(), "the same exception type as List<T>.AddRange(null)");
+            Assert.That(((ArgumentNullException)thrown.InnerException).ParamName, Is.EqualTo(legacy.ParamName), "and the same parameter name");
+            Assert.That(workflowCalculator.Notes, Is.EqualTo(notesBefore), "no note was added or changed");
+            Assert.That(DiagnosticsAssert.Keys(workflowCalculator.GetDiagnostics()), Is.EqualTo(diagnosticsBefore), "no diagnostic was added or changed");
+
+            // The calculator is still usable afterwards, and an empty (non-null) list is still a no-op.
+            addNotes.Invoke(workflowCalculator, new object[] { new List<string>() });
+            Assert.That(workflowCalculator.Notes, Is.EqualTo(notesBefore));
+            addNotes.Invoke(workflowCalculator, new object[] { new List<string> { "Aperture definitions: nothing to reuse." } });
+            Assert.That(workflowCalculator.Notes, Has.Count.EqualTo(3));
+        }
+
+        [Test]
         public void StepNotes_AreMappedByTheProducersMarker_NotByWhatTheTextSays()
         {
             List<string> notes = new List<string>
