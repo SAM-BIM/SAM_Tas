@@ -35,12 +35,35 @@ namespace SAM.Analytical.Tas
             if (tBDDocument == null || string.IsNullOrWhiteSpace(path_TSD))
                 return false;
 
-            // -1 ran, 0 refused (a refusal still writes a stub TSD, so the unlocked file alone proves nothing).
-            int nativeReturnCode = tBDDocument.simulate(day_First, day_Last, 0, 1, 0, 0, path_TSD, 1, 0);
+            return SimulateToTSD(() => tBDDocument.simulate(day_First, day_Last, 0, 1, 0, 0, path_TSD, 1, 0), path_TSD, out SimulationEvidence _);
+        }
+
+        /// <summary>
+        /// The document-level decision, held to the same <see cref="SimulationEvidence"/> rules as the path overloads:
+        /// a leftover TSD and error log are cleared first, then success needs TAS to return -1, the TSD to be fresh and
+        /// non-trivial, and no error log for this run. A <c>TBDDocument</c> carries no path, so the record is keyed on
+        /// the TSD: TAS writes <c>&lt;tsd basename&gt;_error_log.txt</c> beside the TSD (measured 2026-10-19 with a TBD
+        /// and TSD of different names and folders). <paramref name="simulate"/> performs the COM call; a throw from it
+        /// propagates, as before.
+        /// </summary>
+        private static bool SimulateToTSD(System.Func<int> simulate, string path_TSD, out SimulationEvidence simulationEvidence)
+        {
+            simulationEvidence = new SimulationEvidence(SimulationOutputShape.SeparateOutputFile, path_TSD, path_TSD);
+            simulationEvidence.Prepare(System.DateTime.UtcNow);
+
+            if (simulationEvidence.Refusals.Count != 0)
+            {
+                return false;
+            }
+
+            int nativeReturnCode = simulate();
 
             bool unlocked = Core.Query.WaitToUnlock(path_TSD);
 
-            return nativeReturnCode == SimulationEvidence.NativeReturnCode_Ran && unlocked;
+            simulationEvidence.RecordCallReturned((object)nativeReturnCode);
+            simulationEvidence.Conclude();
+
+            return unlocked && simulationEvidence.Completed;
         }
 
         /// <summary>
