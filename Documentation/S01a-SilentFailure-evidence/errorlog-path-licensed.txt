@@ -1,0 +1,18 @@
+== refusal, alpha.tbd -> tsddir\beta.tsd
+mode=evidence SAM.Analytical.Tas=84fb3e6193057601 SAM.Core.Tas=2a0aab0f4373db71
+evidence.Simulate=False Completed=False
+evidence.NativeReturnCode=0
+evidence.refusal=TAS refused the simulation: TBDDocument.simulate returned 0. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\logpath\refuse\tsddir\beta_error_log.txt.
+evidence.refusal=TAS wrote an error log for this run: C:\TasOut\s01a\L\logpath\refuse\tsddir\beta_error_log.txt (TAS return code: 0) | Simulation Failed
+evidence.refusal=The output file is 22 bytes, at or below the 1024-byte threshold that marks the stub TAS writes when it produced no results: C:\TasOut\s01a\L\logpath\refuse\tsddir\beta.tsd. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\logpath\refuse\tsddir\beta_error_log.txt.
+L/logpath/refuse/tbddir:
+alpha.tbd
+
+L/logpath/refuse/tsddir:
+beta.tsd
+beta_error_log.txt
+== success with stale beta_error_log.txt beside the TSD
+evidence.Simulate=True Completed=True
+evidence.NativeReturnCode=-1
+tsd.exists=True tsd.bytes=1034863 tsd.utc=2026-10-19T17:34:33.1162969Z
+beta.tsd

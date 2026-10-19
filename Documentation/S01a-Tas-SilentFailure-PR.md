@@ -5,14 +5,15 @@ propagation is S01b (not started here). Owner approved SAM_Tas write access for 
 
 Base: `sow/2026-Q4` (`a34a298d`). Branch: `feature/s01a-tas-silent-failure`. Dependencies: SAM `sow/2026-Q4`
 (`62b54156`), unchanged. No SAM, SAM_UI, SAM_Tas_Grasshopper or HVAC worktree/branch change.
-Validated content SHA: `0b0257ee` (all code and tests; `6ccc2d53` was the first code commit, `0b0257ee` adds the
-document-level overload correction from the GPT-6 review). Record-only commits follow; the final PR head and hosted
-checks are in the PR description. `PROJECT_PROGRESS.md` is not touched (post-merge closeout only).
+Validated content SHA: `a3be6931` (all code and tests). Code commits: `6ccc2d53` (S01a), `0b0257ee` (document-level
+overload, GPT-6 review 1), `a3be6931` (separate-output error-log path, GPT-6 review 2, plus a test-fixture timestamp fix
+for the hosted D4 failure on `6ef9b3d0`). Record-only commits follow; the final PR head and hosted checks are in the PR
+description. `PROJECT_PROGRESS.md` is not touched (post-merge closeout only).
 
 ## Status
-Implementation, unit tests and licensed checks complete on 2026-10-19 (this laptop, TAS licensed). GPT-6 review: main
-solution correct; one gap (the document-level overload) corrected in `0b0257ee` and re-validated below. Awaiting owner
-review and hosted CI on the final head. Not merged.
+Implementation, unit tests and licensed checks complete on 2026-10-19 (this laptop, TAS licensed). GPT-6 reviews: main
+solution correct; the document-level overload gap (`0b0257ee`) and the separate-output error-log path (`a3be6931`) are
+corrected and re-validated below. Awaiting owner review and hosted CI on the final head. Not merged.
 
 ## Problem (measured)
 `TBDDocument.simulate` (interop signature `Int32 simulate(...)`) returns `-1` when the simulation ran and `0` when
@@ -44,6 +45,8 @@ Before this change (baseline `a34a298d`):
    - Every refusal of a run with a recorded code carries ` TAS return code: <c>; TAS error log: <path>.`; the error-log
      refusal carries ` (TAS return code: <c>)`. Runs that record no code (TPD, legacy callers) keep their refusal text
      byte-for-byte (`DiagnosticsAdapterTests` pins this and passes).
+   - `Path_ErrorLog` for `SeparateOutputFile` is derived from the TSD (`a3be6931`; see Decisions); `InPlaceDocument`
+     keeps the document.
    - Unchanged: `Prepare`, `Conclude` logic, `Completed`, `TrivialOutputLengthThreshold` (1024), the string
      `RecordCallReturned(string)` TPD path, `Query.ToDiagnostics` mapping and codes. An attributable error log still
      refuses when TAS returned `-1` (test A5).
@@ -97,20 +100,25 @@ Before this change (baseline `a34a298d`):
 
 - **TAS writes the error log beside the TSD, with the TSD's basename** (measured: `tbddir\alpha.tbd` simulated to
   `tsddir\beta.tsd` gave `tsddir\beta_error_log.txt` and nothing beside the TBD; `errorlog-location-probe.txt`).
-  `SimulationEvidence` looks for `<tbd basename>_error_log.txt` beside the TBD, which is the same file whenever the TSD
-  is derived from the TBD - true of `WorkflowCalculator`, `benchmark-tas` and every licensed check here. The
-  document-level overload uses the TSD key, which is correct for any naming. The path overloads were not changed
-  (scope); see risks.
+  Until `a3be6931`, `SimulationEvidence` derived the log from the document (`<tbd basename>_error_log.txt` beside the
+  TBD), which missed TAS's log whenever the TSD was named differently. `a3be6931`: for `SeparateOutputFile`,
+  `Path_ErrorLog` is derived from `path_Output` (the TSD); `InPlaceDocument` keeps the document. `Prepare` (stale-log
+  deletion or timestamping), `Conclude` (reading), and the refusal text all read `Path_ErrorLog`, so they follow; no
+  signature, return-code logic or threshold changed. Compatibility: every production caller (`Modify.Simulate` path
+  overloads via `WorkflowCalculator`/`benchmark-tas`, `Create.NoIzamThermalSource` via `Query.Path_TSD`,
+  `ThermostatBridge` via `Path.ChangeExtension`, the document-level `SimulateToTSD`) uses a TSD with the TBD's folder
+  and basename, so its log path is unchanged; only a differently named pair (e.g. a user-supplied Grasshopper
+  `TasSimulate` TSD) changes, which is the fix. Licensed confirmation: `errorlog-path-licensed.txt`.
 
 ## Files changed
 `SAM_Tas/SAM.Core.Tas/Classes/SimulationEvidence.cs`, `SAM_Tas/SAM.Analytical.Tas/Modify/Simulate.cs`,
 `SAM_Tas/SAM.Analytical.Tas/Classes/WorkflowCalculator.cs`, `SAM_Tas/SAM.Analytical.Tas/Query/ZoneResultsRefusal.cs`
 (new), `benchmark/SAM.Analytical.Tas.Benchmark/Producer.cs`, `benchmark/SAM.Analytical.Tas.Benchmark.Cli/Program.cs`;
 tests `SimulationReturnCodeTests.cs` (new), `ZoneResultsRefusalTests.cs` (new), `SimulateDocumentLevelTests.cs` (new,
-`0b0257ee`), `WorkflowCalculatorTests.cs`, `benchmark/.../WorkflowFailureTests.cs` (new); this record and
-`Documentation/S01a-SilentFailure-evidence/`.
+`0b0257ee`; log timestamp in `a3be6931`), `ErrorLogLocationTests.cs` (new, `a3be6931`), `WorkflowCalculatorTests.cs`,
+`benchmark/.../WorkflowFailureTests.cs` (new); this record and `Documentation/S01a-SilentFailure-evidence/`.
 
-## Tests (local, Windows, on the `0b0257ee` working tree, final build)
+## Tests (local, Windows, on the `a3be6931` working tree, final build)
 All rows are **simulated evidence**: real files on disk, with the TAS COM response stood in for (no licence needed).
 Licensed end-to-end evidence is the next section.
 | ID | Case | Test(s) | Result |
@@ -126,7 +134,8 @@ Licensed end-to-end evidence is the next section.
 | A9 | benchmark failure handling, valid Failure document, exit 5 | `WorkflowFailureTests` (3) | PASS |
 | A10 | unchanged recording paths (no-code text, string overload) | `A10_*` | PASS |
 | D1-D4 | document-level overload: 0 fails (stub and ~22 KB); -1 with a fresh valid TSD succeeds; -1 with missing, empty, 22-byte, stale or leftover TSD fails; an attributable error log fails; an earlier run's log is cleared, not charged; public signatures and null inputs | `SimulateDocumentLevelTests` (11), driving the private `SimulateToTSD` with a delegate in place of `TBDDocument.simulate`; 5 consecutive runs green | PASS |
-| A11 | existing regression suites | TM59 **1244/1244**, GenOpt **432/432**, Benchmark **26/26** | PASS |
+| E1-E4 | error-log location: `alpha.tbd` + `tsddir\beta.tsd` keys on `tsddir\beta_error_log.txt`; that log refuses despite -1 and a 1 MB TSD (refusal and diagnostics name it); a stale TSD-keyed log is cleared before a successful run; a log beside the TBD is not charged and not deleted; in-place (TPD) keeps the document-keyed log and its refusal | `ErrorLogLocationTests` (5); focused S01a/evidence/diagnostics fixtures green 5 consecutive runs | PASS |
+| A11 | existing regression suites | TM59 **1249/1249**, GenOpt **432/432**, Benchmark **26/26** | PASS |
 
 Commands (Windows; build with `APPDATA` redirected so `%APPDATA%\SAM` is not touched):
 `MSBuild SAM_Tas.sln /t:Restore` then `/t:Build /p:Configuration=Release`;
@@ -145,7 +154,8 @@ binary (only pre-existing APIs, new members by reflection) was copied into a cop
 |---|---|---|---|
 | L1 | Unbalanced-IZAM refusal (SAM#92 class) | **PASS**. Legacy path: baseline True -> candidate False. Evidence: `NativeReturnCode=0`, three refusals with code 0 and log path. Workflow: returns null in 1.9 s, three `TAS-SIM-001` Errors, no `run.json` written (baseline hung). | `L1-*.txt` |
 | L1b | Refusal through the real `benchmark-tas` CLI | **NOT RUN**: the CLI converts the model itself and IZAMs come only from the per-room-balanced Part O route, so a refusal cannot be injected without changing the producer. Covered by A9 + L1 workflow. | - |
-| L2 | Successful box regression (#237 method) | **PASS**, on `6ccc2d53` and again on the final `0b0257ee` build. benchmark-tas Success on both; B1a identical apart from timestamp/duration; persisted results exact on all **574** numbers (26 surface, 2 space, 2 cluster results). Workflow-route control (canonical TBD, no sizing): exact on **570** numbers. Legacy path on `box-ok.tbd`: True. | `L2-*.json` (final build), `benchmark-TAS-base1.json`, `benchmark-TAS-cand3.json`, `L2-candidate-legacy-success.txt` |
+| L2 | Successful box regression (#237 method) | **PASS**, on `6ccc2d53`, `0b0257ee` and again on the final `a3be6931` build. benchmark-tas Success on both; B1a identical apart from timestamp/duration; persisted results exact on all **574** numbers (26 surface, 2 space, 2 cluster results). Workflow-route control (canonical TBD, no sizing): exact on **570** numbers. Legacy path on `box-ok.tbd`: True. | `L2-*.json` (final build), `benchmark-TAS-base1.json`, `benchmark-TAS-cand4.json`, `L2-candidate-legacy-success.txt` |
+| LP | Separate-output error-log path, real TAS (`a3be6931`), `tbddir\alpha.tbd` -> `tsddir\beta.tsd` | **PASS**. Refusal: three refusals, the error-log one reading TAS's own `tsddir\beta_error_log.txt` ("Simulation Failed"), every refusal naming that path. Success with a stale `beta_error_log.txt` placed beside the TSD: cleared before the run, `Completed=True`. Agrees with the location probe (`errorlog-location-probe.txt`). | `errorlog-path-licensed.txt` |
 | LD | Document-level overload, real TAS (`0b0257ee`) | **PASS**. Unbalanced IZAM: baseline True -> candidate False. Refusal over a 1 MB leftover TSD: False. `box-ok.tbd`: True, both with the TSD beside the TBD and with a differently named TSD in another folder. The -1-with-error-log case cannot be produced with real TAS; covered by D4 only. | `doclevel-licensed.txt` |
 | L3 | Folder reuse | **PASS**. (a) after a failed run (stub TSD + error log left): success, log removed, persisted values exact vs fresh baseline. (b) refusal after a success in the same folder: refused, the 1 MB TSD not inherited. | `L3a-*`, `L3b-*`, `L1-L3b-*` |
 | L4 | Result-less non-trivial TSD through the real reader | **PASS** (helper level). A 3 499-byte TSD written by TSD (`create`+`save`, no zones): `AddResults` returns null on both builds; candidate `ZoneResultsRefusal` refuses; control (real 1 MB TSD) accepted. Not end to end: TAS cannot be made to return -1 with this file. | `L4-*.txt` |
@@ -153,17 +163,16 @@ binary (only pre-existing APIs, new members by reflection) was copied into a cop
 Noise floor: two baseline runs are exact (`L2-control-base1-vs-base2.json`). Comparator sensitivity: one changed last
 digit gives 1 difference (`comparator-tamper-check.json`). Build isolation: between the snapshots only SAM_Tas's own
 assemblies differ; all SAM dependencies are byte-identical. Baseline `SAM.Analytical.Tas.dll` `de942e40...`, candidate
-`78757bb8...` (`6ccc2d53`) and `6fe9bc41...` (`0b0257ee`) (`hashes.txt`).
+`78757bb8...` (`6ccc2d53`), `6fe9bc41...` (`0b0257ee`) and `84fb3e61...` (`a3be6931`) (`hashes.txt`).
 
 ## Unresolved issues and risks
 - **A failed workflow can leave a previous run's `<tbd>.json` in a reused directory.** `WorkflowCalculator` does not
   delete it, and a refused run leaves it untouched (L3b: older timestamp). The JSON retention policy is deliberately
   unchanged. **S01b must not treat the existence of that file as current-run success**; it must decide on
   `Calculate`'s return value and `WorkflowCalculator.SimulationEvidence` / `GetDiagnostics()`.
-- The path overloads find the error log beside the TBD. If a caller (e.g. Grasshopper `TasSimulate`) names the TSD
-  differently from the TBD, a -1 run with an error log beside the TSD would not be caught by the log; a refusal is still
-  caught by return code 0 and the stub-size check. Not changed (scope: the path overloads were left as approved);
-  candidate follow-up if the owner wants it.
+- The error-log location rests on one measured refusal (plus the same-name runs). A log TAS wrote within the same
+  file-system clock tick as `Prepare`'s start line would be dated before it and read as an earlier run's; real TAS
+  writes out of process after the model load, and the hosted D4 failure was this effect in a test stand-in only.
 - `ZoneResultsRefusal` judges the returned results, not attachment: results whose names match no SAM space are still
   accepted (pre-existing behaviour).
 - Return codes other than -1/0 have never been observed; they fail closed by decision.
