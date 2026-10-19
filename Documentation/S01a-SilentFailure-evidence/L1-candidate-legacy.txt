@@ -1,0 +1,5 @@
+mode=legacy SAM.Analytical.Tas=78757bb8094849bd SAM.Core.Tas=5721376afb0d3da3
+legacy.Simulate(path,path,1,365)=False
+tsd.exists=True tsd.bytes=22 tsd.utc=2026-10-19T16:19:27.9511267Z
+errorlog=C:\TasOut\s01a\L\cand-legacy2\izam_error_log.txt exists=True
+errorlog.text=Simulation Failed

@@ -1,0 +1,8 @@
+mode=workflow SAM.Analytical.Tas=78757bb8094849bd SAM.Core.Tas=5721376afb0d3da3
+workflow.result=model
+workflow.SpaceSimulationResults=2
+evidence.NativeReturnCode=-1
+evidence.ToString=Simulation completed (SeparateOutputFile): C:\TasOut\s01a\L\L3b\run.tbd
+json.exists=True
+tsd.exists=True tsd.bytes=1034861 tsd.utc=2026-10-19T16:18:34.1950151Z
+errorlog=C:\TasOut\s01a\L\L3b\run_error_log.txt exists=False

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>s01a-harness</AssemblyName>
+    <!-- Compiled against the BASELINE build; run by copying the exe/dll into a copy of either build folder. -->
+    <BuildDir>C:\TasOut\s01a\build-baseline\</BuildDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SAM.Core"><HintPath>$(BuildDir)SAM.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SAM.Analytical"><HintPath>$(BuildDir)SAM.Analytical.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SAM.Core.Tas"><HintPath>$(BuildDir)SAM.Core.Tas.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SAM.Analytical.Tas"><HintPath>$(BuildDir)SAM.Analytical.Tas.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Interop.TBD"><HintPath>$(BuildDir)Interop.TBD.dll</HintPath><Private>false</Private><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+    <Reference Include="Interop.TSD"><HintPath>$(BuildDir)Interop.TSD.dll</HintPath><Private>false</Private><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+  </ItemGroup>
+</Project>

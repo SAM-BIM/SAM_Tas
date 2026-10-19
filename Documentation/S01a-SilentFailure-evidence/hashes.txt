@@ -1,0 +1,15 @@
+# Build hashes (SHA-256)
+## baseline a34a298d
+de942e4013cd65e181d5f4d4bfe3baa9cc55c85f5acaf9e3f8be0492dbc90aea *build/SAM.Analytical.Tas.dll
+f1d5d82bee8b0c75b58b61652593ab936dc16980fc24c070a92d7f99f7f4632c *build/SAM.Core.Tas.dll
+58285ec19ba36df6e4ebe113f3dab49dbb863ff3fe3e42e90a3f915457ed22f6 *build/benchmark-tas.dll
+## candidate 6ccc2d53 (final)
+78757bb8094849bd8d249757026b3d05f85a8f4c981a2a7fe043de29e40442fa *build-candidate/SAM.Analytical.Tas.dll
+5721376afb0d3da393fe4fb0ea7303bfc793a85041b649c56cb91a76235903ed *build-candidate/SAM.Core.Tas.dll
+a9cb2688a3f0f5f2f83cd8cd0e15a7c0a946cd7a767a805c0830193e2a8b6483 *build-candidate/benchmark-tas.dll
+## inputs
+472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3 */c/TasOut/s01a/inputs/Budapest.epw
+99ba2ab9db625d3872e5087f6c47bb50427bbd5fa2f7e110202242a4fcd5ca23 */c/TasOut/s01a/inputs/box-aperture.json
+7f42deb28f243cc60f10b0949e7674208e2c81ab8ad38324e1bb05129a854e1b *inputs/box-izam.tbd
+8ec08b94d4f92bb663751e9c13d0baf952c07938962b15934d70fca2f7367498 *inputs/box-ok.tbd
+SAM commit: 62b5415697d1a5af143c6b581b7d42fbd6551ca8

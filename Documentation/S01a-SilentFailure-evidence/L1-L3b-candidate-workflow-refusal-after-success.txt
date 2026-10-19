@@ -1,0 +1,14 @@
+mode=workflow SAM.Analytical.Tas=78757bb8094849bd SAM.Core.Tas=5721376afb0d3da3
+workflow.result=null
+evidence.NativeReturnCode=0
+evidence.ToString=Simulation NOT evidenced (SeparateOutputFile): C:\TasOut\s01a\L\L3b\run.tbd - TAS refused the simulation: TBDDocument.simulate returned 0. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\L3b\run_error_log.txt.; TAS wrote an error log for this run: C:\TasOut\s01a\L\L3b\run_error_log.txt (TAS return code: 0) | Simulation Failed; The output file is 22 bytes, at or below the 1024-byte threshold that marks the stub TAS writes when it produced no results: C:\TasOut\s01a\L\L3b\run.tsd. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\L3b\run_error_log.txt.
+evidence.refusal=TAS refused the simulation: TBDDocument.simulate returned 0. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\L3b\run_error_log.txt.
+evidence.refusal=TAS wrote an error log for this run: C:\TasOut\s01a\L\L3b\run_error_log.txt (TAS return code: 0) | Simulation Failed
+evidence.refusal=The output file is 22 bytes, at or below the 1024-byte threshold that marks the stub TAS writes when it produced no results: C:\TasOut\s01a\L\L3b\run.tsd. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\L3b\run_error_log.txt.
+diag Error TAS-SIM-001 [Simulating Model] TAS refused the simulation: TBDDocument.simulate returned 0. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\L3b\run_error_log.txt.
+diag Error TAS-SIM-001 [Simulating Model] TAS wrote an error log for this run: C:\TasOut\s01a\L\L3b\run_error_log.txt (TAS return code: 0) | Simulation Failed
+diag Error TAS-SIM-001 [Simulating Model] The output file is 22 bytes, at or below the 1024-byte threshold that marks the stub TAS writes when it produced no results: C:\TasOut\s01a\L\L3b\run.tsd. TAS return code: 0; TAS error log: C:\TasOut\s01a\L\L3b\run_error_log.txt.
+json.exists=True
+tsd.exists=True tsd.bytes=22 tsd.utc=2026-10-19T16:18:37.3553285Z
+errorlog=C:\TasOut\s01a\L\L3b\run_error_log.txt exists=True
+errorlog.text=Simulation Failed

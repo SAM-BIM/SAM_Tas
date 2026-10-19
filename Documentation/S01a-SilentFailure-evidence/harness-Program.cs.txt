@@ -1,0 +1,184 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using SAM.Analytical;
+using SAM.Analytical.Tas;
+using SAM.Core.Tas;
+
+// S01a licensed harness. One mode per process. Uses only APIs that exist in the BASELINE build; anything
+// S01a adds (WorkflowCalculator.SimulationEvidence, Query.ZoneResultsRefusal) is read by reflection so
+// the same binary runs against both builds.
+public static class Program
+{
+    [STAThread]
+    public static int Main(string[] args)
+    {
+        Console.WriteLine("mode=" + args[0] + " SAM.Analytical.Tas=" + Hash(typeof(WorkflowCalculator).Assembly.Location) + " SAM.Core.Tas=" + Hash(typeof(SimulationEvidence).Assembly.Location));
+        switch (args[0])
+        {
+            case "mkizam": return MkIzam(args[1], args[2]);
+            case "rawsim": return RawSim(args[1], args[2]);
+            case "legacy": return Legacy(args[1], args[2]);
+            case "evidence": return Evidence(args[1], args[2]);
+            case "workflow": return Workflow(args[1], args[2], args[3]);
+            case "addresults": return AddResults(args[1], args[2]);
+            case "mktsd": return MkTsd(args[1]);
+        }
+        Console.WriteLine("unknown mode");
+        return 2;
+    }
+
+    static string Hash(string path)
+    {
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+            return BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").Substring(0, 16).ToLowerInvariant();
+    }
+
+    static void Files(string path_TBD, string path_TSD)
+    {
+        string log = SimulationEvidence.ErrorLogPath(path_TBD);
+        Console.WriteLine("tsd.exists=" + File.Exists(path_TSD) + " tsd.bytes=" + (File.Exists(path_TSD) ? new FileInfo(path_TSD).Length : 0) + (File.Exists(path_TSD) ? " tsd.utc=" + new FileInfo(path_TSD).LastWriteTimeUtc.ToString("o") : ""));
+        Console.WriteLine("errorlog=" + log + " exists=" + File.Exists(log));
+        if (File.Exists(log)) Console.WriteLine("errorlog.text=" + File.ReadAllText(log).Trim().Replace("\r\n", " | "));
+    }
+
+    // Copy a TBD and add ONE unbalanced inter-zone air movement (outside -> first zone). TAS refuses to
+    // simulate a zone whose IZAMs do not balance (SAM PartO-TAS-VALIDATION.md, Iteration 1a root cause).
+    static int MkIzam(string src, string dst)
+    {
+        File.Copy(src, dst, true);
+        using (SAMTBDDocument doc = new SAMTBDDocument(dst))
+        {
+            TBD.Building building = doc.TBDDocument.Building;
+            TBD.zone zone = building.GetZone(0);
+            TBD.IZAM izam = building.AddIZAM(null);
+            izam.name = "S01a unbalanced IZAM FROM OUTSIDE";
+            izam.fromOutside = 1;
+            TBD.Calendar calendar = building.GetCalendar();
+            for (int i = 0; ; i++) { TBD.dayType d = calendar.dayTypes(i + 1); if (d == null) break; izam.SetDayType(d, true); }
+            TBD.profile profile = izam.GetProfile();
+            profile.type = TBD.ProfileTypes.ticValueProfile;
+            profile.value = 0.05f;
+            profile.factor = 1f;
+            zone.AssignIZAM(izam, true);
+            doc.Save();
+            Console.WriteLine("izam added to zone '" + zone.name + "'");
+        }
+        return 0;
+    }
+
+    // The bare native contract: what TBDDocument.simulate returns, with no SAM decision on top.
+    static int RawSim(string path_TBD, string path_TSD)
+    {
+        if (File.Exists(path_TSD)) File.Delete(path_TSD);
+        string log = SimulationEvidence.ErrorLogPath(path_TBD);
+        if (File.Exists(log)) File.Delete(log);
+        using (SAMTBDDocument doc = new SAMTBDDocument(path_TBD))
+        {
+            int code = doc.TBDDocument.simulate(1, 365, 0, 1, 0, 0, path_TSD, 1, 0);
+            SAM.Core.Query.WaitToUnlock(path_TSD);
+            Console.WriteLine("native.simulate.return=" + code);
+        }
+        Files(path_TBD, path_TSD);
+        return 0;
+    }
+
+    static int Legacy(string path_TBD, string path_TSD)
+    {
+        bool result = SAM.Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, 1, 365);
+        Console.WriteLine("legacy.Simulate(path,path,1,365)=" + result);
+        Files(path_TBD, path_TSD);
+        return 0;
+    }
+
+    static int Evidence(string path_TBD, string path_TSD)
+    {
+        bool result = SAM.Analytical.Tas.Modify.Simulate(path_TBD, path_TSD, 1, 365, out SimulationEvidence evidence);
+        Console.WriteLine("evidence.Simulate=" + result + " Completed=" + evidence.Completed);
+        DumpEvidence(evidence);
+        Files(path_TBD, path_TSD);
+        return 0;
+    }
+
+    static void DumpEvidence(SimulationEvidence evidence)
+    {
+        if (evidence == null) { Console.WriteLine("evidence=null"); return; }
+        PropertyInfo code = typeof(SimulationEvidence).GetProperty("NativeReturnCode");
+        Console.WriteLine("evidence.NativeReturnCode=" + (code == null ? "(property absent: baseline)" : (code.GetValue(evidence)?.ToString() ?? "null")));
+        Console.WriteLine("evidence.ToString=" + evidence.ToString().Replace("\r\n", " | ").Replace("\n", " | "));
+        foreach (string r in evidence.Refusals) Console.WriteLine("evidence.refusal=" + r.Replace("\r\n", " | ").Replace("\n", " | "));
+    }
+
+    static int Workflow(string path_Model, string path_Canonical, string path_TBD)
+    {
+        AnalyticalModel model = SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Model).First();
+        string path_TSD = Path.ChangeExtension(path_TBD, ".tsd");
+        WorkflowSettings settings = new WorkflowSettings
+        {
+            Path_TBD = path_TBD,
+            Path_TBD_Canonical = path_Canonical,
+            Simulate = true,
+            Sizing = false,
+            AddIZAMs = false,
+            UpdateZones = false,
+            UnmetHours = false,
+            SimulateFrom = 1,
+            SimulateTo = 365,
+        };
+        WorkflowCalculator calculator = new WorkflowCalculator(settings);
+        AnalyticalModel result = null;
+        try { result = calculator.Calculate(model); }
+        catch (Exception exception) { Console.WriteLine("workflow.threw=" + exception.GetType().Name + ": " + exception.Message); }
+
+        Console.WriteLine("workflow.result=" + (result == null ? "null" : "model"));
+        if (result != null)
+        {
+            int spaceResults = result.AdjacencyCluster.GetObjects<SpaceSimulationResult>()?.Count ?? 0;
+            Console.WriteLine("workflow.SpaceSimulationResults=" + spaceResults);
+        }
+        PropertyInfo ev = typeof(WorkflowCalculator).GetProperty("SimulationEvidence");
+        if (ev == null) Console.WriteLine("workflow.SimulationEvidence=(property absent: baseline)");
+        else DumpEvidence((SimulationEvidence)ev.GetValue(calculator));
+        foreach (SAM.Core.Diagnostic d in calculator.GetDiagnostics())
+            if (d.Severity != SAM.Core.DiagnosticSeverity.Info)
+                Console.WriteLine("diag " + d.Severity + " " + d.Code + " [" + d.Subject + "] " + d.Message.Replace("\r\n", " | ").Replace("\n", " | "));
+        Console.WriteLine("json.exists=" + File.Exists(Path.ChangeExtension(path_TBD, ".json")));
+        Files(path_TBD, path_TSD);
+        return 0;
+    }
+
+    // A TSD written by TSD itself that holds no zone data.
+    static int MkTsd(string path_TSD)
+    {
+        if (File.Exists(path_TSD)) File.Delete(path_TSD);
+        TSD.TSDDocument tsd = new TSD.TSDDocument();
+        try
+        {
+            Console.WriteLine("create=" + tsd.create(path_TSD));
+            Console.WriteLine("save=" + tsd.save());
+        }
+        finally
+        {
+            try { tsd.close(); } catch { }
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(tsd);
+        }
+        Console.WriteLine("tsd.bytes=" + (File.Exists(path_TSD) ? new FileInfo(path_TSD).Length : -1));
+        return 0;
+    }
+
+    static int AddResults(string path_TSD, string path_Model)
+    {
+        AnalyticalModel model = SAM.Core.Convert.ToSAM<AnalyticalModel>(path_Model).First();
+        AdjacencyCluster cluster = model.AdjacencyCluster;
+        foreach (SpaceSimulationResult r in cluster.GetObjects<SpaceSimulationResult>() ?? new List<SpaceSimulationResult>()) cluster.RemoveObject<SpaceSimulationResult>(r.Guid);
+        List<SAM.Core.Result> results = SAM.Analytical.Tas.Modify.AddResults(path_TSD, cluster);
+        Console.WriteLine("addresults.null=" + (results == null) + " count=" + (results?.Count ?? 0));
+        if (results != null) foreach (var g in results.GroupBy(x => x.GetType().Name)) Console.WriteLine("addresults." + g.Key + "=" + g.Count());
+        int spaces = cluster.GetSpaces()?.Count ?? 0;
+        MethodInfo m = typeof(SAM.Analytical.Tas.Query).GetMethod("ZoneResultsRefusal");
+        Console.WriteLine("ZoneResultsRefusal=" + (m == null ? "(absent: baseline)" : (string)m.Invoke(null, new object[] { spaces, results }) ?? "null (accepted)"));
+        return 0;
+    }
+}
