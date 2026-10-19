@@ -157,7 +157,8 @@ namespace SAM.Analytical.Tas.Benchmark
             };
 
             Stopwatch stopwatch = Stopwatch.StartNew();
-            AnalyticalModel calculated = RunWithTimeout(() => new WorkflowCalculator(settings).Calculate(model), timeout, out bool timedOut, out Exception runError);
+            WorkflowCalculator workflowCalculator = new WorkflowCalculator(settings);
+            AnalyticalModel calculated = RunWithTimeout(() => workflowCalculator.Calculate(model), timeout, out bool timedOut, out Exception runError);
             stopwatch.Stop();
 
             AnalyticalModel resultModel = calculated ?? model;
@@ -193,6 +194,12 @@ namespace SAM.Analytical.Tas.Benchmark
                 {
                     context.Notes.Add("The TAS run did not complete successfully; measurements are unavailable.");
                     context.Warnings.Add(runError.Message);
+                }
+                else if (calculated == null)
+                {
+                    // The workflow returned no model - for a refused simulation, a fail-closed refusal whose TAS return
+                    // code and error log are in its diagnostics. Not the missing-TSD note: a refused run leaves a stub TSD.
+                    Producer.AddWorkflowFailure(context, workflowCalculator.GetDiagnostics());
                 }
                 else if (!tsdExists)
                 {

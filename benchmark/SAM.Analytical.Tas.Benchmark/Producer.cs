@@ -120,6 +120,40 @@ namespace SAM.Analytical.Tas.Benchmark
         }
 
         /// <summary>
+        /// Records a workflow that returned no model: every Error the workflow reported (for a refused simulation, the
+        /// TAS return code and error log path) becomes a warning of the B1a document, prefixed with its code, and one
+        /// note states the outcome. The run state and exit code are decided by the caller as before (Failure, exit 5).
+        /// </summary>
+        /// <param name="context">The run context the document is built from.</param>
+        /// <param name="diagnostics">What the workflow reported for this run (<c>WorkflowCalculator.GetDiagnostics()</c>); may be null.</param>
+        public static void AddWorkflowFailure(TasBenchmarkContext context, IEnumerable<Core.Diagnostic> diagnostics)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            int count = 0;
+            if (diagnostics != null)
+            {
+                foreach (Core.Diagnostic diagnostic in diagnostics)
+                {
+                    if (diagnostic == null || diagnostic.Severity != Core.DiagnosticSeverity.Error || string.IsNullOrWhiteSpace(diagnostic.Message))
+                    {
+                        continue;
+                    }
+
+                    context.Warnings.Add(string.IsNullOrWhiteSpace(diagnostic.Code) ? diagnostic.Message : diagnostic.Code + ": " + diagnostic.Message);
+                    count++;
+                }
+            }
+
+            context.Notes.Add(count != 0
+                ? "The TAS workflow refused the run (see warnings: the simulation failure, with the TAS return code and error log where TAS gave one); measurements are unavailable."
+                : "The TAS workflow returned no model and reported no error; measurements are unavailable.");
+        }
+
+        /// <summary>
         /// Returns the first path this run would write that resolves to the same file as the input
         /// model — or null when there is no collision. A TAS run writes the TBD and, from the same
         /// stem, the <c>.tsd</c>/<c>.t3d</c>/<c>.json</c> sidecar/<c>.timing.csv</c>; the producer also

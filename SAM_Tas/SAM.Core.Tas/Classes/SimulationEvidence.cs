@@ -38,6 +38,12 @@ namespace SAM.Core.Tas
         /// <summary>The ~22-byte TSD TAS writes when no weather data is installed. Anything at or below this is not a result set.</summary>
         public const long TrivialOutputLengthThreshold = 1024;
 
+        /// <summary><c>TBDDocument.simulate</c> returned this: the simulation ran. Still judged on its output and error log.</summary>
+        public const int NativeReturnCode_Ran = -1;
+
+        /// <summary><c>TBDDocument.simulate</c> returned this: TAS refused the simulation (it still writes a stub TSD and usually an error log).</summary>
+        public const int NativeReturnCode_Refused = 0;
+
         /// <summary>
         /// Opens an evidence record for a run about to be made.
         /// </summary>
@@ -131,6 +137,16 @@ namespace SAM.Core.Tas
         /// <c>null</c> for a shape whose call returns nothing, or when the call threw.
         /// </summary>
         public string NativeDiagnostic { get; private set; }
+
+        /// <summary>
+        /// The integer <c>TBDDocument.simulate</c> returned (<see cref="NativeReturnCode_Ran"/> or
+        /// <see cref="NativeReturnCode_Refused"/>, or an unexpected value, which refuses). <c>null</c> when no return code
+        /// was recorded, or when what came back was not an integer - the raw value is then in the refusal text.
+        /// </summary>
+        public int? NativeReturnCode { get; private set; }
+
+        /// <summary>Whether <see cref="RecordCallReturned(object)"/> was called, whatever it was given.</summary>
+        public bool NativeReturnCodeRecorded { get; private set; }
 
         /// <summary>What <see cref="NativeDiagnostic"/> was classified as. See <see cref="SimulationDiagnostic"/>.</summary>
         public SimulationDiagnosticKind NativeDiagnosticKind { get; private set; } = SimulationDiagnosticKind.Silent;
@@ -353,6 +369,125 @@ namespace SAM.Core.Tas
             }
         }
 
+        /// <summary>
+        /// Stage 2 for <c>TBDDocument.simulate</c>, which answers with an integer: <see cref="NativeReturnCode_Ran"/>
+        /// (<c>-1</c>) when the simulation ran and <see cref="NativeReturnCode_Refused"/> (<c>0</c>) when TAS refused it.
+        /// <para>
+        /// A refusal still writes a stub TSD - measured at 22 bytes, and larger stubs are possible - so the output file
+        /// cannot be what decides; this code does. Anything else fails closed: an integer other than <c>-1</c> or
+        /// <c>0</c>, <c>null</c>, or a value that is not an integer at all. The raw value is preserved in the refusal.
+        /// <c>-1</c> is necessary but not sufficient: <see cref="Conclude"/> still requires a fresh, non-trivial output
+        /// and no error log attributable to this run.
+        /// </para>
+        /// </summary>
+        /// <returns>True only for <see cref="NativeReturnCode_Ran"/>.</returns>
+        public bool RecordCallReturned(object nativeReturnCode)
+        {
+            NativeReturnCodeRecorded = true;
+            NativeReturnCode = null;
+
+            int code;
+            if (nativeReturnCode == null)
+            {
+                CallReturned = false;
+                Refuse(string.Concat("TAS returned no return code (null) from TBDDocument.simulate, so the run fails closed.", NativeContext()));
+                return false;
+            }
+
+            if (!TryGetInteger(nativeReturnCode, out code))
+            {
+                CallReturned = false;
+                Refuse(
+                    string.Format(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        "TAS returned a value that is not an integer return code from TBDDocument.simulate (\"{0}\", {1}), so the run fails closed.{2}",
+                        nativeReturnCode,
+                        nativeReturnCode.GetType().FullName,
+                        NativeContext()));
+                return false;
+            }
+
+            NativeReturnCode = code;
+
+            if (code == NativeReturnCode_Ran)
+            {
+                CallReturned = true;
+                Note(string.Format(
+                    "TAS returned {0} from TBDDocument.simulate (the simulation ran). Positive evidence, but not the gate - "
+                    + "the output and the error log still decide.",
+                    code));
+                return true;
+            }
+
+            CallReturned = false;
+
+            if (code == NativeReturnCode_Refused)
+            {
+                Refuse(string.Concat("TAS refused the simulation: TBDDocument.simulate returned 0.", NativeContext()));
+                return false;
+            }
+
+            Refuse(
+                string.Format(
+                    "TAS returned an unexpected code {0} from TBDDocument.simulate; only -1 (ran) and 0 (refused) are known, "
+                    + "so the run fails closed.{1}",
+                    code,
+                    NativeContext()));
+            return false;
+        }
+
+        private static bool TryGetInteger(object value, out int code)
+        {
+            code = 0;
+            switch (value)
+            {
+                case int @int:
+                    code = @int;
+                    return true;
+                case short @short:
+                    code = @short;
+                    return true;
+                case sbyte @sbyte:
+                    code = @sbyte;
+                    return true;
+                case byte @byte:
+                    code = @byte;
+                    return true;
+                case ushort @ushort:
+                    code = @ushort;
+                    return true;
+                case long @long when @long >= int.MinValue && @long <= int.MaxValue:
+                    code = (int)@long;
+                    return true;
+                case uint @uint when @uint <= int.MaxValue:
+                    code = (int)@uint;
+                    return true;
+                case ulong @ulong when @ulong <= int.MaxValue:
+                    code = (int)@ulong;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// " TAS return code: …; TAS error log: …" for a refusal of a run whose native return code was recorded, so
+        /// whoever reads the refusal can find what TAS said without the rest of the record. Empty otherwise, which keeps
+        /// every refusal of a run that records no code exactly as it was.
+        /// </summary>
+        private string NativeContext()
+        {
+            if (!NativeReturnCodeRecorded)
+            {
+                return string.Empty;
+            }
+
+            return string.Format(
+                " TAS return code: {0}; TAS error log: {1}.",
+                NativeReturnCode.HasValue ? NativeReturnCode.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "none",
+                string.IsNullOrWhiteSpace(Path_ErrorLog) ? "(no document path)" : Path_ErrorLog);
+        }
+
         /// <summary>Stage 2, failed. The COM call threw, or the document could not be opened.</summary>
         public void RecordCallFailed(string reason)
         {
@@ -398,7 +533,7 @@ namespace SAM.Core.Tas
         {
             if (UtcResultAfter == null)
             {
-                Refuse(string.Concat("The run produced no output file: ", path_Result));
+                Refuse(string.Concat("The run produced no output file: ", path_Result, NativeContext()));
                 return;
             }
 
@@ -409,10 +544,11 @@ namespace SAM.Core.Tas
                 Refuse(
                     string.Format(
                         "The output file predates this run ({0:o} < {1:o}), so it is a leftover and not this "
-                        + "run's result: {2}.",
+                        + "run's result: {2}.{3}",
                         UtcResultAfter,
                         UtcStarted,
-                        path_Result));
+                        path_Result,
+                        NativeContext()));
                 return;
             }
 
@@ -421,10 +557,11 @@ namespace SAM.Core.Tas
                 Refuse(
                     string.Format(
                         "The output file is {0} bytes, at or below the {1}-byte threshold that marks the stub TAS "
-                        + "writes when it produced no results: {2}.",
+                        + "writes when it produced no results: {2}.{3}",
                         ResultLengthAfter,
                         TrivialOutputLengthThreshold,
-                        path_Result));
+                        path_Result,
+                        NativeContext()));
                 return;
             }
 
@@ -538,8 +675,11 @@ namespace SAM.Core.Tas
 
             Refuse(
                 string.Format(
-                    "TAS wrote an error log for this run: {0}{1}{2}",
+                    "TAS wrote an error log for this run: {0}{1}{2}{3}",
                     Path_ErrorLog,
+                    NativeReturnCodeRecorded
+                        ? string.Format(" (TAS return code: {0})", NativeReturnCode.HasValue ? NativeReturnCode.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "none")
+                        : string.Empty,
                     Environment.NewLine,
                     (ErrorLogText ?? string.Empty).Trim()));
         }
