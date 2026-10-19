@@ -68,5 +68,70 @@ namespace SAM.Analytical.Tas.TM59.Tests
             Assert.That(workflowCalculator.Calculate(null), Is.Null);
             Assert.That(workflowCalculator.Notes, Is.Empty);
         }
+
+        // ------------------------------------------------------------------ S01a: a refused simulation
+
+        private static Core.Tas.SimulationEvidence RefusedEvidence(string directory)
+        {
+            string path_TBD = System.IO.Path.Combine(directory, "run.tbd");
+            System.IO.File.WriteAllBytes(path_TBD, new byte[4096]);
+            string path_TSD = System.IO.Path.Combine(directory, "run.tsd");
+
+            Core.Tas.SimulationEvidence simulationEvidence = new Core.Tas.SimulationEvidence(Core.Tas.SimulationOutputShape.SeparateOutputFile, path_TBD, path_TSD);
+            simulationEvidence.Prepare(System.DateTime.UtcNow.AddSeconds(-1));
+            System.IO.File.WriteAllBytes(path_TSD, new byte[22]);
+            System.IO.File.WriteAllText(Core.Tas.SimulationEvidence.ErrorLogPath(path_TBD), "Simulation Failed");
+            simulationEvidence.RecordCallReturned((object)0);
+            simulationEvidence.Conclude();
+            return simulationEvidence;
+        }
+
+        [Test]
+        public void A8_ARefusedSimulation_ReachesNotesAndDiagnostics_AsTASSIM001Errors()
+        {
+            string directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SAM_S01a_Workflow", System.Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(directory);
+            try
+            {
+                Core.Tas.SimulationEvidence simulationEvidence = RefusedEvidence(directory);
+                Assert.That(simulationEvidence.Completed, Is.False, "fixture: a refused run");
+
+                WorkflowCalculator workflowCalculator = new WorkflowCalculator();
+                MethodInfo methodInfo = typeof(WorkflowCalculator).GetMethod("AddSimulationRefusals", BindingFlags.NonPublic | BindingFlags.Instance);
+                Assert.That(methodInfo, Is.Not.Null, "the one place a refused simulation is written to the workflow's diagnostics");
+                methodInfo.Invoke(workflowCalculator, new object[] { simulationEvidence });
+
+                List<Core.Diagnostic> diagnostics = new List<Core.Diagnostic>(workflowCalculator.GetDiagnostics(Core.DiagnosticDetail.Summary));
+                string path_ErrorLog = Core.Tas.SimulationEvidence.ErrorLogPath(System.IO.Path.Combine(directory, "run.tbd"));
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(diagnostics, Has.Count.EqualTo(simulationEvidence.Refusals.Count), "one Error per refusal");
+                    Assert.That(diagnostics.ConvertAll(x => x.Severity), Is.All.EqualTo(Core.DiagnosticSeverity.Error));
+                    Assert.That(diagnostics.ConvertAll(x => x.Code), Is.All.EqualTo(Core.Tas.TasDiagnosticCodes.SimulationRefusal));
+                    Assert.That(diagnostics.ConvertAll(x => x.Message), Has.Some.Contains("TAS return code: 0"));
+                    Assert.That(diagnostics.ConvertAll(x => x.Message), Has.Some.Contains(path_ErrorLog));
+                    Assert.That(workflowCalculator.Notes, Is.EqualTo(simulationEvidence.Refusals), "the legacy text is the refusals verbatim");
+                });
+            }
+            finally
+            {
+                try { System.IO.Directory.Delete(directory, true); } catch { }
+            }
+        }
+
+        [Test]
+        public void Calculate_ResetsTheLastRunsSimulationEvidence()
+        {
+            WorkflowCalculator workflowCalculator = new WorkflowCalculator();
+            PropertyInfo propertyInfo = typeof(WorkflowCalculator).GetProperty("SimulationEvidence");
+            Assert.That(propertyInfo, Is.Not.Null);
+
+            propertyInfo.SetValue(workflowCalculator, new Core.Tas.SimulationEvidence(Core.Tas.SimulationOutputShape.SeparateOutputFile, "a.tbd", "a.tsd"));
+            Assert.That(workflowCalculator.SimulationEvidence, Is.Not.Null, "control: a previous run's evidence");
+
+            Assert.That(workflowCalculator.Calculate(null), Is.Null);
+            Assert.That(workflowCalculator.SimulationEvidence, Is.Null, "a run that did not simulate must not expose a previous run's evidence");
+        }
     }
 }

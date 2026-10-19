@@ -13,60 +13,16 @@ namespace SAM.Analytical.Tas
             return Simulate(path_TBD, path_TSD, day_First, day_Last, SizingType.Undefined, null);
         }
 
+        /// <summary>
+        /// Simulates a TBD to a separate TSD. Decided by <see cref="SimulationEvidence"/>: true only when TAS returned
+        /// -1 and the run left a fresh, non-trivial TSD and no error log. A refusal (TAS returns 0 and still writes a
+        /// stub TSD) is false. Use the overload with the evidence <c>out</c> parameter to learn why.
+        /// </summary>
         public static bool Simulate(string path_TBD, string path_TSD, int day_First, int day_Last, SizingType sizingType, IEnumerable<SurfaceOutputSpec> surfaceOutputSpecs)
         {
-            if (string.IsNullOrWhiteSpace(path_TBD) || string.IsNullOrWhiteSpace(path_TSD))
-                return false;
+            Simulate(path_TBD, path_TSD, day_First, day_Last, sizingType, surfaceOutputSpecs, out SimulationEvidence simulationEvidence);
 
-            bool result = false;
-
-            using (SAMTBDDocument sAMTBDDocument = new (path_TBD))
-            {
-                TBD.TBDDocument tBDDocument = sAMTBDDocument?.TBDDocument;
-                if (tBDDocument == null)
-                    return false;
-
-                bool dirty = false;
-
-                if (sizingType != SizingType.Undefined)
-                {
-                    SetSizingTypes(tBDDocument.Building, sizingType);
-                    dirty = true;
-                }
-
-                SurfaceOutputSpec firstSpec = null;
-                if (surfaceOutputSpecs != null)
-                {
-                    foreach (SurfaceOutputSpec spec in surfaceOutputSpecs)
-                    {
-                        if (spec == null)
-                            continue;
-                        if (firstSpec == null)
-                            firstSpec = spec;
-                    }
-                }
-
-                if (firstSpec != null)
-                {
-                    Core.Tas.Modify.UpdateSurfaceOutputSpecs(tBDDocument, surfaceOutputSpecs);
-                    Core.Tas.Modify.AssignSurfaceOutputSpecs(tBDDocument, firstSpec.Name);
-                    dirty = true;
-                }
-
-                if (dirty)
-                {
-                    sAMTBDDocument.Save();
-                }
-
-                result = Simulate(tBDDocument, path_TSD, day_First, day_Last);
-
-                if (result)
-                {
-                    sAMTBDDocument.Save();
-                }
-            }
-
-            return result;
+            return simulationEvidence.Completed;
         }
 
         public static bool Simulate(SAMTBDDocument sAMTBDDocument, string path_TSD, int day_First, int day_Last)
@@ -79,9 +35,35 @@ namespace SAM.Analytical.Tas
             if (tBDDocument == null || string.IsNullOrWhiteSpace(path_TSD))
                 return false;
 
-            tBDDocument.simulate(day_First, day_Last, 0, 1, 0, 0, path_TSD, 1, 0);
+            return SimulateToTSD(() => tBDDocument.simulate(day_First, day_Last, 0, 1, 0, 0, path_TSD, 1, 0), path_TSD, out SimulationEvidence _);
+        }
 
-            return Core.Query.WaitToUnlock(path_TSD);
+        /// <summary>
+        /// The document-level decision, held to the same <see cref="SimulationEvidence"/> rules as the path overloads:
+        /// a leftover TSD and error log are cleared first, then success needs TAS to return -1, the TSD to be fresh and
+        /// non-trivial, and no error log for this run. A <c>TBDDocument</c> carries no path, so the record is keyed on
+        /// the TSD: TAS writes <c>&lt;tsd basename&gt;_error_log.txt</c> beside the TSD (measured 2026-10-19 with a TBD
+        /// and TSD of different names and folders). <paramref name="simulate"/> performs the COM call; a throw from it
+        /// propagates, as before.
+        /// </summary>
+        private static bool SimulateToTSD(System.Func<int> simulate, string path_TSD, out SimulationEvidence simulationEvidence)
+        {
+            simulationEvidence = new SimulationEvidence(SimulationOutputShape.SeparateOutputFile, path_TSD, path_TSD);
+            simulationEvidence.Prepare(System.DateTime.UtcNow);
+
+            if (simulationEvidence.Refusals.Count != 0)
+            {
+                return false;
+            }
+
+            int nativeReturnCode = simulate();
+
+            bool unlocked = Core.Query.WaitToUnlock(path_TSD);
+
+            simulationEvidence.RecordCallReturned((object)nativeReturnCode);
+            simulationEvidence.Conclude();
+
+            return unlocked && simulationEvidence.Completed;
         }
 
         /// <summary>
@@ -101,6 +83,21 @@ namespace SAM.Analytical.Tas
         /// </summary>
         /// <param name="simulationEvidence">What the run left behind. Never null.</param>
         public static bool Simulate(string path_TBD, string path_TSD, int day_First, int day_Last, out SimulationEvidence simulationEvidence)
+        {
+            return Simulate(path_TBD, path_TSD, day_First, day_Last, SizingType.Undefined, null, out simulationEvidence);
+        }
+
+        /// <summary>
+        /// As <see cref="Simulate(string, string, int, int, out SimulationEvidence)"/>, first applying
+        /// <paramref name="sizingType"/> and <paramref name="surfaceOutputSpecs"/> to the TBD (saved before the run when
+        /// either is given). The integer <c>TBDDocument.simulate</c> returns is recorded: -1 (ran) lets the run be judged
+        /// on its output and error log, 0 (refused) or any other value refuses. The TBD is saved after the call only
+        /// when TAS returned -1.
+        /// </summary>
+        /// <param name="sizingType"><see cref="SizingType.Undefined"/> leaves the zones' sizing as it is.</param>
+        /// <param name="surfaceOutputSpecs">Null or empty leaves the surface outputs as they are.</param>
+        /// <param name="simulationEvidence">What the run left behind. Never null.</param>
+        public static bool Simulate(string path_TBD, string path_TSD, int day_First, int day_Last, SizingType sizingType, IEnumerable<SurfaceOutputSpec> surfaceOutputSpecs, out SimulationEvidence simulationEvidence)
         {
             simulationEvidence = new SimulationEvidence(SimulationOutputShape.SeparateOutputFile, path_TBD, path_TSD);
 
@@ -141,13 +138,47 @@ namespace SAM.Analytical.Tas
 
                 try
                 {
-                    tBDDocument.simulate(day_First, day_Last, 0, 1, 0, 0, path_TSD, 1, 0);
+                    bool dirty = false;
+
+                    if (sizingType != SizingType.Undefined)
+                    {
+                        SetSizingTypes(tBDDocument.Building, sizingType);
+                        dirty = true;
+                    }
+
+                    SurfaceOutputSpec firstSpec = null;
+                    if (surfaceOutputSpecs != null)
+                    {
+                        foreach (SurfaceOutputSpec spec in surfaceOutputSpecs)
+                        {
+                            if (spec == null)
+                                continue;
+                            if (firstSpec == null)
+                                firstSpec = spec;
+                        }
+                    }
+
+                    if (firstSpec != null)
+                    {
+                        Core.Tas.Modify.UpdateSurfaceOutputSpecs(tBDDocument, surfaceOutputSpecs);
+                        Core.Tas.Modify.AssignSurfaceOutputSpecs(tBDDocument, firstSpec.Name);
+                        dirty = true;
+                    }
+
+                    if (dirty)
+                    {
+                        sAMTBDDocument.Save();
+                    }
+
+                    int nativeReturnCode = tBDDocument.simulate(day_First, day_Last, 0, 1, 0, 0, path_TSD, 1, 0);
 
                     // A wait, not a verdict: the file may still be being written when the call returns.
                     Core.Query.WaitToUnlock(path_TSD);
 
-                    simulationEvidence.RecordCallReturned();
-                    sAMTBDDocument.Save();
+                    if (simulationEvidence.RecordCallReturned((object)nativeReturnCode))
+                    {
+                        sAMTBDDocument.Save();
+                    }
                 }
                 catch (System.Exception exception)
                 {

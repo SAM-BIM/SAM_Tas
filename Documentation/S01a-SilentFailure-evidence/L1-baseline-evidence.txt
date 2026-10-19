@@ -1,0 +1,9 @@
+mode=evidence SAM.Analytical.Tas=de942e4013cd65e1 SAM.Core.Tas=f1d5d82bee8b0c75
+evidence.Simulate=False Completed=False
+evidence.NativeReturnCode=(property absent: baseline)
+evidence.ToString=Simulation NOT evidenced (SeparateOutputFile): C:\TasOut\s01a\L\base-evidence\izam.tbd - TAS wrote an error log for this run: C:\TasOut\s01a\L\base-evidence\izam_error_log.txt | Simulation Failed; The output file is 22 bytes, at or below the 1024-byte threshold that marks the stub TAS writes when it produced no results: C:\TasOut\s01a\L\base-evidence\izam.tsd.
+evidence.refusal=TAS wrote an error log for this run: C:\TasOut\s01a\L\base-evidence\izam_error_log.txt | Simulation Failed
+evidence.refusal=The output file is 22 bytes, at or below the 1024-byte threshold that marks the stub TAS writes when it produced no results: C:\TasOut\s01a\L\base-evidence\izam.tsd.
+tsd.exists=True tsd.bytes=22 tsd.utc=2026-10-19T15:57:25.5121799Z
+errorlog=C:\TasOut\s01a\L\base-evidence\izam_error_log.txt exists=True
+errorlog.text=Simulation Failed

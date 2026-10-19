@@ -1,0 +1,5 @@
+mode=addresults SAM.Analytical.Tas=78757bb8094849bd SAM.Core.Tas=5721376afb0d3da3
+addresults.null=False count=28
+addresults.SpaceSimulationResult=2
+addresults.SurfaceSimulationResult=26
+ZoneResultsRefusal=null (accepted)

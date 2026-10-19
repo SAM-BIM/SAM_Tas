@@ -1,0 +1,16 @@
+== baseline C:\TasOut\s01a\L\doc\b-izam\m.tsd
+document.Simulate(SAMTBDDocument,tsd,1,365)=True
+tsd.exists=True tsd.bytes=22 tsdlog=C:\TasOut\s01a\L\doc\b-izam\m_error_log.txt exists=True
+== candidate C:\TasOut\s01a\L\doc\c-izam\m.tsd
+document.Simulate(SAMTBDDocument,tsd,1,365)=False
+tsd.exists=True tsd.bytes=22 tsdlog=C:\TasOut\s01a\L\doc\c-izam\m_error_log.txt exists=True
+== candidate C:\TasOut\s01a\L\doc\c-ok\m.tsd
+document.Simulate(SAMTBDDocument,tsd,1,365)=True
+tsd.exists=True tsd.bytes=1034903 tsdlog=C:\TasOut\s01a\L\doc\c-ok\m_error_log.txt exists=False
+(leftover TSD before run: 1034888 bytes)
+== candidate C:\TasOut\s01a\L\doc\c-leftover\m.tsd
+document.Simulate(SAMTBDDocument,tsd,1,365)=False
+tsd.exists=True tsd.bytes=22 tsdlog=C:\TasOut\s01a\L\doc\c-leftover\m_error_log.txt exists=True
+== candidate C:\TasOut\s01a\L\doc\c-ok-diff\tsd\beta.tsd
+document.Simulate(SAMTBDDocument,tsd,1,365)=True
+tsd.exists=True tsd.bytes=1034870 tsdlog=C:\TasOut\s01a\L\doc\c-ok-diff\tsd\beta_error_log.txt exists=False

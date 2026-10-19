@@ -1,0 +1,4 @@
+mode=rawsim SAM.Analytical.Tas=de942e4013cd65e1 SAM.Core.Tas=f1d5d82bee8b0c75
+native.simulate.return=-1
+tsd.exists=True tsd.bytes=1034856 tsd.utc=2026-10-19T15:57:17.0159945Z
+errorlog=C:\TasOut\s01a\L\raw\ok_error_log.txt exists=False

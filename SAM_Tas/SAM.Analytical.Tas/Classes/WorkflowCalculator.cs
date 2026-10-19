@@ -129,6 +129,31 @@ namespace SAM.Analytical.Tas
         public WorkflowSettings WorkflowSettings { get; set; }
 
         /// <summary>
+        /// What the last run's simulation left behind (the TAS return code, the TSD and the error log), or null when the
+        /// last run did not simulate. Reset at the start of every <see cref="Calculate(AnalyticalModel, bool)"/>.
+        /// </summary>
+        public SimulationEvidence SimulationEvidence { get; private set; }
+
+        /// <summary>
+        /// Writes a simulation that is not evidenced as Error notes (<see cref="TasDiagnosticCodes.SimulationRefusal"/>),
+        /// one per refusal, so the TAS return code and error log path reach <see cref="Notes"/> and the diagnostics.
+        /// </summary>
+        private void AddSimulationRefusals(SimulationEvidence simulationEvidence)
+        {
+            List<string> refusals = simulationEvidence?.Refusals;
+            if (refusals == null || refusals.Count == 0)
+            {
+                AddNote(simulationEvidence?.ToString() ?? "The simulation is not evidenced and no reason was recorded.", Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.SimulationRefusal);
+                return;
+            }
+
+            foreach (string refusal in refusals)
+            {
+                AddNote(refusal, Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.SimulationRefusal);
+            }
+        }
+
+        /// <summary>
         /// Optional cooperative cancellation. Defaults to <see cref="System.Threading.CancellationToken.None"/>
         /// so existing callers (e.g. the benchmark CLI) are unaffected. It is observed once per stage in
         /// <see cref="Step"/>, so a cancel aborts before the next step begins; it does NOT interrupt the
@@ -265,6 +290,7 @@ namespace SAM.Analytical.Tas
             //validation gate below, so a run rejected there leaves no previous run's notes visible either.
             notes.Clear();
             diagnostics.Clear();
+            SimulationEvidence = null;
 
             Started?.Invoke(this, new System.EventArgs());
 
@@ -856,7 +882,19 @@ namespace SAM.Analytical.Tas
             if (WorkflowSettings.Simulate)
             {
                 Step("Simulating Model");
-                Modify.Simulate(WorkflowSettings.Path_TBD, path_TSD, WorkflowSettings.SimulateFrom, WorkflowSettings.SimulateTo, SizingType.Undefined, hasSurfaceOutputSpecs ? WorkflowSettings.SurfaceOutputSpecs : null);
+                bool simulated = Modify.Simulate(WorkflowSettings.Path_TBD, path_TSD, WorkflowSettings.SimulateFrom, WorkflowSettings.SimulateTo, SizingType.Undefined, hasSurfaceOutputSpecs ? WorkflowSettings.SurfaceOutputSpecs : null, out SimulationEvidence simulationEvidence);
+                SimulationEvidence = simulationEvidence;
+
+                //A refused or unevidenced simulation ends the run here, before its TSD is read: nothing of it is
+                //persisted, and the TAS return code and error log path reach the caller as Error diagnostics.
+                if (!simulated)
+                {
+                    AddSimulationRefusals(simulationEvidence);
+
+                    Ended?.Invoke(this, new System.EventArgs());
+
+                    return null;
+                }
             }
 
             if (!WorkflowSettings.Simulate)
@@ -869,6 +907,17 @@ namespace SAM.Analytical.Tas
             Step("Adding Results");
             adjacencyCluster = result.AdjacencyCluster;
             List<Result> results = Modify.AddResults(path_TSD, adjacencyCluster);
+
+            string refusal_ZoneResults = Query.ZoneResultsRefusal(adjacencyCluster?.GetSpaces()?.Count ?? 0, results);
+            if (refusal_ZoneResults != null)
+            {
+                SimulationEvidence?.Refuse(refusal_ZoneResults);
+                AddNote(refusal_ZoneResults, Core.DiagnosticSeverity.Error, Core.DiagnosticDetail.Summary, TasDiagnosticCodes.SimulationRefusal);
+
+                Ended?.Invoke(this, new System.EventArgs());
+
+                return null;
+            }
 
             if (WorkflowSettings.UnmetHours)
             {

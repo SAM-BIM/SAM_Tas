@@ -1,0 +1,4 @@
+mode=legacy SAM.Analytical.Tas=78757bb8094849bd SAM.Core.Tas=5721376afb0d3da3
+legacy.Simulate(path,path,1,365)=True
+tsd.exists=True tsd.bytes=1034863 tsd.utc=2026-10-19T16:19:28.9224202Z
+errorlog=C:\TasOut\s01a\L\cand-legacy-ok\ok_error_log.txt exists=False
