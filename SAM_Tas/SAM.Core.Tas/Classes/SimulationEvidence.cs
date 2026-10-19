@@ -78,7 +78,12 @@ namespace SAM.Core.Tas
                     + "document it simulated, and claiming a distinct output would be false.");
             }
 
-            Path_ErrorLog = ErrorLogPath(path_Document);
+            // TAS writes the log beside the file it writes, under that file's basename: for a separate-output run that is
+            // the TSD (measured 2026-10-19: alpha.tbd simulated to beta.tsd logged beta_error_log.txt beside the TSD).
+            Path_ErrorLog = ErrorLogPath(
+                simulationOutputShape == SimulationOutputShape.SeparateOutputFile && !string.IsNullOrWhiteSpace(path_Output)
+                    ? path_Output
+                    : path_Document);
         }
 
         /// <summary>Where this run writes its results.</summary>
@@ -117,7 +122,10 @@ namespace SAM.Core.Tas
         /// <summary>Post-call length of <see cref="Path_Result"/>; 0 when it does not exist.</summary>
         public long ResultLengthAfter { get; private set; }
 
-        /// <summary><c>&lt;document basename&gt;_error_log.txt</c> - where TAS states a rejected model.</summary>
+        /// <summary>
+        /// Where TAS states a rejected model: <c>&lt;TSD basename&gt;_error_log.txt</c> beside the TSD for a separate-output
+        /// run, <c>&lt;document basename&gt;_error_log.txt</c> beside the document for an in-place run.
+        /// </summary>
         public string Path_ErrorLog { get; }
 
         /// <summary>Whether an error log was present before the run, and therefore could be mistaken for this run's.</summary>
@@ -194,8 +202,8 @@ namespace SAM.Core.Tas
         }
 
         /// <summary>
-        /// The path TAS writes a failure to for a given document: <c>&lt;basename&gt;_error_log.txt</c>
-        /// beside it.
+        /// The path TAS writes a failure to for a given file: <c>&lt;basename&gt;_error_log.txt</c> beside it. For a
+        /// separate-output run pass the TSD (see <see cref="Path_ErrorLog"/>).
         /// </summary>
         public static string ErrorLogPath(string path_Document)
         {

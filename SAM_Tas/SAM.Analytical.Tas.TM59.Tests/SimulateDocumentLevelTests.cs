@@ -81,6 +81,10 @@ namespace SAM.Analytical.Tas.TM59.Tests
                 if (errorLog != null)
                 {
                     File.WriteAllText(Path_ErrorLog, errorLog);
+
+                    // Same clock-granularity reason as the TSD above: a log stamped before the start line is read as an
+                    // earlier run's, which is the rule for a log that could not be deleted, not what this test exercises.
+                    File.SetLastWriteTimeUtc(Path_ErrorLog, DateTime.UtcNow);
                 }
 
                 return code;
