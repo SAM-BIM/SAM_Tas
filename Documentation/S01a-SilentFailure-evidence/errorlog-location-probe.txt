@@ -1,0 +1,10 @@
+mode=rawsim SAM.Analytical.Tas=78757bb8094849bd SAM.Core.Tas=5721376afb0d3da3
+native.simulate.return=0
+tsd.exists=True tsd.bytes=22 tsd.utc=2026-10-19T17:10:41.2618150Z
+errorlog=C:\TasOut\s01a\L\logloc\tbddir\alpha_error_log.txt exists=False
+  /c/TasOut/s01a/L/logloc/tbddir:
+  alpha.tbd
+  
+  /c/TasOut/s01a/L/logloc/tsddir:
+  beta.tsd
+  beta_error_log.txt

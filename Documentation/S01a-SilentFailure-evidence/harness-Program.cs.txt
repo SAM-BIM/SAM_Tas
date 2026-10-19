@@ -25,6 +25,7 @@ public static class Program
             case "workflow": return Workflow(args[1], args[2], args[3]);
             case "addresults": return AddResults(args[1], args[2]);
             case "mktsd": return MkTsd(args[1]);
+            case "docsim": return DocSim(args[1], args[2]);
         }
         Console.WriteLine("unknown mode");
         return 2;
@@ -146,6 +147,18 @@ public static class Program
                 Console.WriteLine("diag " + d.Severity + " " + d.Code + " [" + d.Subject + "] " + d.Message.Replace("\r\n", " | ").Replace("\n", " | "));
         Console.WriteLine("json.exists=" + File.Exists(Path.ChangeExtension(path_TBD, ".json")));
         Files(path_TBD, path_TSD);
+        return 0;
+    }
+
+    // The document-level overload, on a real TBD.
+    static int DocSim(string path_TBD, string path_TSD)
+    {
+        bool result;
+        using (SAMTBDDocument doc = new SAMTBDDocument(path_TBD))
+            result = SAM.Analytical.Tas.Modify.Simulate(doc, path_TSD, 1, 365);
+        Console.WriteLine("document.Simulate(SAMTBDDocument,tsd,1,365)=" + result);
+        string log = SimulationEvidence.ErrorLogPath(path_TSD);
+        Console.WriteLine("tsd.exists=" + File.Exists(path_TSD) + " tsd.bytes=" + (File.Exists(path_TSD) ? new FileInfo(path_TSD).Length : 0) + " tsdlog=" + log + " exists=" + File.Exists(log));
         return 0;
     }
 

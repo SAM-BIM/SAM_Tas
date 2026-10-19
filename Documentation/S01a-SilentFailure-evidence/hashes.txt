@@ -3,10 +3,13 @@
 de942e4013cd65e181d5f4d4bfe3baa9cc55c85f5acaf9e3f8be0492dbc90aea *build/SAM.Analytical.Tas.dll
 f1d5d82bee8b0c75b58b61652593ab936dc16980fc24c070a92d7f99f7f4632c *build/SAM.Core.Tas.dll
 58285ec19ba36df6e4ebe113f3dab49dbb863ff3fe3e42e90a3f915457ed22f6 *build/benchmark-tas.dll
-## candidate 6ccc2d53 (final)
-78757bb8094849bd8d249757026b3d05f85a8f4c981a2a7fe043de29e40442fa *build-candidate/SAM.Analytical.Tas.dll
-5721376afb0d3da393fe4fb0ea7303bfc793a85041b649c56cb91a76235903ed *build-candidate/SAM.Core.Tas.dll
-a9cb2688a3f0f5f2f83cd8cd0e15a7c0a946cd7a767a805c0830193e2a8b6483 *build-candidate/benchmark-tas.dll
+## candidate 0b0257ee (final; L2 rerun, document-level checks)
+6fe9bc41929af171859c1a8badbded604e83c32d8444790e7e6f3638b0bcc772 *build-candidate/SAM.Analytical.Tas.dll
+e8227dcb626f5409a4da1dfbc29f493d76e401ba923e787447b53f55edeaceda *build-candidate/SAM.Core.Tas.dll
+06c61eb358fbca401a7cdfe5a39ceb40d793b42c4c77f1204fab51f80b9e191b *build-candidate/benchmark-tas.dll
+## candidate 6ccc2d53 (L1, L3, L4)
+78757bb8094849bd8d249757026b3d05f85a8f4c981a2a7fe043de29e40442fa *SAM.Analytical.Tas.dll
+5721376afb0d3da393fe4fb0ea7303bfc793a85041b649c56cb91a76235903ed *SAM.Core.Tas.dll
 ## inputs
 472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3 */c/TasOut/s01a/inputs/Budapest.epw
 99ba2ab9db625d3872e5087f6c47bb50427bbd5fa2f7e110202242a4fcd5ca23 */c/TasOut/s01a/inputs/box-aperture.json
