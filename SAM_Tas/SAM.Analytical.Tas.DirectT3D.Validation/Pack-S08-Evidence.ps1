@@ -64,6 +64,12 @@ foreach ($run in @{ 'calib-box-repeat' = 'diff-writer.json'; 'calib-box-sizing' 
     Put (Join-Path $Root "$($run.Key)\$($run.Value)") "runs\$($run.Key)\$($run.Value)"
 }
 
+# Present when the run re-read an earlier approved Sizing run: that run's own Sizing=false box, the diff baseline.
+if (Test-Path (Join-Path $Root 'calib-box-sizing-baseline')) {
+    Put (Join-Path $Root 'calib-box-sizing-baseline\export.json') 'runs\calib-box-sizing-baseline\export.json'
+    Put (Join-Path $Root 'calib-box-sizing-baseline\snapshot.json') 'runs\calib-box-sizing-baseline\snapshot.json' -Gzip
+}
+
 Put (Join-Path $Root 'calib-align\export.json') 'runs\calib-align\export.json'
 foreach ($f in 'input.json', 'weather.json', 'snapshot.json', 'tsd.json') { Put (Join-Path $Root "calib-align\$f") "runs\calib-align\$f" -Gzip }
 

@@ -9,7 +9,9 @@ S08 is not accepted: no fixture was chosen or compared.**
 
 - PR: see the PR description for the number, the final head and the hosted checks.
 - Validated content SHA: `<filled after the re-run at the committed code>`.
-- Offline: core 249/249, read-back 38/38, TM59 1249/1249, benchmark producer 26/26, GenOpt 432/432 (Release, local).
+- Offline (local, Release, on the code of `3d20d0fc`): core 249/249, read-back 39/39 (also on the final evidence), TM59
+  1249/1249, benchmark producer 26/26 (Simulation excluded), GenOpt 432/432. Full `SAM_Tas.sln` Release restore and rebuild
+  succeeded.
 - Licensed (this workstation, Tas 2.0.0.1 dated 2025-06-04): the calibration, compare and negative phases all ran as
   expected. Details below.
 
@@ -55,7 +57,7 @@ dispatches them), and a COM-free test project:
 | `ReadBack/CalibrationModels.cs`, `ReadBack/SnapshotDiff.cs` | Synthetic calibration models. Snapshot diff for the reproducibility controls and the Sizing diff. |
 | `Run-S08-ReadBack.ps1`, `Pack-S08-Evidence.ps1` | One process per step under a watchdog; evidence packing. |
 
-Also added: `SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests` (38 tests), one CI step in
+Also added: `SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests` (39 tests), one CI step in
 `.github/workflows/build.yml`, two `-text` lines in `.gitattributes` (byte-exact evidence and rule table), the evidence
 folder `Documentation/S08-PRB-ReadBack-evidence/` and this record.
 
@@ -140,6 +142,19 @@ Reproducibility controls. The reader read the same TBD in two fresh processes, a
 box twice: both gave **0 differences** over 77,550 (box) and 89,905 (two-zone) leaf values, with only TAS-minted GUIDs
 and reader metadata ignored. The informational Sizing=true export changed only zone `sizeHeating`/`sizeCooling` (2 -> 0)
 and `maxHeatingLoad` (0 -> 751.77 W). **No S07 input changed.**
+
+### Licensed run sequence
+
+| Root (machine-local) | Code | What |
+|---|---|---|
+| `C:\TasOut\s08b\dry` | working tree | Dry run without the approved executions. Not evidence. |
+| `C:\TasOut\s08b\cal1` | working tree on `3d16b5c7` (dirty 4) | **The one P-ALIGN simulation and the one Sizing=true export** (`approved-executions/`), and the first derivation of the committed rules. |
+| `C:\TasOut\s08b\cal2` | `3d20d0fc` (clean) | Re-run, reusing cal1's approved outputs. Same results. Its Sizing diff compared a different model generation, so it was superseded. |
+| `C:\TasOut\s08b\cal3` | harness `direct-t3d-validation.dll` sha256 `a9182e81…`, built from clean `3d20d0fc`; only `Run-S08-ReadBack.ps1` uncommitted (the same-generation Sizing baseline, committed afterwards unchanged) | **The committed evidence.** cal1's approved outputs (P-ALIGN TBD/TSD, Sizing TBD and their own Sizing=false box) were re-read in fresh processes; neither was executed again. |
+
+The calibration models are regenerated on each run, with new SAM GUIDs (`Create.Aperture` mints them). Each run's frozen
+inputs are therefore committed with that run. The rules re-derived at cal2 and cal3 equal the committed table: 0 of 13
+differ.
 
 ## Licensed results (calibration models only)
 

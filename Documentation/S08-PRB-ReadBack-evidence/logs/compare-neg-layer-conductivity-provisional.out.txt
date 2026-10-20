@@ -5,11 +5,11 @@ S08 read-back neg-layer-conductivity (negative check 'layer-conductivity' on a d
   elements by outcome: AcceptedTransformation=1, Match=80810, NotApplicable=5, OutOfTolerance=8, WithinTolerance=86212
   proposed cases (all elements): none
   owner decisions (all elements): 0; technical blockers: 0; informational mismatches: 0
-  NOT PASS Fail 3a panel:6a6dced0-b547-4226-9193-15252a8d60df@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
-  NOT PASS Fail 3b panel:6a6dced0-b547-4226-9193-15252a8d60df@space:5080b000-0000-0000-0000-00000000c001.U
-  NOT PASS Fail 3a panel:6f8138e6-5cd0-4a47-9f9a-11c21f8ec06f@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
-  NOT PASS Fail 3b panel:6f8138e6-5cd0-4a47-9f9a-11c21f8ec06f@space:5080b000-0000-0000-0000-00000000c001.U
-  NOT PASS Fail 3a panel:14a13b39-a5ad-43d0-8218-d0232cc97050@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
-  NOT PASS Fail 3b panel:14a13b39-a5ad-43d0-8218-d0232cc97050@space:5080b000-0000-0000-0000-00000000c001.U
-  NOT PASS Fail 3a panel:c645d09f-aa10-4186-a7f9-257f4e9beaa7@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
-  NOT PASS Fail 3b panel:c645d09f-aa10-4186-a7f9-257f4e9beaa7@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:dae5d8ff-76de-4fd4-83e9-8c677e63da35@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:dae5d8ff-76de-4fd4-83e9-8c677e63da35@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U

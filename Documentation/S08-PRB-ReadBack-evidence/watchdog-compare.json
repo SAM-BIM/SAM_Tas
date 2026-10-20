@@ -1,7 +1,7 @@
 ﻿[
     {
         "step":  "compare-calib-box",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-box --fixture-id calib-box --out C:\\TasOut\\s08b\\cal1\\calib-box\\compare",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-box --fixture-id calib-box --out C:\\TasOut\\s08b\\cal3\\calib-box\\compare",
         "exitCode":  0,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
@@ -9,13 +9,13 @@
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  31144,
-        "startedUtc":  "2026-10-20T20:02:10.1399636Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-calib-box.out.txt"
+        "pid":  13772,
+        "startedUtc":  "2026-10-20T20:20:55.1530516Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-calib-box.out.txt"
     },
     {
         "step":  "compare-provisional-calib-box",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-box --fixture-id calib-box --rule-set provisional --out C:\\TasOut\\s08b\\cal1\\calib-box\\compare-provisional",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-box --fixture-id calib-box --rule-set provisional --out C:\\TasOut\\s08b\\cal3\\calib-box\\compare-provisional",
         "exitCode":  0,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
@@ -23,13 +23,13 @@
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  31024,
-        "startedUtc":  "2026-10-20T20:02:11.4431894Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-provisional-calib-box.out.txt"
+        "pid":  25652,
+        "startedUtc":  "2026-10-20T20:20:56.4846679Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-provisional-calib-box.out.txt"
     },
     {
         "step":  "compare-calib-two",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-two --fixture-id calib-two --out C:\\TasOut\\s08b\\cal1\\calib-two\\compare",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-two --fixture-id calib-two --out C:\\TasOut\\s08b\\cal3\\calib-two\\compare",
         "exitCode":  12,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
@@ -37,64 +37,64 @@
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  7292,
-        "startedUtc":  "2026-10-20T20:02:12.5529316Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-calib-two.out.txt"
+        "pid":  37708,
+        "startedUtc":  "2026-10-20T20:20:57.6350163Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-calib-two.out.txt"
     },
     {
         "step":  "compare-provisional-calib-two",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-two --fixture-id calib-two --rule-set provisional --out C:\\TasOut\\s08b\\cal1\\calib-two\\compare-provisional",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-two --fixture-id calib-two --rule-set provisional --out C:\\TasOut\\s08b\\cal3\\calib-two\\compare-provisional",
         "exitCode":  12,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
-        "seconds":  1.8,
+        "seconds":  1.5,
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  33456,
-        "startedUtc":  "2026-10-20T20:02:14.1153780Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-provisional-calib-two.out.txt"
+        "pid":  31516,
+        "startedUtc":  "2026-10-20T20:20:59.1863860Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-provisional-calib-two.out.txt"
     },
     {
         "step":  "compare-calib-box-repeat",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-box-repeat --fixture-id calib-box-repeat --out C:\\TasOut\\s08b\\cal1\\calib-box-repeat\\compare",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-box-repeat --fixture-id calib-box-repeat --out C:\\TasOut\\s08b\\cal3\\calib-box-repeat\\compare",
         "exitCode":  0,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
-        "seconds":  1.1,
+        "seconds":  1.2,
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  39808,
-        "startedUtc":  "2026-10-20T20:02:15.9732909Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-calib-box-repeat.out.txt"
+        "pid":  37008,
+        "startedUtc":  "2026-10-20T20:21:00.7582957Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-calib-box-repeat.out.txt"
     },
     {
         "step":  "compare-provisional-calib-box-repeat",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-box-repeat --fixture-id calib-box-repeat --rule-set provisional --out C:\\TasOut\\s08b\\cal1\\calib-box-repeat\\compare-provisional",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-box-repeat --fixture-id calib-box-repeat --rule-set provisional --out C:\\TasOut\\s08b\\cal3\\calib-box-repeat\\compare-provisional",
         "exitCode":  0,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
-        "seconds":  1.1,
+        "seconds":  1.4,
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  15888,
-        "startedUtc":  "2026-10-20T20:02:17.0903020Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-provisional-calib-box-repeat.out.txt"
+        "pid":  8368,
+        "startedUtc":  "2026-10-20T20:21:01.9467702Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-provisional-calib-box-repeat.out.txt"
     },
     {
         "step":  "compare-calib-box-sizing",
-        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal1\\calib-box-sizing --fixture-id calib-box-sizing --purpose \"informational Sizing=true run (not the contract route)\" --out C:\\TasOut\\s08b\\cal1\\calib-box-sizing\\compare",
+        "arguments":  "readback-compare --run C:\\TasOut\\s08b\\cal3\\calib-box-sizing --fixture-id calib-box-sizing --purpose \"informational Sizing=true run (not the contract route)\" --out C:\\TasOut\\s08b\\cal3\\calib-box-sizing\\compare",
         "exitCode":  0,
         "expected":  "0,10,11,12,13,14",
         "asExpected":  true,
-        "seconds":  1.3,
+        "seconds":  1.5,
         "timedOut":  false,
         "strayBefore":  "",
         "strayAfter":  "",
-        "pid":  12356,
-        "startedUtc":  "2026-10-20T20:02:18.1844204Z",
-        "stdout":  "C:\\TasOut\\s08b\\cal1\\logs\\compare-calib-box-sizing.out.txt"
+        "pid":  8152,
+        "startedUtc":  "2026-10-20T20:21:03.4244196Z",
+        "stdout":  "C:\\TasOut\\s08b\\cal3\\logs\\compare-calib-box-sizing.out.txt"
     }
 ]

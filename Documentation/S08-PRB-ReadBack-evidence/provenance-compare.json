@@ -1,5 +1,5 @@
 ﻿{
-    "utc":  "2026-10-20T20:02:10.0398674Z",
+    "utc":  "2026-10-20T20:20:54.9948216Z",
     "machine":  "LEGION5MD",
     "phase":  "compare",
     "exe":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Debug\\direct-t3d-validation.exe",
@@ -8,9 +8,9 @@
     "rulesSha256":  "766a88cdbf1294992c2b089502ad2027d6645674f514628c0a039d16a9e42c40",
     "repositories":  {
                          "SAM_Tas":  {
-                                         "head":  "3d16b5c71be99f83335aba64d37aa624c58b2196",
+                                         "head":  "3d20d0fc1918b698a5c7922081c041613f0f6ba8",
                                          "branch":  "feature/s08-tas-readback-harness",
-                                         "dirty":  4
+                                         "dirty":  1
                                      },
                          "SAM":  {
                                      "head":  "ee3771678bcaf8b060c6e40548c5174fe1984516",

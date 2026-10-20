@@ -1,6 +1,6 @@
 {
-  "A": "C:\\TasOut\\s08b\\cal1\\calib-box\\snapshot.json",
-  "B": "C:\\TasOut\\s08b\\cal1\\calib-box-repeat\\snapshot.json",
+  "A": "C:\\TasOut\\s08b\\cal3\\calib-box\\snapshot.json",
+  "B": "C:\\TasOut\\s08b\\cal3\\calib-box-repeat\\snapshot.json",
   "Purpose": "writer control: the same frozen model exported twice",
   "Ignored": [
     "Reader",

@@ -5,25 +5,25 @@ S08 read-back neg-flip-partition (negative check 'flip-partition' on a disposabl
   elements by outcome: Match=113341, NotApplicable=8, OutOfTolerance=20, UnlistedDefault=2, WithinTolerance=123943
   proposed cases (all elements): G1 (S-UNSPEC, native zero, UNLISTED-DEFAULT) -> UnlistedDefault (proposed, OD-G1) x2
   owner decisions (all elements): 1; technical blockers: 0; informational mismatches: 0
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.thickness
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.conductivity
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.density
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.specificHeat
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.externalSolarReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.internalSolarReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.externalLightReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.internalLightReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.externalEmissivity
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer1.internalEmissivity
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.thickness
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.conductivity
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.density
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.specificHeat
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.externalSolarReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.internalSolarReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.externalLightReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.internalLightReflectance
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.externalEmissivity
-  NOT PASS Fail 3a panel:3bf2c5b6-fcab-4deb-ac75-14804df93e10@space:5080b000-0000-0000-0000-00000000c0a1#layer3.internalEmissivity
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.thickness
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.conductivity
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.density
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.specificHeat
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.externalSolarReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.internalSolarReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.externalLightReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.internalLightReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.externalEmissivity
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.internalEmissivity
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.thickness
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.conductivity
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.density
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.specificHeat
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.externalSolarReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.internalSolarReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.externalLightReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.internalLightReflectance
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.externalEmissivity
+  NOT PASS Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer3.internalEmissivity
   NOT PASS BlockedOwnerDecision 8b space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.delivered
   NOT PASS BlockedOwnerDecision 8b space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.delivered

@@ -1,6 +1,6 @@
 {
-  "A": "C:\\TasOut\\s08b\\cal1\\calib-box\\snapshot.json",
-  "B": "C:\\TasOut\\s08b\\cal1\\calib-box\\snapshot.reread.json",
+  "A": "C:\\TasOut\\s08b\\cal3\\calib-box\\snapshot.json",
+  "B": "C:\\TasOut\\s08b\\cal3\\calib-box\\snapshot.reread.json",
   "Purpose": "reader control: the same TBD read in two fresh processes",
   "Ignored": [
     "Reader",

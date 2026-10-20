@@ -128,9 +128,12 @@ if ($Phase -eq 'calibrate') {
         Step 'read-calib-box-sizing' @('readback-read', '--tbd', (Join-Path $Root 'calib-box-sizing\model.tbd'), '--t3d', (Join-Path $Root 'calib-box-sizing\model.t3d'), '--out', (Join-Path $Root 'calib-box-sizing\snapshot.json')) | Out-Null
         Step 'diff-sizing-calib-box' @('readback-diff', '--a', (Join-Path $Root 'calib-box\snapshot.json'), '--b', (Join-Path $Root 'calib-box-sizing\snapshot.json'), '--purpose', 'informational: what Sizing=true changes in the persisted inputs', '--out', (Join-Path $Root 'calib-box-sizing\diff-sizing.json')) | Out-Null
     } elseif ($ReuseApprovedFrom) {
-        foreach ($run in 'calib-align', 'calib-box-sizing') {
-            $from = Join-Path $ReuseApprovedFrom $run
-            if (-not (Test-Path (Join-Path $from 'model.tbd'))) { throw "no approved $run output in $ReuseApprovedFrom" }
+        # The calibration models are regenerated with fresh SAM GUIDs on every run, so the Sizing=true output is compared with
+        # the Sizing=false box of ITS OWN run (same frozen model), copied here as calib-box-sizing-baseline.
+        foreach ($pair in @(@('calib-align', 'calib-align'), @('calib-box-sizing', 'calib-box-sizing'), @('calib-box', 'calib-box-sizing-baseline'))) {
+            $from = Join-Path $ReuseApprovedFrom $pair[0]
+            $run = $pair[1]
+            if (-not (Test-Path (Join-Path $from 'model.tbd'))) { throw "no approved $($pair[0]) output in $ReuseApprovedFrom" }
             New-Item -ItemType Directory -Force (Join-Path $Root $run) | Out-Null
             foreach ($f in 'input.json', 'weather.json', 'export.json', 'model.tbd', 'model.t3d', 'model.tsd') {
                 if (Test-Path (Join-Path $from $f)) { Copy-Item (Join-Path $from $f) (Join-Path $Root "$run\$f") }
@@ -140,7 +143,8 @@ if ($Phase -eq 'calibrate') {
         Step 'reread-approved-calib-align' @('readback-read', '--tbd', (Join-Path $Root 'calib-align\model.tbd'), '--t3d', (Join-Path $Root 'calib-align\model.t3d'), '--out', (Join-Path $Root 'calib-align\snapshot.json')) | Out-Null
         Step 'reread-approved-tsd-calib-align' @('readback-tsd', '--tsd', (Join-Path $Root 'calib-align\model.tsd'), '--out', (Join-Path $Root 'calib-align\tsd.json')) | Out-Null
         Step 'reread-approved-calib-box-sizing' @('readback-read', '--tbd', (Join-Path $Root 'calib-box-sizing\model.tbd'), '--t3d', (Join-Path $Root 'calib-box-sizing\model.t3d'), '--out', (Join-Path $Root 'calib-box-sizing\snapshot.json')) | Out-Null
-        Step 'diff-sizing-calib-box' @('readback-diff', '--a', (Join-Path $Root 'calib-box\snapshot.json'), '--b', (Join-Path $Root 'calib-box-sizing\snapshot.json'), '--purpose', 'informational: what Sizing=true changes in the persisted inputs (the approved run, re-read)', '--out', (Join-Path $Root 'calib-box-sizing\diff-sizing.json')) | Out-Null
+        Step 'reread-approved-calib-box-sizing-baseline' @('readback-read', '--tbd', (Join-Path $Root 'calib-box-sizing-baseline\model.tbd'), '--t3d', (Join-Path $Root 'calib-box-sizing-baseline\model.t3d'), '--out', (Join-Path $Root 'calib-box-sizing-baseline\snapshot.json')) | Out-Null
+        Step 'diff-sizing-calib-box' @('readback-diff', '--a', (Join-Path $Root 'calib-box-sizing-baseline\snapshot.json'), '--b', (Join-Path $Root 'calib-box-sizing\snapshot.json'), '--purpose', 'informational: what Sizing=true changes in the persisted inputs (the approved run and its own Sizing=false box, re-read)', '--out', (Join-Path $Root 'calib-box-sizing\diff-sizing.json')) | Out-Null
     }
 
     $alignArgs = @()

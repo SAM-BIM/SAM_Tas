@@ -1,7 +1,7 @@
 {
-  "A": "C:\\TasOut\\s08b\\cal1\\calib-box\\snapshot.json",
-  "B": "C:\\TasOut\\s08b\\cal1\\calib-box-sizing\\snapshot.json",
-  "Purpose": "informational: what Sizing=true changes in the persisted inputs",
+  "A": "C:\\TasOut\\s08b\\cal3\\calib-box-sizing-baseline\\snapshot.json",
+  "B": "C:\\TasOut\\s08b\\cal3\\calib-box-sizing\\snapshot.json",
+  "Purpose": "informational: what Sizing=true changes in the persisted inputs (the approved run and its own Sizing=false box, re-read)",
   "Ignored": [
     "Reader",
     "Guid",
