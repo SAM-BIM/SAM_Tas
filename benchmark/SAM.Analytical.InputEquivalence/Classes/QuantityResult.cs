@@ -10,7 +10,7 @@ namespace SAM.Analytical.InputEquivalence
     /// <summary>The evaluated outcome of one quantity on one object, with its working.</summary>
     public sealed class QuantityResult
     {
-        public QuantityResult(QuantityInput input, EquivalenceOutcome outcome, GateStatus status, string reason, NumericComparison comparison, string proposed, string ownerDecisionNamed, string technicalBlockerNamed, string acceptedBy, bool isInformational = false)
+        public QuantityResult(QuantityInput input, EquivalenceOutcome outcome, GateStatus status, string reason, NumericComparison comparison, string proposed, string ownerDecisionNamed, string technicalBlockerNamed, string acceptedBy, bool isInformational = false, IReadOnlyList<QuantityResult> informationalElements = null)
         {
             Input = input;
             Outcome = outcome;
@@ -22,6 +22,7 @@ namespace SAM.Analytical.InputEquivalence
             TechnicalBlockerNamed = technicalBlockerNamed;
             AcceptedBy = acceptedBy;
             IsInformational = isInformational;
+            InformationalElements = informationalElements ?? Array.Empty<QuantityResult>();
         }
 
         public QuantityInput Input { get; }
@@ -56,6 +57,12 @@ namespace SAM.Analytical.InputEquivalence
         /// NaN, unreadable or invalid value, a proposed OD-G case, a G2 default and every prerequisite still gate.
         /// </summary>
         public bool IsInformational { get; }
+
+        /// <summary>
+        /// For a series result: its informational element mismatches, kept as evidence beside the decisive result so that a
+        /// non-gated mismatch is never dropped. Empty for a scalar result.
+        /// </summary>
+        public IReadOnlyList<QuantityResult> InformationalElements { get; }
 
         /// <summary>False for an informational result.</summary>
         public bool GatesFixture => !IsInformational;
@@ -188,7 +195,7 @@ namespace SAM.Analytical.InputEquivalence
         public IReadOnlyList<QuantityResult> NonPass => Results.Where(x => x.GatesFixture && !x.IsPass).ToList();
 
         /// <summary>Numeric mismatches on quantities that are not gated: visible, with their own verdict, never deciding the fixture status.</summary>
-        public IReadOnlyList<QuantityResult> InformationalMismatches => Results.Where(x => x.IsInformational).ToList();
+        public IReadOnlyList<QuantityResult> InformationalMismatches => Results.SelectMany(x => x.InformationalElements.Count > 0 ? x.InformationalElements : (x.IsInformational ? new[] { x } : new QuantityResult[0])).ToList();
 
         public IReadOnlyList<string> OwnerDecisionsNamed => Results.Select(x => x.OwnerDecisionNamed).Where(x => x != null).Distinct().ToList();
 

@@ -17,10 +17,22 @@ namespace SAM.Analytical.InputEquivalence
 
             // One result for the whole series, keyed by the series object (not by the decisive hour), so it can satisfy a
             // required comparison. It carries the decisive element's verdict and names the element in the reason.
+            InformationalElements = elements.Where(x => x.IsInformational).ToList();
+
             QuantityInput input = Query.With(aggregate.Input, aggregate.Input.Expected, aggregate.Input.Native, seriesObjectKey, aggregate.Input.Listing);
             string element = aggregate.Input.ObjectKey != seriesObjectKey ? " [decisive element " + aggregate.Input.ObjectKey + " of " + elements.Count + "]" : string.Empty;
-            GateResult = new QuantityResult(input, aggregate.Outcome, aggregate.Status, aggregate.Reason + element, aggregate.Comparison, aggregate.Proposed, aggregate.OwnerDecisionNamed, aggregate.TechnicalBlockerNamed, aggregate.AcceptedBy, aggregate.IsInformational);
+            string informational = InformationalElements.Count > 0 && !aggregate.IsInformational
+                ? " [" + InformationalElements.Count + " informational mismatch element(s) do not gate, first " + InformationalElements[0].Input.ObjectKey + "]"
+                : string.Empty;
+
+            GateResult = new QuantityResult(input, aggregate.Outcome, aggregate.Status, aggregate.Reason + element + informational, aggregate.Comparison, aggregate.Proposed, aggregate.OwnerDecisionNamed, aggregate.TechnicalBlockerNamed, aggregate.AcceptedBy, aggregate.IsInformational, InformationalElements);
         }
+
+        /// <summary>
+        /// The elements that are informational numeric mismatches (non-gated quantity). They never decide the series result
+        /// while a gating element exists, but they are never dropped: they are listed here and carried on <see cref="GateResult"/>.
+        /// </summary>
+        public IReadOnlyList<QuantityResult> InformationalElements { get; }
 
         /// <summary>The decisive element result (the lowest rank; the first on a tie). When every element passes, a within-tolerance one if any.</summary>
         public QuantityResult Aggregate { get; }
@@ -81,8 +93,15 @@ namespace SAM.Analytical.InputEquivalence
                 elements.Add(Evaluate(With(prototype, expected[i], native[i], prototype.ObjectKey + "[" + i + "]", prototype.Listing), configuration));
             }
 
-            QuantityResult decisive = elements[0];
-            foreach (QuantityResult element in elements)
+            // The decisive element is chosen among the elements that gate the fixture, by the existing rank precedence (lowest
+            // rank; the first on a tie). An informational mismatch (a non-gated quantity) can therefore never outrank, tie with
+            // or hide a gating FAIL, BLOCKED, NOT RUN or accepted limitation. Only when no element gates is an informational
+            // element the series result; every informational element stays in the evidence either way.
+            List<QuantityResult> gating = elements.Where(x => x.GatesFixture).ToList();
+            List<QuantityResult> candidates = gating.Count > 0 ? gating : elements;
+
+            QuantityResult decisive = candidates[0];
+            foreach (QuantityResult element in candidates)
             {
                 if ((int)element.Status < (int)decisive.Status)
                 {
@@ -92,7 +111,7 @@ namespace SAM.Analytical.InputEquivalence
 
             if (decisive.IsPass)
             {
-                decisive = elements.FirstOrDefault(x => x.Outcome == EquivalenceOutcome.WithinTolerance) ?? decisive;
+                decisive = candidates.FirstOrDefault(x => x.Outcome == EquivalenceOutcome.WithinTolerance) ?? decisive;
             }
 
             return new SeriesResult(decisive, elements, prototype.ObjectKey);
