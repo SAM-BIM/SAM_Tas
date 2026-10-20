@@ -14,9 +14,13 @@ planned PR-A / PR-B / PR-C slices. Contract: `documentation/SIMULATION_INPUT_MAP
 * **Revision history:**
   * Revision 1: content `da0f5529545eca519782e9f4e310b7f44cf3a1de`, record-only head `7d7f2964e0985aff34e377f9739a77ca0b06c12f`
     (the head the independent review examined).
-  * Revision 2 (this record): the four independent-review findings, section "Revision 2" below. **Validated content SHA:
-    `ab5754483587fada9e8fc84e084436f24e3ffd05`.** A record-only commit (this file) follows it; the local results below were
-    obtained on that content. The final PR head and its GitHub checks are identified in the PR description.
+  * Revision 2: the four independent-review findings, section "Revision 2" below. Content
+    `ab5754483587fada9e8fc84e084436f24e3ffd05`, record-only head `1a6239bcd9bf2a3299502641266696fdb6e05d7c` (the head the
+    second review examined; hosted `build` and `spdx` SUCCESS).
+  * Revision 3 (this record): one P1 regression the second review found in mixed-series aggregation, section "Revision 3"
+    below. **Validated content SHA: `6e0b55e46a5ba8674bb05da8a0245aba92afdd64`.** A record-only commit (this file) follows
+    it; the local results below were obtained on that content. The final PR head and its GitHub checks are identified in
+    the PR description.
 
 ## Work completed
 
@@ -42,7 +46,7 @@ New COM-free library `benchmark/SAM.Analytical.InputEquivalence` (net8.0, refere
    never truncated), hourly series evaluation, `FindHourShifts` for alignment diagnosis, reader-state propagation
    through products (`Query.Multiply`).
 6. **Provisional OD-G1 to OD-G3 rules.** `GateRuleSet.Interim` (default) and `GateRuleSet.ProvisionalProposed`.
-7. **Tests.** 229 licence-free tests (177 from revision 1 plus the revision 2 regression cases), including an
+7. **Tests.** 249 licence-free tests (177 from revision 1, plus the revision 2 and revision 3 regression cases), including an
    exhaustive sweep of 663,552 input combinations asserting the PASS allow-list invariants, and a check that the
    provisional rule set is never more lenient than the interim one.
 
@@ -157,6 +161,53 @@ Decisions I made where S07 is silent (all fail-closed, for owner review):
 * `RequiredQuantityIds` was replaced rather than extended because the review showed quantity presence cannot express
   all-object coverage. The new API is unmerged, so nothing outside this PR depended on it.
 
+## Revision 3: mixed-series aggregation (P1 from the second independent review)
+
+**Root cause.** `Query.EvaluateSeries` (`Query/Series.cs`, former lines 84-95) chose the decisive element by the lowest
+numeric rank across *every* element, informational ones included. An informational mismatch has the status `Fail`
+(rank 1), so it outranked a gating `BlockedTechnical` (rank 2) and tied by position with a gating `Fail`.
+`SeriesResult.GateResult` copied the winning element's informational flag, and `Query.Gate` ignores an informational
+result, so the whole series dropped out of the verdict: the gating defect was hidden, and the verdict depended on the
+element order.
+
+Reproduced on `1a6239bc` with row 1a (20 vs 20, object `zone`) and row `9.ground` (object `ground`, expected `[10,10]`),
+both required, identity and alignment verified:
+
+| native ground series | scalar results | fixture verdict before |
+| --- | --- | --- |
+| `[12, Unreadable("field unavailable")]` | informational Fail, gating BlockedTechnical | **Pass** |
+| `[12, Absent]` | informational Fail, gating Fail (EXPORT-DEFECT) | **Pass** |
+| `[Absent, 12]` | gating Fail, informational Fail | Fail |
+
+**Corrected rule** (`Query/Series.cs:96-117`). The decisive element is chosen among the elements that gate the
+fixture (`GatesFixture`), by the existing rank precedence: lowest rank, the first on a tie, and, if that is a pass, a
+within-tolerance element in preference to a match. An informational mismatch can therefore never outrank, tie with or
+hide a gating FAIL, BLOCKED, NOT RUN or accepted limitation. Only when **no** element gates is an informational element
+the series result (and the series then stays informational, so it cannot make a fixture pass by itself).
+
+**Evidence kept, nothing relabelled.** `SeriesResult.Elements` holds every element result as before.
+`SeriesResult.InformationalElements` (`Query/Series.cs:20-35`) lists the informational ones; `GateResult` carries them
+(`Classes/QuantityResult.cs:65`) and notes their count in its reason; `GateReport.InformationalMismatches`
+(`Classes/QuantityResult.cs:198`) lists the nested elements, so a series' non-gated mismatch is visible in the fixture
+report. The mismatch keeps its own verdict (`OutOfTolerance`, `IsPass == false`) and numeric working. The series object
+coverage key, the decisive element's owner-decision, proposed (G2/G3) and technical-blocker metadata, the all-pass and
+within-tolerance behaviour, and the coverage safeguards are unchanged.
+
+**Regression tests** (`SeriesAggregationTests.cs`, 20 cases): the two reviewed reproductions; each defect kind beside an
+informational mismatch, in both element orders and under both rule sets (unreadable, NaN under the interim and the
+provisional rule set, absent, zeroed, invalid input, unaccepted G2 default); an accepted default beside an informational
+mismatch (rank 5, not informational, not pass); identity not established; rank ties (informational against absent and
+zeroed, first-wins among equal gating ranks, rank 2 against rank 3); element evidence and the series key; all-match and
+within-tolerance series; gating passes beside an informational mismatch (Pass, mismatch still reported); an
+only-informational series; an ordinary gated series; coverage safeguards on a mixed series; and an exhaustive sweep of
+every 3-element series over nine element kinds, both rule sets, with and without the default accepted (2,916 series) asserting
+the lowest gating rank decides, a gating non-pass never gives a fixture PASS, all-gating-pass with an informational
+mismatch passes, and the verdict is independent of the element order.
+
+No tolerance, state rule, S07 text or engineering decision was changed. Decision taken where S07 is silent: a series whose
+gating elements all pass but which contains an informational mismatch passes, with the mismatch reported (the same as
+a scalar informational mismatch).
+
 ## Files changed
 
 Revision 1 (against `e84aeff6`):
@@ -173,21 +224,30 @@ them: none):
   `Query/Evaluate.cs`, `Query/Identity.cs`, `Query/Series.cs`, `README.md`.
 * Tests: `EvaluateStateTableTests.cs`, `GateTests.cs`, `NeverSilentlyPassTests.cs`, new `ReviewFindingTests.cs`.
 * This record. `git diff --check` is clean. No existing source, project, solution, setting, default or public API file
+
+Revision 3 (against `1a6239bc`, 3 files, all inside the two benchmark projects; outside them: none):
+
+* Library: `Query/Series.cs` (decisive element chosen among gating elements; `SeriesResult.InformationalElements`),
+  `Classes/QuantityResult.cs` (`QuantityResult.InformationalElements`; `GateReport.InformationalMismatches` lists nested
+  elements).
+* Tests: new `SeriesAggregationTests.cs`.
+* This record. `git diff --check` is clean; `PROJECT_PROGRESS.md` is untouched.
   outside the new library is touched; `PROJECT_PROGRESS.md` is untouched.
 
 ## Tests, builds and validation
 
 Local, this workstation, no TAS and no licence used (`dotnet 10.0.401`, projects target net8.0). Results below are on the
-validated content `ab575448`:
+validated content `6e0b55e4` (revision 3):
 
 | Check | Command | Result |
 | --- | --- | --- |
 | New library build | `dotnet build benchmark/SAM.Analytical.InputEquivalence/SAM.Analytical.InputEquivalence.csproj -c Debug` | 0 warnings, 0 errors |
-| Core suite (Debug) | `dotnet test benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytical.InputEquivalence.Tests.csproj -c Debug` | **229 passed, 0 failed, 0 skipped** |
-| Core suite (Release, CI form) | same, `-c Release -p:SAMVersion=2026.4.999.0` | **229 passed, 0 failed, 0 skipped** |
-| Exhaustive PASS sweep | included in the 229 | 663,552 combinations evaluated, 7,344 pass, every pass satisfies the allow-list invariants (revision 1: 414,720 / 5,184) |
+| Core suite (Debug) | `dotnet test benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytical.InputEquivalence.Tests.csproj -c Debug` | **249 passed, 0 failed, 0 skipped** |
+| Core suite (Release, CI form) | same, `-c Release -p:SAMVersion=2026.4.999.0` | **249 passed, 0 failed, 0 skipped** |
+| Exhaustive PASS sweep | included in the 249 | 663,552 combinations evaluated, 7,344 pass, every pass satisfies the allow-list invariants (revision 1: 414,720 / 5,184) |
 | Review-finding reproductions | four probes on `7d7f2964`, revision 1 API | 4 of 4 failed as the review said (table above); now covered by `ReviewFindingTests` and passing |
-| Mutation check | each revision 2 fix removed in turn, then restored byte-identical | finding 1: 8 failures; finding 2: 11; finding 3: 11; finding 4: 5 (revision 1 mutations: 7, 1, 3, 1) |
+| Mutation check | each fix removed in turn, then restored byte-identical | revision 3 aggregation correction: 15 failures (14 new methods); revision 2 findings 1 to 4: 8, 11, 11, 5; revision 1: 7, 1, 3, 1 |
+| Series reproductions (revision 3) | three probes on `1a6239bc`, then deleted | `[12,Unreadable]` Pass, `[12,Absent]` Pass, `[Absent,12]` Fail, as the review said; now covered by `SeriesAggregationTests` and passing |
 | Existing TM59 tests (rebuilt with `--no-incremental`) | `dotnet build SAM_Tas/SAM.Analytical.Tas.TM59.Tests/... -c Release --no-incremental`, then `dotnet test ... --no-build` | **1249 passed, 0 failed, 0 skipped** |
 | Existing benchmark producer tests | `dotnet test benchmark/SAM.Analytical.Tas.Benchmark.Tests/... -c Release --filter "TestCategory!=Simulation"` | **26 passed, 0 failed, 0 skipped** |
 | Whitespace and scope | `git diff --cached --check`; `git diff --cached --name-only` | clean; only the two benchmark projects |
@@ -210,6 +270,7 @@ Not done, by instruction: licensed TAS, native reader, fixtures, conversion, siz
   `MissingRequiredQuantityIds` replaced by `Coverage`, `MissingComparisons`, `Unrequested`; added `QuantityResult.IsInformational`,
   `GatesFixture`, `GateReport.InformationalMismatches`, `RequiredComparison`, `CoverageStatus`, `SeriesResult.GateResult`.
   Nothing outside the PR consumes them.
+Revision 3 adds `SeriesResult.InformationalElements` and `QuantityResult.InformationalElements` (empty for a scalar  result) and no removal; `GateReport.InformationalMismatches` now also lists a series' nested informational elements.  Revisions 2 and 3 change only the new library and its tests.
 * The new project loads `SAM.Core.dll` and `SAM.Geometry.dll` from the sibling `SAM/build` like the benchmark projects.
   A stale `SAM/build` is the one environmental risk; CI builds it first.
 
@@ -218,6 +279,7 @@ Not done, by instruction: licensed TAS, native reader, fixtures, conversion, siz
 * Owner decisions still open (S08 plan section 8): fixtures (D-FIX); OD-G1 to OD-G3 approval; OD-W1 and OD-W2; the
   alignment probe and Sizing diff inside S08; the leap-year policy. This PR implements none of them as approved.
 * New from revision 2, for the owner: (a) whether an absent or unreadable value on a non-gated diagnostic should also be informational (it still gates); (b) the coverage list is the caller's responsibility, so PR-B must build it from the frozen model for every object (`RequiredComparison.Cross`), and a list that omits an object is not detected by the gate; (c) the general OD-G2 definition of "gated" is still unapproved.
+* New from revision 3, for the owner: a series whose gating elements all pass but which holds an informational mismatch  passes with the mismatch reported (like a scalar informational mismatch); say so if a mismatch inside a series should  instead hold the series at a lower rank. `GateResult` carries the owner-decision, proposed and technical metadata of the  decisive element only; a proposed G case on a *non-decisive* element is visible in `Elements` but not in the fixture-level  `GateReport.Provisional` flag (the decisive element's own rank still gates).
 * Native questions N-1 to N-13 of the plan stay open for PR-B (host-surface area gross or net, layer order versus
   `reversed`, T-FRAME native uncertainties, hour-ending slot and yearly alignment, calendar day types, and so on).
 * Recorded in passing, not fixed: `Convert/ToSAM/Material.cs:50-51,70-71` passes `externalLightReflectance` in both
@@ -226,7 +288,7 @@ Not done, by instruction: licensed TAS, native reader, fixtures, conversion, siz
 
 ## Exact recommended next step
 
-1. Independent re-review of revision 2 (the four findings) on the final head, then the owner's decision to mark the draft ready and merge it. The PR stays draft until then.
+1. Independent re-review of revision 3 (series aggregation, on top of the four revision 2 findings) on the final head, then the owner's decision to mark the draft ready and merge it. The PR stays draft until then.
 2. After merge: the known-SHA `PROJECT_PROGRESS.md` closeout on `sow/2026-Q4` and guarded branch cleanup.
 3. Before PR-B: the owner answers the S08 plan decision gate (SAM_Tas write scope for PR-B, fixtures, OD-G1..G3,
    OD-W1/W2, probes, leap year).
