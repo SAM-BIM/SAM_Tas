@@ -7,8 +7,12 @@ S08 is not accepted: no fixture was chosen or compared.**
 
 ## Status
 
-- PR: see the PR description for the number, the final head and the hosted checks.
-- Validated content SHA: `<filled after the re-run at the committed code>`.
+- PR: SAM-BIM/SAM_Tas#105 (draft) into `sow/2026-Q4`. The final head and hosted checks are in the PR description.
+- Validated content SHA: `b9975571532612454baa6f07fbd4fa9f3be16a63` (code identical to `3d20d0fc`, from which the
+  licensed harness was built; this record-only commit follows it).
+- Dependency selection: no SAM-BIM dependency repository has a `feature/s08-tas-readback-harness` branch (checked with
+  `git ls-remote` on SAM, SAM_gbXML, SAM_Systems, SAM_Windows, SAM_SolarCalculator, SAM_Psychrometrics, SAM_Mollier), so
+  CI clones each one at `sow/2026-Q4`. Confirm in the job log of the final head.
 - Offline (local, Release, on the code of `3d20d0fc`): core 249/249, read-back 39/39 (also on the final evidence), TM59
   1249/1249, benchmark producer 26/26 (Simulation excluded), GenOpt 432/432. Full `SAM_Tas.sln` Release restore and rebuild
   succeeded.
