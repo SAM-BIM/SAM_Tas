@@ -1,0 +1,9 @@
+S08 read-back calib-two (calibration (not an equivalence fixture)): BlockedOwnerDecision (rank 3, exit 12)
+  gate: calib-two: BlockedOwnerDecision (provisional: unapproved OD-G rules applied), 499 result(s), 2 not pass, 0 informational, coverage Complete
+  gate BlockedOwnerDecision | provisional-rules gate BlockedOwnerDecision | coverage Complete (499 required, 0 missing, 0 unrequested)
+  results by status: BlockedOwnerDecision=2, Pass=497
+  elements by outcome: Match=113345, NotApplicable=8, UnlistedDefault=2, WithinTolerance=123959
+  proposed cases (all elements): G1 (S-UNSPEC, native zero, UNLISTED-DEFAULT) -> UnlistedDefault (proposed, OD-G1) x2
+  owner decisions (all elements): 1; technical blockers: 0; informational mismatches: 0
+  NOT PASS BlockedOwnerDecision 8b space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.delivered
+  NOT PASS BlockedOwnerDecision 8b space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.delivered

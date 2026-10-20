@@ -1,0 +1,1 @@
+negative layer-conductivity: element 'CAL_EXT_WALL' materials(1).conductivity 0.77 -> 1.155; originals unchanged: True

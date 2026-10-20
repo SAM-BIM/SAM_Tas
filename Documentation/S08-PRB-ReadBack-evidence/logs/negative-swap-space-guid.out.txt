@@ -1,0 +1,1 @@
+negative swap-space-guid: swapped the [SpaceGuid] carriers of zones 'CalA' and 'CalB'; originals unchanged: True

@@ -1,0 +1,54 @@
+{
+  "A": "C:\\TasOut\\s08b\\cal1\\calib-box\\snapshot.json",
+  "B": "C:\\TasOut\\s08b\\cal1\\calib-box-sizing\\snapshot.json",
+  "Purpose": "informational: what Sizing=true changes in the persisted inputs",
+  "Ignored": [
+    "Reader",
+    "Guid",
+    "BuildingElementGuid",
+    "LinkZoneGuid",
+    "LinkSurfaceGuid"
+  ],
+  "Compared": 77550,
+  "DifferenceCount": 6,
+  "ByPattern": {
+    "$.Zones[*].SizeHeating.Kind": 1,
+    "$.Zones[*].SizeHeating.Value": 1,
+    "$.Zones[*].SizeCooling.Kind": 1,
+    "$.Zones[*].SizeCooling.Value": 1,
+    "$.Zones[*].MaxHeatingLoad.Kind": 1,
+    "$.Zones[*].MaxHeatingLoad.Value": 1
+  },
+  "Differences": [
+    {
+      "Path": "$.Zones[0].SizeHeating.Kind",
+      "A": "\u0022Finite\u0022",
+      "B": "\u0022Zero\u0022"
+    },
+    {
+      "Path": "$.Zones[0].SizeHeating.Value",
+      "A": "2",
+      "B": "0"
+    },
+    {
+      "Path": "$.Zones[0].SizeCooling.Kind",
+      "A": "\u0022Finite\u0022",
+      "B": "\u0022Zero\u0022"
+    },
+    {
+      "Path": "$.Zones[0].SizeCooling.Value",
+      "A": "2",
+      "B": "0"
+    },
+    {
+      "Path": "$.Zones[0].MaxHeatingLoad.Kind",
+      "A": "\u0022Zero\u0022",
+      "B": "\u0022Finite\u0022"
+    },
+    {
+      "Path": "$.Zones[0].MaxHeatingLoad.Value",
+      "A": "0",
+      "B": "751.7711181640625"
+    }
+  ]
+}

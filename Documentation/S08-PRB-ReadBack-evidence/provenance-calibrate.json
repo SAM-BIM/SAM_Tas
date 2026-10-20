@@ -1,0 +1,27 @@
+﻿{
+    "utc":  "2026-10-20T20:00:17.1250561Z",
+    "machine":  "LEGION5MD",
+    "phase":  "calibrate",
+    "exe":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Debug\\direct-t3d-validation.exe",
+    "exeSha256":  "2ada4255ed4b23ce2fe538e008a35e1ea890d7512661ac8f280d43825d7fbe17",
+    "rules":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Debug\\calibration-rules.json",
+    "rulesSha256":  "7d43ff1b108b8a13a8f1ac173c9b2f7d5bc8b231b3cc8f6d84c02ca53e971362",
+    "repositories":  {
+                         "SAM_Tas":  {
+                                         "head":  "3d16b5c71be99f83335aba64d37aa624c58b2196",
+                                         "branch":  "feature/s08-tas-readback-harness",
+                                         "dirty":  4
+                                     },
+                         "SAM":  {
+                                     "head":  "ee3771678bcaf8b060c6e40548c5174fe1984516",
+                                     "branch":  "sow/2026-Q4",
+                                     "dirty":  0
+                                 },
+                         "SAM_gbXML":  {
+                                           "head":  "43b5d018ac7a8a14f332e8bcde9cb0d613bf1efb",
+                                           "branch":  "sow/2026-Q4",
+                                           "dirty":  0
+                                       }
+                     },
+    "powershell":  "5.1.26100.9711"
+}

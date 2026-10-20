@@ -1,0 +1,16 @@
+{
+  "A": "C:\\TasOut\\s08b\\cal1\\calib-two\\snapshot.json",
+  "B": "C:\\TasOut\\s08b\\cal1\\calib-two\\snapshot.reread.json",
+  "Purpose": "reader control: the same TBD read in two fresh processes",
+  "Ignored": [
+    "Reader",
+    "Guid",
+    "BuildingElementGuid",
+    "LinkZoneGuid",
+    "LinkSurfaceGuid"
+  ],
+  "Compared": 89905,
+  "DifferenceCount": 0,
+  "ByPattern": {},
+  "Differences": []
+}

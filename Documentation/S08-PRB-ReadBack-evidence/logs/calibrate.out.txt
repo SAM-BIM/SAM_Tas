@@ -1,0 +1,13 @@
+N-1.hostSurfaceArea          verified   net
+N-2.layerOrientation         verified   reversed 0: materials(1) faces the zone; reversed non-zero: materials(n) faces the zone
+N-3.1.frameSurfaces          verified   geometric: pane and frame surface areas equal the T-FRAME split (framePerc of the opening outline)
+N-3.2.frameWidthEffect       verified   no independent geometric effect: TBD pane/frame follow framePerc, and the saved T3D frameWidth is the ring width TAS derives from framePerc and the opening size, not the value the writer set
+N-3.3.zeroPercentFrame       verified   no-frame-surface
+N-3.4.frameFieldsSource      verified   T3D only: the TBD interop has no frame-percentage or frame-width field; in the T3D framePerc and frameWidth read, isPercFrame is unreadable (TAS3D getter fails)
+N-5.hourlySlot               verified   1
+N-5.yearlyIndex              verified   1
+N-5.weatherIndex             verified   1
+N-5.designDaySlot            verified   1
+N-6.calendar                 verified   1
+N-8.winding                  verified   the outline reproduces the panel boundary (same vertices, collinear points dropped); winding: 7 same as the SAM panel, 11 opposite (identity is winding-independent)
+N-5.alignment                verified   aligned: every pulse lands in the TSD hour that carries the weather of the same SAM hour (shift 0)

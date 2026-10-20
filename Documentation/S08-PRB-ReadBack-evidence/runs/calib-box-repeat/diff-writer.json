@@ -1,0 +1,16 @@
+{
+  "A": "C:\\TasOut\\s08b\\cal1\\calib-box\\snapshot.json",
+  "B": "C:\\TasOut\\s08b\\cal1\\calib-box-repeat\\snapshot.json",
+  "Purpose": "writer control: the same frozen model exported twice",
+  "Ignored": [
+    "Reader",
+    "Guid",
+    "BuildingElementGuid",
+    "LinkZoneGuid",
+    "LinkSurfaceGuid"
+  ],
+  "Compared": 77550,
+  "DifferenceCount": 0,
+  "ByPattern": {},
+  "Differences": []
+}

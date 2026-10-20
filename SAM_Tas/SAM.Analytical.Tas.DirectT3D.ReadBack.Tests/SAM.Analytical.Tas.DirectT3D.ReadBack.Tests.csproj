@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!--
+    S08 PR-B: the offline (licence-free, COM-free) tests of the Tas native-input read-back. They compile the COM-free
+    half of the licensed harness (SAM.Analytical.Tas.DirectT3D.Validation/ReadBack: the snapshot model, the expected
+    values, identity, comparison, report, calibration analysis) against the merged S07 evaluation core, and replay the
+    REAL native snapshots the licensed calibration committed under Documentation/S08-PRB-ReadBack-evidence. No TAS
+    interop, no SAM_Tas assembly and no licence: `dotnet test` builds and runs them on any machine.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\benchmark\SAM.Analytical.InputEquivalence\SAM.Analytical.InputEquivalence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SAM.Core">
+      <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical">
+      <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Weather">
+      <HintPath>..\..\..\SAM\build\SAM.Weather.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Units">
+      <HintPath>..\..\..\SAM\build\SAM.Units.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Architectural">
+      <HintPath>..\..\..\SAM\build\SAM.Architectural.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The COM-free read-back files, linked from the licensed harness so the tests exercise the very code the licensed
+         runs used. None of them names a TAS type. -->
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\SyntheticModels.cs" Link="Harness\SyntheticModels.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\NativeSnapshot.cs" Link="Harness\NativeSnapshot.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\CalibrationModels.cs" Link="Harness\CalibrationModels.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\CalibrationRules.cs" Link="Harness\CalibrationRules.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\Calibration.cs" Link="Harness\Calibration.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackExpected.cs" Link="Harness\ReadBackExpected.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackIdentity.cs" Link="Harness\ReadBackIdentity.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs" Link="Harness\ReadBackComparison.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackReport.cs" Link="Harness\ReadBackReport.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackCompare.cs" Link="Harness\ReadBackCompare.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\SnapshotDiff.cs" Link="Harness\SnapshotDiff.cs" />
+    <None Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\calibration-rules.json" Link="calibration-rules.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

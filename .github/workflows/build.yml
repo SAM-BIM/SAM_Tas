@@ -239,6 +239,23 @@ jobs:
             --logger 'console;verbosity=normal'
           if ($LASTEXITCODE -ne 0) { throw "Input-equivalence core tests failed" }
 
+      - name: Run Tas native-input read-back tests (offline)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # S08 PR-B: the COM-free half of the licensed read-back harness (snapshot model, expected values, identity,
+          # comparison, report, calibration analysis), replaying the committed licensed evidence in
+          # Documentation/S08-PRB-ReadBack-evidence. It references only the S08 core and the already-built SAM/build
+          # assemblies, so `dotnet test` runs it without the TAS COM interop or a licence.
+          $testProject = 'SAM_Tas/SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj'
+          Write-Host "==> Testing: $testProject"
+          & dotnet test $testProject `
+            -c Release `
+            '/p:SAMVersion=${{ steps.ver.outputs.samversion }}' `
+            --logger 'console;verbosity=normal'
+          if ($LASTEXITCODE -ne 0) { throw "Tas native-input read-back tests failed" }
+
       - name: Run TM59 room-use regression tests
         shell: pwsh
         run: |
