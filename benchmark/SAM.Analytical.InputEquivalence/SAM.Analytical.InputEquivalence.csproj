@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SAM.Analytical.InputEquivalence</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!--
+    S08 PR-A: the licence-free, COM-free input-equivalence evaluation core of the simulation roadmap
+    (SAM documentation/SIMULATION_INPUT_MAPPING_S07.md). It holds the reader-result and quantity DTOs, the S07
+    section 5 numeric rule and tolerance catalogue, the section 6 outcome states and rank gate, the independent
+    expected-value calculations that need no TAS, and the provisional OD-G1..G3 rules.
+
+    It references SAM core and SAM geometry only. It deliberately does NOT reference SAM.Analytical.Tas,
+    SAM.Core.Tas, any TAS COM interop, SAM_UI, SAM_Validation or SAM_OpenStudio, so that it builds and tests with
+    the .NET CLI and so that the OpenStudio read-back (S09) can lift it unchanged.
+  -->
+
+  <ItemGroup>
+    <Reference Include="SAM.Core">
+      <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

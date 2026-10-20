@@ -221,6 +221,24 @@ jobs:
             --logger 'console;verbosity=normal'
           if ($LASTEXITCODE -ne 0) { throw "Benchmark producer tests failed" }
 
+      - name: Run input-equivalence core tests (offline)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # S08 PR-A: the licence-free, COM-free input-equivalence evaluation core (reader-result and quantity DTOs,
+          # the S07 numeric rule and tolerance catalogue, the section 6 outcome states and rank gate, the independent
+          # expected-value calculations and the provisional OD-G1..G3 rules). It references only the already-built
+          # SAM/build SAM.Core and SAM.Geometry assemblies, so `dotnet test` builds and runs it without the TAS COM
+          # interop, a licence or the .NET Framework MSBuild.
+          $testProject = 'SAM_Tas/benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytical.InputEquivalence.Tests.csproj'
+          Write-Host "==> Testing: $testProject"
+          & dotnet test $testProject `
+            -c Release `
+            '/p:SAMVersion=${{ steps.ver.outputs.samversion }}' `
+            --logger 'console;verbosity=normal'
+          if ($LASTEXITCODE -ne 0) { throw "Input-equivalence core tests failed" }
+
       - name: Run TM59 room-use regression tests
         shell: pwsh
         run: |
