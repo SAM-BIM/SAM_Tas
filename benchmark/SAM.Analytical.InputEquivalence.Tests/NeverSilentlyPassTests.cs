@@ -25,6 +25,7 @@ namespace SAM.Analytical.InputEquivalence.Tests
         private static IEnumerable<ExpectedValue> Expecteds()
         {
             yield return ExpectedValue.FromValue(10);
+            yield return ExpectedValue.FromValue(0.00005); // below the 7a absolute tolerance of 1e-4: the zeroed-native probe
             yield return ExpectedValue.Zero();
             yield return ExpectedValue.Unspecified();
             yield return ExpectedValue.Invalid("invalid");
@@ -49,7 +50,7 @@ namespace SAM.Analytical.InputEquivalence.Tests
             int evaluated = 0;
             int passes = 0;
 
-            foreach (string quantity in new[] { "1a", "3c.g", "6.hourly" })
+            foreach (string quantity in new[] { "1a", "3c.g", "6.hourly", "7a" })
             foreach (ExpectedValue expected in Expecteds())
             foreach (ReaderResult native in Natives())
             foreach (ContractListing listing in Enum.GetValues(typeof(ContractListing)))
@@ -121,6 +122,12 @@ namespace SAM.Analytical.InputEquivalence.Tests
                     {
                         Assert.That(native.HasNumber, Is.True, context);
                         Assert.That(expected.State, Is.AnyOf(SamInputState.Value, SamInputState.Zero), context);
+
+                        // Review finding 1: abs never turns a zeroed native object into a pass for a non-zero SAM value.
+                        if (expected.State == SamInputState.Value)
+                        {
+                            Assert.That(native.Kind, Is.EqualTo(ReaderKind.Finite), "a non-zero S-VALUE must not pass against a zeroed native: " + context);
+                        }
                     }
                 }
                 else
@@ -137,6 +144,15 @@ namespace SAM.Analytical.InputEquivalence.Tests
                     result.Outcome == EquivalenceOutcome.OutOfTolerance || result.Outcome == EquivalenceOutcome.ExportDefect)
                 {
                     Assert.That(result.IsPass, Is.False, context);
+                }
+
+                // An informational result is only ever a numeric mismatch on a non-gated quantity, and never a pass.
+                if (result.IsInformational)
+                {
+                    Assert.That(result.Outcome, Is.EqualTo(EquivalenceOutcome.OutOfTolerance), context);
+                    Assert.That(input.Definition.Gated, Is.False, context);
+                    Assert.That(result.IsPass, Is.False, context);
+                    Assert.That(result.Comparison, Is.Not.Null, context);
                 }
 
                 // An accepted limitation is rank 5 and an unaccepted one at best rank 3, never better.

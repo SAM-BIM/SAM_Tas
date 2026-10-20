@@ -62,9 +62,9 @@ namespace SAM.Analytical.InputEquivalence
     public static partial class Query
     {
         /// <summary>
-        /// Matches authored polygons to native polygons by vertex geometry only: two polygons match when they have the
-        /// same number of vertices and every vertex of one lies within <paramref name="tolerance"/> of a distinct vertex of
-        /// the other, whatever the start vertex and winding. Names, array order and GUIDs are not inputs.
+        /// Matches authored polygons to native polygons by boundary geometry only: two polygons match when they have the
+        /// same number of vertices and their vertices follow each other in the same cyclic order, each within <paramref name="tolerance"/>,
+        /// whatever the start vertex and winding. The same vertex set with different edges is a different polygon. Names, array order and GUIDs are not inputs.
         /// </summary>
         public static GeometryMatchResult MatchPolygons(IReadOnlyList<Polygon3D> expected, IReadOnlyList<Polygon3D> native, double tolerance = Core.Tolerance.MacroDistance)
         {
@@ -83,7 +83,7 @@ namespace SAM.Analytical.InputEquivalence
 
                 for (int j = 0; j < n.Count; j++)
                 {
-                    if (n[j] != null && SameVertices(e[i], n[j], tolerance))
+                    if (n[j] != null && SameBoundary(e[i], n[j], tolerance))
                     {
                         candidates[i].Add(j);
                         nativeUse[j]++;
@@ -151,42 +151,38 @@ namespace SAM.Analytical.InputEquivalence
             return geometry.PairForExpected(expectedIndex) != null ? IdentityStatus.Verified : IdentityStatus.Mismatch;
         }
 
-        private static bool SameVertices(List<Point3D> a, List<Point3D> b, double tolerance)
+        /// <summary>
+        /// The two closed boundaries are the same polygon: the same vertices in the same cyclic order, from any start
+        /// vertex and in either winding, each vertex within the tolerance. The same vertex set with different edges (a
+        /// different polygon, a different area) does not match.
+        /// </summary>
+        private static bool SameBoundary(List<Point3D> a, List<Point3D> b, double tolerance)
         {
-            if (a.Count != b.Count)
+            if (a.Count != b.Count || a.Count < 3)
             {
                 return false;
             }
 
-            bool[] used = new bool[b.Count];
-            foreach (Point3D point in a)
+            int n = a.Count;
+            for (int direction = 1; direction >= -1; direction -= 2)
             {
-                int found = -1;
-                double best = double.MaxValue;
-                for (int j = 0; j < b.Count; j++)
+                for (int offset = 0; offset < n; offset++)
                 {
-                    if (used[j])
+                    bool all = true;
+                    for (int i = 0; i < n && all; i++)
                     {
-                        continue;
+                        int j = ((offset + direction * i) % n + n) % n;
+                        all = a[i].Distance(b[j]) <= tolerance;
                     }
 
-                    double distance = point.Distance(b[j]);
-                    if (distance <= tolerance && distance < best)
+                    if (all)
                     {
-                        best = distance;
-                        found = j;
+                        return true;
                     }
                 }
-
-                if (found < 0)
-                {
-                    return false;
-                }
-
-                used[found] = true;
             }
 
-            return true;
+            return false;
         }
 
         private struct Vec

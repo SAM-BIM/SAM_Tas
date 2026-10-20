@@ -58,9 +58,11 @@ namespace SAM.Analytical.InputEquivalence.Tests
         }
 
         [Test]
-        public void SValue_Native_Zero_Against_A_Value_Is_Out_Of_Tolerance_Not_A_Match()
+        public void SValue_Native_Zero_Against_A_Value_Is_A_Zeroed_Object_Not_A_Match()
         {
-            Expect(Run(ExpectedValue.FromValue(20), ReaderResult.FromValue(0)), EquivalenceOutcome.OutOfTolerance, GateStatus.Fail);
+            // Intentional expectation change (review finding 1): this used to be OutOfTolerance. A zeroed native object is
+            // judged like a missing one (S07 section 6), so it is an EXPORT-DEFECT; the status (FAIL) is unchanged.
+            Expect(Run(ExpectedValue.FromValue(20), ReaderResult.FromValue(0)), EquivalenceOutcome.ExportDefect, GateStatus.Fail);
         }
 
         [Test]

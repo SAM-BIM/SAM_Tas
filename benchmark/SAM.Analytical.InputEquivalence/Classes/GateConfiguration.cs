@@ -50,11 +50,13 @@ namespace SAM.Analytical.InputEquivalence
         public IReadOnlyCollection<OwnerAcceptance> Acceptances { get; init; } = Array.Empty<OwnerAcceptance>();
 
         /// <summary>
-        /// The quantity identifiers that must be resolved for the fixture ("every applicable quantity must be
-        /// resolved", S07 section 6). A required identifier with no result makes the gate NOT RUN. Null means the
-        /// caller supplies no list; the gate then cannot detect a quantity that was never evaluated, and says so.
+        /// The quantity-on-object comparisons the fixture verdict needs ("every applicable quantity must be resolved",
+        /// S07 section 6). The caller states them explicitly, for every object (see <see cref="RequiredComparison.Cross"/>);
+        /// quantity presence alone is not coverage. Null (not supplied) and empty both leave the coverage unknown, so the
+        /// gate cannot reach PASS; a required comparison with no result makes the coverage incomplete, which caps the
+        /// status at NOT RUN. Higher-ranked FAIL and BLOCKED outcomes are never hidden by a coverage problem.
         /// </summary>
-        public IReadOnlyCollection<string> RequiredQuantityIds { get; init; }
+        public IReadOnlyCollection<RequiredComparison> RequiredComparisons { get; init; }
 
         internal bool IsAccepted(string quantityId, string fixtureId, AcceptableLimitation limitation, out OwnerAcceptance acceptance)
         {

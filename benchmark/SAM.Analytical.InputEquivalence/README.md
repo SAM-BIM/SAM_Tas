@@ -15,18 +15,27 @@ SAM_OpenStudio. It builds and tests with the .NET CLI, and the OpenStudio read-b
 | Reader results | `ReaderResult` (`Absent`, `Unreadable`, `NaN`, `Zero`, `Finite`, kept distinct), `ExpectedValue` (S-ZERO, S-UNSPEC, S-INVALID, S-VALUE) | section 6, 6.1 reader precondition |
 | Numeric rule | `ToleranceRule`, `Query.Compare`: within when `d <= abs` or `d / max(\|n\|,\|s\|) <= rel`; zero and invalid inputs handled | section 5 |
 | Tolerances as data | `QuantityCatalog` (every Tas-applicable row, locked by a test) | section 5 |
-| Outcomes and gate | `EquivalenceOutcome`, `GateStatus` (rank 1-6), `Query.Evaluate`, `Query.Gate`, `GateReport`, `OwnerAcceptance` | section 6 |
+| Outcomes and gate | `EquivalenceOutcome`, `GateStatus` (rank 1-6), `Query.Evaluate`, `Query.Gate`, `GateReport`, `OwnerAcceptance`, `RequiredComparison` (explicit coverage) | section 6 |
 | Prerequisites | identity (`IdentityStatus`), hour alignment (`AlignmentStatus`), model interpretation (`ModelInterpretation`) | sections 6, 7, D-F9 |
 | Expected values | `Query.ExpectedFloorArea`, `ExpectedShellVolume`, `ExpectedNetArea`, `ExpectedFramePercentage`, `ExpectedFrameWidth`, `ExpectedGainDensity`, `ExpectedPeopleDensity`, `ExpectedInfiltrationFlow`, `ClassifyVentilation`, `ExpectedRequiredSupplyFlow`, `ExpectedDeliveredOutdoorAir`, `ExpectedOpaqueU`, `ExpectedGlazingU`, `ExpectedYearDay` | sections 3, 4, 5, D-F2 |
 | Schedules | `ExpandSchedule` (1, 24 or 8760 values; 8784 is an unsupported leap year), `ExpectedEquivalentFullLoadHours`, `EvaluateSeries`, `FindHourShifts` | sections 5 row 6, 7 |
-| Identity | `MatchPolygons` (vertex geometry only), `AssessIdentity` | S08 plan R5 |
+| Identity | `MatchPolygons` (boundary geometry: cyclic order, either winding), `AssessIdentity` | S08 plan R5 |
 | Provisional rules | `GateRuleSet.Interim` (default) and `GateRuleSet.ProvisionalProposed` for the undecided OD-G1 to OD-G3 cases | section 6.1 |
 
 ## Fail-closed by construction
 
 * A result passes only for MATCH, WITHIN-TOLERANCE, a **verified** ACCEPTED-TRANSFORMATION, or a proven
   NOT-APPLICABLE; every other outcome is below rank 6. An owner acceptance moves a limitation from rank 3 to rank 5
-  and never to a pass. An empty result set, or a required quantity that was never evaluated, is NOT RUN.
+  and never to a pass.
+* **No fixture PASS without explicit coverage.** `Query.Gate` needs `GateConfiguration.RequiredComparisons`, a non-empty
+  list of quantity-on-object comparisons (`RequiredComparison.Cross` builds all-object coverage). No list, an empty list
+  or a missing comparison is at best NOT RUN; quantity presence alone is not coverage. A higher-ranked FAIL or BLOCKED
+  outcome is never hidden by that cap, and a gate with nothing that gates is NOT RUN.
+* **A zeroed native object is never a pass.** A non-zero SAM value against a native object holding exactly 0 is an
+  EXPORT-DEFECT (or a listed limitation), however small the value; the generic `Query.Compare` mathematics is unchanged.
+* **Informational mismatches stay visible and do not gate.** A numeric mismatch on a quantity that is not gated (F-OPQ
+  ground and adiabatic U, derived g, ground temperature) is reported as informational; every other outcome of such a
+  quantity (absent, zero, NaN, unreadable, invalid, the G2 default, a listed limitation, a prerequisite) still gates.
 * `QuantityInput.Identity` defaults to `NotEstablished` and `Alignment` to `Unverified`. Writer-generated names, array
   order and GUIDs can only reach `WriterOnly`; only independent geometry evidence reaches `Verified`. Hourly
   quantities are capped at NOT RUN until the alignment is verified.

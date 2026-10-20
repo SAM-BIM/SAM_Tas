@@ -44,17 +44,32 @@ namespace SAM.Analytical.InputEquivalence.Tests
 
         private static QuantityResult Rank5() => Query.Evaluate(Base(native: ReaderResult.Absent(), listing: ContractListing.UnsupportedMapping), Accepting());
 
+        /// <summary>
+        /// Test helper: states the explicit coverage list for exactly the comparisons the test built, as a caller must,
+        /// so the rank behaviour can be tested apart from the coverage rule (which has its own tests).
+        /// </summary>
+        private static GateReport Covered(IEnumerable<QuantityResult> results, GateConfiguration configuration = null)
+        {
+            List<QuantityResult> list = results.ToList();
+            return Query.Gate(list, new GateConfiguration
+            {
+                RuleSet = configuration?.RuleSet ?? GateRuleSet.Interim,
+                Acceptances = configuration?.Acceptances ?? new OwnerAcceptance[0],
+                RequiredComparisons = list.Select(x => new RequiredComparison(x.Definition.Id, x.Input.ObjectKey)).ToList()
+            });
+        }
+
         // ---------------------------------------------------------------- the six ranks
 
         [Test]
         public void Each_Rank_Has_Its_Roadmap_Status()
         {
-            Assert.That(Query.Gate(new[] { Rank1() }).Status, Is.EqualTo(GateStatus.Fail));
-            Assert.That(Query.Gate(new[] { Rank2() }).Status, Is.EqualTo(GateStatus.BlockedTechnical));
-            Assert.That(Query.Gate(new[] { Rank3() }).Status, Is.EqualTo(GateStatus.BlockedOwnerDecision));
-            Assert.That(Query.Gate(new[] { Rank4() }).Status, Is.EqualTo(GateStatus.NotRun));
-            Assert.That(Query.Gate(new[] { Rank5() }).Status, Is.EqualTo(GateStatus.NotPassAcceptedLimitation));
-            Assert.That(Query.Gate(new[] { Pass() }).Status, Is.EqualTo(GateStatus.Pass));
+            Assert.That(Covered(new[] { Rank1() }).Status, Is.EqualTo(GateStatus.Fail));
+            Assert.That(Covered(new[] { Rank2() }).Status, Is.EqualTo(GateStatus.BlockedTechnical));
+            Assert.That(Covered(new[] { Rank3() }).Status, Is.EqualTo(GateStatus.BlockedOwnerDecision));
+            Assert.That(Covered(new[] { Rank4() }).Status, Is.EqualTo(GateStatus.NotRun));
+            Assert.That(Covered(new[] { Rank5() }).Status, Is.EqualTo(GateStatus.NotPassAcceptedLimitation));
+            Assert.That(Covered(new[] { Pass() }).Status, Is.EqualTo(GateStatus.Pass));
 
             Assert.That(new[] { GateStatus.Fail, GateStatus.BlockedTechnical, GateStatus.BlockedOwnerDecision, GateStatus.NotRun, GateStatus.NotPassAcceptedLimitation, GateStatus.Pass }.Select(x => (int)x), Is.EqualTo(new[] { 1, 2, 3, 4, 5, 6 }));
         }
@@ -63,51 +78,41 @@ namespace SAM.Analytical.InputEquivalence.Tests
         public void The_Highest_Ranked_Trigger_Decides_And_Every_Non_Pass_Item_Stays_Visible()
         {
             QuantityResult[] all = { Pass(), Rank5(), Rank4(), Rank3(), Rank2(), Rank1() };
-            GateReport report = Query.Gate(all);
+            GateReport report = Covered(all);
             Assert.That(report.Status, Is.EqualTo(GateStatus.Fail));
             Assert.That(report.NonPass.Count, Is.EqualTo(5));
             Assert.That(report.CountByOutcome.Values.Sum(), Is.EqualTo(6));
 
-            Assert.That(Query.Gate(new[] { Pass(), Rank5(), Rank4(), Rank3(), Rank2() }).Status, Is.EqualTo(GateStatus.BlockedTechnical));
-            Assert.That(Query.Gate(new[] { Pass(), Rank5(), Rank4(), Rank3() }).Status, Is.EqualTo(GateStatus.BlockedOwnerDecision));
-            Assert.That(Query.Gate(new[] { Pass(), Rank5(), Rank4() }).Status, Is.EqualTo(GateStatus.NotRun));
-            Assert.That(Query.Gate(new[] { Pass(), Rank5() }).Status, Is.EqualTo(GateStatus.NotPassAcceptedLimitation));
-            Assert.That(Query.Gate(new[] { Pass(), Pass() }).Status, Is.EqualTo(GateStatus.Pass));
+            Assert.That(Covered(new[] { Pass(), Rank5(), Rank4(), Rank3(), Rank2() }).Status, Is.EqualTo(GateStatus.BlockedTechnical));
+            Assert.That(Covered(new[] { Pass(), Rank5(), Rank4(), Rank3() }).Status, Is.EqualTo(GateStatus.BlockedOwnerDecision));
+            Assert.That(Covered(new[] { Pass(), Rank5(), Rank4() }).Status, Is.EqualTo(GateStatus.NotRun));
+            Assert.That(Covered(new[] { Pass(), Rank5() }).Status, Is.EqualTo(GateStatus.NotPassAcceptedLimitation));
+            Assert.That(Covered(new[] { Pass(), Pass() }).Status, Is.EqualTo(GateStatus.Pass));
         }
 
         [Test]
         public void The_Order_Of_The_Results_Does_Not_Change_The_Verdict()
         {
             QuantityResult[] all = { Pass(), Rank5(), Rank4(), Rank3(), Rank2(), Rank1() };
-            Assert.That(Query.Gate(Enumerable.Reverse(all)).Status, Is.EqualTo(Query.Gate(all).Status));
+            Assert.That(Covered(Enumerable.Reverse(all)).Status, Is.EqualTo(Covered(all).Status));
         }
 
         [Test]
-        public void An_Empty_Result_Set_Is_Never_A_Pass()
+        public void An_Empty_Result_Set_Is_Never_A_Pass_Even_With_A_Coverage_List()
         {
             Assert.That(Query.Gate(new QuantityResult[0]).Status, Is.EqualTo(GateStatus.NotRun));
             Assert.That(Query.Gate(null).Status, Is.EqualTo(GateStatus.NotRun));
-        }
 
-        [Test]
-        public void A_Required_Quantity_That_Was_Never_Evaluated_Makes_The_Gate_Not_Run()
-        {
-            GateConfiguration configuration = new GateConfiguration { RequiredQuantityIds = new[] { "1a", "2" } };
-            GateReport report = Query.Gate(new[] { Pass("1a") }, configuration);
-            Assert.That(report.Status, Is.EqualTo(GateStatus.NotRun));
-            Assert.That(report.MissingRequiredQuantityIds, Is.EqualTo(new[] { "2" }));
-            Assert.That(report.RequiredListSupplied, Is.True);
-
-            Assert.That(Query.Gate(new[] { Pass("1a"), Pass("2") }, configuration).Status, Is.EqualTo(GateStatus.Pass));
-            Assert.That(Query.Gate(new[] { Rank1() }, configuration).Status, Is.EqualTo(GateStatus.Fail), "a more severe rank is not hidden by a missing quantity");
-            Assert.That(Query.Gate(new[] { Pass("1a") }).RequiredListSupplied, Is.False, "without a list the gate says it cannot detect omissions");
+            GateConfiguration asking = new GateConfiguration { RequiredComparisons = new[] { new RequiredComparison("1a", "object") } };
+            Assert.That(Query.Gate(new QuantityResult[0], asking).Status, Is.EqualTo(GateStatus.NotRun));
+            Assert.That(Query.Gate(null, asking).Coverage, Is.EqualTo(CoverageStatus.Incomplete));
         }
 
         [Test]
         public void The_Gate_Is_Per_Fixture()
         {
             Assert.Throws<ArgumentException>(() => Query.Gate(new[] { Query.Evaluate(Base(fixture: "A")), Query.Evaluate(Base(fixture: "B")) }));
-            Assert.That(Query.Gate(new[] { Query.Evaluate(Base(fixture: "A")) }).FixtureId, Is.EqualTo("A"));
+            Assert.That(Covered(new[] { Query.Evaluate(Base(fixture: "A")) }).FixtureId, Is.EqualTo("A"));
         }
 
         // ---------------------------------------------------------------- owner acceptances (rank 5)
@@ -120,7 +125,7 @@ namespace SAM.Analytical.InputEquivalence.Tests
             Assert.That(accepted.Status, Is.EqualTo(GateStatus.NotPassAcceptedLimitation));
             Assert.That(accepted.IsPass, Is.False);
             Assert.That(accepted.AcceptedBy, Is.EqualTo("owner decision 2026-10-21 chat"));
-            Assert.That(Query.Gate(new[] { accepted, Pass("2") }).IsPass, Is.False);
+            Assert.That(Covered(new[] { accepted, Pass("2") }).IsPass, Is.False);
         }
 
         [Test]
@@ -148,8 +153,8 @@ namespace SAM.Analytical.InputEquivalence.Tests
         {
             GateConfiguration configuration = Accepting();
             QuantityResult accepted = Query.Evaluate(Base(native: ReaderResult.Absent(), listing: ContractListing.UnsupportedMapping), configuration);
-            Assert.That(Query.Gate(new[] { accepted, Rank1() }, configuration).Status, Is.EqualTo(GateStatus.Fail));
-            Assert.That(Query.Gate(new[] { accepted, Rank2() }, configuration).Status, Is.EqualTo(GateStatus.BlockedTechnical));
+            Assert.That(Covered(new[] { accepted, Rank1() }, configuration).Status, Is.EqualTo(GateStatus.Fail));
+            Assert.That(Covered(new[] { accepted, Rank2() }, configuration).Status, Is.EqualTo(GateStatus.BlockedTechnical));
         }
 
         [Test]
@@ -232,7 +237,7 @@ namespace SAM.Analytical.InputEquivalence.Tests
         {
             // The EFLH quantity is not hourly-aligned and passes on its own; the hourly series stays NOT RUN regardless.
             Assert.That(Query.Evaluate(Base("6.eflh", expected: ExpectedValue.FromValue(3000), native: ReaderResult.FromValue(3000))).IsPass, Is.True);
-            GateReport report = Query.Gate(new[]
+            GateReport report = Covered(new[]
             {
                 Query.Evaluate(Base("6.eflh", expected: ExpectedValue.FromValue(3000), native: ReaderResult.FromValue(3000))),
                 Query.Evaluate(Base("6.hourly", alignment: AlignmentStatus.Unverified))
@@ -265,17 +270,17 @@ namespace SAM.Analytical.InputEquivalence.Tests
         public void The_Report_Is_Labelled_Provisional_When_A_Proposed_Rule_Contributed()
         {
             QuantityResult g3 = Query.Evaluate(Base(native: ReaderResult.NotANumber()));
-            GateReport report = Query.Gate(new[] { g3, Pass("2") });
+            GateReport report = Covered(new[] { g3, Pass("2") });
             Assert.That(report.Provisional, Is.True);
             Assert.That(report.OwnerDecisionsNamed, Contains.Item("OD-G3"));
             Assert.That(report.RuleSet, Is.EqualTo(GateRuleSet.Interim));
-            Assert.That(Query.Gate(new[] { Pass() }).Provisional, Is.False);
+            Assert.That(Covered(new[] { Pass() }).Provisional, Is.False);
         }
 
         [Test]
         public void The_Report_Names_Technical_Blockers()
         {
-            GateReport report = Query.Gate(new[] { Rank2() });
+            GateReport report = Covered(new[] { Rank2() });
             Assert.That(report.TechnicalBlockersNamed.Single(), Does.Contain("COM"));
         }
     }

@@ -63,8 +63,10 @@ namespace SAM.Analytical.InputEquivalence
                 triggers.Add(new Trigger(EquivalenceOutcome.UnverifiedUnresolved, GateStatus.NotRun, "Hour/day-type alignment is unverified (S07 section 7); an EFLH agreement is supporting evidence only."));
             }
 
-            Trigger decisive = triggers[0];
-            foreach (Trigger trigger in triggers)
+            // An informational numeric mismatch (a non-gated quantity) never decides the status while a gating trigger exists.
+            List<Trigger> gating = triggers.Where(x => !x.Informational).ToList();
+            Trigger decisive = gating.Count > 0 ? gating[0] : triggers[0];
+            foreach (Trigger trigger in gating)
             {
                 if ((int)trigger.Status < (int)decisive.Status)
                 {
@@ -79,7 +81,7 @@ namespace SAM.Analytical.InputEquivalence
                 reason += " Also: " + string.Join(" ", others.Select(x => x.Reason));
             }
 
-            return new QuantityResult(input, decisive.Outcome, decisive.Status, reason, decisive.Comparison, decisive.Proposed, decisive.OwnerDecision, decisive.Technical, decisive.AcceptedBy);
+            return new QuantityResult(input, decisive.Outcome, decisive.Status, reason, decisive.Comparison, decisive.Proposed, decisive.OwnerDecision, decisive.Technical, decisive.AcceptedBy, decisive.Informational);
         }
 
         private sealed class Trigger
@@ -99,6 +101,18 @@ namespace SAM.Analytical.InputEquivalence
             public string OwnerDecision { get; set; }
             public string Technical { get; set; }
             public string AcceptedBy { get; set; }
+
+            /// <summary>A numeric mismatch on a quantity that is not gated: reported, never gating.</summary>
+            public bool Informational { get; set; }
+        }
+
+        private static Trigger NumericMismatch(QuantityInput input, NumericComparison comparison, string reason)
+        {
+            return new Trigger(EquivalenceOutcome.OutOfTolerance, GateStatus.Fail, reason + (input.Definition.Gated ? string.Empty : " The quantity is not gated (" + input.Definition.NotGatedReason + "), so this is informational and does not decide the fixture status."))
+            {
+                Comparison = comparison,
+                Informational = !input.Definition.Gated
+            };
         }
 
         private static Trigger CoreTrigger(QuantityInput input, GateConfiguration configuration)
@@ -148,6 +162,15 @@ namespace SAM.Analytical.InputEquivalence
                     // G3 (proposed, OD-G3): NaN is not a comparable value; a listed limitation does not cover it.
                     return GCase(configuration, EquivalenceOutcome.ExportDefect, GateStatus.Fail, "G3 (S-VALUE, native NaN)", "OD-G3", "The native value was read as NaN, which is not comparable; neither abs nor rel can pass it, and a listed limitation does not cover it.");
 
+                case ReaderKind.Zero:
+                    // S07 section 6: "abs never turns a missing or zeroed native object into a pass". A non-zero SAM value
+                    // against a native object that holds exactly 0 is a zeroed object, however small the SAM value is. It is
+                    // judged like a missing one: an export defect unless the contract lists an unsupported mapping or a
+                    // mapping difference. The numeric working is kept for the report, but is not used for the verdict.
+                    Trigger zeroed = ListedOrDefect(input, configuration, "SAM states a non-zero value (S-VALUE) but the native object holds exactly 0; abs never turns a zeroed native object into a pass.");
+                    zeroed.Comparison = Compare(expected.Value, native.Value, input.Definition.Tolerance);
+                    return zeroed;
+
                 default:
                     return NumericTrigger(input, expected.Value, native, configuration);
             }
@@ -168,7 +191,7 @@ namespace SAM.Analytical.InputEquivalence
                         return new Trigger(EquivalenceOutcome.WithinTolerance, GateStatus.Pass, "SAM is zero and the native value is within the tolerance of zero.") { Comparison = comparison };
                     }
 
-                    return new Trigger(EquivalenceOutcome.OutOfTolerance, GateStatus.Fail, "SAM is zero and the native holds a non-zero value outside the tolerance.") { Comparison = comparison };
+                    return NumericMismatch(input, comparison, "SAM is zero and the native holds a non-zero value outside the tolerance.");
 
                 case ReaderKind.Absent:
                     if (!string.IsNullOrWhiteSpace(input.TransformationId))
@@ -251,7 +274,7 @@ namespace SAM.Analytical.InputEquivalence
                 return trigger;
             }
 
-            return new Trigger(EquivalenceOutcome.OutOfTolerance, GateStatus.Fail, "The native value is outside the tolerance without a contract explanation.") { Comparison = comparison };
+            return NumericMismatch(input, comparison, "The native value is outside the tolerance without a contract explanation.");
         }
 
         private static Trigger ListedOrDefect(QuantityInput input, GateConfiguration configuration, string detail)
@@ -315,9 +338,15 @@ namespace SAM.Analytical.InputEquivalence
         }
 
         /// <summary>
-        /// The S07 section 6 gate for one fixture: the lowest rank present decides, and only rank 6 is a pass. A
-        /// pass needs at least one result, every result a pass, and every required quantity resolved. An empty set,
-        /// a missing required quantity, an unsupported, unverified or accepted-limitation item can never give PASS.
+        /// The S07 section 6 gate for one fixture: the lowest rank present decides, and only rank 6 is a pass.
+        /// <para>
+        /// A pass needs an explicit, non-empty and complete list of the required quantity-on-object comparisons
+        /// (<see cref="GateConfiguration.RequiredComparisons"/>), at least one gating result, and every gating result a
+        /// pass. The gate never infers its own coverage from the results it was given: with no list, an empty list or a
+        /// required comparison missing the status is at best NOT RUN. A higher-ranked FAIL or BLOCKED outcome is never
+        /// hidden by that cap. Informational numeric mismatches (quantities that are not gated) are reported and do not
+        /// decide the status; every other outcome of a non-gated quantity still gates.
+        /// </para>
         /// </summary>
         public static GateReport Gate(IEnumerable<QuantityResult> results, GateConfiguration configuration = null)
         {
@@ -330,16 +359,33 @@ namespace SAM.Analytical.InputEquivalence
                 throw new ArgumentException("The gate is per fixture; results of " + fixtures.Count + " fixtures were supplied.", nameof(results));
             }
 
-            bool requiredSupplied = configuration.RequiredQuantityIds != null;
-            List<string> missing = new List<string>();
-            if (requiredSupplied)
+            // Coverage: explicit, non-empty, complete. Key = quantity identifier and object key; quantity presence is not enough.
+            CoverageStatus coverage;
+            List<RequiredComparison> missing = new List<RequiredComparison>();
+            List<QuantityResult> unrequested = new List<QuantityResult>();
+            List<RequiredComparison> required = configuration.RequiredComparisons?.Where(x => x != null).ToList();
+
+            if (configuration.RequiredComparisons == null)
             {
-                HashSet<string> present = new HashSet<string>(list.Select(x => x.Definition?.Id), StringComparer.Ordinal);
-                missing = configuration.RequiredQuantityIds.Where(x => !present.Contains(x)).Distinct().ToList();
+                coverage = CoverageStatus.NotSupplied;
+            }
+            else if (required.Count == 0)
+            {
+                coverage = CoverageStatus.Empty;
+            }
+            else
+            {
+                HashSet<string> present = new HashSet<string>(list.Where(x => !string.IsNullOrWhiteSpace(x.Input?.ObjectKey)).Select(x => CoverageKey(x.Definition?.Id, x.Input.ObjectKey)), StringComparer.Ordinal);
+                HashSet<string> asked = new HashSet<string>(required.Select(x => CoverageKey(x.QuantityId, x.ObjectKey)), StringComparer.Ordinal);
+
+                missing = required.Where(x => !present.Contains(CoverageKey(x.QuantityId, x.ObjectKey))).GroupBy(x => CoverageKey(x.QuantityId, x.ObjectKey)).Select(x => x.First()).ToList();
+                unrequested = list.Where(x => !asked.Contains(CoverageKey(x.Definition?.Id, x.Input?.ObjectKey))).ToList();
+                coverage = missing.Count == 0 ? CoverageStatus.Complete : CoverageStatus.Incomplete;
             }
 
+            List<QuantityResult> gating = list.Where(x => x.GatesFixture).ToList();
             GateStatus status = GateStatus.Pass;
-            foreach (QuantityResult result in list)
+            foreach (QuantityResult result in gating)
             {
                 if ((int)result.Status < (int)status)
                 {
@@ -347,13 +393,18 @@ namespace SAM.Analytical.InputEquivalence
                 }
             }
 
-            // Nothing evaluated, or a required quantity never evaluated: not resolved, so at best NOT RUN.
-            if ((list.Count == 0 || missing.Count > 0) && (int)status > (int)GateStatus.NotRun)
+            // Unknown, empty or incomplete coverage, or nothing that can gate: not resolved, so at best NOT RUN.
+            if ((coverage != CoverageStatus.Complete || gating.Count == 0) && (int)status > (int)GateStatus.NotRun)
             {
                 status = GateStatus.NotRun;
             }
 
-            return new GateReport(fixtures.Count == 1 ? fixtures[0] : null, status, list, missing, requiredSupplied, configuration.RuleSet);
+            return new GateReport(fixtures.Count == 1 ? fixtures[0] : null, status, list, coverage, missing, unrequested, configuration.RuleSet);
+        }
+
+        private static string CoverageKey(string quantityId, string objectKey)
+        {
+            return quantityId + "\u0001" + objectKey;
         }
     }
 }

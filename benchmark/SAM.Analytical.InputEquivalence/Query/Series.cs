@@ -10,14 +10,23 @@ namespace SAM.Analytical.InputEquivalence
     /// <summary>The evaluation of an hourly (or any ordered) series: one result per element and the aggregate.</summary>
     public sealed class SeriesResult
     {
-        public SeriesResult(QuantityResult aggregate, IReadOnlyList<QuantityResult> elements)
+        public SeriesResult(QuantityResult aggregate, IReadOnlyList<QuantityResult> elements, string seriesObjectKey)
         {
             Aggregate = aggregate;
             Elements = elements;
+
+            // One result for the whole series, keyed by the series object (not by the decisive hour), so it can satisfy a
+            // required comparison. It carries the decisive element's verdict and names the element in the reason.
+            QuantityInput input = Query.With(aggregate.Input, aggregate.Input.Expected, aggregate.Input.Native, seriesObjectKey, aggregate.Input.Listing);
+            string element = aggregate.Input.ObjectKey != seriesObjectKey ? " [decisive element " + aggregate.Input.ObjectKey + " of " + elements.Count + "]" : string.Empty;
+            GateResult = new QuantityResult(input, aggregate.Outcome, aggregate.Status, aggregate.Reason + element, aggregate.Comparison, aggregate.Proposed, aggregate.OwnerDecisionNamed, aggregate.TechnicalBlockerNamed, aggregate.AcceptedBy, aggregate.IsInformational);
         }
 
         /// <summary>The decisive element result (the lowest rank; the first on a tie). When every element passes, a within-tolerance one if any.</summary>
         public QuantityResult Aggregate { get; }
+
+        /// <summary>The series verdict as one result keyed by the series object: pass this to <see cref="Query.Gate"/>, not an element.</summary>
+        public QuantityResult GateResult { get; }
 
         public IReadOnlyList<QuantityResult> Elements { get; }
 
@@ -63,7 +72,7 @@ namespace SAM.Analytical.InputEquivalence
                 QuantityResult mismatch = new QuantityResult(prototype, EquivalenceOutcome.ExportDefect, GateStatus.Fail,
                     "The expected and native series are empty or differ in length (" + (expected?.Count ?? 0) + " vs " + (native?.Count ?? 0) + "); a series is never truncated or padded.", null, null, null, null, null);
 
-                return new SeriesResult(mismatch, new[] { mismatch });
+                return new SeriesResult(mismatch, new[] { mismatch }, prototype.ObjectKey);
             }
 
             List<QuantityResult> elements = new List<QuantityResult>(expected.Count);
@@ -86,7 +95,7 @@ namespace SAM.Analytical.InputEquivalence
                 decisive = elements.FirstOrDefault(x => x.Outcome == EquivalenceOutcome.WithinTolerance) ?? decisive;
             }
 
-            return new SeriesResult(decisive, elements);
+            return new SeriesResult(decisive, elements, prototype.ObjectKey);
         }
     }
 }

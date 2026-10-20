@@ -9,8 +9,11 @@ namespace SAM.Analytical.InputEquivalence
 {
     /// <summary>
     /// One compared S07 section 5 quantity: its identifier, unit, tolerance and whether it is hour-aligned and
-    /// gated. <see cref="Gated"/> follows the <b>proposed</b> OD-G2 definition (S07 section 6.1), which the owner has
-    /// not approved; it only changes which owner decision a rank 3 item names, never whether it can pass.
+    /// gated. In the catalogue the quantities with <c>Gated == false</c> are exactly the ones S07 states are informational or
+    /// not gated (the F-OPQ ground and adiabatic U, the derived g, the ground temperature). A numeric mismatch on such a
+    /// quantity is reported as informational and does not decide the fixture status; every other outcome still gates, and an
+    /// unaccepted DOCUMENTED-DEFAULT on one is the proposed G2 case (S07 section 6.1, OD-G2, not approved). The general
+    /// "gated quantity" definition stays the owner's to approve; nothing here can make a result pass.
     /// </summary>
     public sealed class QuantityDefinition
     {
@@ -35,7 +38,7 @@ namespace SAM.Analytical.InputEquivalence
         public string Unit { get; }
         public ToleranceRule Tolerance { get; }
 
-        /// <summary>Proposed OD-G2 definition: every quantity with a tolerance except the ones S07 marks informational, not gated or outside S07.</summary>
+        /// <summary>False only for the quantities S07 states are informational or not gated; a numeric mismatch on them is informational (does not decide the fixture status).</summary>
         public bool Gated { get; }
 
         public string NotGatedReason { get; }

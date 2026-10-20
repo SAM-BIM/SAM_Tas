@@ -10,7 +10,7 @@ namespace SAM.Analytical.InputEquivalence
     /// <summary>The evaluated outcome of one quantity on one object, with its working.</summary>
     public sealed class QuantityResult
     {
-        public QuantityResult(QuantityInput input, EquivalenceOutcome outcome, GateStatus status, string reason, NumericComparison comparison, string proposed, string ownerDecisionNamed, string technicalBlockerNamed, string acceptedBy)
+        public QuantityResult(QuantityInput input, EquivalenceOutcome outcome, GateStatus status, string reason, NumericComparison comparison, string proposed, string ownerDecisionNamed, string technicalBlockerNamed, string acceptedBy, bool isInformational = false)
         {
             Input = input;
             Outcome = outcome;
@@ -21,6 +21,7 @@ namespace SAM.Analytical.InputEquivalence
             OwnerDecisionNamed = ownerDecisionNamed;
             TechnicalBlockerNamed = technicalBlockerNamed;
             AcceptedBy = acceptedBy;
+            IsInformational = isInformational;
         }
 
         public QuantityInput Input { get; }
@@ -48,12 +49,83 @@ namespace SAM.Analytical.InputEquivalence
         /// <summary>The recorded decision that moved this result to rank 5. Null otherwise.</summary>
         public string AcceptedBy { get; }
 
+        /// <summary>
+        /// True for a numeric mismatch on a quantity that is not gated (S07: the F-OPQ ground and adiabatic U, the derived g,
+        /// the ground temperature). The comparison and its own verdict (<see cref="Outcome"/>, <see cref="Status"/>) stay visible
+        /// in the report, but it does not decide the fixture status. Only a numeric mismatch is informational: an absent,
+        /// NaN, unreadable or invalid value, a proposed OD-G case, a G2 default and every prerequisite still gate.
+        /// </summary>
+        public bool IsInformational { get; }
+
+        /// <summary>False for an informational result.</summary>
+        public bool GatesFixture => !IsInformational;
+
         public bool IsPass => Status == GateStatus.Pass;
 
         public override string ToString()
         {
-            return (Definition?.Id ?? "?") + " " + (Input?.ObjectKey ?? string.Empty) + ": " + Outcome + " -> " + Status + (Proposed != null ? " (proposed)" : string.Empty);
+            return (Definition?.Id ?? "?") + " " + (Input?.ObjectKey ?? string.Empty) + ": " + Outcome + " -> " + Status + (Proposed != null ? " (proposed)" : string.Empty) + (IsInformational ? " (informational, does not gate)" : string.Empty);
         }
+    }
+
+    /// <summary>
+    /// One comparison the fixture verdict needs: a quantity on a named object (a space, a panel side, an aperture, a
+    /// profile). Quantity presence alone is not coverage: "floor area" for one zone says nothing about the other zones.
+    /// </summary>
+    public sealed class RequiredComparison
+    {
+        public RequiredComparison(string quantityId, string objectKey)
+        {
+            if (string.IsNullOrWhiteSpace(quantityId) || string.IsNullOrWhiteSpace(objectKey))
+            {
+                throw new ArgumentException("A required comparison needs a quantity identifier and an object key.");
+            }
+
+            QuantityId = quantityId;
+            ObjectKey = objectKey;
+        }
+
+        public string QuantityId { get; }
+        public string ObjectKey { get; }
+
+        /// <summary>
+        /// Every quantity on every object: the all-object coverage for quantities that apply to each listed object. A
+        /// quantity that does not apply to an object must be left out by building the list from explicit pairs instead.
+        /// </summary>
+        public static IReadOnlyCollection<RequiredComparison> Cross(IEnumerable<string> quantityIds, IEnumerable<string> objectKeys)
+        {
+            List<string> objects = (objectKeys ?? Enumerable.Empty<string>()).ToList();
+            List<RequiredComparison> result = new List<RequiredComparison>();
+            foreach (string quantityId in quantityIds ?? Enumerable.Empty<string>())
+            {
+                foreach (string objectKey in objects)
+                {
+                    result.Add(new RequiredComparison(quantityId, objectKey));
+                }
+            }
+
+            return result;
+        }
+
+        public override string ToString()
+        {
+            return QuantityId + " @ " + ObjectKey;
+        }
+    }
+
+    /// <summary>Whether the fixture verdict could rest on an explicit, complete list of the comparisons it needs.</summary>
+    public enum CoverageStatus
+    {
+        /// <summary>The caller gave no list. Coverage is unknown, so the fixture cannot pass.</summary>
+        NotSupplied,
+
+        /// <summary>The caller gave an empty list. Rejected: an empty list is not a statement of completeness.</summary>
+        Empty,
+
+        /// <summary>A required comparison has no result.</summary>
+        Incomplete,
+
+        Complete
     }
 
     /// <summary>
@@ -62,13 +134,14 @@ namespace SAM.Analytical.InputEquivalence
     /// </summary>
     public sealed class GateReport
     {
-        public GateReport(string fixtureId, GateStatus status, IReadOnlyList<QuantityResult> results, IReadOnlyList<string> missingRequiredQuantityIds, bool requiredListSupplied, GateRuleSet ruleSet)
+        public GateReport(string fixtureId, GateStatus status, IReadOnlyList<QuantityResult> results, CoverageStatus coverage, IReadOnlyList<RequiredComparison> missingComparisons, IReadOnlyList<QuantityResult> unrequested, GateRuleSet ruleSet)
         {
             FixtureId = fixtureId;
             Status = status;
             Results = results;
-            MissingRequiredQuantityIds = missingRequiredQuantityIds;
-            RequiredListSupplied = requiredListSupplied;
+            Coverage = coverage;
+            MissingComparisons = missingComparisons;
+            Unrequested = unrequested;
             RuleSet = ruleSet;
         }
 
@@ -76,11 +149,18 @@ namespace SAM.Analytical.InputEquivalence
         public GateStatus Status { get; }
         public IReadOnlyList<QuantityResult> Results { get; }
 
-        /// <summary>Required quantities with no result. A non-empty list makes the status NOT RUN at best.</summary>
-        public IReadOnlyList<string> MissingRequiredQuantityIds { get; }
+        /// <summary>
+        /// Whether an explicit, non-empty and complete list of the required comparisons backed the verdict. Anything other
+        /// than <see cref="CoverageStatus.Complete"/> caps the status at NOT RUN: the gate never infers its own coverage
+        /// from the results it happens to have been given.
+        /// </summary>
+        public CoverageStatus Coverage { get; }
 
-        /// <summary>False when the caller gave no required list, so a never-evaluated quantity cannot be detected.</summary>
-        public bool RequiredListSupplied { get; }
+        /// <summary>Required quantity-on-object comparisons with no result. Non-empty only when <see cref="Coverage"/> is Incomplete.</summary>
+        public IReadOnlyList<RequiredComparison> MissingComparisons { get; }
+
+        /// <summary>Results that no required comparison asked for (reported, and still counted in the verdict).</summary>
+        public IReadOnlyList<QuantityResult> Unrequested { get; }
 
         public GateRuleSet RuleSet { get; }
 
@@ -104,8 +184,11 @@ namespace SAM.Analytical.InputEquivalence
             }
         }
 
-        /// <summary>Every result that is not a pass, in input order.</summary>
-        public IReadOnlyList<QuantityResult> NonPass => Results.Where(x => !x.IsPass).ToList();
+        /// <summary>Every gating result that is not a pass, in input order. Informational mismatches are listed separately.</summary>
+        public IReadOnlyList<QuantityResult> NonPass => Results.Where(x => x.GatesFixture && !x.IsPass).ToList();
+
+        /// <summary>Numeric mismatches on quantities that are not gated: visible, with their own verdict, never deciding the fixture status.</summary>
+        public IReadOnlyList<QuantityResult> InformationalMismatches => Results.Where(x => x.IsInformational).ToList();
 
         public IReadOnlyList<string> OwnerDecisionsNamed => Results.Select(x => x.OwnerDecisionNamed).Where(x => x != null).Distinct().ToList();
 
@@ -113,8 +196,8 @@ namespace SAM.Analytical.InputEquivalence
 
         public override string ToString()
         {
-            return FixtureId + ": " + Status + (Provisional ? " (provisional: unapproved OD-G rules applied)" : string.Empty) + ", " + Results.Count + " result(s), " + NonPass.Count + " not pass" +
-                   (MissingRequiredQuantityIds.Count > 0 ? ", missing: " + string.Join(",", MissingRequiredQuantityIds) : string.Empty);
+            return FixtureId + ": " + Status + (Provisional ? " (provisional: unapproved OD-G rules applied)" : string.Empty) + ", " + Results.Count + " result(s), " + NonPass.Count + " not pass, " + InformationalMismatches.Count + " informational, coverage " + Coverage +
+                   (MissingComparisons.Count > 0 ? ", missing: " + string.Join(", ", MissingComparisons) : string.Empty);
         }
     }
 }
