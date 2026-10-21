@@ -15,7 +15,9 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
     /// The false-PASS routes found by the independent review of SAM_Tas#105 (2026-10-21), each replayed on the committed real
     /// snapshots through the run verdict (<see cref="ReadBackReport"/>) or the full <see cref="ReadBackCompare.Run"/> path:
     /// a schedule SAM does not state, a SAM space without an internal condition, native annual arrays outside the calibrated
-    /// domain, an extra native design day, and provenance that does not prove a fresh, unchanged read. None may PASS.
+    /// domain, an extra native design day, and provenance that does not prove a fresh, unchanged read. The review of revision 2
+    /// added two: a derived U whose native film inputs (inclination, surface type) are not usable, and a snapshot without
+    /// the per-run calendar that decides day-type applicability. None may PASS.
     /// </summary>
     [TestFixture]
     public class FalsePassRegressionTests
@@ -327,6 +329,160 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             ReadBackReport report = FullCompare(run, snapshot, GateRuleSet.Interim, manifest);
 
             Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.Infrastructure), report.Status);
+        }
+
+        // ---- 4. derived U: the native film-selection inputs (review of revision 2) ----------------------------------------
+
+        private static NativeSurface OpaqueWall(NativeSnapshot snapshot)
+        {
+            return snapshot.Zones[0].Surfaces.First(x => !ReadBackIdentity.IsOpening(x) && x.Inclination.HasNumber && x.Inclination.Value == 90);
+        }
+
+        private static IEnumerable<TestCaseData> FilmDependencyFailures()
+        {
+            foreach (GateRuleSet ruleSet in BothRuleSets)
+            {
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Inclination = NativeField.Unreadable("regression: inclination getter failed")), ruleSet, "inclination, which is Unreadable [regression: inclination getter failed]").SetName("FilmInput_InclinationUnreadable_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Inclination = NativeField.Absent("regression: no inclination")), ruleSet, "inclination, which is Absent [regression: no inclination]").SetName("FilmInput_InclinationAbsent_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Inclination = NativeField.Of(double.NaN)), ruleSet, "inclination, which is NaN").SetName("FilmInput_InclinationNaN_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Inclination = null), ruleSet, "inclination, which was not read").SetName("FilmInput_InclinationNotRead_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Inclination = NativeField.Of(-999)), ruleSet, "inclination -999 is outside 0..180").SetName("FilmInput_InclinationBelowDomain_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Inclination = NativeField.Of(270)), ruleSet, "inclination 270 is outside 0..180").SetName("FilmInput_InclinationAboveDomain_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Type = null), ruleSet, "surface type, which was not read").SetName("FilmInput_SurfaceTypeNotRead_" + ruleSet);
+                yield return new TestCaseData((Action<NativeSurface>)(s => s.Type = "tbdShade"), ruleSet, "surface type, which is 'tbdShade'").SetName("FilmInput_SurfaceTypeUnrecognised_" + ruleSet);
+            }
+        }
+
+        /// <summary>
+        /// The derived U (3b) depends on the native film selection (inclination and surface type). A dependency that is not
+        /// a usable number or recognised type leaves the native U undeterminable: BLOCKED technical with the dependency's own
+        /// reader state named, never an assumed Horizontal or External film. Only that side's U changes.
+        /// </summary>
+        [TestCaseSource(nameof(FilmDependencyFailures))]
+        public void FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action<NativeSurface> change, GateRuleSet ruleSet, string named)
+        {
+            string run = Evidence.Unpack(Box);
+            NativeSnapshot snapshot = Evidence.Snapshot(run);
+            change(OpaqueWall(snapshot));
+            ReadBackReport report = FullCompare(run, snapshot, ruleSet);
+
+            Assert.That(report.NotPass, Has.Count.EqualTo(1), string.Join(" | ", report.NotPass));
+            Assert.That(report.NotPass[0], Does.StartWith(GateStatus.BlockedTechnical + " 3b panel:").And.EndWith(".U"));
+            ReportResult u = report.Results.Single(x => x.QuantityId == "3b" && report.NotPass[0].EndsWith(" " + x.ObjectKey, StringComparison.Ordinal));
+            Assert.That(u.Outcome, Is.EqualTo(EquivalenceOutcome.UnverifiedUnreadable.ToString()), u.Reason);
+            Assert.That(u.TechnicalBlocker, Does.Contain(named).And.Contain("no film is assumed"));
+            Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.BlockedTechnical), report.Status);
+        }
+
+        [TestCaseSource(nameof(BothRuleSets))]
+        public void FilmInput_TheMeasuredInclinationsAndRecognisedTypes_StillPass(GateRuleSet ruleSet)
+        {
+            // Box: inclinations 0, 90 and 180 with tbdExposed and tbdGround. Two-zone: also the tbdLink partition sides.
+            string box = Evidence.Unpack(Box);
+            ReadBackReport boxReport = FullCompare(box, Evidence.Snapshot(box), ruleSet);
+            Assert.That(boxReport.ExitCode, Is.EqualTo(ReadBackExit.Pass), string.Join(" | ", boxReport.NotPass));
+
+            string two = Evidence.Unpack("calib-two");
+            NativeSnapshot twoSnapshot = Evidence.Snapshot(two);
+            Assert.That(twoSnapshot.Zones.SelectMany(x => x.Surfaces).Select(x => x.Type).Distinct(), Is.EquivalentTo(new[] { "tbdExposed", "tbdGround", "tbdLink" }));
+            ReadBackReport twoReport = FullCompare(two, twoSnapshot, ruleSet);
+            List<ReportResult> u = twoReport.Results.Where(x => x.QuantityId.StartsWith("3b", StringComparison.Ordinal)).ToList();
+            Assert.That(u, Is.Not.Empty);
+            Assert.That(u.All(x => x.Status == GateStatus.Pass.ToString()), string.Join(" | ", u.Where(x => x.Status != GateStatus.Pass.ToString()).Select(x => x.ObjectKey + " " + x.Reason)));
+        }
+
+        // ---- 5. calendar applicability evidence (review of revision 2) ----------------------------------------------------
+
+        private static readonly string[] ScheduleRows = { "5.temperature", "5.humidity", "6.hourly", "6.eflh", "8b" };
+
+        private static IEnumerable<TestCaseData> CalendarEvidenceMissing()
+        {
+            foreach (GateRuleSet ruleSet in BothRuleSets)
+            {
+                yield return new TestCaseData((Action<NativeCalendar, NativeSnapshot>)((c, s) => s.Calendar = null), ruleSet, "the snapshot holds no native calendar").SetName("Calendar_Omitted_" + ruleSet);
+                yield return new TestCaseData((Action<NativeCalendar, NativeSnapshot>)((c, s) => c.Days = null), ruleSet, "the native calendar holds no days").SetName("Calendar_DaysOmitted_" + ruleSet);
+            }
+        }
+
+        /// <summary>
+        /// Without the per-run calendar the day-type applicability of every annual schedule is unread: every hour of rows 5,
+        /// 6 and 8b is BLOCKED technical with the calendar named, never unmasked profiles certified by the alignment rules.
+        /// </summary>
+        [TestCaseSource(nameof(CalendarEvidenceMissing))]
+        public void Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action<NativeCalendar, NativeSnapshot> change, GateRuleSet ruleSet, string named)
+        {
+            string run = Evidence.Unpack(Box);
+            NativeSnapshot snapshot = Evidence.Snapshot(run);
+            change(snapshot.Calendar, snapshot);
+            ReadBackReport report = FullCompare(run, snapshot, ruleSet);
+
+            List<ReportResult> rows = report.Results.Where(x => ScheduleRows.Contains(x.QuantityId)).ToList();
+            Assert.That(rows.Select(x => x.QuantityId).Distinct(), Is.EquivalentTo(ScheduleRows));
+            foreach (ReportResult row in rows)
+            {
+                Assert.That(row.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()), row.QuantityId + " " + row.ObjectKey + ": " + row.Reason);
+                Assert.That(row.TechnicalBlocker, Does.Contain(named), row.ObjectKey);
+            }
+
+            Assert.That(report.NotPass.All(x => ScheduleRows.Any(q => x.Contains(" " + q + " "))), "nothing outside the schedule rows changes: " + string.Join(" | ", report.NotPass.Where(x => !ScheduleRows.Any(q => x.Contains(" " + q + " ")))));
+            Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.BlockedTechnical), report.Status);
+        }
+
+        private static IEnumerable<TestCaseData> CalendarDayUnread()
+        {
+            foreach (GateRuleSet ruleSet in BothRuleSets)
+            {
+                yield return new TestCaseData((Action<NativeCalendar>)(c => c.Days.RemoveAll(x => x.Index == 100)), ruleSet, "calendar day 100 was read 0 times").SetName("Calendar_DayMissing_" + ruleSet);
+                yield return new TestCaseData((Action<NativeCalendar>)(c => { NativeCalendarDay d = c.Days.Single(x => x.Index == 100); d.DayType = null; d.Detail = "unreadable: COMException"; }), ruleSet, "calendar day 100 has no day type (unreadable: COMException)").SetName("Calendar_DayTypeUnreadable_" + ruleSet);
+                yield return new TestCaseData((Action<NativeCalendar>)(c => c.Days.Add(new NativeCalendarDay { Index = 100, DayType = "Sunday" })), ruleSet, "calendar day 100 was read 2 times").SetName("Calendar_DayDuplicated_" + ruleSet);
+            }
+        }
+
+        /// <summary>One unread calendar day (index 100 = SAM day 100) blocks exactly that day's hours; every element is kept.</summary>
+        [TestCaseSource(nameof(CalendarDayUnread))]
+        public void Calendar_OneDayUnread_BlocksThatDaysHours(Action<NativeCalendar> change, GateRuleSet ruleSet, string named)
+        {
+            string run = Evidence.Unpack(Box);
+            NativeSnapshot snapshot = Evidence.Snapshot(run);
+            change(snapshot.Calendar);
+            ReadBackReport report = FullCompare(run, snapshot, ruleSet);
+
+            ReportResult hourly = Item(report, "6.hourly", ".ticLG.hourly");
+            Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()), hourly.Reason);
+            Assert.That(hourly.TechnicalBlocker, Does.Contain(named));
+            Assert.That(hourly.Series.ElementCount, Is.EqualTo(8760), "every element is kept");
+            Assert.That(hourly.Series.NotPassCount, Is.EqualTo(24), "only the unread day's hours");
+            Assert.That(hourly.Series.FirstNotPass.First(), Is.EqualTo(99 * 24));
+            Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.BlockedTechnical), report.Status);
+        }
+
+        [Test]
+        public void Calendar_ADayTypeTheConditionDoesNotCarry_IsStillMaskedAsAbsent_NotUnread()
+        {
+            // Preserved: a read day whose type the annual condition does not carry masks the profile (native absent), so a
+            // stated SAM schedule is an export defect on that day - a different, named outcome from an unread calendar.
+            string run = Evidence.Unpack(Box);
+            NativeSnapshot snapshot = Evidence.Snapshot(run);
+            snapshot.Calendar.Days.Single(x => x.Index == 100).DayType = "HDD";
+            ReadBackReport report = FullCompare(run, snapshot);
+
+            ReportResult hourly = Item(report, "6.hourly", ".ticLG.hourly");
+            Assert.That(hourly.Status, Is.EqualTo(GateStatus.Fail.ToString()), hourly.Reason);
+            Assert.That(hourly.Series.NotPassCount, Is.EqualTo(24));
+            Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.Fail), report.Status);
+        }
+
+        [Test]
+        public void Calendar_Missing_UnderAnUnverifiedCalendarRule_StaysNotRun()
+        {
+            // Preserved: with N-6 (and the alignment rules) unverified the schedules are NOT RUN on the convention, as before.
+            string run = Evidence.Unpack(Box);
+            NativeSnapshot snapshot = Evidence.Snapshot(run);
+            snapshot.Calendar = null;
+            ReadBackComparison comparison = Evidence.Compare(run, snapshot, rules: CalibrationRules.None());
+
+            Assert.That(comparison.Results.Where(x => x.Definition.Id == "6.hourly").All(x => x.Status == GateStatus.NotRun));
+            Assert.That(comparison.Gate.Status, Is.EqualTo(GateStatus.NotRun));
         }
     }
 }

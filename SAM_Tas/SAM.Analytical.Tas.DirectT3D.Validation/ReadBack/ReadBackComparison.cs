@@ -337,13 +337,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             // conditions are still read and compared, so a non-zero native gain or schedule cannot disappear.
             NativeInternalCondition ic = NormalCondition(zone, out string icProblem);
             ReaderResult icMissing = zone == null ? ReaderResult.Absent("no native zone") : ReaderResult.Unreadable(icProblem);
-            bool[] covered = DayCoverage(ic, out string calendarNote);
+            ReaderResult[] dayMask = DayCoverage(ic, out string calendarNote);
             if (calendarNote != null) Supporting.Add(spaceKey + ": " + calendarNote);
 
             CompareGains(space, zone, ic, icMissing, zoneIdentity);
-            CompareThermostat(space, ic, icMissing, zoneIdentity, covered);
-            CompareSchedules(space, ic, icMissing, zoneIdentity, covered);
-            CompareInfiltrationAndVentilation(space, zone, ic, icMissing, zoneIdentity, covered, volumeInterpretation);
+            CompareThermostat(space, ic, icMissing, zoneIdentity, dayMask);
+            CompareSchedules(space, ic, icMissing, zoneIdentity, dayMask);
+            CompareInfiltrationAndVentilation(space, zone, ic, icMissing, zoneIdentity, dayMask, volumeInterpretation);
             RecordHdd(space, zone);
         }
 
@@ -430,6 +430,16 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             return panel.Outer.GetPoints().Max(x => x.Z) <= bottom + Core.Tolerance.MacroDistance ? InputEquivalence.HeatFlowDirection.Downward : InputEquivalence.HeatFlowDirection.Upward;
         }
 
+        /// <summary>The native surface types the film selection recognises (unchanged from revision 1); no other is assumed.</summary>
+        private static readonly Dictionary<string, ElementKind> SurfaceKinds = new Dictionary<string, ElementKind>(StringComparer.Ordinal)
+        {
+            { "tbdExposed", ElementKind.External },
+            { "tbdInternal", ElementKind.Internal },
+            { "tbdLink", ElementKind.Internal },
+            { "tbdGround", ElementKind.GroundOrAdiabatic },
+            { "tbdNullLink", ElementKind.GroundOrAdiabatic }
+        };
+
         private static ReaderResult NativeU(List<NativeLayer> layers, NativeSurface surface)
         {
             if (layers == null || layers.Count == 0)
@@ -447,8 +457,25 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             }
 
             // Films from the native geometry: inclination 90 is a wall, 0 faces up (roof, ceiling), 180 down (floor), as measured.
-            InputEquivalence.HeatFlowDirection direction = !surface.Inclination.HasNumber ? InputEquivalence.HeatFlowDirection.Horizontal : surface.Inclination.Value < 60 ? InputEquivalence.HeatFlowDirection.Upward : surface.Inclination.Value > 120 ? InputEquivalence.HeatFlowDirection.Downward : InputEquivalence.HeatFlowDirection.Horizontal;
-            ElementKind kind = surface.Type == "tbdGround" || surface.Type == "tbdNullLink" ? ElementKind.GroundOrAdiabatic : surface.Type == "tbdInternal" || surface.Type == "tbdLink" ? ElementKind.Internal : ElementKind.External;
+            // An inclination that is not a number in 0..180, or a surface type outside the recognised ones, leaves the film and
+            // so the native U undeterminable: unreadable with the input's own reader state named, never an assumed film. (Not
+            // Absent: against an S-UNSPEC U that would pass, although the native layers exist.)
+            if (surface.Inclination == null || !surface.Inclination.HasNumber)
+            {
+                return ReaderResult.Unreadable("the film selection needs the native inclination, which " + (surface.Inclination == null ? "was not read" : "is " + surface.Inclination) + "; no film is assumed");
+            }
+
+            if (surface.Inclination.Value < 0 || surface.Inclination.Value > 180)
+            {
+                return ReaderResult.Unreadable("the native inclination " + Num(surface.Inclination.Value) + " is outside 0..180; no film is assumed");
+            }
+
+            if (!SurfaceKinds.TryGetValue(surface.Type ?? string.Empty, out ElementKind kind))
+            {
+                return ReaderResult.Unreadable("the film selection needs the native surface type, which " + (surface.Type == null ? "was not read" : "is '" + surface.Type + "', not one of " + string.Join(", ", SurfaceKinds.Keys)) + "; no film is assumed");
+            }
+
+            InputEquivalence.HeatFlowDirection direction = surface.Inclination.Value < 60 ? InputEquivalence.HeatFlowDirection.Upward : surface.Inclination.Value > 120 ? InputEquivalence.HeatFlowDirection.Downward : InputEquivalence.HeatFlowDirection.Horizontal;
             ExpectedValue u = EQ.ExpectedOpaqueU(layers.Select(x => LayerResistance.Solid(x.MaterialWidth.Value, x.Conductivity.Value)), direction, kind);
             return u.State == SamInputState.Value ? ReaderResult.FromValue(u.Value) : ReaderResult.Absent("the native layers give no U (" + u.Detail + ")");
         }
@@ -688,32 +715,52 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
 
         /// <summary>
         /// Which simulated days the annual condition applies on: calendar days(i) (index base per N-6) whose day type the
-        /// condition carries. Null when the calendar rule is unverified (then nothing is masked and alignment stays unverified).
+        /// condition carries. Per day: null when it applies; native Absent when the read day type is not carried; Unreadable
+        /// when the snapshot does not prove the day's type (no calendar, no days, the day not read exactly once, or without a
+        /// type), so missing applicability evidence is never an unmasked profile. Null when the calendar rule is unverified
+        /// (then nothing is masked and alignment stays unverified) or there is no condition.
         /// </summary>
-        private bool[] DayCoverage(NativeInternalCondition ic, out string note)
+        private ReaderResult[] DayCoverage(NativeInternalCondition ic, out string note)
         {
             note = null;
             int first = Rules.Offset(CalibrationRules.Calendar, 1, out bool verified);
-            if (!verified || ic == null || Native.Calendar?.Days == null)
+            if (!verified || ic == null)
             {
                 note = "calendar day-type coverage not checked (N-6 unverified or no condition)";
                 return null;
             }
 
-            bool[] result = new bool[365];
-            List<string> missing = new List<string>();
+            ReaderResult[] result = new ReaderResult[365];
+            string whole = Native.Calendar == null ? "the snapshot holds no native calendar" : Native.Calendar.Days == null ? "the native calendar holds no days" : null;
+            if (whole != null)
+            {
+                note = whole + ": the day-type applicability of every annual schedule is unread";
+                for (int d = 0; d < 365; d++) result[d] = ReaderResult.Unreadable(whole + " (N-6): day-type applicability unread");
+                return result;
+            }
+
+            List<string> missing = new List<string>(), unread = new List<string>();
             for (int d = 0; d < 365; d++)
             {
-                NativeCalendarDay day = Native.Calendar.Days.Find(x => x.Index == d + first);
-                result[d] = day?.DayType != null && ic.DayTypes.Contains(day.DayType);
-                if (!result[d]) missing.Add((d + 1).ToString(ci) + ":" + (day?.DayType ?? "none"));
+                List<NativeCalendarDay> days = Native.Calendar.Days.Where(x => x != null && x.Index == d + first).ToList();
+                string label = "calendar day " + (d + first).ToString(ci);
+                string problem = days.Count != 1 ? label + " was read " + days.Count.ToString(ci) + " times" : days[0].DayType == null ? label + " has no day type (" + (days[0].Detail ?? "none") + ")" : null;
+                if (problem != null)
+                {
+                    result[d] = ReaderResult.Unreadable(problem + " (N-6): day-type applicability unread");
+                    unread.Add(problem);
+                }
+                else if (!ic.DayTypes.Contains(days[0].DayType))
+                {
+                    result[d] = ReaderResult.Absent("the calendar day's type is not carried by the annual internal condition");
+                    missing.Add((d + 1).ToString(ci) + ":" + days[0].DayType);
+                }
             }
 
-            if (missing.Count > 0)
-            {
-                note = missing.Count + " calendar day(s) carry a day type the annual internal condition does not: " + string.Join(", ", missing.Take(10));
-            }
-
+            List<string> notes = new List<string>();
+            if (unread.Count > 0) notes.Add(unread.Count + " calendar day(s) unread: " + string.Join(", ", unread.Take(10)));
+            if (missing.Count > 0) notes.Add(missing.Count + " calendar day(s) carry a day type the annual internal condition does not: " + string.Join(", ", missing.Take(10)));
+            note = notes.Count == 0 ? null : string.Join("; ", notes);
             return result;
         }
 
@@ -852,12 +899,12 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
         /// conventions: value profiles hold one value, hourly profiles hourlyValues[hour % 24 + offset], yearly profiles the
         /// GetYearlyValues() element at CLR index hour + offset. Function profiles are not readable as values.
         /// </summary>
-        private ReaderResult Shape(NativeProfile profile, int hour, bool[] covered, out string encoding)
+        private ReaderResult Shape(NativeProfile profile, int hour, ReaderResult[] dayMask, out string encoding)
         {
             encoding = profile?.Type;
             if (profile == null) return ReaderResult.Absent("no native profile");
             if (profile.Kind != FieldKind.Finite) return profile.Kind == FieldKind.Unreadable ? ReaderResult.Unreadable(profile.Detail) : ReaderResult.Absent(profile.Detail);
-            if (covered != null && !covered[hour / 24]) return ReaderResult.Absent("the calendar day's type is not carried by the annual internal condition");
+            if (dayMask != null && dayMask[hour / 24] != null) return dayMask[hour / 24];
 
             switch (profile.TypeCode)
             {
@@ -894,13 +941,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             return what + " has " + series.Values.Length + " elements at lower bound " + series.LowerBound + "; the calibrated domain (N-5) is 8760 elements at lower bound " + offset + ", so it is not compared, truncated or padded";
         }
 
-        private List<ReaderResult> NativeHours(NativeProfile profile, ReaderResult missing, bool[] covered, Func<ReaderResult, ReaderResult> scale, out string encoding)
+        private List<ReaderResult> NativeHours(NativeProfile profile, ReaderResult missing, ReaderResult[] dayMask, Func<ReaderResult, ReaderResult> scale, out string encoding)
         {
             encoding = profile?.Type ?? "none";
             List<ReaderResult> result = new List<ReaderResult>(8760);
             for (int h = 0; h < 8760; h++)
             {
-                ReaderResult shape = profile == null ? missing : Shape(profile, h, covered, out _);
+                ReaderResult shape = profile == null ? missing : Shape(profile, h, dayMask, out _);
                 result.Add(scale == null ? shape : scale(shape));
             }
 
@@ -942,19 +989,19 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             SeriesOf(quantityId, key, ExpectedHours(expected, scale, unspecified), native, identity, HourAlignment(), convention, encoding, interpretation);
         }
 
-        private void CompareThermostat(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, bool[] covered)
+        private void CompareThermostat(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask)
         {
             foreach (string slot in ThermostatSlots)
             {
                 NativeProfile profile = ThermostatProfile(ic, slot);
                 ExpectedProfile expected = space.Profiles.TryGetValue(slot, out ExpectedProfile p) ? p : null;
                 ReaderResult factor = ProfileField(profile, x => x.Factor, icMissing);
-                List<ReaderResult> native = NativeHours(profile, icMissing, covered, shape => EQ.Multiply(shape, factor), out string encoding);
+                List<ReaderResult> native = NativeHours(profile, icMissing, dayMask, shape => EQ.Multiply(shape, factor), out string encoding);
                 HourlySeries(slot == "ticLL" || slot == "ticUL" ? "5.temperature" : "5.humidity", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, "no SAM " + slot + " profile", native, identity, ShapeConventions(profile), encoding + " x factor");
             }
         }
 
-        private void CompareSchedules(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, bool[] covered)
+        private void CompareSchedules(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask)
         {
             foreach (string slot in ScheduleSlots)
             {
@@ -963,7 +1010,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 NativeProfile profile = GainProfile(ic, slot);
                 ExpectedProfile expected = ProfileFor(space, slot);
                 string unspecified = "no SAM " + slot + " profile";
-                List<ReaderResult> native = NativeHours(profile, icMissing, covered, null, out string encoding);
+                List<ReaderResult> native = NativeHours(profile, icMissing, dayMask, null, out string encoding);
                 HourlySeries("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, unspecified, native, identity, ShapeConventions(profile), encoding);
 
                 // EFLH: supporting evidence only (S07 section 7); it never stands in for the hourly comparison.
@@ -986,7 +1033,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             return ReaderResult.FromValue(sum);
         }
 
-        private void CompareInfiltrationAndVentilation(ExpectedSpace space, NativeZone zone, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, bool[] covered, ModelInterpretation volumeInterpretation)
+        private void CompareInfiltrationAndVentilation(ExpectedSpace space, NativeZone zone, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask, ModelInterpretation volumeInterpretation)
         {
             ReaderResult volume = Field(zone?.Volume, zone);
             double geometricVolume = space.ShellVolume?.State == SamInputState.Value ? space.ShellVolume.Value : double.NaN;
@@ -1014,7 +1061,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             string key = Keys.Profile(space.Guid, "ticV", "delivered");
             Supporting.Add(Keys.Space(space.Guid) + ": D-F2 state " + state + "; required supply " + required + "; native ticV " + (ticV == null ? "none" : ticV.Type + " factor " + ticV.Factor + " value " + ticV.Value));
 
-            List<ReaderResult> delivered = NativeHours(ticV, icMissing, covered, shape => EQ.Multiply(EQ.Multiply(shape, ticVFactor), volume, 1 / SecondsPerHour), out string encoding);
+            List<ReaderResult> delivered = NativeHours(ticV, icMissing, dayMask, shape => EQ.Multiply(EQ.Multiply(shape, ticVFactor), volume, 1 / SecondsPerHour), out string encoding);
             if (state == VentilationState.V2 && required.State == SamInputState.Value && ventilationProfile != null)
             {
                 HourlySeries("8b", key, ventilationProfile, required.Value, null, delivered, identity, ShapeConventions(ticV), encoding + " x factor x zone.volume / 3600", volumeInterpretation);
