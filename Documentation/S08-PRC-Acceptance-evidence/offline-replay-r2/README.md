@@ -17,4 +17,4 @@ dotnet test SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.T
 dotnet run -c Release --project <copy of Replay.csproj> -- <empty output folder>
 ```
 
-`Replay.csproj` references the read-back test project's Release output; it needs the machine-local `C:\TasOut\s08c\acc1`.
+`Program.cs` carries the repository licence header (added after the replay run; no other change). `Replay.csproj` references the read-back test project's Release output; it needs the machine-local `C:\TasOut\s08c\acc1`.
