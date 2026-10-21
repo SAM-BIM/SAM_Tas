@@ -1,0 +1,1 @@
+negative nan-infiltration: zone 'FixBox' ticI factor 0.3 -> NaN (read back as NaN); originals unchanged: True

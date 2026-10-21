@@ -1,0 +1,13 @@
+  Failed ApprovedRules_ASelectedButUnresolvedVentilationProfile_IsNeverInactive_AndBlocksAsAnInvalidInput("missing",System.Func`2[SAM.Analytical.AnalyticalModel,System.String]) [1 s]
+  Expected: not equal to 0
+  But was:  0
+  Failed ApprovedRules_ASelectedButUnresolvedVentilationProfile_IsNeverInactive_AndBlocksAsAnInvalidInput("wrong-type",System.Func`2[SAM.Analytical.AnalyticalModel,System.String]) [1 s]
+  Expected: not equal to 0
+  But was:  0
+  Failed PreDecisionRules_ASelectedButUnresolvedVentilationProfile_IsAlsoAnInvalidInput("missing",System.Func`2[SAM.Analytical.AnalyticalModel,System.String]) [852 ms]
+  Expected: 11
+  But was:  12
+  Failed PreDecisionRules_ASelectedButUnresolvedVentilationProfile_IsAlsoAnInvalidInput("wrong-type",System.Func`2[SAM.Analytical.AnalyticalModel,System.String]) [868 ms]
+  Expected: 11
+  But was:  12
+Failed!  - Failed:     4, Passed:     2, Skipped:     0, Total:     6, Duration: 6 s - SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll (net8.0)

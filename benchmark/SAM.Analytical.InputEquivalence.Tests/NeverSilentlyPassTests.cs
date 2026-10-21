@@ -62,6 +62,7 @@ namespace SAM.Analytical.InputEquivalence.Tests
             foreach (ModelInterpretation interpretation in Enum.GetValues(typeof(ModelInterpretation)))
             foreach (GateRuleSet ruleSet in Enum.GetValues(typeof(GateRuleSet)))
             foreach (bool accepted in new[] { false, true })
+            foreach (string inactive in new[] { null, "T-VENT-INACTIVE" })
             {
                 QuantityInput input = new QuantityInput
                 {
@@ -76,7 +77,8 @@ namespace SAM.Analytical.InputEquivalence.Tests
                     TransformationVerified = verified,
                     Identity = identity,
                     Alignment = alignment,
-                    Interpretation = interpretation
+                    Interpretation = interpretation,
+                    InactiveNativeTransformation = inactive
                 };
 
                 GateConfiguration configuration = new GateConfiguration
@@ -90,7 +92,7 @@ namespace SAM.Analytical.InputEquivalence.Tests
                 QuantityResult result = Query.Evaluate(input, configuration);
                 evaluated++;
                 string context = quantity + " " + expected + " / " + native + " listing=" + listing + " default=" + listedDefault + " T=" + transformation + "/" + verified +
-                                 " id=" + identity + " align=" + alignment + " interp=" + interpretation + " rules=" + ruleSet + " accepted=" + accepted + " => " + result.Outcome + "/" + result.Status;
+                                 " id=" + identity + " align=" + alignment + " interp=" + interpretation + " rules=" + ruleSet + " accepted=" + accepted + " inactive=" + inactive + " => " + result.Outcome + "/" + result.Status;
 
                 if (result.IsPass)
                 {
@@ -109,7 +111,10 @@ namespace SAM.Analytical.InputEquivalence.Tests
 
                     if (result.Outcome == EquivalenceOutcome.AcceptedTransformation)
                     {
-                        Assert.That(verified, Is.True, "an unverified transformation must not pass: " + context);
+                        // Either a verified contract transformation, or the owner-approved inactive-profile transformation, which
+                        // passes only under the approved rules, only for S-UNSPEC and only against a native that is exactly 0.
+                        bool inactivePass = inactive != null && ruleSet == GateRuleSet.Approved && expected.State == SamInputState.Unspecified && native.Kind == ReaderKind.Zero;
+                        Assert.That(verified || inactivePass, Is.True, "an unverified transformation must not pass: " + context);
                     }
 
                     if (result.Outcome == EquivalenceOutcome.NotApplicable)

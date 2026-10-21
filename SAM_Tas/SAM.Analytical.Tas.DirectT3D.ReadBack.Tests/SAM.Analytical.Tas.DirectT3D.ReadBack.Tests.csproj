@@ -54,6 +54,7 @@
     <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\SyntheticModels.cs" Link="Harness\SyntheticModels.cs" />
     <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\NativeSnapshot.cs" Link="Harness\NativeSnapshot.cs" />
     <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\CalibrationModels.cs" Link="Harness\CalibrationModels.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\AcceptanceFixtures.cs" Link="Harness\AcceptanceFixtures.cs" />
     <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\CalibrationRules.cs" Link="Harness\CalibrationRules.cs" />
     <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\Calibration.cs" Link="Harness\Calibration.cs" />
     <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackExpected.cs" Link="Harness\ReadBackExpected.cs" />

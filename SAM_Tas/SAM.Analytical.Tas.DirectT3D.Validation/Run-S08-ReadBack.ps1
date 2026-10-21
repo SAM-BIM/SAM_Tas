@@ -11,12 +11,18 @@
 #   negative   apply each licensed negative case to a DISPOSABLE copy, reopen it in a fresh process and compare;
 #              every case must end non-PASS, and the originals must hash the same before and after.
 #
+# S08 PR-C (owner-approved fixtures only; same contract route, same committed rules, no simulation, no sizing):
+#   acceptance           check the committed fixtures (ReadBack/Fixtures/SHA256SUMS.txt) and the weather EPW against
+#                        their hashes, export each fixture once (the box twice, as the writer control), read each
+#                        TBD/T3D twice in fresh processes, and compare every run under both rule sets.
+#   acceptance-negative  the negative cases, on DISPOSABLE copies of the fixture runs of the same root.
+#
 # Usage (Windows PowerShell 5.1, licensed Tas, Tas GUI closed, short output path):
 #   powershell -ExecutionPolicy Bypass -File Run-S08-ReadBack.ps1 -Phase calibrate -Root C:\TasOut\s08b\run1
 #   powershell -ExecutionPolicy Bypass -File Run-S08-ReadBack.ps1 -Phase compare   -Root C:\TasOut\s08b\run1
 #   powershell -ExecutionPolicy Bypass -File Run-S08-ReadBack.ps1 -Phase negative  -Root C:\TasOut\s08b\run1
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('calibrate', 'compare', 'negative')][string]$Phase,
+    [Parameter(Mandatory = $true)][ValidateSet('calibrate', 'compare', 'negative', 'acceptance', 'acceptance-negative')][string]$Phase,
     [Parameter(Mandatory = $true)][string]$Root,
     [string]$Exe = '',
     [int]$TimeoutSeconds = 1200,
@@ -26,7 +32,11 @@ param(
     # With -SkipApprovedExecutions: copy the persisted outputs of the earlier approved executions (calib-align with its
     # TSD, calib-box-sizing) from this root and only READ them again here, so a re-run at a later commit needs no second
     # simulation or sizing.
-    [string]$ReuseApprovedFrom = ''
+    [string]$ReuseApprovedFrom = '',
+    # PR-C: the weather EPW every fixture is exported with, and the sha256 it must have (the uncompressed SAM#212 TMYx
+    # Budapest file, SAM/SAM/SAM.Tests/Resources/Weather, recorded in its SHA256SUMS.txt).
+    [string]$WeatherEpw = '',
+    [string]$WeatherEpwSha256 = '472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -178,6 +188,70 @@ if ($Phase -eq 'negative') {
         foreach ($set in 'interim', 'provisional') {
             # A negative case must NOT pass: 0 is the only unexpected exit.
             Step "compare-neg-$case-$set" @('readback-compare', '--run', $target, '--fixture-id', "neg-$case", '--rule-set', $set, '--purpose', "negative check '$case' on a disposable copy", '--out', (Join-Path $target "compare-$set")) @(10, 11, 12, 13, 14) | Out-Null
+        }
+
+        $after = Get-ChildItem $source -File | Where-Object { $_.Name -in 'input.json', 'weather.json', 'export.json', 'model.tbd', 'model.t3d' } | ForEach-Object { "$($_.Name)=$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }
+        $same = (($originals -join ';') -eq ($after -join ';'))
+        Write-Host ("  originals of {0} unchanged: {1}" -f $cases[$case], $same)
+        $steps.Add([ordered]@{ step = "originals-$case"; source = $source; before = $originals; after = $after; unchanged = $same; asExpected = $same })
+        $steps | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $log
+    }
+}
+
+$fixtures = 's08-fix-box', 's08-fix-two'
+$any = @(0, 10, 11, 12, 13, 14)
+
+if ($Phase -eq 'acceptance') {
+    # The committed fixture bytes and the weather bytes are checked first; nothing runs on a file that does not match.
+    $source = Join-Path $PSScriptRoot 'ReadBack\Fixtures'
+    $fixtureDir = Join-Path $Root 'fixtures'
+    New-Item -ItemType Directory -Force $fixtureDir | Out-Null
+    foreach ($line in (Get-Content (Join-Path $source 'SHA256SUMS.txt') | Where-Object { $_.Trim() })) {
+        $hash, $name = $line -split '\s+', 2
+        $actual = (Get-FileHash (Join-Path $source $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $hash) { throw "fixture $name is $actual, committed $hash" }
+        Copy-Item (Join-Path $source $name) (Join-Path $fixtureDir $name) -Force
+        Set-ItemProperty (Join-Path $fixtureDir $name) IsReadOnly $true
+    }
+
+    if (-not $WeatherEpw -or -not (Test-Path $WeatherEpw)) { throw "-WeatherEpw <epw> is required for the acceptance phase" }
+    $actual = (Get-FileHash $WeatherEpw -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $WeatherEpwSha256) { throw "weather $WeatherEpw is $actual, expected $WeatherEpwSha256" }
+    [ordered]@{ fixtures = (Get-Content (Join-Path $source 'SHA256SUMS.txt')); weather = $WeatherEpw; weatherSha256 = $actual } | ConvertTo-Json -Depth 3 | Set-Content -Encoding utf8 (Join-Path $Root 'inputs-acceptance.json')
+
+    foreach ($m in $fixtures) {
+        Step "export-$m" @('readback-export', '--model', (Join-Path $fixtureDir "$m.json"), '--weather', $WeatherEpw, '--out', (Join-Path $Root $m), '--label', "$m (S08 PR-C acceptance)") | Out-Null
+        Step "read-$m" @('readback-read', '--tbd', (Join-Path $Root "$m\model.tbd"), '--t3d', (Join-Path $Root "$m\model.t3d"), '--out', (Join-Path $Root "$m\snapshot.json")) | Out-Null
+        Step "reread-$m" @('readback-read', '--tbd', (Join-Path $Root "$m\model.tbd"), '--t3d', (Join-Path $Root "$m\model.t3d"), '--out', (Join-Path $Root "$m\snapshot.reread.json")) | Out-Null
+        Step "diff-reader-$m" @('readback-diff', '--a', (Join-Path $Root "$m\snapshot.json"), '--b', (Join-Path $Root "$m\snapshot.reread.json"), '--purpose', 'reader control: the same TBD read in two fresh processes', '--out', (Join-Path $Root "$m\diff-reader.json")) | Out-Null
+    }
+
+    Step 'export-s08-fix-box-repeat' @('readback-export', '--model', (Join-Path $fixtureDir 's08-fix-box.json'), '--weather', $WeatherEpw, '--out', (Join-Path $Root 's08-fix-box-repeat'), '--label', 's08-fix-box-repeat (writer control)') | Out-Null
+    Step 'read-s08-fix-box-repeat' @('readback-read', '--tbd', (Join-Path $Root 's08-fix-box-repeat\model.tbd'), '--t3d', (Join-Path $Root 's08-fix-box-repeat\model.t3d'), '--out', (Join-Path $Root 's08-fix-box-repeat\snapshot.json')) | Out-Null
+    Step 'diff-writer-s08-fix-box' @('readback-diff', '--a', (Join-Path $Root 's08-fix-box\snapshot.json'), '--b', (Join-Path $Root 's08-fix-box-repeat\snapshot.json'), '--purpose', 'writer control: the same frozen fixture exported twice', '--out', (Join-Path $Root 's08-fix-box-repeat\diff-writer.json')) | Out-Null
+
+    # The verdict is the approved rule set (OD-G1..G3, T-VENT-INACTIVE); the pre-decision provisional set is the baseline.
+    foreach ($m in $fixtures + 's08-fix-box-repeat') {
+        foreach ($set in 'approved', 'provisional') {
+            Step "compare-$m-$set" @('readback-compare', '--run', (Join-Path $Root $m), '--fixture-id', $m, '--rule-set', $set, '--purpose', 'S08 PR-C equivalence fixture (acceptance)', '--out', (Join-Path $Root "$m\compare-$set")) $any | Out-Null
+        }
+    }
+}
+
+if ($Phase -eq 'acceptance-negative') {
+    $cases = [ordered]@{
+        'swap-space-guid' = 's08-fix-two'; 'flip-partition' = 's08-fix-two'; 'layer-conductivity' = 's08-fix-box'; 'zero-lighting-factor' = 's08-fix-box'
+        'nan-infiltration' = 's08-fix-box'; 'shift-heating-slot' = 's08-fix-box'; 'add-izam' = 's08-fix-box'
+    }
+
+    foreach ($case in $cases.Keys) {
+        $source = Join-Path $Root $cases[$case]
+        $target = Join-Path $Root "neg-$case"
+        $originals = Get-ChildItem $source -File | Where-Object { $_.Name -in 'input.json', 'weather.json', 'export.json', 'model.tbd', 'model.t3d' } | ForEach-Object { "$($_.Name)=$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }
+        Step "negative-$case" @('readback-negative', '--run', $source, '--case', $case, '--out', $target) | Out-Null
+        Step "read-neg-$case" @('readback-read', '--tbd', (Join-Path $target 'model.tbd'), '--t3d', (Join-Path $target 'model.t3d'), '--out', (Join-Path $target 'snapshot.json')) | Out-Null
+        foreach ($set in 'approved', 'provisional') {
+            Step "compare-neg-$case-$set" @('readback-compare', '--run', $target, '--fixture-id', "neg-$case", '--rule-set', $set, '--purpose', "negative check '$case' on a disposable copy of a fixture run", '--out', (Join-Path $target "compare-$set")) @(10, 11, 12, 13, 14) | Out-Null
         }
 
         $after = Get-ChildItem $source -File | Where-Object { $_.Name -in 'input.json', 'weather.json', 'export.json', 'model.tbd', 'model.t3d' } | ForEach-Object { "$($_.Name)=$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }

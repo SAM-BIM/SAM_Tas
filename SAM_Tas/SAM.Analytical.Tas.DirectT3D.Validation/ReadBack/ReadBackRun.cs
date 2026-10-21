@@ -38,6 +38,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                     case "readback-models":
                         return Models(Require(options, "out"));
 
+                    case "readback-fixtures":
+                        return Fixtures(Require(options, "out"));
+
                     case "readback-export":
                         return Export(Require(options, "model"), Require(options, "out"), options.TryGetValue("weather", out string weather) ? weather : null, options.ContainsKey("sizing"), options.ContainsKey("simulate"), options.TryGetValue("label", out string label) ? label : null);
 
@@ -71,12 +74,14 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                     case "readback-compare":
                         {
                             string ruleSet = options.TryGetValue("rule-set", out string r) ? r : "interim";
-                            if (ruleSet != "interim" && ruleSet != "provisional")
+                            if (ruleSet != "interim" && ruleSet != "provisional" && ruleSet != "approved")
                             {
-                                throw new UsageException("--rule-set interim|provisional");
+                                throw new UsageException("--rule-set interim|provisional|approved");
                             }
 
-                            ReadBackReport report = ReadBackCompare.Run(Require(options, "run"), options.TryGetValue("rules", out string rules) ? rules : DefaultRules(), Require(options, "fixture-id"), options.TryGetValue("purpose", out string purpose) ? purpose : "calibration (not an equivalence fixture)", ruleSet == "provisional" ? InputEquivalence.GateRuleSet.ProvisionalProposed : InputEquivalence.GateRuleSet.Interim, options.TryGetValue("out", out string output) ? output : null);
+                            // approved: OD-G1..G3 as the owner approved them on 2026-10-21 (S08 PR-C), with T-VENT-INACTIVE.
+                            InputEquivalence.GateRuleSet gateRuleSet = ruleSet == "approved" ? InputEquivalence.GateRuleSet.Approved : ruleSet == "provisional" ? InputEquivalence.GateRuleSet.ProvisionalProposed : InputEquivalence.GateRuleSet.Interim;
+                            ReadBackReport report = ReadBackCompare.Run(Require(options, "run"), options.TryGetValue("rules", out string rules) ? rules : DefaultRules(), Require(options, "fixture-id"), options.TryGetValue("purpose", out string purpose) ? purpose : "calibration (not an equivalence fixture)", gateRuleSet, options.TryGetValue("out", out string output) ? output : null);
                             Console.Write(report.ToText());
                             return report.ExitCode;
                         }
@@ -108,6 +113,30 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             string path_Weather = Path.Combine(directory, "calib-weather.json");
             Core.Convert.ToFile(CalibrationModels.CreateWeather(), path_Weather, Core.SAMFileType.Json);
             lines.Add(SnapshotJson.Sha256(path_Weather) + "  " + Path.GetFileName(path_Weather));
+
+            File.WriteAllLines(Path.Combine(directory, "SHA256SUMS.txt"), lines);
+            foreach (string line in lines) Console.WriteLine(line);
+            return 0;
+        }
+
+        // ---- readback-fixtures: the S08 PR-C equivalence fixtures, authored once; the committed files are the fixtures ---
+
+        private static int Fixtures(string directory)
+        {
+            if (Directory.Exists(directory) && Directory.EnumerateFileSystemEntries(directory).Any())
+            {
+                Console.WriteLine("refused: the fixture directory exists and is not empty: " + directory);
+                return ReadBackExit.Usage;
+            }
+
+            Directory.CreateDirectory(directory);
+            List<string> lines = new List<string>();
+            foreach (string name in AcceptanceFixtures.Names)
+            {
+                string path = Path.Combine(directory, name + ".json");
+                Core.Convert.ToFile(AcceptanceFixtures.Create(name), path, Core.SAMFileType.Json);
+                lines.Add(SnapshotJson.Sha256(path) + "  " + Path.GetFileName(path));
+            }
 
             File.WriteAllLines(Path.Combine(directory, "SHA256SUMS.txt"), lines);
             foreach (string line in lines) Console.WriteLine(line);

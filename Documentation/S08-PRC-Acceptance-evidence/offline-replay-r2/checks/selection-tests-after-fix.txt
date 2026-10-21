@@ -1,0 +1,1 @@
+Passed!  - Failed:     0, Passed:     6, Skipped:     0, Total:     6, Duration: 9 s - SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll (net8.0)

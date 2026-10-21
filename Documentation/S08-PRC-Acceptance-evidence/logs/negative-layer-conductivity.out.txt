@@ -1,0 +1,1 @@
+negative layer-conductivity: element 'FIX_EXT_WALL' materials(1).conductivity 0.21 -> 0.315; originals unchanged: True

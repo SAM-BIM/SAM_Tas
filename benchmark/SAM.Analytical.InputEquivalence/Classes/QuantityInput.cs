@@ -43,5 +43,14 @@ namespace SAM.Analytical.InputEquivalence
         public bool TransformationVerified { get; init; }
 
         public ModelInterpretation Interpretation { get; init; } = ModelInterpretation.NotRequired;
+
+        /// <summary>
+        /// The owner-approved transformation under which an S-UNSPEC quantity whose native object is present and holds
+        /// exactly 0 is that object's verified inactive form, or null. The caller sets it only after verifying its
+        /// precondition (S08 PR-C: T-VENT-INACTIVE, rows 6 and 8b of a V0/V1 zone's ticV, every one of its 8760 schedule
+        /// values and delivered flows read, finite and exactly 0). Consulted only under <see cref="GateRuleSet.Approved"/>
+        /// and only for a native <see cref="ReaderKind.Zero"/>; it never covers an absent, unreadable, NaN or non-zero value.
+        /// </summary>
+        public string InactiveNativeTransformation { get; init; }
     }
 }

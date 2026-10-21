@@ -1,0 +1,1 @@
+negative zero-lighting-factor: zone 'FixBox' ticLG factor 7.4 -> 0; originals unchanged: True
