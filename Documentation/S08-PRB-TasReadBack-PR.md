@@ -2,26 +2,58 @@
 
 Task S08 of the SAM simulation roadmap, PR-B of the approved sequence (PR-A core SAM_Tas#104, merged `d08916ca`;
 PR-C fixtures and acceptance, not started). Contract: SAM `documentation/SIMULATION_INPUT_MAPPING_S07.md` (SAM#216).
-Branch `feature/s08-tas-readback-harness`, base `sow/2026-Q4` (`3d16b5c7`). **Draft, revision 2 (review fixes), for
-independent review. Not merged. S08 is not accepted: no fixture was chosen or compared.**
+Branch `feature/s08-tas-readback-harness`, base `sow/2026-Q4` (`3d16b5c7`). **Draft, revision 3 (second review's fixes),
+for independent review. Not merged. S08 is not accepted: no fixture was chosen or compared.**
 
 ## Status
 
 - PR: SAM-BIM/SAM_Tas#105 (draft) into `sow/2026-Q4`. The final head and hosted checks are in the PR description.
-- **Revision 2** (independent review 2026-10-21 of head `057d24c7`, recommendation REVISE): tested content SHA
-  `87f6ecf389d73f70923d8aca518ea3fa5138e483`. Comparator and precondition fixes only, validated **offline**; no new
-  licensed run. See "Revision 2" below.
+- **Revision 3** (independent review 2026-10-21 of head `cc414876`, recommendation REVISE): tested content SHA
+  `bc867f8ae15ec5c2b99d99234e8020edfe08a3a5`. Two comparator fixes only, validated **offline**; no licensed run. See
+  "Revision 3" below.
+- Revision 2 (review of `057d24c7`): tested content SHA `87f6ecf389d73f70923d8aca518ea3fa5138e483`. See "Revision 2".
 - Revision 1 validated content SHA: `b9975571532612454baa6f07fbd4fa9f3be16a63` (code identical to `3d20d0fc`, from which
   the licensed harness was built). Its licensed evidence is unchanged and remains the historical record.
 - Dependency selection: no SAM-BIM dependency repository has a `feature/s08-tas-readback-harness` branch (checked with
   `git ls-remote` on SAM, SAM_gbXML, SAM_Systems, SAM_Windows, SAM_SolarCalculator, SAM_Psychrometrics, SAM_Mollier,
   SAM_Validation), so CI clones each one at `sow/2026-Q4`. Confirm in the job log of the final head.
-- Offline at `87f6ecf3` (local, Release): core 249/249, read-back 74/74 (39 before, 35 added), full `SAM_Tas.sln` Release
-  restore and rebuild succeeded (0 errors). TM59, producer and GenOpt were not rerun locally (no shared code changed); the
-  hosted Build runs them at the final head. At `3d20d0fc` (revision 1): core 249/249, read-back 39/39, TM59 1249/1249,
-  benchmark producer 26/26 (Simulation excluded), GenOpt 432/432.
+- Offline at `bc867f8a` (local, Release, run sequentially): core 249/249, read-back 104/104 (74 before, 30 added), 0
+  failed or skipped; full `SAM_Tas.sln` Release restore (up to date) and rebuild succeeded (exit 0, 0 errors). TM59,
+  producer and GenOpt were not rerun locally (no shared code changed); the hosted Build runs them at the final head. At
+  `87f6ecf3` (revision 2): core 249/249, read-back 74/74. At `3d20d0fc` (revision 1): core 249/249, read-back 39/39,
+  TM59 1249/1249, benchmark producer 26/26 (Simulation excluded), GenOpt 432/432.
 - Licensed (revision 1 only; this workstation, Tas 2.0.0.1 dated 2025-06-04): the calibration, compare and negative phases
-  all ran as expected. Details below. Revision 2 re-compared those persisted snapshots offline; it ran no Tas.
+  all ran as expected. Details below. Revisions 2 and 3 re-compared those persisted snapshots offline; they ran no Tas.
+
+## Revision 3: second review's findings and fixes (2026-10-21)
+
+Review: `C:\Users\michal\Documents\GitHub\SAM-BIM\.review-s08-prb-r2-20261021\S08-PRB-R2-Review.md` (machine-local; copy it
+when switching machines). Its COM-free probe reproduced on `cc414876` exactly as reported (all 7 mutations PASS, exit 0,
+also through the full `ReadBackCompare.Run`) before any change. Change: `ReadBackComparison.cs` only.
+
+| Finding | Fix | Result now |
+|---|---|---|
+| P1 `NativeU`: a non-numeric inclination was Horizontal, a null or unrecognised surface type External | The film selection's inputs must be usable: inclination a number in 0..180 (the measured 0/90/180 bands are unchanged), type one of the recognised TBD types (`tbdExposed` External; `tbdInternal`, `tbdLink` Internal; `tbdGround`, `tbdNullLink` ground, as in revision 1). Otherwise the derived native U is Unreadable, its reason naming the input and that input's own reader state (not read / Absent / Unreadable / NaN / out of domain / unrecognised type) | That side's 3b U is BLOCKED technical (exit 11) under both rule sets; nothing else changes. Previously a null inclination also threw a NullReferenceException |
+| P2 `DayCoverage`: a null `Calendar` or `Days` unmasked every profile while `HourAlignment` stayed Verified | With N-6 verified and an annual condition, the snapshot must prove each day's type: a missing calendar or days makes every day unread; a day not read exactly once (missing or duplicated) or without a type makes that day unread. An unread day's hours are Unreadable | Rows 5, 6 and 8b BLOCKED technical (exit 11) under both rule sets, every element kept; one unread day blocks exactly its 24 hours |
+
+Decisions for review:
+
+- **Unreadable, not Absent, for an unusable film input.** The core passes S-UNSPEC against a native Absent
+  (`Evaluate.UnspecifiedState`), so an absent inclination mapped to an absent U could pass although the native layers
+  exist. NaN is not passed through either: the U was not read as NaN, so G3 (OD-G3) would mislabel it. The input's state
+  stays visible in the named blocker. No film convention is invented and no tolerance changed.
+- **An inclination outside 0..180** (also found by the reviewer's probe) is outside the measured domain, so unreadable.
+- **Preserved:** a read day whose type the condition does not carry is still masked as native Absent (FAIL against a
+  stated SAM schedule); an unverified N-6 (or alignment) rule still gives NOT RUN, as before.
+- `HourAlignment` is unchanged: the per-hour Unreadable already prevents a verified equivalence on unread days.
+
+Evidence: `Documentation/S08-PRB-ReadBack-evidence/offline-replay-r3/` (README, `replay-summary.txt`, every report,
+`checks/` with the probe and test logs before and after, `checks/r2-vs-r3-diff.txt`, `SHA256SUMS.txt`). Offline replay of
+the 21 cal3 comparisons with `readback-compare` built from `bc867f8a` (`direct-t3d-validation.dll` sha256 `b9c3ea32…`):
+**no difference from revision 2**, item by item (statuses, exit codes, every not-pass item, every result's outcome,
+blocker and reason, every series-element file hash). Expected: the cal3 calendars are complete and their inclinations and
+types are all measured ones. Correction: the r2 README's harness sha256 `2ada4255…` is the `.exe` apphost stub, which does
+not change with the code; the DLL identifies the build.
 
 ## Revision 2: review findings and fixes (2026-10-21)
 
@@ -248,6 +280,15 @@ TBD and T3D hashes); an optional T3D left unread; and the full compare returning
 missing timing. 29 of the 35 fail on `057d24c7`; the 6 that pass there are preserved behaviour. The calib-two serialized
 report test now expects the six G1 items.
 
+Revision 3 added 30 cases to `FalsePassRegressionTests` (104 in the project), all through the full `ReadBackCompare.Run`
+under Interim and ProvisionalProposed: an opaque wall's inclination Unreadable, Absent, NaN, not read, -999 and 270, and
+its surface type not read and unrecognised (exactly one not-pass item, that side's 3b U, BLOCKED technical with the state
+named); the measured inclinations and recognised types still passing (box PASS, every two-zone 3b PASS including the
+tbdLink sides); the calendar and its days omitted (every row 5, 6 and 8b result BLOCKED technical naming the calendar,
+nothing else changed); one day missing, without a type, or duplicated (exactly that day's 24 hours of 8760 blocked).
+Preserved: a day type the condition does not carry still FAILs as masked absence; a missing calendar under unverified
+rules stays NOT RUN. 26 of the 30 fail on `cc414876`; the 4 that pass there are the preserved-behaviour cases.
+
 ## Commands
 
 ```text
@@ -256,9 +297,10 @@ dotnet test SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.T
 msbuild SAM_Tas.sln -t:Restore -p:Configuration=Release ; msbuild SAM_Tas.sln -t:Rebuild -p:Configuration=Release
 ```
 
-Revision 2 ran these four at `87f6ecf3` (MSBuild from Visual Studio 18 Community): 249 passed; 74 passed; restore up to
-date; rebuild 0 errors. The offline replay command is in `Documentation/S08-PRB-ReadBack-evidence/offline-replay-r2/README.md`
-(needs the machine-local `C:\TasOut\s08b\cal3` run folders; their input hashes are committed there).
+Revision 3 ran these four at `bc867f8a`, sequentially (MSBuild from Visual Studio 18 Community): 249 passed; 104 passed;
+restore up to date; rebuild exit 0, 0 errors. Revision 2 ran them at `87f6ecf3`: 249; 74; up to date; 0 errors. The
+offline replay command is in `Documentation/S08-PRB-ReadBack-evidence/offline-replay-r3/README.md` (needs the
+machine-local `C:\TasOut\s08b\cal3` run folders, copied to `C:\TasOut\s08b\replay-r3`; input hashes committed there).
 
 Licensed: see `Documentation/S08-PRB-ReadBack-evidence/README.md`. Machine-local prerequisites (copy or provision on
 another machine): licensed Tas, `C:\TasOut\s08b\*` run roots holding the TBD/T3D/TSD files (their hashes are committed).
@@ -288,6 +330,10 @@ another machine): licensed Tas, `C:\TasOut\s08b\*` run roots holding the TBD/T3D
 - **Revision 2 limits:** a native zone without a non-HDD internal condition is still BLOCKED technical, not absent (fail
   closed, unexercised). An extra native day in a design day is FAIL with no measured meaning. The offline replay used the
   machine-local cal3 snapshots; the negative-check snapshots were never committed.
+- **Revision 3 limits:** the new film-input and calendar states are exercised only by mutated committed snapshots; no
+  licensed read produced them (no Tas run was authorised). Only tbdExposed, tbdGround and tbdLink were ever read; the other
+  recognised types keep their revision-1 classification unmeasured. A TAS calendar with a 366th typed day is not checked
+  (only days 1..365 are required).
 - **4c Tas defaults** are not listed in S07. When the radiant fractions are not authored, the TAS defaults
   (HDD condition 0.3 / 0.2 / 0.1) are EXPORT-DEFECTs. The fixtures must author them (D-FIX).
 - **T-FRAME:** the persisted T3D `frameWidth` differs from the writer's value. It was reported, not changed.
@@ -303,9 +349,9 @@ another machine): licensed Tas, `C:\TasOut\s08b\*` run roots holding the TBD/T3D
 
 ## Next step
 
-Independent re-review of revision 2 by GPT-6 (effort High, new session, Plan/review mode, read-only, because the fixes
-change coverage and evidence validity and need an independent check that no false-PASS route remains). Keep the PR draft
-until then. Then the owner's merge decision. After merge: the known-SHA `PROJECT_PROGRESS.md`
+Independent re-review of revision 3 by GPT-6 (effort High, new session, Plan/review mode, read-only, because the fixes
+change derived-U and schedule applicability outcomes and need an independent check that no false-PASS route remains).
+Keep the PR draft until then. Then the owner's merge decision. After merge: the known-SHA `PROJECT_PROGRESS.md`
 closeout and guarded branch cleanup. Then PR-C (fixtures and acceptance) as a new session on the licensed workstation,
 Claude Opus 5.5, effort High, Build mode after the owner answers OD-G1 for V0/V1 delivery and signs the fixture
 provenance.

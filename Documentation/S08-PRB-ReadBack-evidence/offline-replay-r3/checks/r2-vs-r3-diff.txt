@@ -1,0 +1,23 @@
+# r3 replay at bc867f8a (readback-compare CLI) vs committed r2 replay at 87f6ecf3, item by item
+calib-box compare-interim: status Pass/0 -> Pass/0; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+calib-box compare-provisional: status Pass/0 -> Pass/0; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+calib-box-repeat compare-interim: status Pass/0 -> Pass/0; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+calib-box-repeat compare-provisional: status Pass/0 -> Pass/0; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+calib-box-sizing compare-interim: status Pass/0 -> Pass/0; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+calib-two compare-interim: status BlockedOwnerDecision/12 -> BlockedOwnerDecision/12; not-pass before 6, after 6, removed 0, added 0; results 503 -> 503, changed 0; series elements sha256 equal
+calib-two compare-provisional: status BlockedOwnerDecision/12 -> BlockedOwnerDecision/12; not-pass before 6, after 6, removed 0, added 0; results 503 -> 503, changed 0; series elements sha256 equal
+neg-add-izam compare-interim: status Fail/10 -> Fail/10; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-add-izam compare-provisional: status Fail/10 -> Fail/10; not-pass before 0, after 0, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-flip-partition compare-interim: status Fail/10 -> Fail/10; not-pass before 26, after 26, removed 0, added 0; results 503 -> 503, changed 0; series elements sha256 equal
+neg-flip-partition compare-provisional: status Fail/10 -> Fail/10; not-pass before 26, after 26, removed 0, added 0; results 503 -> 503, changed 0; series elements sha256 equal
+neg-layer-conductivity compare-interim: status Fail/10 -> Fail/10; not-pass before 8, after 8, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-layer-conductivity compare-provisional: status Fail/10 -> Fail/10; not-pass before 8, after 8, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-nan-infiltration compare-interim: status BlockedOwnerDecision/12 -> BlockedOwnerDecision/12; not-pass before 2, after 2, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-nan-infiltration compare-provisional: status Fail/10 -> Fail/10; not-pass before 2, after 2, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-shift-heating-slot compare-interim: status Fail/10 -> Fail/10; not-pass before 1, after 1, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-shift-heating-slot compare-provisional: status Fail/10 -> Fail/10; not-pass before 1, after 1, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-swap-space-guid compare-interim: status Fail/10 -> Fail/10; not-pass before 484, after 484, removed 0, added 0; results 517 -> 517, changed 0; series elements sha256 equal
+neg-swap-space-guid compare-provisional: status Fail/10 -> Fail/10; not-pass before 484, after 484, removed 0, added 0; results 517 -> 517, changed 0; series elements sha256 equal
+neg-zero-lighting-factor compare-interim: status Fail/10 -> Fail/10; not-pass before 2, after 2, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+neg-zero-lighting-factor compare-provisional: status Fail/10 -> Fail/10; not-pass before 2, after 2, removed 0, added 0; results 293 -> 293, changed 0; series elements sha256 equal
+comparisons with any difference: 0

@@ -1,0 +1,22 @@
+baseline [Interim]: Pass exit=0 coverage=Complete nonpass=
+baseline [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+wall inclination unreadable [Interim]: Pass exit=0 coverage=Complete nonpass=
+  FULL COMPARE: Pass exit=0
+wall inclination unreadable [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+  FULL COMPARE: Pass exit=0
+wall inclination absent [Interim]: Pass exit=0 coverage=Complete nonpass=
+wall inclination absent [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+wall inclination NaN [Interim]: Pass exit=0 coverage=Complete nonpass=
+wall inclination NaN [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+wall inclination outside angular domain [Interim]: Pass exit=0 coverage=Complete nonpass=
+wall inclination outside angular domain [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+wall surface type unreadable [Interim]: Pass exit=0 coverage=Complete nonpass=
+wall surface type unreadable [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+calendar omitted [Interim]: Pass exit=0 coverage=Complete nonpass=
+  FULL COMPARE: Pass exit=0
+calendar omitted [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+  FULL COMPARE: Pass exit=0
+calendar Days omitted [Interim]: Pass exit=0 coverage=Complete nonpass=
+  FULL COMPARE: Pass exit=0
+calendar Days omitted [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+  FULL COMPARE: Pass exit=0

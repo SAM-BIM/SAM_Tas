@@ -1,0 +1,22 @@
+baseline [Interim]: Pass exit=0 coverage=Complete nonpass=
+baseline [ProvisionalProposed]: Pass exit=0 coverage=Complete nonpass=
+wall inclination unreadable [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+  FULL COMPARE: BlockedTechnical exit=11
+wall inclination unreadable [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+  FULL COMPARE: BlockedTechnical exit=11
+wall inclination absent [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall inclination absent [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall inclination NaN [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall inclination NaN [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall inclination outside angular domain [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall inclination outside angular domain [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall surface type unreadable [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+wall surface type unreadable [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U
+calendar omitted [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly | BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticUL.hourly | BlockedTechnical 5.humidity space:5080b000-0000-0000-0000-00000000c001.ic.ticHLL.hourly
+  FULL COMPARE: BlockedTechnical exit=11
+calendar omitted [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly | BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticUL.hourly | BlockedTechnical 5.humidity space:5080b000-0000-0000-0000-00000000c001.ic.ticHLL.hourly
+  FULL COMPARE: BlockedTechnical exit=11
+calendar Days omitted [Interim]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly | BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticUL.hourly | BlockedTechnical 5.humidity space:5080b000-0000-0000-0000-00000000c001.ic.ticHLL.hourly
+  FULL COMPARE: BlockedTechnical exit=11
+calendar Days omitted [ProvisionalProposed]: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly | BlockedTechnical 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticUL.hourly | BlockedTechnical 5.humidity space:5080b000-0000-0000-0000-00000000c001.ic.ticHLL.hourly
+  FULL COMPARE: BlockedTechnical exit=11

@@ -1,0 +1,399 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SAM.Analytical.InputEquivalence -> C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\benchmark\SAM.Analytical.InputEquivalence\bin\Release\net8.0\SAM.Analytical.InputEquivalence.dll
+  SAM.Analytical.Tas.DirectT3D.ReadBack.Tests -> C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\bin\Release\net8.0\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll
+Test run for C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\bin\Release\net8.0\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+  Failed Calendar_Omitted_Interim [813 ms]
+  Error Message:
+     5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly: Native equals SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly[0] of 8760]
+Assert.That(row.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+
+
+  Failed Calendar_DaysOmitted_Interim [900 ms]
+  Error Message:
+     5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly: Native equals SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly[0] of 8760]
+Assert.That(row.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+   at InvokeStub_FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+   at InvokeStub_FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed Calendar_Omitted_ProvisionalProposed [999 ms]
+  Error Message:
+     5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly: Native equals SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly[0] of 8760]
+Assert.That(row.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+   at InvokeStub_FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+   at InvokeStub_FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed Calendar_DaysOmitted_ProvisionalProposed [725 ms]
+  Error Message:
+     5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly: Native equals SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly[0] of 8760]
+Assert.That(row.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+   at InvokeStub_FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Action`2 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 423
+   at InvokeStub_FalsePassRegressionTests.Calendar_EvidenceMissing_BlocksEveryScheduleRow_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed Calendar_DayMissing_Interim [753 ms]
+  Error Message:
+     The native object is absent for an S-VALUE input. No limitation is listed. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.hourly[2376] of 8760]
+Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+
+
+  Failed Calendar_DayTypeUnreadable_Interim [720 ms]
+  Error Message:
+     The native object is absent for an S-VALUE input. No limitation is listed. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.hourly[2376] of 8760]
+Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+
+  Failed Calendar_DayDuplicated_Interim [831 ms]
+  Error Message:
+     Native is within the tolerance of SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.hourly[0] of 8760]
+Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+
+  Failed Calendar_DayMissing_ProvisionalProposed [735 ms]
+  Error Message:
+     The native object is absent for an S-VALUE input. No limitation is listed. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.hourly[2376] of 8760]
+Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+
+  Failed Calendar_DayTypeUnreadable_ProvisionalProposed [795 ms]
+  Error Message:
+     The native object is absent for an S-VALUE input. No limitation is listed. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.hourly[2376] of 8760]
+Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+
+  Failed Calendar_DayDuplicated_ProvisionalProposed [747 ms]
+  Error Message:
+     Native is within the tolerance of SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.hourly[0] of 8760]
+Assert.That(hourly.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 451
+   at InvokeStub_FalsePassRegressionTests.Calendar_OneDayUnread_BlocksThatDaysHours(Object, Span`1)
+
+
+  Failed FilmInput_InclinationUnreadable_Interim [760 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+
+
+  Failed FilmInput_InclinationAbsent_Interim [763 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationNaN_Interim [759 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationNotRead_Interim [186 ms]
+  Error Message:
+   System.NullReferenceException : Object reference not set to an instance of an object.
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.NativeU(List`1 layers, NativeSurface surface) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 450
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.CompareSide(ExpectedSpace space, ExpectedPanel panel, NativeZone zone, ZoneMatch zoneMatch) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 413
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.CompareSpace(ExpectedSpace space) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 333
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.Compare() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 259
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.Run(ExpectedModel expected, NativeSnapshot native, CalibrationRules rules, GateRuleSet ruleSet) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 71
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackCompare.Run(String runDirectory, String rulesPath, String fixtureId, String purpose, GateRuleSet ruleSet, String outDirectory) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackCompare.cs:line 90
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FullCompare(String run, NativeSnapshot snapshot, GateRuleSet ruleSet, ExportManifest manifest) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 44
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 367
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+  Failed FilmInput_InclinationBelowDomain_Interim [816 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationAboveDomain_Interim [802 ms]
+  Error Message:
+     Assert.That(report.NotPass[0], Does.StartWith(GateStatus.BlockedTechnical + " 3b panel:").And.EndWith(".U"))
+  Expected: String starting with "BlockedTechnical 3b panel:" and String ending with ".U"
+  But was:  "Fail 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U"
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 370
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 370
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_SurfaceTypeNotRead_Interim [792 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_SurfaceTypeUnrecognised_Interim [807 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationUnreadable_ProvisionalProposed [779 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationAbsent_ProvisionalProposed [778 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationNaN_ProvisionalProposed [766 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationNotRead_ProvisionalProposed [190 ms]
+  Error Message:
+   System.NullReferenceException : Object reference not set to an instance of an object.
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.NativeU(List`1 layers, NativeSurface surface) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 450
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.CompareSide(ExpectedSpace space, ExpectedPanel panel, NativeZone zone, ZoneMatch zoneMatch) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 413
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.CompareSpace(ExpectedSpace space) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 333
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.Compare() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 259
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackComparison.Run(ExpectedModel expected, NativeSnapshot native, CalibrationRules rules, GateRuleSet ruleSet) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackComparison.cs:line 71
+   at SAM.Analytical.Tas.DirectT3D.Validation.ReadBack.ReadBackCompare.Run(String runDirectory, String rulesPath, String fixtureId, String purpose, GateRuleSet ruleSet, String outDirectory) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\ReadBackCompare.cs:line 90
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FullCompare(String run, NativeSnapshot snapshot, GateRuleSet ruleSet, ExportManifest manifest) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 44
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 367
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+  Failed FilmInput_InclinationBelowDomain_ProvisionalProposed [817 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_InclinationAboveDomain_ProvisionalProposed [732 ms]
+  Error Message:
+     Assert.That(report.NotPass[0], Does.StartWith(GateStatus.BlockedTechnical + " 3b panel:").And.EndWith(".U"))
+  Expected: String starting with "BlockedTechnical 3b panel:" and String ending with ".U"
+  But was:  "Fail 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U"
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 370
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 370
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_SurfaceTypeNotRead_ProvisionalProposed [792 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+  Failed FilmInput_SurfaceTypeUnrecognised_ProvisionalProposed [741 ms]
+  Error Message:
+     Assert.That(report.NotPass, Has.Count.EqualTo(1))
+  Expected: property Count equal to 1
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Action`1 change, GateRuleSet ruleSet, String named) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 369
+   at InvokeStub_FalsePassRegressionTests.FilmInput_NotUsable_BlocksTheDerivedU_ThroughTheFullCompare(Object, Span`1)
+
+
+Results File: C:\Users\michal\AppData\Local\Temp\claude\C--Users-michal-Documents-GitHub-SAM-BIM-SAM-Tas\48ec57af-3dbd-46c3-8302-5d8f08e64395\scratchpad\before\before.trx
+
+Failed!  - Failed:    26, Passed:     4, Skipped:     0, Total:    30, Duration: 25 s - SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll (net8.0)

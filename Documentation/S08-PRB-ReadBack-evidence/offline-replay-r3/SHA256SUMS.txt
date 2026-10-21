@@ -1,0 +1,118 @@
+﻿# sha256 of every committed file in offline-replay-r3 (this file excluded)
+1234811333089ebe9ac0852c787e9a361e54fd30360aa1ead5b617edb9b1870c  calib-box/compare-interim/compare-interim.out.txt
+ae364cedd9eca40dccd618b37f76ee2878350770f7d2504c94ebd3433d8bdea9  calib-box/compare-interim/report.json.gz
+09d17f8ae4e56258c4096f5ead1c808e229071e3efb7776d8d83b1dd2ceb5ef7  calib-box/compare-interim/report.txt
+1234811333089ebe9ac0852c787e9a361e54fd30360aa1ead5b617edb9b1870c  calib-box/compare-provisional/compare-provisional.out.txt
+9b224e639f075626b6690e1392c4ee7aad48946a169bc0495d824cad652a5500  calib-box/compare-provisional/report.json.gz
+09d17f8ae4e56258c4096f5ead1c808e229071e3efb7776d8d83b1dd2ceb5ef7  calib-box/compare-provisional/report.txt
+75b6e546c04a6b2f4aa3794c87d04d405fb88451902bf4b98702c5e0fd3b41a8  calib-box-repeat/compare-interim/compare-interim.out.txt
+46128a60c381342a62d20529ba32ddf94ec39e56b1d8b88b08f586e312321ebf  calib-box-repeat/compare-interim/report.json.gz
+07586ef25c1405fe590d76c799826f094d7557e2b9bc8a274b43c795d7ab5b2d  calib-box-repeat/compare-interim/report.txt
+75b6e546c04a6b2f4aa3794c87d04d405fb88451902bf4b98702c5e0fd3b41a8  calib-box-repeat/compare-provisional/compare-provisional.out.txt
+94f9270ed21ab52f7daaeb2cda451924a3ef078da9a81c1a0c74f7b0822a74c1  calib-box-repeat/compare-provisional/report.json.gz
+07586ef25c1405fe590d76c799826f094d7557e2b9bc8a274b43c795d7ab5b2d  calib-box-repeat/compare-provisional/report.txt
+fa5186510ab6a47f06260e0096abb67f20a7df82115a028c7f6ed24dba0adb40  calib-box-sizing/compare-interim/compare-interim.out.txt
+80063cd6385285956faf9d7beecf7367798b9c8f8e48e39566e629a975f5225a  calib-box-sizing/compare-interim/report.json.gz
+d5c4f37ddb98835b3d0fb805401c0d67c11a8c6f6131a7a189070093d8e7b834  calib-box-sizing/compare-interim/report.txt
+2444eec09ea46420a94b2f62a2841a06fe8169a6571e15637bd93ef5e679b72b  calib-two/compare-interim/compare-interim.out.txt
+c7069d22c336a95ed0418bb444b8ea7fce82b539a6619bdea6ace3ae14c4d2a3  calib-two/compare-interim/report.json.gz
+651ddef6c1bacf9c2698d9985f607578aa734622db753f5fc4eb9d7d0a833d32  calib-two/compare-interim/report.txt
+2444eec09ea46420a94b2f62a2841a06fe8169a6571e15637bd93ef5e679b72b  calib-two/compare-provisional/compare-provisional.out.txt
+547b1b4e38257f6eec70fb63b2703a468e59ea2bd46597559e79694698173659  calib-two/compare-provisional/report.json.gz
+651ddef6c1bacf9c2698d9985f607578aa734622db753f5fc4eb9d7d0a833d32  calib-two/compare-provisional/report.txt
+5b74239aaf8064a886f5f27d873310b48a7671906ead3a1933f76d781e2f3f3b  checks/core-tests-on-bc867f8a.txt
+b88bb9ba2f0c75355bc78949c259a44ddb1f82bf80a6e6145893d5333a0c3577  checks/r2-vs-r3-diff.txt
+4b357d217406adb12b0f9888d69e9db761504b727b19faac31979647b8bc7242  checks/readback-tests-on-bc867f8a.txt
+0cf173a190ced639fe9cbc36f79c742d165cb71d725d9391e52a11f34f522342  checks/regression-tests-on-cc414876.txt
+5ef3b469109f17c9f6331aa3573577f57edefa70182c55de046173e61daa6948  checks/review-probe-on-bc867f8a.txt
+0c9ea2c64eb18129a45a4fee42adf88ac7202ded36e23956a17057d635ef8f60  checks/review-probe-on-cc414876.txt
+0f7687a6ffba080bdc1503daa5d5ae10d2289de716cd0e9689aae7e257ca50dc  checks/review-probe-Program.cs.txt
+da9ee595837d57ff7900b198b8ea6ed3deda11170594e60dd203ea2242477575  inputs.sha256.txt
+b1ef9bf384ca97d464bf60dcec5cdc8515afcd0f0a6ac4ece255b87caa4dccdf  neg-add-izam/compare-interim/compare-interim.out.txt
+a25f1576a68da08fd135044b06969d6d0b0052f0df2faa2f1ce024bd744d7ab5  neg-add-izam/compare-interim/report.json.gz
+db200e8c703a7cb756f27b01d78642eb148c1e301a79dc81183e50fdb1fbca67  neg-add-izam/compare-interim/report.txt
+b1ef9bf384ca97d464bf60dcec5cdc8515afcd0f0a6ac4ece255b87caa4dccdf  neg-add-izam/compare-provisional/compare-provisional.out.txt
+bbf4f680db8706d19155fddc6d544422cc1f35701cfa276cce65798f3b80ac05  neg-add-izam/compare-provisional/report.json.gz
+db200e8c703a7cb756f27b01d78642eb148c1e301a79dc81183e50fdb1fbca67  neg-add-izam/compare-provisional/report.txt
+0070507f12cf433bdb779c5d0445d3afbd86d23098c925fa3f68387ee5135bfa  neg-flip-partition/compare-interim/compare-interim.out.txt
+70fca5fdc6fb37367d3711f627f0411bb16361d269eb84d8b633e9aae3c9ac37  neg-flip-partition/compare-interim/report.json.gz
+52c2f86838196ce613e271712bb4a3e488a972f3bdb04389a63bb9519f0adf6b  neg-flip-partition/compare-interim/report.txt
+0070507f12cf433bdb779c5d0445d3afbd86d23098c925fa3f68387ee5135bfa  neg-flip-partition/compare-provisional/compare-provisional.out.txt
+753d0ec9cf9f176b35dbc4ab948a7d5e802278e139cf06c0b207c2d634fed713  neg-flip-partition/compare-provisional/report.json.gz
+52c2f86838196ce613e271712bb4a3e488a972f3bdb04389a63bb9519f0adf6b  neg-flip-partition/compare-provisional/report.txt
+f966598e26fda653c27c634d4c58135f0318ccca656cdf2dfd8583893d0f5404  neg-layer-conductivity/compare-interim/compare-interim.out.txt
+f1ff8c345e596497905f3536a645e58646098e972347c89ada9d5406e9e2267d  neg-layer-conductivity/compare-interim/report.json.gz
+6d3d0417ee8888a5fad4202a4d35624c9e1ac6f8b749719e8dd6da7cc338d81e  neg-layer-conductivity/compare-interim/report.txt
+f966598e26fda653c27c634d4c58135f0318ccca656cdf2dfd8583893d0f5404  neg-layer-conductivity/compare-provisional/compare-provisional.out.txt
+d10b166299d8ba2175f8f1a48a46c1a492e6428470b943b1658409bc311793cd  neg-layer-conductivity/compare-provisional/report.json.gz
+6d3d0417ee8888a5fad4202a4d35624c9e1ac6f8b749719e8dd6da7cc338d81e  neg-layer-conductivity/compare-provisional/report.txt
+6ace14cb780344d47be5457c7bd6c3f733129f64c2450310f9d1a55b2cc55910  neg-nan-infiltration/compare-interim/compare-interim.out.txt
+6f6c3e9a79e5f024f914987e4c887bdb679901a74d111389005d25a2d960d01a  neg-nan-infiltration/compare-interim/report.json.gz
+d36557090de445509e072e41123e703ce396f1e9b08618e64424ffa1e49adcfc  neg-nan-infiltration/compare-interim/report.txt
+b600f8c7d7abfdd11ee1d41f4147937b02b068c95656fcaf3d68c8e67c283522  neg-nan-infiltration/compare-provisional/compare-provisional.out.txt
+1fd81dfbc1294e4cbf9f56b43eec122960837f745e924df4bc420c03bb8b5162  neg-nan-infiltration/compare-provisional/report.json.gz
+2c8c04d44f610fa27dec4e2fc5bfbac94f8e7f16c44eed11a3ce2f6a9527d0e0  neg-nan-infiltration/compare-provisional/report.txt
+e8f50b7b5c16dfb225a316abf82ac8d1114594b48fc7664446084fcf423c6557  neg-shift-heating-slot/compare-interim/compare-interim.out.txt
+c4e04a7832c85e5c4dfa5f623dec186197fd7b8e6d5d9997ca9c012d45963c64  neg-shift-heating-slot/compare-interim/report.json.gz
+c44bb6cb97639fa7aa75e92b7d9b9089a0325f5c259866233d86774a4abe659c  neg-shift-heating-slot/compare-interim/report.txt
+e8f50b7b5c16dfb225a316abf82ac8d1114594b48fc7664446084fcf423c6557  neg-shift-heating-slot/compare-provisional/compare-provisional.out.txt
+8b303cf0b3b3180746ba882a1409d6c88b68e297e34eb36baf989c7716af9a18  neg-shift-heating-slot/compare-provisional/report.json.gz
+c44bb6cb97639fa7aa75e92b7d9b9089a0325f5c259866233d86774a4abe659c  neg-shift-heating-slot/compare-provisional/report.txt
+7f12679f03602ddfdedb3a5934bb51c806492575c260474fb6fc0131f9cb2b97  neg-swap-space-guid/compare-interim/compare-interim.out.txt
+ed4ea0c1b644f0d1ae97c764f1f21c193b833b4dad541adae5a2b79a1efd7b24  neg-swap-space-guid/compare-interim/report.json.gz
+63ef9ffe723cb63d3f9b05ea9df39f0a646b8fc82938369fc3b3d9dceb2f8d48  neg-swap-space-guid/compare-interim/report.txt
+7f12679f03602ddfdedb3a5934bb51c806492575c260474fb6fc0131f9cb2b97  neg-swap-space-guid/compare-provisional/compare-provisional.out.txt
+efba03f04716bf9dc6a6745512a29dde6a0feac53e133a74a82cc8fa00723ee5  neg-swap-space-guid/compare-provisional/report.json.gz
+63ef9ffe723cb63d3f9b05ea9df39f0a646b8fc82938369fc3b3d9dceb2f8d48  neg-swap-space-guid/compare-provisional/report.txt
+07eaafcb843c557308d7d2b15293bbf2445e40e7ca689fb061e8b21b726d9a4f  neg-zero-lighting-factor/compare-interim/compare-interim.out.txt
+8a7eb053d659bfa906797cf09901c3f5af533e957e3f0cc18a62c4b9ae86270a  neg-zero-lighting-factor/compare-interim/report.json.gz
+8eced46ec179da6927b9c15e49cf860bab929453993a38e3fe61b56b6ffd02c0  neg-zero-lighting-factor/compare-interim/report.txt
+07eaafcb843c557308d7d2b15293bbf2445e40e7ca689fb061e8b21b726d9a4f  neg-zero-lighting-factor/compare-provisional/compare-provisional.out.txt
+d6c08ad59d63e1ca6e2ec2f02fe07fd6fd0416005af616dfc4be6efd47180c03  neg-zero-lighting-factor/compare-provisional/report.json.gz
+8eced46ec179da6927b9c15e49cf860bab929453993a38e3fe61b56b6ffd02c0  neg-zero-lighting-factor/compare-provisional/report.txt
+64733c60175c482b5240aef84a610ab4716dfa6ccdc324fd39d6b8d9ba411dd9  README.md
+a96a52c41fed301a93751fd5b91f28664179a3167355212dafd5a789d472eb72  replay-summary.txt
+# decompressed-derived: the uncompressed originals of each report.json.gz
+e548f27754696ab38c09aa6d3e2da8e2c634367eed7b4ca50ac8a7d063697539  calib-box/compare-interim/report.json (uncompressed original of report.json.gz)
+a4dfcd0abc7effa9e743d445f33360c02ab976277a1f171bafa4042d7a7829da  calib-box/compare-provisional/report.json (uncompressed original of report.json.gz)
+ab1fbf026936051bfbfc226dbb3a91609401220d5392523cab0743f3bd902402  calib-box-repeat/compare-interim/report.json (uncompressed original of report.json.gz)
+3453e50d64a54090f8d0f580c7983e2ba225a48b01c2651f6cff6d412b5c459f  calib-box-repeat/compare-provisional/report.json (uncompressed original of report.json.gz)
+49e244e497d8215456763980206cb0465d950fdbcd045864fa75b8109b67cabe  calib-box-sizing/compare-interim/report.json (uncompressed original of report.json.gz)
+6a69b95334b35f096b9995f6b655079e12e2cdae8ca87041d0bc4106ee23766c  calib-two/compare-interim/report.json (uncompressed original of report.json.gz)
+6d26dd4612a66e692a1de15719a43e2d118a5beb9e12c24f844f7e9dcd1f3585  calib-two/compare-provisional/report.json (uncompressed original of report.json.gz)
+7114545ecfcf4b145c9d4bf86c7065f5e07b0c4dee4ce0db1de63a7cdb28c9f3  neg-add-izam/compare-interim/report.json (uncompressed original of report.json.gz)
+4ccf27269e2694498de6fa7d818fff22691b429be0aecd45d363283f2b12fe44  neg-add-izam/compare-provisional/report.json (uncompressed original of report.json.gz)
+bbcefeb6b2b99c4731d490aa38a794908c3164cdccb561473f9d051740a5d44f  neg-flip-partition/compare-interim/report.json (uncompressed original of report.json.gz)
+96b3740aa42c7e534cd9dde0b475cd96e0270c24ddab724503b582ff4948d5ee  neg-flip-partition/compare-provisional/report.json (uncompressed original of report.json.gz)
+0697d728068f765646592dd2af4ad420dcb13b8184d9dee921a966b14efee886  neg-layer-conductivity/compare-interim/report.json (uncompressed original of report.json.gz)
+9241cdc1196aaf256a7a5ae1e37b729908335240ac4e5ff7175f170d1408bc55  neg-layer-conductivity/compare-provisional/report.json (uncompressed original of report.json.gz)
+8122e8455700ac6c1defa2eaaef9fdbc7a35ce42a2fd4aefe56d486c8783b7e5  neg-nan-infiltration/compare-interim/report.json (uncompressed original of report.json.gz)
+c654af9ffcf99b2114e1e3344d49e7166d2a7b5828b2be5cfc79b1d86fb761c9  neg-nan-infiltration/compare-provisional/report.json (uncompressed original of report.json.gz)
+40bcab75531e8befc0ae2d585836505aad9872992f62eecac32526e8dc79a97b  neg-shift-heating-slot/compare-interim/report.json (uncompressed original of report.json.gz)
+be130a531fc7df59419bf5c4340674a7c16a1fb2d0aec4505132a34b59f2a2f8  neg-shift-heating-slot/compare-provisional/report.json (uncompressed original of report.json.gz)
+5378c767b4325ba3cb2241ba94fd0dc00f3fbee822ac552cf492934f55d961c2  neg-swap-space-guid/compare-interim/report.json (uncompressed original of report.json.gz)
+00ec3f6d4e82dd1ea7627a6cf6143963b8f7ec527af411d8f431e54c1be8e919  neg-swap-space-guid/compare-provisional/report.json (uncompressed original of report.json.gz)
+f83942b23dff340bf9b3818df13477db7865194c419f3979fd32df288a4136f3  neg-zero-lighting-factor/compare-interim/report.json (uncompressed original of report.json.gz)
+86871dc20b2d19743d3294050106fbc8fe6e93e04496f5695142691dd1aa5be5  neg-zero-lighting-factor/compare-provisional/report.json (uncompressed original of report.json.gz)
+# machine-local, not committed (C:\TasOut\s08b\replay-r3): the series-element files of every replay; each equals the r2 hash in ../offline-replay-r2/SHA256SUMS.txt (checks/r2-vs-r3-diff.txt)
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  calib-box/compare-interim/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  calib-box/compare-provisional/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  calib-box-repeat/compare-interim/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  calib-box-repeat/compare-provisional/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  calib-box-sizing/compare-interim/series-elements.csv.gz
+cf064c62e9ef5dcba385cd3759e5ebe7ea5e4a66a3750e5fca1bf3a13d12d7a9  calib-two/compare-interim/series-elements.csv.gz
+cf064c62e9ef5dcba385cd3759e5ebe7ea5e4a66a3750e5fca1bf3a13d12d7a9  calib-two/compare-provisional/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-add-izam/compare-interim/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-add-izam/compare-provisional/series-elements.csv.gz
+cf064c62e9ef5dcba385cd3759e5ebe7ea5e4a66a3750e5fca1bf3a13d12d7a9  neg-flip-partition/compare-interim/series-elements.csv.gz
+cf064c62e9ef5dcba385cd3759e5ebe7ea5e4a66a3750e5fca1bf3a13d12d7a9  neg-flip-partition/compare-provisional/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-layer-conductivity/compare-interim/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-layer-conductivity/compare-provisional/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-nan-infiltration/compare-interim/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-nan-infiltration/compare-provisional/series-elements.csv.gz
+baeb3b429397bbc508a9e5e2b4a397626281bb0b2baf6c74bd0bf78bd9f552e4  neg-shift-heating-slot/compare-interim/series-elements.csv.gz
+baeb3b429397bbc508a9e5e2b4a397626281bb0b2baf6c74bd0bf78bd9f552e4  neg-shift-heating-slot/compare-provisional/series-elements.csv.gz
+345dab2c289f9961596a48ad9c204e81289d6552b00ed403cd9e36a489b3ec25  neg-swap-space-guid/compare-interim/series-elements.csv.gz
+345dab2c289f9961596a48ad9c204e81289d6552b00ed403cd9e36a489b3ec25  neg-swap-space-guid/compare-provisional/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-zero-lighting-factor/compare-interim/series-elements.csv.gz
+3eb25c042f41bd46f53e97c0867d1a3c1c2e30cfc0776e1aa0d7e18be1154463  neg-zero-lighting-factor/compare-provisional/series-elements.csv.gz

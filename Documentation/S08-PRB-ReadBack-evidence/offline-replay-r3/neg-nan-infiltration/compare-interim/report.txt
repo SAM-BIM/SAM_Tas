@@ -1,0 +1,9 @@
+S08 read-back neg-nan-infiltration (offline replay r3 at bc867f8a of the cal3 licensed snapshot (no Tas run)): BlockedOwnerDecision (rank 3, exit 12)
+  gate: neg-nan-infiltration: BlockedOwnerDecision (provisional: unapproved OD-G rules applied), 293 result(s), 2 not pass, 0 informational, coverage Complete
+  gate BlockedOwnerDecision | provisional-rules gate BlockedOwnerDecision | coverage Complete (293 required, 0 missing, 0 unrequested)
+  results by status: BlockedOwnerDecision=2, Pass=291
+  elements by outcome: AcceptedTransformation=1, ExportDefect=2, Match=80810, NotApplicable=5, WithinTolerance=86218
+  proposed cases (all elements): G3 (S-VALUE, native NaN) -> ExportDefect (proposed, OD-G3) x2
+  owner decisions (all elements): 1; technical blockers: 0; informational mismatches: 0
+  NOT PASS BlockedOwnerDecision 7a space:5080b000-0000-0000-0000-00000000c001.ic.ticI.factor
+  NOT PASS BlockedOwnerDecision 7b space:5080b000-0000-0000-0000-00000000c001.ic.ticI.flow

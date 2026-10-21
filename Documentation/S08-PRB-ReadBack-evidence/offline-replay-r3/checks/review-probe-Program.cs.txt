@@ -1,0 +1,53 @@
+﻿using System.IO.Compression;
+using SAM.Analytical.InputEquivalence;
+using SAM.Analytical.Tas.DirectT3D.Validation.ReadBack;
+using SAM.Analytical.Tas.DirectT3D.ReadBack.Tests;
+var root = @"C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas";
+var scratch = @"C:\Users\michal\AppData\Local\Temp\claude\C--Users-michal-Documents-GitHub-SAM-BIM-SAM-Tas\48ec57af-3dbd-46c3-8302-5d8f08e64395\scratchpad\probe-out";
+var dir = Path.Combine(scratch,"box");
+Directory.CreateDirectory(dir);
+foreach(var file in Directory.GetFiles(Path.Combine(root,"Documentation/S08-PRB-ReadBack-evidence/runs/calib-box"))) {
+ var name=Path.GetFileName(file); var dest=Path.Combine(dir,name.EndsWith(".gz")?name[..^3]:name);
+ if(name.EndsWith(".gz")) { using var input=File.OpenRead(file);using var gz=new GZipStream(input,CompressionMode.Decompress);using var output=File.Create(dest);gz.CopyTo(output); } else File.Copy(file,dest,true);
+}
+var rules=CalibrationRules.Load(Path.Combine(root,"SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/ReadBack/calibration-rules.json"));
+if(args.Contains("replay")) {
+ var cal=@"C:\TasOut\s08b\cal3";
+ var runs=new[]{"calib-box","calib-two","calib-box-repeat","calib-box-sizing"}.Select(x=>Path.Combine(cal,x)).Concat(Directory.GetDirectories(cal,"neg-*"));
+ foreach(var run in runs)foreach(var set in new[]{GateRuleSet.Interim,GateRuleSet.ProvisionalProposed}) {
+  var name=Path.GetFileName(run);if(name=="calib-box-sizing"&&set==GateRuleSet.ProvisionalProposed)continue;
+  var label=set==GateRuleSet.Interim?"interim":"provisional";
+  var report=ReadBackCompare.Run(run,rules.SourcePath,name,"independent offline replay r2",set,Path.Combine(scratch,"replay",name,label));
+  var originalPath=Path.Combine(root,"Documentation","S08-PRB-ReadBack-evidence","offline-replay-r2",name,"compare-"+label,"report.json.gz");
+  using var input=File.OpenRead(originalPath);using var gzip=new GZipStream(input,CompressionMode.Decompress);
+  var original=System.Text.Json.JsonSerializer.Deserialize<ReadBackReport>(gzip,new System.Text.Json.JsonSerializerOptions{NumberHandling=System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals});
+  bool equal=report.Status==original.Status&&report.ExitCode==original.ExitCode&&report.NotPass.Order().SequenceEqual(original.NotPass.Order());
+  Console.WriteLine($"{name} {label}: {report.Status}/{report.ExitCode} notpass={report.NotPass.Count} historical_match={equal}");
+  if(!equal)Environment.ExitCode=1;
+ }
+ return;
+}
+void Check(string name, Action<ExpectedModel,NativeSnapshot> change, bool full=false) {
+ var e=Evidence.Expected(dir,"review-r2"); var n=Evidence.Snapshot(dir);change(e,n);
+ foreach(var set in new[]{GateRuleSet.Interim,GateRuleSet.ProvisionalProposed}) {
+  var c=ReadBackComparison.Run(e,n,rules,set);var r=ReadBackReport.Create(c,"review-r2",null);
+  Console.WriteLine(name+" ["+set+"]: "+r.Status+" exit="+r.ExitCode+" coverage="+r.Coverage+" nonpass="+string.Join(" | ",r.NotPass.Take(3)));
+  if(full) {
+   var mutated = Path.Combine(scratch,"full-"+name.Replace(" ","-")+"-"+set);Directory.CreateDirectory(mutated);
+   foreach(var file in new[]{"input.json","weather.json","export.json"})File.Copy(Path.Combine(dir,file),Path.Combine(mutated,file),true);
+   SnapshotJson.Write(n,Path.Combine(mutated,"snapshot.json"));
+   var report=ReadBackCompare.Run(mutated,rules.SourcePath,"review-r2",name,set);
+   Console.WriteLine("  FULL COMPARE: "+report.Status+" exit="+report.ExitCode);
+  }
+ }
+}
+NativeSurface Wall(NativeSnapshot n)=>n.Zones[0].Surfaces.First(x=>!ReadBackIdentity.IsOpening(x)&&x.Inclination.HasNumber&&Math.Abs(x.Inclination.Value-90)<0.01);
+Check("baseline",(e,n)=>{});
+Check("wall inclination unreadable",(e,n)=>Wall(n).Inclination=NativeField.Unreadable("independent review: inclination getter failed"),true);
+Check("wall inclination absent",(e,n)=>Wall(n).Inclination=NativeField.Absent("independent review: no inclination"));
+Check("wall inclination NaN",(e,n)=>Wall(n).Inclination=NativeField.Of(double.NaN));
+Check("wall inclination outside angular domain",(e,n)=>Wall(n).Inclination=NativeField.Of(-999));
+Check("wall surface type unreadable",(e,n)=>Wall(n).Type=null);
+Check("calendar omitted",(e,n)=>n.Calendar=null,true);
+Check("calendar Days omitted",(e,n)=>n.Calendar.Days=null,true);
+

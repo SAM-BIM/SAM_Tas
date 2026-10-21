@@ -1,0 +1,7 @@
+﻿S08 read-back calib-box-sizing (offline replay r3 at bc867f8a of the cal3 licensed snapshot (no Tas run)): Pass (rank 6, exit 0)
+  gate: calib-box-sizing: Pass, 293 result(s), 0 not pass, 0 informational, coverage Complete
+  gate Pass | provisional-rules gate Pass | coverage Complete (293 required, 0 missing, 0 unrequested)
+  results by status: Pass=293
+  elements by outcome: AcceptedTransformation=1, Match=80810, NotApplicable=5, WithinTolerance=86220
+  proposed cases (all elements): none
+  owner decisions (all elements): 0; technical blockers: 0; informational mismatches: 0

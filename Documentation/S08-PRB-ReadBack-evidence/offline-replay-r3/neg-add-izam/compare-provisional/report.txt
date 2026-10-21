@@ -1,0 +1,8 @@
+S08 read-back neg-add-izam (offline replay r3 at bc867f8a of the cal3 licensed snapshot (no Tas run)): Fail (rank 1, exit 10)
+  gate: neg-add-izam: Pass, 293 result(s), 0 not pass, 0 informational, coverage Complete
+  native objects SAM never stated: 8e: native IZAM 'S08 negative IZAM' present; the contract route ran with AddIZAMs=false and SAM states none
+  gate Pass | provisional-rules gate Pass | coverage Complete (293 required, 0 missing, 0 unrequested)
+  results by status: Pass=293
+  elements by outcome: AcceptedTransformation=1, Match=80810, NotApplicable=5, WithinTolerance=86220
+  proposed cases (all elements): none
+  owner decisions (all elements): 0; technical blockers: 0; informational mismatches: 0
