@@ -149,24 +149,90 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 yield return "the frozen weather is not byte-identical to what the export froze";
             }
 
-            if (snapshot.Reader == null || snapshot.Reader.ProcessId == manifest.ProcessId)
+            // Fresh process and ordering: proven only by valid evidence. A missing or unparseable process id or time proves
+            // nothing, so it fails the precondition rather than being skipped.
+            ReaderInfo reader = snapshot.Reader;
+            if (manifest.ProcessId <= 0 || reader == null || reader.ProcessId <= 0)
+            {
+                yield return "the export or reader process id is missing (export " + manifest.ProcessId + ", reader " + (reader?.ProcessId.ToString(CultureInfo.InvariantCulture) ?? "none") + "): a fresh read is not proven";
+            }
+            else if (reader.ProcessId == manifest.ProcessId)
             {
                 yield return "the reader did not run in a fresh process (same process id as the export)";
             }
 
-            if (DateTime.TryParse(snapshot.Reader?.StartedUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime read) && DateTime.TryParse(manifest.EndedUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime ended) && read < ended)
+            bool endedValid = TryUtc(manifest.EndedUtc, out DateTime ended);
+            bool readValid = TryUtc(reader?.StartedUtc, out DateTime read);
+            if (!endedValid)
+            {
+                yield return "the export end time is missing or invalid ('" + manifest.EndedUtc + "'): the reader is not proven to have run after the export";
+            }
+
+            if (!readValid)
+            {
+                yield return "the reader start time is missing or invalid ('" + reader?.StartedUtc + "'): the reader is not proven to have run after the export";
+            }
+
+            if (endedValid && readValid && read < ended)
             {
                 yield return "the reader started before the export ended";
             }
 
-            if (!manifest.Outputs.TryGetValue(ReadBackFiles.Tbd, out string tbd) || tbd != snapshot.Reader?.TbdSha256Before)
+            // Required native files: the TBD always; the T3D when the export wrote one. Each must be the file the export wrote
+            // and unchanged across the read. An optional file the export did not write is not a problem.
+            foreach (string problem in RequiredFile("TBD", manifest.Outputs.TryGetValue(ReadBackFiles.Tbd, out string tbd) ? tbd : null, true, reader?.TbdSha256Before, reader?.TbdSha256After))
             {
-                yield return "the TBD the reader opened is not the one the export wrote (sha256)";
+                yield return problem;
             }
 
-            if (manifest.Outputs.TryGetValue(ReadBackFiles.T3d, out string t3d) && snapshot.Reader?.T3dSha256Before != null && t3d != snapshot.Reader.T3dSha256Before)
+            bool t3dRequired = manifest.Outputs.TryGetValue(ReadBackFiles.T3d, out string t3d);
+            foreach (string problem in RequiredFile("T3D", t3d, t3dRequired, reader?.T3dSha256Before, reader?.T3dSha256After))
             {
-                yield return "the T3D the reader opened is not the one the export wrote (sha256)";
+                yield return problem;
+            }
+        }
+
+        private static bool TryUtc(string value, out DateTime result)
+        {
+            return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out result) && result.Kind == DateTimeKind.Utc;
+        }
+
+        private static IEnumerable<string> RequiredFile(string name, string written, bool required, string before, string after)
+        {
+            if (!required)
+            {
+                if (before != null && before != after)
+                {
+                    yield return "the " + name + " changed while it was read (sha256 before " + before + ", after " + (after ?? "none") + ")";
+                }
+
+                yield break;
+            }
+
+            if (string.IsNullOrEmpty(written))
+            {
+                yield return "the export recorded no sha256 for the " + name + " it wrote: the " + name + " the reader opened is unverified";
+                yield break;
+            }
+
+            if (before == null)
+            {
+                yield return "the reader recorded no sha256 for the " + name + " the export wrote: the " + name + " read is unverified";
+                yield break;
+            }
+
+            if (written != before)
+            {
+                yield return "the " + name + " the reader opened is not the one the export wrote (sha256)";
+            }
+
+            if (after == null)
+            {
+                yield return "the reader recorded no sha256 for the " + name + " after the read: an unchanged " + name + " is unverified";
+            }
+            else if (after != before)
+            {
+                yield return "the " + name + " changed while it was read (sha256 before " + before + ", after " + after + ")";
             }
         }
     }

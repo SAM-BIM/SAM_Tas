@@ -104,7 +104,13 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             Assert.That(read.Status, Is.EqualTo(written.Status));
             Assert.That(read.ProposedCases.Keys.Any(x => x.Contains("G1")));
             Assert.That(read.OwnerDecisions.Keys, Does.Contain("OD-G1"));
-            Assert.That(read.NotPass, Has.Count.EqualTo(2));
+            // Two zones, each with no SAM ventilation profile and a present, zero native ticV: 8b and the schedule rows 6.hourly
+            // and 6.eflh are all the proposed G1 (BLOCKED, owner decision), never absence.
+            Assert.That(read.NotPass, Has.Count.EqualTo(6));
+            Assert.That(read.NotPass.All(x => x.StartsWith(GateStatus.BlockedOwnerDecision.ToString(), StringComparison.Ordinal) && x.Contains(".ic.ticV.")), string.Join(" | ", read.NotPass));
+            Assert.That(read.NotPass.Count(x => x.Contains(" 8b ")), Is.EqualTo(2));
+            Assert.That(read.NotPass.Count(x => x.Contains(" 6.hourly ")), Is.EqualTo(2));
+            Assert.That(read.NotPass.Count(x => x.Contains(" 6.eflh ")), Is.EqualTo(2));
             Assert.That(read.Results.Where(x => x.Series != null).All(x => x.Series.ElementCount > 0));
 
             // Every element of every series is in the elements file, one row each.

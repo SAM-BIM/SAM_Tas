@@ -155,11 +155,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                     }
                 }
 
-                if (!space.HasInternalCondition)
-                {
-                    continue;
-                }
-
+                // The internal-condition rows are required for every space, with or without a SAM internal condition: what SAM
+                // does not state is S-UNSPEC and is compared with the persisted native state, never left out.
                 foreach (string slot in GainSlots)
                 {
                     yield return new RequiredComparison("4a.density", Keys.Profile(space.Guid, slot, "factor"));
@@ -177,7 +174,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                     yield return new RequiredComparison(slot == "ticLL" || slot == "ticUL" ? "5.temperature" : "5.humidity", Keys.Profile(space.Guid, slot, "hourly"));
                 }
 
-                foreach (string slot in ScheduledSlots(space))
+                foreach (string slot in ScheduleSlots)
                 {
                     yield return new RequiredComparison("6.hourly", Keys.Profile(space.Guid, slot, "hourly"));
                     yield return new RequiredComparison("6.eflh", Keys.Profile(space.Guid, slot, "eflh"));
@@ -220,17 +217,11 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             }
         }
 
-        /// <summary>The profile slots a space states a SAM profile for, among the schedule rows (6): gains, infiltration and ventilation.</summary>
-        public static IEnumerable<string> ScheduledSlots(ExpectedSpace space)
-        {
-            foreach (string slot in new[] { "ticOSG", "ticOLG", "ticLG", "ticESG", "ticELG", "ticI", "ticV" })
-            {
-                if (ProfileFor(space, slot) != null)
-                {
-                    yield return slot;
-                }
-            }
-        }
+        /// <summary>
+        /// The schedule rows (6) of the bounded S07 contract: gains, infiltration and ventilation. Every slot is compared for
+        /// every space; a slot without a SAM profile is S-UNSPEC against the persisted native schedule.
+        /// </summary>
+        public static readonly string[] ScheduleSlots = { "ticOSG", "ticOLG", "ticLG", "ticESG", "ticELG", "ticI", "ticV" };
 
         // ticOSG and ticOLG both carry the one SAM Occupancy profile (MA/Modify/UpdateInternalCondition.cs).
         private static ExpectedProfile ProfileFor(ExpectedSpace space, string slot)
@@ -342,11 +333,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 CompareSide(space, panel, zone, zoneMatch);
             }
 
-            if (!space.HasInternalCondition)
-            {
-                return;
-            }
-
+            // A space without a SAM internal condition states every internal-condition quantity as S-UNSPEC; the native
+            // conditions are still read and compared, so a non-zero native gain or schedule cannot disappear.
             NativeInternalCondition ic = NormalCondition(zone, out string icProblem);
             ReaderResult icMissing = zone == null ? ReaderResult.Absent("no native zone") : ReaderResult.Unreadable(icProblem);
             bool[] covered = DayCoverage(ic, out string calendarNote);
@@ -877,15 +865,33 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                     return profile.Value.ToReaderResult();
 
                 case 2:
+                    // The profile is present, so a slot the reader holds no value for is unread, never native absence.
                     int slot = hour % 24 + Rules.Offset(CalibrationRules.HourlySlot, 1, out _);
-                    return profile.Hourly != null && profile.Hourly.TryGetValue(slot, out NativeField field) ? field.ToReaderResult() : ReaderResult.Absent("hourly slot " + slot + " not read");
+                    return profile.Hourly != null && profile.Hourly.TryGetValue(slot, out NativeField field) ? (field?.ToReaderResult() ?? ReaderResult.Unreadable("hourly slot " + slot + " not read")) : ReaderResult.Unreadable("hourly slot " + slot + " not read");
 
                 case 3:
-                    return (profile.Yearly ?? NativeSeries.Absent()).At(hour + Rules.Offset(CalibrationRules.YearlyIndex, 1, out _)).ToReaderResult();
+                    int offset = Rules.Offset(CalibrationRules.YearlyIndex, 1, out _);
+                    string domain = AnnualDomainProblem(profile.Yearly, offset, "the yearly profile");
+                    return domain != null ? ReaderResult.Unreadable(domain) : (profile.Yearly ?? NativeSeries.Absent()).At(hour + offset).ToReaderResult();
 
                 default:
                     return ReaderResult.Unreadable("a TAS function profile (" + profile.Type + "): its schedule is not readable as hourly values");
             }
+        }
+
+        /// <summary>
+        /// Why a read native annual array is outside the calibrated domain (N-5: CLR index = SAM hour + offset, lower bound =
+        /// offset, exactly 8760 elements), or null when it is inside it or was not read. Outside the domain no element can be
+        /// attributed to a SAM hour: the array is never compared as a prefix, truncated or padded.
+        /// </summary>
+        private static string AnnualDomainProblem(NativeSeries series, int offset, string what)
+        {
+            if (series == null || !series.IsRead || (series.Values.Length == 8760 && series.LowerBound == offset))
+            {
+                return null;
+            }
+
+            return what + " has " + series.Values.Length + " elements at lower bound " + series.LowerBound + "; the calibrated domain (N-5) is 8760 elements at lower bound " + offset + ", so it is not compared, truncated or padded";
         }
 
         private List<ReaderResult> NativeHours(NativeProfile profile, ReaderResult missing, bool[] covered, Func<ReaderResult, ReaderResult> scale, out string encoding)
@@ -950,15 +956,18 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
 
         private void CompareSchedules(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, bool[] covered)
         {
-            foreach (string slot in ScheduledSlots(space))
+            foreach (string slot in ScheduleSlots)
             {
+                // A slot without a SAM profile is S-UNSPEC for every hour: the core decides it against the native schedule
+                // (absent, zero, non-zero or unreadable) with its unchanged rules; it is never left out of the comparison.
                 NativeProfile profile = GainProfile(ic, slot);
                 ExpectedProfile expected = ProfileFor(space, slot);
+                string unspecified = "no SAM " + slot + " profile";
                 List<ReaderResult> native = NativeHours(profile, icMissing, covered, null, out string encoding);
-                HourlySeries("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, null, native, identity, ShapeConventions(profile), encoding);
+                HourlySeries("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, unspecified, native, identity, ShapeConventions(profile), encoding);
 
                 // EFLH: supporting evidence only (S07 section 7); it never stands in for the hourly comparison.
-                ExpectedValue eflh = expected.Expanded.IsOk ? EQ.ExpectedEquivalentFullLoadHours(expected.Expanded) : ExpectedValue.Invalid(expected.Expanded.Detail);
+                ExpectedValue eflh = expected == null ? ExpectedValue.Unspecified(unspecified) : expected.Expanded.IsOk ? EQ.ExpectedEquivalentFullLoadHours(expected.Expanded) : ExpectedValue.Invalid(expected.Expanded.Detail);
                 Scalar("6.eflh", Keys.Profile(space.Guid, slot, "eflh"), eflh, Sum(native), identity, ShapeConventions(profile));
             }
         }
@@ -1140,10 +1149,11 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 }
 
                 NativeSeries series = nativePresent && w.Annual.TryGetValue(item.Key, out NativeSeries s) ? s : null;
-                List<ReaderResult> native = Enumerable.Range(0, 8760).Select(h => series == null ? missing : series.At(h + offset).ToReaderResult()).ToList();
-                if (series != null && series.IsRead && series.Values.Length != 8760)
+                string domain = AnnualDomainProblem(series, offset, "the native annual array GetAnnualParameter(" + item.Key + ")");
+                List<ReaderResult> native = Enumerable.Range(0, 8760).Select(h => series == null ? missing : domain != null ? ReaderResult.Unreadable(domain) : series.At(h + offset).ToReaderResult()).ToList();
+                if (domain != null)
                 {
-                    Supporting.Add(key + ": the native annual array has " + series.Values.Length + " elements (lower bound " + series.LowerBound + ")");
+                    Supporting.Add(key + ": " + domain);
                 }
 
                 SeriesOf("9", key, values.Select(ExpectedValue.FromValue).ToList(), native, identity, AlignmentStatus.Unverified, convention, "GetAnnualParameter(" + item.Key + ") at CLR index hour + " + offset);
@@ -1171,25 +1181,32 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 ExpectedDesignDay e = expected[i];
                 NativeDesignDayGroup group = i < native.Count ? native[i] : null;
                 List<NativeDesignDay> days = group?.Days ?? new List<NativeDesignDay>();
-                for (int j = 0; j < System.Math.Max(1, days.Count); j++)
+                NativeDesignDay day = days.Count > 0 ? days[0] : null;
+                ReaderResult missing = ReaderResult.Absent(group == null ? "no native " + role + " design day " + i : "the native design day has no day");
+
+                // S07 10: the integer yearDay against the SAM date's day of year in its own year (not a reconstructed date).
+                Scalar("10.yearDay", Keys.DesignDay(role, i, "yearDay"), EQ.ExpectedYearDay(e.Year, e.Month, e.Day), day == null ? missing : day.YearDay.ToReaderResult(), identity);
+                foreach (KeyValuePair<string, Weather.WeatherDataType> item in ReadBackExpected.DesignDayWeather)
                 {
-                    NativeDesignDay day = j < days.Count ? days[j] : null;
-                    string suffix = j == 0 ? string.Empty : ".day[" + j.ToString(ci) + "]";
-                    ReaderResult missing = ReaderResult.Absent(group == null ? "no native " + role + " design day " + i : "the native design day has no day " + j);
+                    Dictionary<int, NativeField> slots = day != null && day.Hours.TryGetValue(item.Key, out Dictionary<int, NativeField> s) ? s : null;
+                    List<ReaderResult> values = Enumerable.Range(0, 24).Select(h => slots == null ? missing : slots.TryGetValue(h + offset, out NativeField f) ? f.ToReaderResult() : ReaderResult.Absent("slot not read")).ToList();
+                    SeriesOf("10", Keys.DesignDay(role, i, item.Key), e.Hours[item.Key].Select(ExpectedValue.FromValue).ToList(), values, identity, AlignmentStatus.Unverified, convention, "WeatherDay." + item.Key + "[hour + " + offset + "]");
+                }
 
-                    // S07 10: the integer yearDay against the SAM date's day of year in its own year (not a reconstructed date).
-                    Scalar("10.yearDay", Keys.DesignDay(role, i, "yearDay") + suffix, EQ.ExpectedYearDay(e.Year, e.Month, e.Day), day == null ? missing : day.YearDay.ToReaderResult(), identity);
-                    foreach (KeyValuePair<string, Weather.WeatherDataType> item in ReadBackExpected.DesignDayWeather)
-                    {
-                        Dictionary<int, NativeField> slots = day != null && day.Hours.TryGetValue(item.Key, out Dictionary<int, NativeField> s) ? s : null;
-                        List<ReaderResult> values = Enumerable.Range(0, 24).Select(h => slots == null ? missing : slots.TryGetValue(h + offset, out NativeField f) ? f.ToReaderResult() : ReaderResult.Absent("slot not read")).ToList();
-                        SeriesOf("10", Keys.DesignDay(role, i, item.Key) + suffix, e.Hours[item.Key].Select(ExpectedValue.FromValue).ToList(), values, identity, AlignmentStatus.Unverified, convention, "WeatherDay." + item.Key + "[hour + " + offset + "]");
-                    }
+                if (day != null)
+                {
+                    Supporting.Add(Keys.DesignDay(role, i, "native") + ": name '" + day.Name + "', repetitions " + day.Repetitions + ", day type " + day.DayType + " (reported, S07 10)");
+                }
 
-                    if (day != null)
-                    {
-                        Supporting.Add(Keys.DesignDay(role, i, "native") + suffix + ": name '" + day.Name + "', repetitions " + day.Repetitions + ", day type " + day.DayType + " (reported, S07 10)");
-                    }
+                // A SAM design day is one day (its repetitions are a field of that day). Every calibration run persisted one day
+                // per design day; a further day in the group has no measured native meaning, so it is a native object SAM never
+                // stated - never compared against the one SAM day, and never a pass.
+                for (int j = 1; j < days.Count; j++)
+                {
+                    NativeDesignDay extra = days[j];
+                    string key = Keys.DesignDay(role, i, "yearDay") + ".day[" + j.ToString(ci) + "].native-only";
+                    Results.Add(EQ.Evaluate(Input("10.yearDay", key, ExpectedValue.Unspecified("SAM states one day per design day"), extra == null ? ReaderResult.Absent() : extra.YearDay.ToReaderResult(), IdentityStatus.Mismatch), Configuration));
+                    Supporting.Add(Keys.DesignDay(role, i, "native") + ".day[" + j.ToString(ci) + "]: a further native day in the design day ('" + extra?.Name + "', yearDay " + extra?.YearDay + "); SAM states one day (unstated native object)");
                 }
             }
 

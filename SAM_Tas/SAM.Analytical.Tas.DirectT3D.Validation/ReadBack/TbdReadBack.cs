@@ -114,6 +114,12 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             }
 
             snapshot.T3D = ReadT3D(path_T3D, info);
+            if (info.T3dSha256Before != null && info.T3dSha256Before != info.T3dSha256After)
+            {
+                // Infrastructure, as for the TBD: its T3D field checks are informational, a changed file is not.
+                snapshot.Errors.Add("the T3D changed while it was read (sha256 before " + info.T3dSha256Before + ", after " + info.T3dSha256After + ")");
+            }
+
             return snapshot;
         }
 
