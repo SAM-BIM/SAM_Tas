@@ -163,7 +163,10 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
 
             Assert.That(approved.ExitCode, Is.EqualTo(ReadBackExit.Pass), approved.Status);
             Assert.That(approved.Results.Select(x => x.ObjectKey + "=" + x.Outcome), Is.EqualTo(interim.Results.Select(x => x.ObjectKey + "=" + x.Outcome)));
-            Assert.That(approved.Supporting.Single(x => x.Contains(ReadBackComparison.InactiveVentilationTransformation)), Does.Contain("not applied: D-F2 state V2"));
+            // V2 is refused on its authored (and resolved) delivery selection, before the D-F2 state is even considered.
+            string refusal = approved.Supporting.Single(x => x.Contains(ReadBackComparison.InactiveVentilationTransformation));
+            Assert.That(refusal, Does.Contain("not applied: SAM selects a Ventilation profile"));
+            Assert.That(refusal, Does.Not.Contain("does not resolve"));
         }
 
         [Test]

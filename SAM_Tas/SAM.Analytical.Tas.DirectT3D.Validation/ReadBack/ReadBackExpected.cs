@@ -85,6 +85,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
         public Dictionary<string, double> Parameters = new Dictionary<string, double>(StringComparer.Ordinal);
         public Dictionary<string, ExpectedProfile> Profiles = new Dictionary<string, ExpectedProfile>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// The Ventilation profile name the internal condition selects, as authored, or null when none is selected (blank
+        /// counts as none). Kept apart from <see cref="Profiles"/>, which holds only profiles that resolve: a selection that
+        /// does not resolve (a missing name, or a profile of another type) is still a selected delivery (D-F2), never "none".
+        /// </summary>
+        public string VentilationProfileSelection;
+
         /// <summary>SAM Calculated* values recorded beside the raw formulas, for the report only.</summary>
         public Dictionary<string, double> CrossChecks = new Dictionary<string, double>(StringComparer.Ordinal);
     }
@@ -223,6 +230,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             }
 
             result.InternalConditionName = ic.Name;
+            string ventilationSelection = ic.GetProfileName(ProfileType.Ventilation);
+            result.VentilationProfileSelection = string.IsNullOrWhiteSpace(ventilationSelection) ? null : ventilationSelection;
             foreach (InternalConditionParameter parameter in new[]
             {
                 InternalConditionParameter.AreaPerPerson, InternalConditionParameter.OccupancySensibleGainPerPerson, InternalConditionParameter.OccupancyLatentGainPerPerson,

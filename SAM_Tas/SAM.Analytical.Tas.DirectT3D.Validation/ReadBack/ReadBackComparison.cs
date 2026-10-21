@@ -1014,6 +1014,16 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 string unspecified = "no SAM " + slot + " profile";
                 string inactive = slot == "ticV" ? inactiveVentilation : null;
                 List<ReaderResult> native = NativeHours(profile, icMissing, dayMask, null, out string encoding);
+
+                // A Ventilation profile SAM selects but that does not resolve is an invalid input (S-INVALID), never "no profile".
+                string unresolved = slot == "ticV" ? UnresolvedVentilationSelection(space) : null;
+                if (unresolved != null)
+                {
+                    SeriesOf("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), Enumerable.Repeat(ExpectedValue.Invalid(unresolved), 8760).ToList(), native, identity, HourAlignment(), ShapeConventions(profile), encoding);
+                    Scalar("6.eflh", Keys.Profile(space.Guid, slot, "eflh"), ExpectedValue.Invalid(unresolved), Sum(native), identity, ShapeConventions(profile));
+                    continue;
+                }
+
                 HourlySeries("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, unspecified, native, identity, ShapeConventions(profile), encoding, ModelInterpretation.NotRequired, inactive);
 
                 // EFLH: supporting evidence only (S07 section 7); it never stands in for the hourly comparison.
@@ -1024,6 +1034,20 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
 
         /// <summary>The owner-approved verified inactive-profile transformation (S08 PR-C, 2026-10-21), rows 6 and 8b of ticV only.</summary>
         public const string InactiveVentilationTransformation = "T-VENT-INACTIVE";
+
+        /// <summary>
+        /// Why the space's authored Ventilation profile selection is an invalid input, or null when SAM selects none or the
+        /// selection resolves. A missing name and the name of a profile of another type both fail to resolve.
+        /// </summary>
+        private static string UnresolvedVentilationSelection(ExpectedSpace space)
+        {
+            if (space.VentilationProfileSelection == null || ProfileFor(space, "ticV") != null)
+            {
+                return null;
+            }
+
+            return "SAM selects the Ventilation profile '" + space.VentilationProfileSelection + "', which does not resolve to a Ventilation profile in the model's profile library (missing, or a profile of another type): the delivery selection is invalid";
+        }
 
         /// <summary>
         /// <see cref="InactiveVentilationTransformation"/> when its precondition holds for this space, else null with the
@@ -1044,6 +1068,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             {
                 Supporting.Add(spaceKey + ": " + InactiveVentilationTransformation + " not applied: " + why);
                 return null;
+            }
+
+            // The owner's first condition: SAM selects no ventilation-delivery profile. The authored selection decides, not
+            // whether it resolves.
+            if (space.VentilationProfileSelection != null)
+            {
+                return Refuse("SAM selects a Ventilation profile ('" + space.VentilationProfileSelection + "'" + (ProfileFor(space, "ticV") == null ? ", which does not resolve" : string.Empty) + "); only an unselected V0 or V1 delivery qualifies");
             }
 
             VentilationRequirement requirement = new VentilationRequirement { Flow = Param(space, "SupplyAirFlow"), FlowPerArea = Param(space, "SupplyAirFlowPerArea"), FlowPerPerson = Param(space, "SupplyAirFlowPerPerson"), AirChangesPerHour = Param(space, "SupplyAirChangesPerHour") };
@@ -1104,7 +1135,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             // 8b: the delivery, per the D-F2 state of the frozen model.
             VentilationRequirement requirement = new VentilationRequirement { Flow = Param(space, "SupplyAirFlow"), FlowPerArea = Param(space, "SupplyAirFlowPerArea"), FlowPerPerson = Param(space, "SupplyAirFlowPerPerson"), AirChangesPerHour = Param(space, "SupplyAirChangesPerHour") };
             ExpectedProfile ventilationProfile = ProfileFor(space, "ticV");
-            VentilationState state = EQ.ClassifyVentilation(requirement, ventilationProfile != null);
+            string unresolved = UnresolvedVentilationSelection(space);
+            VentilationState state = EQ.ClassifyVentilation(requirement, ventilationProfile != null || space.VentilationProfileSelection != null);
             ExpectedValue required = EQ.ExpectedRequiredSupplyFlow(requirement, space.StoredArea, Peoples(space), geometricVolume);
             NativeProfile ticV = GainProfile(ic, "ticV");
             ReaderResult ticVFactor = ProfileField(ticV, x => x.Factor, icMissing);
@@ -1112,6 +1144,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             Supporting.Add(Keys.Space(space.Guid) + ": D-F2 state " + state + "; required supply " + required + "; native ticV " + (ticV == null ? "none" : ticV.Type + " factor " + ticV.Factor + " value " + ticV.Value));
 
             List<ReaderResult> delivered = NativeHours(ticV, icMissing, dayMask, shape => EQ.Multiply(EQ.Multiply(shape, ticVFactor), volume, 1 / SecondsPerHour), out string encoding);
+            if (unresolved != null)
+            {
+                // A selected delivery that does not resolve: S-INVALID against the native peak, never V1 and never inactive.
+                Results.Add(EQ.Evaluate(Input("8b", key, ExpectedValue.Invalid(unresolved), Peak(delivered), identity, HourAlignment(), ContractListing.None, ShapeConventions(ticV), false, volumeInterpretation), Configuration));
+                return;
+            }
+
             if (state == VentilationState.V2 && required.State == SamInputState.Value && ventilationProfile != null)
             {
                 HourlySeries("8b", key, ventilationProfile, required.Value, null, delivered, identity, ShapeConventions(ticV), encoding + " x factor x zone.volume / 3600", volumeInterpretation);
