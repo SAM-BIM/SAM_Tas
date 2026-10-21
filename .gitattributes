@@ -2,3 +2,8 @@
 # output, which is UTF-8 without BOM and uses LF newlines. Pin them to LF so Git's autocrlf
 # setting cannot rewrite them to CRLF on checkout and break the byte-stability comparison.
 benchmark/**/*.json text eol=lf
+
+# S08 PR-B: the read-back evidence and the calibration rule table are hashed (SHA256SUMS.txt, report.json). Keep their
+# bytes exactly as committed on every machine: no end-of-line conversion.
+Documentation/S08-PRB-ReadBack-evidence/** -text
+SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/ReadBack/calibration-rules.json -text

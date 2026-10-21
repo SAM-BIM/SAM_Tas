@@ -1,0 +1,1 @@
+negative shift-heating-slot: zone 'CalBox' ticLL hourlyValues rotated one slot earlier (slot s takes slot s + 1); originals unchanged: True

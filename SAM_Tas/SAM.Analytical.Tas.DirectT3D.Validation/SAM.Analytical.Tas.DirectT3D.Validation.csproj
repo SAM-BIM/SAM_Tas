@@ -25,6 +25,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SAM.Analytical.Tas\SAM.Analytical.Tas.csproj" />
+    <!-- S08 PR-B read-back: the merged, COM-free S07 evaluation core (S08 PR-A) decides every outcome. -->
+    <ProjectReference Include="..\..\benchmark\SAM.Analytical.InputEquivalence\SAM.Analytical.InputEquivalence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The committed calibration rule table travels with the executable, so a run records the rules it applied. -->
+    <None Include="ReadBack\calibration-rules.json" CopyToOutputDirectory="PreserveNewest" Link="calibration-rules.json" />
   </ItemGroup>
 
   <ItemGroup>

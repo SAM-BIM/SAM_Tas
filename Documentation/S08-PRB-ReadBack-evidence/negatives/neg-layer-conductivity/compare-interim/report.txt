@@ -1,0 +1,15 @@
+S08 read-back neg-layer-conductivity (negative check 'layer-conductivity' on a disposable copy): Fail (rank 1, exit 10)
+  gate: neg-layer-conductivity: Fail, 293 result(s), 8 not pass, 0 informational, coverage Complete
+  gate Fail | provisional-rules gate Fail | coverage Complete (293 required, 0 missing, 0 unrequested)
+  results by status: Fail=8, Pass=285
+  elements by outcome: AcceptedTransformation=1, Match=80810, NotApplicable=5, OutOfTolerance=8, WithinTolerance=86212
+  proposed cases (all elements): none
+  owner decisions (all elements): 0; technical blockers: 0; informational mismatches: 0
+  NOT PASS Fail 3a panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:dae5d8ff-76de-4fd4-83e9-8c677e63da35@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:dae5d8ff-76de-4fd4-83e9-8c677e63da35@space:5080b000-0000-0000-0000-00000000c001.U
+  NOT PASS Fail 3a panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+  NOT PASS Fail 3b panel:d0c019c3-e194-4e84-a274-bd6a31baaef1@space:5080b000-0000-0000-0000-00000000c001.U

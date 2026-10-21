@@ -1,0 +1,7 @@
+diff: 77550 leaf value(s) compared, 6 differ
+       1 $.Zones[*].SizeHeating.Kind
+       1 $.Zones[*].SizeHeating.Value
+       1 $.Zones[*].SizeCooling.Kind
+       1 $.Zones[*].SizeCooling.Value
+       1 $.Zones[*].MaxHeatingLoad.Kind
+       1 $.Zones[*].MaxHeatingLoad.Value

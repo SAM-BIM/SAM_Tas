@@ -1,0 +1,199 @@
+[
+  {
+    "Id": "N-1.hostSurfaceArea",
+    "Question": "N-1: is a host surface\u0027s TBD area gross or net of its openings?",
+    "Answer": "net",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box: CAL_EXT_WALL in CalBox: gross 15, net 13, native 13",
+      "calib-box: CAL_EXT_WALL in CalBox: gross 12, net 11, native 11",
+      "calib-two: CAL_EXT_WALL in CalA: gross 15, net 13.2, native 13.199999809265137"
+    ],
+    "Note": "3 net, 0 gross, 0 neither"
+  },
+  {
+    "Id": "N-2.layerOrientation",
+    "Question": "N-2: which construction layer faces the zone, for each value of the zone surface\u0027s reversed flag?",
+    "Answer": "reversed 0: materials(1) faces the zone; reversed non-zero: materials(n) faces the zone",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "element \u0027CAL_GRD_FLOOR\u0027: externalSolarAbsorptanceExtSurf 0.7990000247955322 = 1 - materials(2).externalSolarReflectance 0.20100000500679016; internalSolarAbsorptanceIntSurf 0.5479999780654907 = 1 - materials(1).internalSolarReflectance 0.4519999921321869 -\u003E materials(1) inside",
+      "element \u0027CAL_ROOF\u0027: externalSolarAbsorptanceExtSurf 0.49900001287460327 = 1 - materials(3).externalSolarReflectance 0.5009999871253967; internalSolarAbsorptanceIntSurf 0.8479999899864197 = 1 - materials(1).internalSolarReflectance 0.15199999511241913 -\u003E materials(1) inside",
+      "element \u0027CAL_EXT_WALL\u0027: externalSolarAbsorptanceExtSurf 0.2990000247955322 = 1 - materials(3).externalSolarReflectance 0.7009999752044678; internalSolarAbsorptanceIntSurf 0.6480000019073486 = 1 - materials(1).internalSolarReflectance 0.35199999809265137 -\u003E materials(1) inside",
+      "element \u0027CAL_GRD_FLOOR\u0027: externalSolarAbsorptanceExtSurf 0.7990000247955322 = 1 - materials(2).externalSolarReflectance 0.20100000500679016; internalSolarAbsorptanceIntSurf 0.5479999780654907 = 1 - materials(1).internalSolarReflectance 0.4519999921321869 -\u003E materials(1) inside",
+      "element \u0027CAL_ROOF\u0027: externalSolarAbsorptanceExtSurf 0.49900001287460327 = 1 - materials(3).externalSolarReflectance 0.5009999871253967; internalSolarAbsorptanceIntSurf 0.8479999899864197 = 1 - materials(1).internalSolarReflectance 0.15199999511241913 -\u003E materials(1) inside",
+      "element \u0027CAL_EXT_WALL\u0027: externalSolarAbsorptanceExtSurf 0.2990000247955322 = 1 - materials(3).externalSolarReflectance 0.7009999752044678; internalSolarAbsorptanceIntSurf 0.6480000019073486 = 1 - materials(1).internalSolarReflectance 0.35199999809265137 -\u003E materials(1) inside",
+      "element \u0027CAL_PARTITION\u0027: externalSolarAbsorptanceExtSurf 0.2990000247955322 = 1 - materials(3).externalSolarReflectance 0.7009999752044678; internalSolarAbsorptanceIntSurf 0.4480000138282776 = 1 - materials(1).internalSolarReflectance 0.5519999861717224 -\u003E materials(1) inside",
+      "calib-two: partition CAL_PARTITION: reversed 0 (first space) / -1 (second space)"
+    ],
+    "Note": "single-space surfaces reversed 0: 16, other: 0; constructions inside-first: 7, other: 0; partitions as SAM: 1, other: 0. The flip itself is TAS\u0027s definition of the flag, checked here as one-reversed-side per partition."
+  },
+  {
+    "Id": "N-3.1.frameSurfaces",
+    "Question": "N-3 (T-FRAME 1): are the TBD pane and frame surfaces the T-FRAME split of the aperture outline?",
+    "Answer": "geometric: pane and frame surface areas equal the T-FRAME split (framePerc of the opening outline)",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box: aperture 4830d5ee-0ffe-4d4f-9777-0a79185b256a: expected pane 1.6988159999999999 frame 0.3011840000000001 (pane = face offset inwards by 0.052 m); native pane 1.698815941810608 frame 0.3011839985847473",
+      "calib-two: aperture 69d18bb7-948a-4602-a566-2b0ec4c23b74: expected pane 1.5300159999999998 frame 0.2699840000000002 (pane = face offset inwards by 0.052 m); native pane 1.5300159454345703 frame 0.26998400688171387"
+    ],
+    "Note": "2 framed aperture side(s) agree, 0 disagree"
+  },
+  {
+    "Id": "N-3.2.frameWidthEffect",
+    "Question": "N-3 (T-FRAME 2): does frameWidth have a geometric effect when isPercFrame = true, and what does the saved T3D hold?",
+    "Answer": "no independent geometric effect: TBD pane/frame follow framePerc, and the saved T3D frameWidth is the ring width TAS derives from framePerc and the opening size, not the value the writer set",
+    "Consistent": true,
+    "Consumed": false,
+    "Evidence": [
+      "calib-box: window \u0027Windows: CAL_GLZ_FRAMED 4830d5ee-0ffe-4d4f-9777-0a79185b256a \u0027 2 x 1 framePerc 15.059200299549103: saved frameWidth 0.052000001072883606, ring width from framePerc 0.052000001072883606, writer rule Value(0.068); isPercFrame Unreadable [COMException: The server threw an exception. (0x80010105 (RPC_E_SERVERFAULT))]",
+      "calib-two: window \u0027Windows: CAL_GLZ_FRAMED 69d18bb7-948a-4602-a566-2b0ec4c23b74 \u0027 1.5 x 1.2000000476837158 framePerc 14.999111087675454: saved frameWidth 0.052000001072883606, ring width from framePerc 0.052000001072883606, writer rule Value(0.068); isPercFrame Unreadable [COMException: The server threw an exception. (0x80010105 (RPC_E_SERVERFAULT))]"
+    ],
+    "Note": "2 saved frameWidth value(s) equal the framePerc ring width, 0 do not. Thermal effect not measured (no simulation is authorised for it)."
+  },
+  {
+    "Id": "N-3.3.zeroPercentFrame",
+    "Question": "N-3 (T-FRAME 3): what does TAS build for framePerc = 0?",
+    "Answer": "no-frame-surface",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box: aperture e12a5cbc-6a51-4b84-bc25-7e0928af7efb (0 %): 0 frame surface(s), 1 pane surface(s)"
+    ],
+    "Note": "100 % is not reachable from SAM geometry at the S07 pin (the offset that leaves no pane gives no frame); not exercised."
+  },
+  {
+    "Id": "N-3.4.frameFieldsSource",
+    "Question": "N-3 (T-FRAME 4): can isPercFrame, framePerc and frameWidth be read back from the TBD, or only the T3D?",
+    "Answer": "T3D only: the TBD interop has no frame-percentage or frame-width field; in the T3D framePerc and frameWidth read, isPercFrame is unreadable (TAS3D getter fails)",
+    "Consistent": true,
+    "Consumed": false,
+    "Evidence": [
+      "T3D window \u0027Windows: CAL_GLZ_FRAMED 4830d5ee-0ffe-4d4f-9777-0a79185b256a \u0027: isPercFrame Unreadable [COMException: The server threw an exception. (0x80010105 (RPC_E_SERVERFAULT))], framePerc Finite(15.059200299549103), frameWidth Finite(0.052000001072883606)",
+      "T3D window \u0027Windows: CAL_GLZ_UNFRAMED e12a5cbc-6a51-4b84-bc25-7e0928af7efb \u0027: isPercFrame Unreadable [COMException: The server threw an exception. (0x80010105 (RPC_E_SERVERFAULT))], framePerc Zero(0), frameWidth Zero(0)",
+      "T3D window \u0027Windows: CAL_GLZ_FRAMED 69d18bb7-948a-4602-a566-2b0ec4c23b74 \u0027: isPercFrame Unreadable [COMException: The server threw an exception. (0x80010105 (RPC_E_SERVERFAULT))], framePerc Finite(14.999111087675454), frameWidth Finite(0.052000001072883606)"
+    ],
+    "Note": "The T3D window is tied to its aperture only by the GUID the writer put in its description (writer-only identity), so T3D field checks are reported and not gated."
+  },
+  {
+    "Id": "N-5.hourlySlot",
+    "Question": "N-5: which hourlyValues slot holds SAM hour h (slot = h \u002B offset)?",
+    "Answer": "1",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box ticOSG \u0027CAL_IC_BOX_OCC\u0027: offsets that reproduce every value: [1]",
+      "calib-box ticLG \u0027CAL_IC_BOX_LGT\u0027: offsets that reproduce every value: [1]",
+      "calib-box ticI \u0027CAL_IC_BOX_INF\u0027: offsets that reproduce every value: [1]",
+      "calib-box ticV \u0027CAL_IC_BOX_VNT\u0027: offsets that reproduce every value: [1]",
+      "calib-box ticLL \u0027CAL_IC_BOX_HTG\u0027: offsets that reproduce every value: [1]",
+      "calib-box ticUL \u0027CAL_IC_BOX_CLG\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticOSG \u0027CAL_IC_A_OCC\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticLG \u0027CAL_IC_A_LGT\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticI \u0027CAL_IC_A_INF\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticLL \u0027CAL_IC_A_HTG\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticUL \u0027CAL_IC_A_CLG\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticOSG \u0027CAL_IC_B_OCC\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticLG \u0027CAL_IC_B_LGT\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticI \u0027CAL_IC_B_INF\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticLL \u0027CAL_IC_B_HTG\u0027: offsets that reproduce every value: [1]",
+      "calib-two ticUL \u0027CAL_IC_B_CLG\u0027: offsets that reproduce every value: [1]"
+    ],
+    "Note": "offsets common to every case: [1]"
+  },
+  {
+    "Id": "N-5.yearlyIndex",
+    "Question": "N-5: which GetYearlyValues() CLR index holds SAM hour h (index = h \u002B offset)?",
+    "Answer": "1",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box ticESG \u0027CAL_IC_BOX_EQS\u0027 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-two ticESG \u0027CAL_IC_A_EQS\u0027 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-two ticESG \u0027CAL_IC_B_EQS\u0027 (lower bound 1, length 8760): offsets that reproduce every value: [1]"
+    ],
+    "Note": "offsets common to every case: [1]"
+  },
+  {
+    "Id": "N-5.weatherIndex",
+    "Question": "N-5: which GetAnnualParameter() CLR index holds SAM weather hour h (index = h \u002B offset)?",
+    "Answer": "1",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box annual parameter 0 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-box annual parameter 1 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-box annual parameter 5 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-box annual parameter 6 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-two annual parameter 0 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-two annual parameter 1 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-two annual parameter 5 (lower bound 1, length 8760): offsets that reproduce every value: [1]",
+      "calib-two annual parameter 6 (lower bound 1, length 8760): offsets that reproduce every value: [1]"
+    ],
+    "Note": "offsets common to every case: [1]"
+  },
+  {
+    "Id": "N-5.designDaySlot",
+    "Question": "N-5: which WeatherDay slot holds design-day hour h (slot = h \u002B offset)?",
+    "Answer": "1",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box cooling dryBulb: offsets that reproduce every value: [1]",
+      "calib-box cooling humidity: offsets that reproduce every value: [1]",
+      "calib-box cooling windSpeed: offsets that reproduce every value: [1]",
+      "calib-box cooling windDirection: offsets that reproduce every value: [1]",
+      "calib-two cooling dryBulb: offsets that reproduce every value: [1]",
+      "calib-two cooling humidity: offsets that reproduce every value: [1]",
+      "calib-two cooling windSpeed: offsets that reproduce every value: [1]",
+      "calib-two cooling windDirection: offsets that reproduce every value: [1]"
+    ],
+    "Note": "offsets common to every case: [1]"
+  },
+  {
+    "Id": "N-6.calendar",
+    "Question": "N-6: which days(i) indices hold the 365 simulated days, and does the annual internal condition carry every calendar day type?",
+    "Answer": "1",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "calib-box zone \u0027CalBox\u0027: calendar day types {Saturday,Sunday,Weekday}, annual condition day types {Weekday,Saturday,Sunday,CDD} -\u003E covered",
+      "calib-box: typed days(i) 365 from 1 to 365; calendar dayTypes(i) [1:Weekday, 2:Saturday, 3:Sunday, 4:HDD, 5:CDD]; building year Finite(2026)",
+      "calib-two zone \u0027CalA\u0027: calendar day types {Saturday,Sunday,Weekday}, annual condition day types {Weekday,Saturday,Sunday,CDD} -\u003E covered",
+      "calib-two zone \u0027CalB\u0027: calendar day types {Saturday,Sunday,Weekday}, annual condition day types {Weekday,Saturday,Sunday,CDD} -\u003E covered",
+      "calib-two: typed days(i) 365 from 1 to 365; calendar dayTypes(i) [1:Weekday, 2:Saturday, 3:Sunday, 4:HDD, 5:CDD]; building year Finite(2026)"
+    ],
+    "Note": "The answer is the index of the first simulated day; 365 contiguous typed days were required."
+  },
+  {
+    "Id": "N-8.winding",
+    "Question": "N-8: does the native room-surface outline reproduce the input polygon, and with which winding?",
+    "Answer": "the outline reproduces the panel boundary (same vertices, collinear points dropped); winding: 7 same as the SAM panel, 11 opposite (identity is winding-independent)",
+    "Consistent": true,
+    "Consumed": false,
+    "Evidence": [
+      "calib-box space:5080b000-0000-0000-0000-00000000c001: Verified - panel boundaries match the zone\u0027s opaque room surfaces one to one (6 pairs); the [SpaceGuid] carrier agrees",
+      "calib-two space:5080b000-0000-0000-0000-00000000c0a1: Verified - panel boundaries match the zone\u0027s opaque room surfaces one to one (6 pairs); the [SpaceGuid] carrier agrees",
+      "calib-two space:5080b000-0000-0000-0000-00000000c0b1: Verified - panel boundaries match the zone\u0027s opaque room surfaces one to one (6 pairs); the [SpaceGuid] carrier agrees"
+    ],
+    "Note": null
+  },
+  {
+    "Id": "N-5.alignment",
+    "Question": "N-5 (P-ALIGN): does TAS apply profile slot h \u002B 1 in the same simulated hour as weather slot h \u002B 1, for hourly, yearly, infiltration and thermostat profiles?",
+    "Answer": "aligned: every pulse lands in the TSD hour that carries the weather of the same SAM hour (shift 0)",
+    "Consistent": true,
+    "Consumed": true,
+    "Evidence": [
+      "TSD externalTemperature: lower bound 1, length 8760; weather shifts that reproduce the marker year: [0]",
+      "lighting, 24-hour profile, SAM hour 10 of every day: TSD lightingGain non-zero in 365 hour(s), SAM hours 10,34,58,82,106,130,... -\u003E aligned",
+      "sensible equipment, 8760-hour profile, SAM hour of year 2390 (day 100, 14:00): TSD equipmentSensibleGain non-zero in 1 hour(s), SAM hours 2390 -\u003E aligned",
+      "infiltration, 24-hour profile, SAM hour 20: TSD infiltration non-zero in 365 hour(s), SAM hours 20,44,68,92,116,140,... -\u003E aligned",
+      "heating setpoint step, 24-hour thermostat profile, SAM hour 4: TSD heatingLoad non-zero in 365 hour(s), SAM hours 4,28,52,76,100,124,... -\u003E aligned"
+    ],
+    "Note": "weather shift 0; gains, infiltration and thermostat must all land on the authored SAM hour"
+  }
+]

@@ -12,6 +12,22 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
         public static int Main(string[] args)
         {
             string mode = args.Length > 0 ? args[0] : string.Empty;
+
+            // S08 PR-B: the independent native-input read-back (ReadBack/). Its modes own their exit codes (0 = PASS only)
+            // and report failures themselves, so an exception there is an infrastructure failure, never a PASS.
+            if (mode.StartsWith("readback-", StringComparison.Ordinal))
+            {
+                try
+                {
+                    return ReadBack.ReadBackRun.Run(args);
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine("ERROR (infrastructure): " + exception);
+                    return ReadBack.ReadBackExit.Infrastructure;
+                }
+            }
+
             try
             {
                 switch (mode)

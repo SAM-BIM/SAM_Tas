@@ -1,0 +1,46 @@
+﻿# Not-pass items: library replay on 057d24c7 (before) vs readback-compare CLI on 87f6ecf3 (after), item by item
+calib-box compare-interim: before 0, after 0, removed 0, added 0
+calib-box compare-provisional: before 0, after 0, removed 0, added 0
+calib-box-repeat compare-interim: before 0, after 0, removed 0, added 0
+calib-box-repeat compare-provisional: before 0, after 0, removed 0, added 0
+calib-box-sizing compare-interim: before 0, after 0, removed 0, added 0
+calib-two compare-interim: before 2, after 6, removed 0, added 4
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+calib-two compare-provisional: before 2, after 6, removed 0, added 4
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+neg-add-izam compare-interim: before 0, after 0, removed 0, added 0
+neg-add-izam compare-provisional: before 0, after 0, removed 0, added 0
+neg-flip-partition compare-interim: before 22, after 26, removed 0, added 4
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+neg-flip-partition compare-provisional: before 22, after 26, removed 0, added 4
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  + BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  + BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+neg-layer-conductivity compare-interim: before 8, after 8, removed 0, added 0
+neg-layer-conductivity compare-provisional: before 8, after 8, removed 0, added 0
+neg-nan-infiltration compare-interim: before 2, after 2, removed 0, added 0
+neg-nan-infiltration compare-provisional: before 2, after 2, removed 0, added 0
+neg-shift-heating-slot compare-interim: before 1, after 1, removed 0, added 0
+neg-shift-heating-slot compare-provisional: before 1, after 1, removed 0, added 0
+neg-swap-space-guid compare-interim: before 480, after 484, removed 0, added 4
+  + Fail 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  + Fail 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  + Fail 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  + Fail 6.eflh space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+neg-swap-space-guid compare-provisional: before 480, after 484, removed 0, added 4
+  + Fail 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  + Fail 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  + Fail 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  + Fail 6.eflh space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+neg-zero-lighting-factor compare-interim: before 2, after 2, removed 0, added 0
+neg-zero-lighting-factor compare-provisional: before 2, after 2, removed 0, added 0

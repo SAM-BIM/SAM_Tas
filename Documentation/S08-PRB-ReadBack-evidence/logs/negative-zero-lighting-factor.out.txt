@@ -1,0 +1,1 @@
+negative zero-lighting-factor: zone 'CalBox' ticLG factor 8.25 -> 0; originals unchanged: True
