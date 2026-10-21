@@ -1,0 +1,13 @@
+baseline: Pass exit=0 coverage=Complete nonpass=
+lighting schedule unstated, native profile retained: Pass exit=0 coverage=Complete nonpass=
+lighting schedule unstated, native hours corrupted: Pass exit=0 coverage=Complete nonpass=
+lighting schedule unstated, native hourly field unreadable: Pass exit=0 coverage=Complete nonpass=
+lighting schedule unstated, native profile unreadable: BlockedTechnical exit=11 coverage=Complete nonpass=BlockedTechnical 4a.density space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.factor | BlockedTechnical 4b space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.total
+extra cooling day cloned: Pass exit=0 coverage=Complete nonpass=
+annual weather extra value: Pass exit=0 coverage=Complete nonpass=
+annual weather 8784 elements: Pass exit=0 coverage=Complete nonpass=
+yearly native gain 8784 elements: Pass exit=0 coverage=Complete nonpass=
+missing timestamps preconditions: 
+aperture native parts: panes=1 frames=1; panes=1 frames=0
+T3D changed during read: Pass exit=0 coverage=Complete nonpass=
+full compare changed T3D: Pass exit=0

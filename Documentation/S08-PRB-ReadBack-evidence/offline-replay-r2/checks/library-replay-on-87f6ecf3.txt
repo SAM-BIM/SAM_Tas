@@ -1,0 +1,63 @@
+calib-box                    interim     Pass                   exit=0   coverage=Complete notpass=0 infra=
+calib-box                    provisional Pass                   exit=0   coverage=Complete notpass=0 infra=
+calib-two                    interim     BlockedOwnerDecision   exit=12  coverage=Complete notpass=6 infra=
+      BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+      BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+      BlockedOwnerDecision 8b space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.delivered
+      BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+calib-two                    provisional BlockedOwnerDecision   exit=12  coverage=Complete notpass=6 infra=
+      BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+      BlockedOwnerDecision 6.eflh space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+      BlockedOwnerDecision 8b space:5080b000-0000-0000-0000-00000000c0a1.ic.ticV.delivered
+      BlockedOwnerDecision 6.hourly space:5080b000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+calib-box-repeat             interim     Pass                   exit=0   coverage=Complete notpass=0 infra=
+calib-box-repeat             provisional Pass                   exit=0   coverage=Complete notpass=0 infra=
+calib-box-sizing             interim     Pass                   exit=0   coverage=Complete notpass=0 infra=
+neg-add-izam                 interim     Fail                   exit=10  coverage=Complete notpass=0 infra=
+neg-add-izam                 provisional Fail                   exit=10  coverage=Complete notpass=0 infra=
+neg-flip-partition           interim     Fail                   exit=10  coverage=Complete notpass=26 infra=
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.thickness
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.conductivity
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.density
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.specificHeat
+neg-flip-partition           provisional Fail                   exit=10  coverage=Complete notpass=26 infra=
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.thickness
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.conductivity
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.density
+      Fail 3a panel:70739411-c652-4abe-ae62-06d74a0f8060@space:5080b000-0000-0000-0000-00000000c0a1#layer1.specificHeat
+neg-layer-conductivity       interim     Fail                   exit=10  coverage=Complete notpass=8 infra=
+      Fail 3a panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+      Fail 3b panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001.U
+      Fail 3a panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+      Fail 3b panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001.U
+neg-layer-conductivity       provisional Fail                   exit=10  coverage=Complete notpass=8 infra=
+      Fail 3a panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+      Fail 3b panel:4c4d61ae-167f-4fbe-9d63-ea13cc588bf3@space:5080b000-0000-0000-0000-00000000c001.U
+      Fail 3a panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001#layer1.conductivity
+      Fail 3b panel:f6e8a3c9-c908-4d63-b191-5a40fc445a72@space:5080b000-0000-0000-0000-00000000c001.U
+neg-nan-infiltration         interim     BlockedOwnerDecision   exit=12  coverage=Complete notpass=2 infra=
+      BlockedOwnerDecision 7a space:5080b000-0000-0000-0000-00000000c001.ic.ticI.factor
+      BlockedOwnerDecision 7b space:5080b000-0000-0000-0000-00000000c001.ic.ticI.flow
+neg-nan-infiltration         provisional Fail                   exit=10  coverage=Complete notpass=2 infra=
+      Fail 7a space:5080b000-0000-0000-0000-00000000c001.ic.ticI.factor
+      Fail 7b space:5080b000-0000-0000-0000-00000000c001.ic.ticI.flow
+neg-shift-heating-slot       interim     Fail                   exit=10  coverage=Complete notpass=1 infra=
+      Fail 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly
+neg-shift-heating-slot       provisional Fail                   exit=10  coverage=Complete notpass=1 infra=
+      Fail 5.temperature space:5080b000-0000-0000-0000-00000000c001.ic.ticLL.hourly
+neg-swap-space-guid          interim     Fail                   exit=10  coverage=Complete notpass=484 infra=
+      Fail 1a space:5080b000-0000-0000-0000-00000000c0a1
+      Fail 2 space:5080b000-0000-0000-0000-00000000c0a1
+      Fail 1b panel:14d999b5-2e1e-4502-b700-9ceec77c2390@space:5080b000-0000-0000-0000-00000000c0a1
+      Fail 3a panel:14d999b5-2e1e-4502-b700-9ceec77c2390@space:5080b000-0000-0000-0000-00000000c0a1#layer1.thickness
+neg-swap-space-guid          provisional Fail                   exit=10  coverage=Complete notpass=484 infra=
+      Fail 1a space:5080b000-0000-0000-0000-00000000c0a1
+      Fail 2 space:5080b000-0000-0000-0000-00000000c0a1
+      Fail 1b panel:14d999b5-2e1e-4502-b700-9ceec77c2390@space:5080b000-0000-0000-0000-00000000c0a1
+      Fail 3a panel:14d999b5-2e1e-4502-b700-9ceec77c2390@space:5080b000-0000-0000-0000-00000000c0a1#layer1.thickness
+neg-zero-lighting-factor     interim     Fail                   exit=10  coverage=Complete notpass=2 infra=
+      Fail 4a.density space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.factor
+      Fail 4b space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.total
+neg-zero-lighting-factor     provisional Fail                   exit=10  coverage=Complete notpass=2 infra=
+      Fail 4a.density space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.factor
+      Fail 4b space:5080b000-0000-0000-0000-00000000c001.ic.ticLG.total

@@ -1,0 +1,430 @@
+Test run for C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\bin\Release\net8.0\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 4.6.0.0: Test execution started
+Running selected tests in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\bin\Release\net8.0\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.dll
+   NUnit3TestExecutor discovered 35 of 35 NUnit test cases using Current Discovery mode, Non-Explicit run
+  Failed ExtraNativeDesignDay_InTheGroup_IsANativeObjectSamNeverStated [1 s]
+  Error Message:
+   System.InvalidOperationException : Sequence contains more than one matching element
+  Stack Trace:
+     at System.Linq.ThrowHelper.ThrowMoreThanOneMatchException()
+   at System.Linq.Enumerable.TryGetSingle[TSource](IEnumerable`1 source, Func`2 predicate, Boolean& found)
+   at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.ExtraNativeDesignDay_InTheGroup_IsANativeObjectSamNeverStated() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 246
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+  Failed FullCompare_AT3DChangedWhileRead_IsInfrastructureExit70_EvenThoughT3DChecksAreInformational [788 ms]
+  Error Message:
+     Pass
+Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.Infrastructure))
+  Expected: 70
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FullCompare_AT3DChangedWhileRead_IsInfrastructureExit70_EvenThoughT3DChecksAreInformational() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 315
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FullCompare_AT3DChangedWhileRead_IsInfrastructureExit70_EvenThoughT3DChecksAreInformational() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 315
+
+
+  Failed FullCompare_MissingTimingEvidence_IsInfrastructureExit70 [664 ms]
+  Error Message:
+     Pass
+Assert.That(report.ExitCode, Is.EqualTo(ReadBackExit.Infrastructure))
+  Expected: 70
+  But was:  0
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FullCompare_MissingTimingEvidence_IsInfrastructureExit70() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 329
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.FullCompare_MissingTimingEvidence_IsInfrastructureExit70() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 329
+
+
+  Failed NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8761,1) [881 ms]
+  Error Message:
+     Native is within the tolerance of SAM. [decisive element weather.annual.DryBulbTemperature[24] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+
+
+  Failed NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8784,1) [733 ms]
+  Error Message:
+     Native is within the tolerance of SAM. [decisive element weather.annual.DryBulbTemperature[24] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+   at InvokeStub_FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+   at InvokeStub_FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+
+  Failed NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8759,1) [639 ms]
+  Error Message:
+     The native object is absent for an S-VALUE input. No limitation is listed. [decisive element weather.annual.DryBulbTemperature[8759] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+   at InvokeStub_FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+   at InvokeStub_FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+
+  Failed NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8760,0) [693 ms]
+  Error Message:
+     The native value is outside the tolerance without a contract explanation. [decisive element weather.annual.DryBulbTemperature[0] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+   at InvokeStub_FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 196
+   at InvokeStub_FalsePassRegressionTests.NativeAnnualWeather_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+
+  Failed NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8761,1) [681 ms]
+  Error Message:
+     6.hourly: Native is within the tolerance of SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticESG.hourly[0] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+
+
+  Failed NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8784,1) [706 ms]
+  Error Message:
+     6.hourly: Native is within the tolerance of SAM. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticESG.hourly[0] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Pass"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+   at InvokeStub_FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+   at InvokeStub_FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+
+  Failed NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8759,1) [794 ms]
+  Error Message:
+     6.hourly: The native object is absent for an S-VALUE input. No limitation is listed. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticESG.hourly[8759] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+   at InvokeStub_FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+   at InvokeStub_FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+
+  Failed NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(8760,0) [816 ms]
+  Error Message:
+     6.hourly: The native value is outside the tolerance without a contract explanation. [decisive element space:5080b000-0000-0000-0000-00000000c001.ic.ticESG.hourly[0] of 8760]
+Assert.That(result.Status, Is.EqualTo(GateStatus.BlockedTechnical.ToString()))
+  Expected string length 16 but was 4. Strings differ at index 0.
+  Expected: "BlockedTechnical"
+  But was:  "Fail"
+  -----------^
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+   at InvokeStub_FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Int32 length, Int32 lowerBound) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 216
+   at InvokeStub_FalsePassRegressionTests.NativeYearlyProfile_OutsideTheCalibratedDomain_IsNamed_AndNeverPass(Object, Span`1)
+
+
+  Passed Provenance_TheCommittedRunsAreValid_AndAnOptionalT3DLeftUnreadIsNotAProblem [85 ms]
+  Failed Provenance_MissingExportEnd [37 ms]
+  Error Message:
+     expected a problem naming 'export end time'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+
+
+  Failed Provenance_InvalidExportEnd [38 ms]
+  Error Message:
+     expected a problem naming 'export end time'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed Provenance_MissingReaderStart [62 ms]
+  Error Message:
+     expected a problem naming 'reader start time'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed Provenance_InvalidReaderStart [45 ms]
+  Error Message:
+     expected a problem naming 'reader start time'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Passed Provenance_ReaderBeforeExportEnd [51 ms]
+  Failed Provenance_MissingReaderProcess [39 ms]
+  Error Message:
+     expected a problem naming 'process id'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed Provenance_MissingExportProcess [36 ms]
+  Error Message:
+     expected a problem naming 'process id'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Passed Provenance_TbdHashMissingFromExport [33 ms]
+  Passed Provenance_TbdHashMismatch [40 ms]
+  Failed Provenance_TbdAfterHashMissing [39 ms]
+  Error Message:
+     expected a problem naming 'TBD'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed Provenance_TbdChangedDuringRead [43 ms]
+  Error Message:
+     expected a problem naming 'TBD changed'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed Provenance_RequiredT3dUnverified [39 ms]
+  Error Message:
+     expected a problem naming 'T3D'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Passed Provenance_T3dHashMismatch [31 ms]
+  Failed Provenance_T3dAfterHashMissing [34 ms]
+  Error Message:
+     expected a problem naming 'T3D'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed Provenance_T3dChangedDuringRead [37 ms]
+  Error Message:
+     expected a problem naming 'T3D changed'; got: 
+Assert.That(problems.Any(x => x.Contains(expected)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Action`2 change, String expected) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 286
+   at InvokeStub_FalsePassRegressionTests.Provenance_UnprovenOrChanged_IsAnInfrastructureProblem(Object, Span`1)
+
+
+  Failed SamSpaceWithoutInternalCondition_NativeConditionsStayRequired_AndNonZeroGainsFail [100 ms]
+  Error Message:
+     4a.density is required for every space
+Assert.That(required.Any(x => x.QuantityId == quantity && x.ObjectKey.StartsWith(ReadBackComparison.Keys.Space(space.Guid), StringComparison.Ordinal)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.SamSpaceWithoutInternalCondition_NativeConditionsStayRequired_AndNonZeroGainsFail() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 162
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.SamSpaceWithoutInternalCondition_NativeConditionsStayRequired_AndNonZeroGainsFail() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 162
+
+
+  Passed SupportedEncodings_ConstantHourlyAndYearly_StillPass [436 ms]
+  Failed UnstatedSamSchedule_AMissingNativeHourlySlot_IsNeverReadAsAbsence [495 ms]
+  Error Message:
+   System.InvalidOperationException : Sequence contains no matching element
+  Stack Trace:
+     at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.Evidence.Result(ReadBackComparison comparison, String quantityId, String keyEndsWith) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\Evidence.cs:line 84
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_AMissingNativeHourlySlot_IsNeverReadAsAbsence() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 139
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+  Failed UnstatedSamSchedule_AnUnreadableNativeHour_IsATechnicalBlocker [495 ms]
+  Error Message:
+   System.InvalidOperationException : Sequence contains no matching element
+  Stack Trace:
+     at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.Evidence.Result(ReadBackComparison comparison, String quantityId, String keyEndsWith) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\Evidence.cs:line 84
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_AnUnreadableNativeHour_IsATechnicalBlocker() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 118
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+  Failed UnstatedSamSchedule_IsStillRequired_FromTheModelAndTheBoundedContract [107 ms]
+  Error Message:
+     Assert.That(required.Any(x => x.QuantityId == "6.hourly" && x.ObjectKey.EndsWith(".ticLG.hourly", StringComparison.Ordinal)), Is.True)
+  Expected: True
+  But was:  False
+
+  Stack Trace:
+     at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_IsStillRequired_FromTheModelAndTheBoundedContract() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 67
+
+1)    at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_IsStillRequired_FromTheModelAndTheBoundedContract() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 67
+
+
+  Failed UnstatedSamSchedule_NativeNonZeroHours_IsAnExportDefect_NotPass(Interim) [502 ms]
+  Error Message:
+   System.InvalidOperationException : Sequence contains no matching element
+  Stack Trace:
+     at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.Evidence.Result(ReadBackComparison comparison, String quantityId, String keyEndsWith) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\Evidence.cs:line 84
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_NativeNonZeroHours_IsAnExportDefect_NotPass(GateRuleSet ruleSet) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 79
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+
+  Failed UnstatedSamSchedule_NativeNonZeroHours_IsAnExportDefect_NotPass(ProvisionalProposed) [479 ms]
+  Error Message:
+   System.InvalidOperationException : Sequence contains no matching element
+  Stack Trace:
+     at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.Evidence.Result(ReadBackComparison comparison, String quantityId, String keyEndsWith) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\Evidence.cs:line 84
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_NativeNonZeroHours_IsAnExportDefect_NotPass(GateRuleSet ruleSet) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 79
+   at InvokeStub_FalsePassRegressionTests.UnstatedSamSchedule_NativeNonZeroHours_IsAnExportDefect_NotPass(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+NUnit Adapter 4.6.0.0: Test execution complete
+  Failed UnstatedSamSchedule_NativeZeroHours_IsTheProposedG1_BlockedUnderBothRuleSets [488 ms]
+  Error Message:
+   System.InvalidOperationException : Sequence contains no matching element
+  Stack Trace:
+     at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.Evidence.Result(ReadBackComparison comparison, String quantityId, String keyEndsWith) in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\Evidence.cs:line 84
+   at SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.FalsePassRegressionTests.UnstatedSamSchedule_NativeZeroHours_IsTheProposedG1_BlockedUnderBothRuleSets() in C:\Users\michal\Documents\GitHub\SAM-BIM\SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\FalsePassRegressionTests.cs:line 99
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+
+Test Run Failed.
+Total tests: 35
+     Passed: 6
+     Failed: 29
+ Total time: 13.0013 Seconds

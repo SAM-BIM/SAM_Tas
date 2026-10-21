@@ -2,22 +2,56 @@
 
 Task S08 of the SAM simulation roadmap, PR-B of the approved sequence (PR-A core SAM_Tas#104, merged `d08916ca`;
 PR-C fixtures and acceptance, not started). Contract: SAM `documentation/SIMULATION_INPUT_MAPPING_S07.md` (SAM#216).
-Branch `feature/s08-tas-readback-harness`, base `sow/2026-Q4` (`3d16b5c7`). **Draft, for independent review. Not merged.
-S08 is not accepted: no fixture was chosen or compared.**
+Branch `feature/s08-tas-readback-harness`, base `sow/2026-Q4` (`3d16b5c7`). **Draft, revision 2 (review fixes), for
+independent review. Not merged. S08 is not accepted: no fixture was chosen or compared.**
 
 ## Status
 
 - PR: SAM-BIM/SAM_Tas#105 (draft) into `sow/2026-Q4`. The final head and hosted checks are in the PR description.
-- Validated content SHA: `b9975571532612454baa6f07fbd4fa9f3be16a63` (code identical to `3d20d0fc`, from which the
-  licensed harness was built; this record-only commit follows it).
+- **Revision 2** (independent review 2026-10-21 of head `057d24c7`, recommendation REVISE): tested content SHA
+  `87f6ecf389d73f70923d8aca518ea3fa5138e483`. Comparator and precondition fixes only, validated **offline**; no new
+  licensed run. See "Revision 2" below.
+- Revision 1 validated content SHA: `b9975571532612454baa6f07fbd4fa9f3be16a63` (code identical to `3d20d0fc`, from which
+  the licensed harness was built). Its licensed evidence is unchanged and remains the historical record.
 - Dependency selection: no SAM-BIM dependency repository has a `feature/s08-tas-readback-harness` branch (checked with
-  `git ls-remote` on SAM, SAM_gbXML, SAM_Systems, SAM_Windows, SAM_SolarCalculator, SAM_Psychrometrics, SAM_Mollier), so
-  CI clones each one at `sow/2026-Q4`. Confirm in the job log of the final head.
-- Offline (local, Release, on the code of `3d20d0fc`): core 249/249, read-back 39/39 (also on the final evidence), TM59
-  1249/1249, benchmark producer 26/26 (Simulation excluded), GenOpt 432/432. Full `SAM_Tas.sln` Release restore and rebuild
-  succeeded.
-- Licensed (this workstation, Tas 2.0.0.1 dated 2025-06-04): the calibration, compare and negative phases all ran as
-  expected. Details below.
+  `git ls-remote` on SAM, SAM_gbXML, SAM_Systems, SAM_Windows, SAM_SolarCalculator, SAM_Psychrometrics, SAM_Mollier,
+  SAM_Validation), so CI clones each one at `sow/2026-Q4`. Confirm in the job log of the final head.
+- Offline at `87f6ecf3` (local, Release): core 249/249, read-back 74/74 (39 before, 35 added), full `SAM_Tas.sln` Release
+  restore and rebuild succeeded (0 errors). TM59, producer and GenOpt were not rerun locally (no shared code changed); the
+  hosted Build runs them at the final head. At `3d20d0fc` (revision 1): core 249/249, read-back 39/39, TM59 1249/1249,
+  benchmark producer 26/26 (Simulation excluded), GenOpt 432/432.
+- Licensed (revision 1 only; this workstation, Tas 2.0.0.1 dated 2025-06-04): the calibration, compare and negative phases
+  all ran as expected. Details below. Revision 2 re-compared those persisted snapshots offline; it ran no Tas.
+
+## Revision 2: review findings and fixes (2026-10-21)
+
+Review: `C:\Users\michal\Documents\GitHub\SAM-BIM\.review-s08-prb-20261021\S08-PRB-Review.md` (machine-local; copy it when
+switching machines). Its COM-free probe reproduced on `057d24c7` exactly as reported (9 mutations PASS, empty
+preconditions for missing timestamps) before any change.
+
+| Finding | Fix (SAM_Tas only, harness code) | Result now |
+|---|---|---|
+| P1 unstated SAM schedules left out of coverage; a SAM space without an internal condition returned early | `ReadBackComparison`: rows 4-8 are required for **every** space; row 6 compares all seven slots (`ticOSG`, `ticOLG`, `ticLG`, `ticESG`, `ticELG`, `ticI`, `ticV`). A slot without a SAM profile is S-UNSPEC for every hour and EFLH, decided by the core unchanged. A missing hourly slot of a present profile is unread, never native absence | native non-zero = EXPORT-DEFECT FAIL; native zero = proposed **G1** BLOCKED (OD-G1, not decided); unreadable hour = BLOCKED technical; no SAM IC with native gains = FAIL |
+| P1 native annual arrays silently compared as an 8760 prefix | A read yearly profile or annual weather array outside the calibrated N-5 domain (exactly 8760 elements at lower bound = offset) is unreadable for every hour, with its length and lower bound named | 8759/8761/8784 elements or lower bound 0 = BLOCKED technical, never truncated or padded. SAM-side 8784-hour UNSUPPORTED handling and the constant/24-hour/8760 encodings are unchanged |
+| Probe note: a cloned native design day passed | Only the one SAM day is compared. A further native day in a design-day group is an unstated native object (identity mismatch) | FAIL. Every calibration run persisted one day per design day; no multi-day support was added |
+| P2 provenance failed open | `ReadBackCompare.Checks`: export and reader process ids must be present and different; export end and reader start must be valid UTC times and in order; the TBD, and the T3D when the export wrote one, must match the export's sha256 and have equal before/after hashes. `TbdReadBack` also records a changed T3D as a snapshot error, as for the TBD | infrastructure, exit 70. A T3D the export did not write stays optional (not a problem) |
+
+Decisions for review:
+
+- An array outside the calibrated domain is **BLOCKED technical** (unreadable under the committed convention), not FAIL:
+  its elements cannot be attributed to SAM hours, and no padding or truncation convention was measured.
+- The added `ticV` comparisons in V0/V1 zones are the same proposed G1 as 8b (native `ticV` value profile, value 0). They
+  are labelled proposed and do not decide OD-G1 or treat zero delivery as absence.
+- Unchanged and fail-closed: a native zone with no non-HDD internal condition still reads as unreadable (BLOCKED
+  technical) rather than absent. Not exercised by any calibration run; a SAM space without an internal condition whose
+  zone also has none therefore cannot PASS.
+
+Evidence: `Documentation/S08-PRB-ReadBack-evidence/offline-replay-r2/` (README, `replay-summary.txt`, every report,
+`checks/` with the probe and test logs before and after, `checks/notpass-diff.txt`, `SHA256SUMS.txt`). Offline replay of
+the cal3 snapshots with `direct-t3d-validation.exe readback-compare` built from `87f6ecf3` (sha256 `2ada4255…`): every
+status and exit code equals revision 1 under both rule sets. Coverage grew only on the two-zone model and its
+derivatives (calib-two 2 -> 6, neg-flip-partition 22 -> 26, neg-swap-space-guid 480 -> 484 not-pass items: the
+unstated `ticV` 6.hourly/6.eflh); no not-pass item was removed.
 
 ## Launch decisions (owner, 2026-10-20, recorded here for portability)
 
@@ -80,8 +114,10 @@ the approved Sizing export used `Sizing=true`.
 The source model and weather are hashed, then frozen as `input.json` and `weather.json` (read-only) and hashed again. The
 workflow converts a fresh load of the frozen files, and the frozen files are re-hashed after the run. The read runs in a
 separate process after the export has exited. `readback-compare` refuses the comparison as **infrastructure** when any of
-these fail: the reader has the export's process id, it started before the export ended, the TBD or T3D hash differs from
-what the export wrote, or a frozen input changed. Each comparison builds the expected values from fresh loads.
+these fail: either process id is missing or they are equal; the export end or reader start time is missing, invalid or
+out of order; the TBD (always) or the T3D (when the export wrote one) is not the file the export wrote or changed during
+the read, or a hash is missing; or a frozen input changed (revision 2 made the timing and hash checks fail closed). Each
+comparison builds the expected values from fresh loads.
 
 ### What each S07 row reads (persisted file -> raw field)
 
@@ -117,7 +153,8 @@ A SAM space is a native zone when every panel outline pairs one to one with an o
 object claims is an EXPORT-DEFECT. Apertures own the pane and frame surfaces that lie in their outline.
 
 Weather and design days pair structurally: one item on each side per role. More than one design day per role could only
-pair by writer name and would be WriterOnly (NOT RUN).
+pair by writer name and would be WriterOnly (NOT RUN). Within a design day only its first native day is compared; any
+further native day is an unstated native object (FAIL, revision 2).
 
 T3D windows tie to their aperture only through the GUID the writer put in the window description. That is writer-only
 identity, so T3D field checks are reported and **never gated**.
@@ -160,7 +197,10 @@ The calibration models are regenerated on each run, with new SAM GUIDs (`Create.
 inputs are therefore committed with that run. The rules re-derived at cal2 and cal3 equal the committed table: 0 of 13
 differ.
 
-## Licensed results (calibration models only)
+## Licensed results (calibration models only; revision 1, historical)
+
+Revision 2's offline replay of these snapshots gives the same statuses and exit codes (see "Revision 2"); the two-zone
+model's BLOCKED now also lists the unstated `ticV` schedule rows (same proposed G1).
 
 | Run | Interim | Provisional |
 |---|---|---|
@@ -198,6 +238,16 @@ beside a decisive FAIL, the serialized report and the full elements file, exit c
 leap-year refusal, the snapshot diff, the committed rules, reproduction of every consumed rule from the committed
 evidence, a shifted P-ALIGN pulse, the T-FRAME geometry and a D-FIX criterion.
 
+Revision 2 added `FalsePassRegressionTests` (35 cases; 74 in the project). Each replays a committed snapshot through the run
+verdict (`ReadBackReport`) or the full `ReadBackCompare.Run` path: an unstated SAM schedule against native non-zero (both
+rule sets), zero (G1, both rule sets) and unreadable hours, and a missing hourly slot; the schedule rows required from the
+model; a SAM space without an internal condition against native gains; native annual weather and yearly profiles of
+8759, 8761 and 8784 elements and at lower bound 0; the supported constant, 24-hour and 8760 encodings still passing; an
+extra native design day; 15 provenance cases (missing or invalid times and process ids, missing, mismatching or changed
+TBD and T3D hashes); an optional T3D left unread; and the full compare returning exit 70 for a changed T3D and for
+missing timing. 29 of the 35 fail on `057d24c7`; the 6 that pass there are preserved behaviour. The calib-two serialized
+report test now expects the six G1 items.
+
 ## Commands
 
 ```text
@@ -205,6 +255,10 @@ dotnet test benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytical.Input
 dotnet test SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj -c Release
 msbuild SAM_Tas.sln -t:Restore -p:Configuration=Release ; msbuild SAM_Tas.sln -t:Rebuild -p:Configuration=Release
 ```
+
+Revision 2 ran these four at `87f6ecf3` (MSBuild from Visual Studio 18 Community): 249 passed; 74 passed; restore up to
+date; rebuild 0 errors. The offline replay command is in `Documentation/S08-PRB-ReadBack-evidence/offline-replay-r2/README.md`
+(needs the machine-local `C:\TasOut\s08b\cal3` run folders; their input hashes are committed there).
 
 Licensed: see `Documentation/S08-PRB-ReadBack-evidence/README.md`. Machine-local prerequisites (copy or provision on
 another machine): licensed Tas, `C:\TasOut\s08b\*` run roots holding the TBD/T3D/TSD files (their hashes are committed).
@@ -229,7 +283,11 @@ another machine): licensed Tas, `C:\TasOut\s08b\*` run roots holding the TBD/T3D
 
 - **OD-G1 for V0/V1 delivery.** TAS always holds a `ticV` profile; with no delivery it reads as present and zero.
   D-F2 states "no `ticV` = MATCH with intent", but the core treats a zero native against S-UNSPEC as G1 (BLOCKED). The
-  owner decides whether a zero-delivery `ticV` is native absence for 8b. Until then, every V0 and V1 zone is BLOCKED.
+  owner decides whether a zero-delivery `ticV` is native absence for 8b. Until then, every V0 and V1 zone is BLOCKED. Since
+  revision 2 the same zero `ticV` also shows as G1 on the row-6 schedule comparison of that slot.
+- **Revision 2 limits:** a native zone without a non-HDD internal condition is still BLOCKED technical, not absent (fail
+  closed, unexercised). An extra native day in a design day is FAIL with no measured meaning. The offline replay used the
+  machine-local cal3 snapshots; the negative-check snapshots were never committed.
 - **4c Tas defaults** are not listed in S07. When the radiant fractions are not authored, the TAS defaults
   (HDD condition 0.3 / 0.2 / 0.1) are EXPORT-DEFECTs. The fixtures must author them (D-FIX).
 - **T-FRAME:** the persisted T3D `frameWidth` differs from the writer's value. It was reported, not changed.
@@ -245,8 +303,9 @@ another machine): licensed Tas, `C:\TasOut\s08b\*` run roots holding the TBD/T3D
 
 ## Next step
 
-Independent review of this draft PR (Claude Opus 5.5, effort High, new session, Plan mode, because reader independence
-and the calibration rules are the risk). Then the owner's merge decision. After merge: the known-SHA `PROJECT_PROGRESS.md`
+Independent re-review of revision 2 by GPT-6 (effort High, new session, Plan/review mode, read-only, because the fixes
+change coverage and evidence validity and need an independent check that no false-PASS route remains). Keep the PR draft
+until then. Then the owner's merge decision. After merge: the known-SHA `PROJECT_PROGRESS.md`
 closeout and guarded branch cleanup. Then PR-C (fixtures and acceptance) as a new session on the licensed workstation,
 Claude Opus 5.5, effort High, Build mode after the owner answers OD-G1 for V0/V1 delivery and signs the fixture
 provenance.
