@@ -230,8 +230,9 @@ if ($Phase -eq 'acceptance') {
     Step 'read-s08-fix-box-repeat' @('readback-read', '--tbd', (Join-Path $Root 's08-fix-box-repeat\model.tbd'), '--t3d', (Join-Path $Root 's08-fix-box-repeat\model.t3d'), '--out', (Join-Path $Root 's08-fix-box-repeat\snapshot.json')) | Out-Null
     Step 'diff-writer-s08-fix-box' @('readback-diff', '--a', (Join-Path $Root 's08-fix-box\snapshot.json'), '--b', (Join-Path $Root 's08-fix-box-repeat\snapshot.json'), '--purpose', 'writer control: the same frozen fixture exported twice', '--out', (Join-Path $Root 's08-fix-box-repeat\diff-writer.json')) | Out-Null
 
+    # The verdict is the approved rule set (OD-G1..G3, T-VENT-INACTIVE); the pre-decision provisional set is the baseline.
     foreach ($m in $fixtures + 's08-fix-box-repeat') {
-        foreach ($set in 'interim', 'provisional') {
+        foreach ($set in 'approved', 'provisional') {
             Step "compare-$m-$set" @('readback-compare', '--run', (Join-Path $Root $m), '--fixture-id', $m, '--rule-set', $set, '--purpose', 'S08 PR-C equivalence fixture (acceptance)', '--out', (Join-Path $Root "$m\compare-$set")) $any | Out-Null
         }
     }
@@ -249,7 +250,7 @@ if ($Phase -eq 'acceptance-negative') {
         $originals = Get-ChildItem $source -File | Where-Object { $_.Name -in 'input.json', 'weather.json', 'export.json', 'model.tbd', 'model.t3d' } | ForEach-Object { "$($_.Name)=$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }
         Step "negative-$case" @('readback-negative', '--run', $source, '--case', $case, '--out', $target) | Out-Null
         Step "read-neg-$case" @('readback-read', '--tbd', (Join-Path $target 'model.tbd'), '--t3d', (Join-Path $target 'model.t3d'), '--out', (Join-Path $target 'snapshot.json')) | Out-Null
-        foreach ($set in 'interim', 'provisional') {
+        foreach ($set in 'approved', 'provisional') {
             Step "compare-neg-$case-$set" @('readback-compare', '--run', $target, '--fixture-id', "neg-$case", '--rule-set', $set, '--purpose', "negative check '$case' on a disposable copy of a fixture run", '--out', (Join-Path $target "compare-$set")) @(10, 11, 12, 13, 14) | Out-Null
         }
 

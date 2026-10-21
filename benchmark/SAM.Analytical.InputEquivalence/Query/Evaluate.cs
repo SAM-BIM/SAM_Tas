@@ -160,7 +160,7 @@ namespace SAM.Analytical.InputEquivalence
 
                 case ReaderKind.NaN:
                     // G3 (proposed, OD-G3): NaN is not a comparable value; a listed limitation does not cover it.
-                    return GCase(configuration, EquivalenceOutcome.ExportDefect, GateStatus.Fail, "G3 (S-VALUE, native NaN)", "OD-G3", "The native value was read as NaN, which is not comparable; neither abs nor rel can pass it, and a listed limitation does not cover it.");
+                    return GCase(input, configuration, EquivalenceOutcome.ExportDefect, GateStatus.Fail, "G3 (S-VALUE, native NaN)", "OD-G3", "The native value was read as NaN, which is not comparable; neither abs nor rel can pass it, and a listed limitation does not cover it.");
 
                 case ReaderKind.Zero:
                     // S07 section 6: "abs never turns a missing or zeroed native object into a pass". A non-zero SAM value
@@ -226,15 +226,22 @@ namespace SAM.Analytical.InputEquivalence
                     return new Trigger(EquivalenceOutcome.ExportDefect, GateStatus.Fail, "SAM states no value (S-UNSPEC) and the native holds a non-zero value that is not the contract-listed default.");
 
                 case ReaderKind.Zero:
-                    // G1 (proposed, OD-G1): zero is neither absence nor a comparable value.
+                    // The one owner-approved refinement of G1 (2026-10-21): a native object the caller verified as present and
+                    // inactive under a named transformation. Only under the approved rules; every other zero stays G1.
+                    if (configuration.RuleSet == GateRuleSet.Approved && !string.IsNullOrWhiteSpace(input.InactiveNativeTransformation))
+                    {
+                        return new Trigger(EquivalenceOutcome.AcceptedTransformation, GateStatus.Pass, "SAM states no value and the native object is present with exactly 0, verified inactive under " + input.InactiveNativeTransformation + " (owner-approved transformation).");
+                    }
+
+                    // G1 (OD-G1): zero is neither absence nor a comparable value.
                     bool listedZero = input.ListedDefault.HasValue && input.ListedDefault.Value == 0;
-                    return GCase(configuration, listedZero ? EquivalenceOutcome.DocumentedDefault : EquivalenceOutcome.UnlistedDefault, GateStatus.BlockedOwnerDecision,
+                    return GCase(input, configuration, listedZero ? EquivalenceOutcome.DocumentedDefault : EquivalenceOutcome.UnlistedDefault, GateStatus.BlockedOwnerDecision,
                         listedZero ? "G1 (S-UNSPEC, native zero, zero is the listed default)" : "G1 (S-UNSPEC, native zero, UNLISTED-DEFAULT)", "OD-G1",
                         "SAM states no value and the native object is present with the value 0; zero does not mean absence, and it is " + (listedZero ? "" : "not ") + "the contract-listed default.");
 
                 default:
                     // G1-NaN (proposed, OD-G3).
-                    return GCase(configuration, EquivalenceOutcome.ExportDefect, GateStatus.Fail, "G1-NaN (S-UNSPEC, native NaN)", "OD-G3", "SAM states no value and the native object is present with the value NaN.");
+                    return GCase(input, configuration, EquivalenceOutcome.ExportDefect, GateStatus.Fail, "G1-NaN (S-UNSPEC, native NaN)", "OD-G3", "SAM states no value and the native object is present with the value NaN.");
             }
         }
 
@@ -307,23 +314,40 @@ namespace SAM.Analytical.InputEquivalence
             string decision = "owner acceptance of " + limitation + " for " + input.Definition.Id + " on fixture " + input.FixtureId;
             Trigger trigger = new Trigger(outcome, GateStatus.BlockedOwnerDecision, detail + " Not accepted by the owner.") { OwnerDecision = decision };
 
-            if (outcome == EquivalenceOutcome.DocumentedDefault && !input.Definition.Gated)
+            if ((outcome == EquivalenceOutcome.DocumentedDefault || outcome == EquivalenceOutcome.UnlistedDefault) && !input.Definition.Gated)
             {
-                trigger.Proposed = "G2 (unaccepted DOCUMENTED-DEFAULT on a non-gated quantity: " + input.Definition.NotGatedReason + ")";
-                trigger.OwnerDecision = decision + "; OD-G2 is open";
+                if (configuration.RuleSet == GateRuleSet.Approved)
+                {
+                    trigger.OwnerDecision = decision + " (approved rule G2, OD-G2: an unaccepted DOCUMENTED-DEFAULT on a non-gated quantity, " + input.Definition.NotGatedReason + ", blocks until accepted)";
+                }
+                else
+                {
+                    trigger.Proposed = "G2 (unaccepted DOCUMENTED-DEFAULT on a non-gated quantity: " + input.Definition.NotGatedReason + ")";
+                    trigger.OwnerDecision = decision + "; OD-G2 is open";
+                }
             }
 
             return trigger;
         }
 
         /// <summary>
-        /// The undecided S07 section 6.1 cases. Both rule sets report the proposed outcome, labelled proposed, with
+        /// The S07 section 6.1 cases. The two pre-decision rule sets report the proposed outcome, labelled proposed, with
         /// the open decision named, and neither can rise above BLOCKED. <see cref="GateRuleSet.ProvisionalProposed"/>
         /// additionally uses the proposed rank where it is more severe (EXPORT-DEFECT is rank 1). An owner acceptance
-        /// does not lift a proposed case.
+        /// does not lift a proposed case. <see cref="GateRuleSet.Approved"/> applies the approved outcome: EXPORT-DEFECT
+        /// for G1-NaN and G3; for G1 a DOCUMENTED-DEFAULT (or UNLISTED-DEFAULT handled as one), rank 3 until the owner
+        /// accepts it for this quantity on this fixture, then rank 5, and the G2 rule when the quantity is not gated.
         /// </summary>
-        private static Trigger GCase(GateConfiguration configuration, EquivalenceOutcome proposedOutcome, GateStatus proposedStatus, string label, string decision, string detail)
+        private static Trigger GCase(QuantityInput input, GateConfiguration configuration, EquivalenceOutcome proposedOutcome, GateStatus proposedStatus, string label, string decision, string detail)
         {
+            if (configuration.RuleSet == GateRuleSet.Approved)
+            {
+                string rule = " Approved rule " + label + " (" + decision + ", owner 2026-10-21).";
+                return proposedOutcome == EquivalenceOutcome.ExportDefect
+                    ? new Trigger(EquivalenceOutcome.ExportDefect, GateStatus.Fail, detail + rule)
+                    : Acceptable(input, configuration, proposedOutcome, AcceptableLimitation.DocumentedDefault, detail + rule);
+            }
+
             GateStatus status = GateStatus.BlockedOwnerDecision;
             if (configuration.RuleSet == GateRuleSet.ProvisionalProposed && (int)proposedStatus < (int)status)
             {

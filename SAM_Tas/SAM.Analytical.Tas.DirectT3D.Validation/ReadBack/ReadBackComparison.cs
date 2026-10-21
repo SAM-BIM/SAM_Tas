@@ -269,7 +269,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             }
         }
 
-        private QuantityInput Input(string quantityId, string key, ExpectedValue expected, ReaderResult native, IdentityStatus identity, AlignmentStatus alignment = AlignmentStatus.Unverified, ContractListing listing = ContractListing.None, string transformation = null, bool transformationVerified = false, ModelInterpretation interpretation = ModelInterpretation.NotRequired)
+        private QuantityInput Input(string quantityId, string key, ExpectedValue expected, ReaderResult native, IdentityStatus identity, AlignmentStatus alignment = AlignmentStatus.Unverified, ContractListing listing = ContractListing.None, string transformation = null, bool transformationVerified = false, ModelInterpretation interpretation = ModelInterpretation.NotRequired, string inactive = null)
         {
             return new QuantityInput
             {
@@ -283,18 +283,19 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 Listing = listing,
                 TransformationId = transformation,
                 TransformationVerified = transformationVerified,
-                Interpretation = interpretation
+                Interpretation = interpretation,
+                InactiveNativeTransformation = inactive
             };
         }
 
-        private void Scalar(string quantityId, string key, ExpectedValue expected, ReaderResult native, IdentityStatus identity, string convention = null, ModelInterpretation interpretation = ModelInterpretation.NotRequired, ContractListing listing = ContractListing.None)
+        private void Scalar(string quantityId, string key, ExpectedValue expected, ReaderResult native, IdentityStatus identity, string convention = null, ModelInterpretation interpretation = ModelInterpretation.NotRequired, ContractListing listing = ContractListing.None, string inactive = null)
         {
-            Results.Add(EQ.Evaluate(Input(quantityId, key, expected, native, identity, AlignmentStatus.Unverified, listing, convention, false, interpretation), Configuration));
+            Results.Add(EQ.Evaluate(Input(quantityId, key, expected, native, identity, AlignmentStatus.Unverified, listing, convention, false, interpretation, inactive), Configuration));
         }
 
-        private void SeriesOf(string quantityId, string key, IReadOnlyList<ExpectedValue> expected, IReadOnlyList<ReaderResult> native, IdentityStatus identity, AlignmentStatus alignment, string convention, string encoding, ModelInterpretation interpretation = ModelInterpretation.NotRequired)
+        private void SeriesOf(string quantityId, string key, IReadOnlyList<ExpectedValue> expected, IReadOnlyList<ReaderResult> native, IdentityStatus identity, AlignmentStatus alignment, string convention, string encoding, ModelInterpretation interpretation = ModelInterpretation.NotRequired, string inactive = null)
         {
-            SeriesResult series = EQ.EvaluateSeries(Input(quantityId, key, null, null, identity, alignment, ContractListing.None, convention, false, interpretation), expected, native, Configuration);
+            SeriesResult series = EQ.EvaluateSeries(Input(quantityId, key, null, null, identity, alignment, ContractListing.None, convention, false, interpretation, inactive), expected, native, Configuration);
             Series.Add(new SeriesRecord { QuantityId = quantityId, ObjectKey = key, NativeEncoding = encoding, Result = series });
             Results.Add(series.GateResult);
         }
@@ -342,8 +343,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
 
             CompareGains(space, zone, ic, icMissing, zoneIdentity);
             CompareThermostat(space, ic, icMissing, zoneIdentity, dayMask);
-            CompareSchedules(space, ic, icMissing, zoneIdentity, dayMask);
-            CompareInfiltrationAndVentilation(space, zone, ic, icMissing, zoneIdentity, dayMask, volumeInterpretation);
+            string inactiveVentilation = InactiveVentilation(space, zone, ic, icMissing, dayMask);
+            CompareSchedules(space, ic, icMissing, zoneIdentity, dayMask, inactiveVentilation);
+            CompareInfiltrationAndVentilation(space, zone, ic, icMissing, zoneIdentity, dayMask, volumeInterpretation, inactiveVentilation);
             RecordHdd(space, zone);
         }
 
@@ -976,7 +978,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             return profile.Expanded.Hours.Select(x => ExpectedValue.FromValue(x * scale)).ToList();
         }
 
-        private void HourlySeries(string quantityId, string key, ExpectedProfile expected, double scale, string unspecified, List<ReaderResult> native, IdentityStatus identity, string convention, string encoding, ModelInterpretation interpretation = ModelInterpretation.NotRequired)
+        private void HourlySeries(string quantityId, string key, ExpectedProfile expected, double scale, string unspecified, List<ReaderResult> native, IdentityStatus identity, string convention, string encoding, ModelInterpretation interpretation = ModelInterpretation.NotRequired, string inactive = null)
         {
             if (expected != null && !expected.Expanded.IsOk)
             {
@@ -986,7 +988,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 return;
             }
 
-            SeriesOf(quantityId, key, ExpectedHours(expected, scale, unspecified), native, identity, HourAlignment(), convention, encoding, interpretation);
+            SeriesOf(quantityId, key, ExpectedHours(expected, scale, unspecified), native, identity, HourAlignment(), convention, encoding, interpretation, inactive);
         }
 
         private void CompareThermostat(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask)
@@ -1001,7 +1003,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             }
         }
 
-        private void CompareSchedules(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask)
+        private void CompareSchedules(ExpectedSpace space, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask, string inactiveVentilation)
         {
             foreach (string slot in ScheduleSlots)
             {
@@ -1010,13 +1012,61 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                 NativeProfile profile = GainProfile(ic, slot);
                 ExpectedProfile expected = ProfileFor(space, slot);
                 string unspecified = "no SAM " + slot + " profile";
+                string inactive = slot == "ticV" ? inactiveVentilation : null;
                 List<ReaderResult> native = NativeHours(profile, icMissing, dayMask, null, out string encoding);
-                HourlySeries("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, unspecified, native, identity, ShapeConventions(profile), encoding);
+                HourlySeries("6.hourly", Keys.Profile(space.Guid, slot, "hourly"), expected, 1, unspecified, native, identity, ShapeConventions(profile), encoding, ModelInterpretation.NotRequired, inactive);
 
                 // EFLH: supporting evidence only (S07 section 7); it never stands in for the hourly comparison.
                 ExpectedValue eflh = expected == null ? ExpectedValue.Unspecified(unspecified) : expected.Expanded.IsOk ? EQ.ExpectedEquivalentFullLoadHours(expected.Expanded) : ExpectedValue.Invalid(expected.Expanded.Detail);
-                Scalar("6.eflh", Keys.Profile(space.Guid, slot, "eflh"), eflh, Sum(native), identity, ShapeConventions(profile));
+                Scalar("6.eflh", Keys.Profile(space.Guid, slot, "eflh"), eflh, Sum(native), identity, ShapeConventions(profile), ModelInterpretation.NotRequired, ContractListing.None, inactive);
             }
+        }
+
+        /// <summary>The owner-approved verified inactive-profile transformation (S08 PR-C, 2026-10-21), rows 6 and 8b of ticV only.</summary>
+        public const string InactiveVentilationTransformation = "T-VENT-INACTIVE";
+
+        /// <summary>
+        /// <see cref="InactiveVentilationTransformation"/> when its precondition holds for this space, else null with the
+        /// reason recorded: the approved rule set; a V0 or V1 zone (SAM selects no ventilation-delivery profile); a native ticV
+        /// profile that is present; verified slot, calendar and alignment rules; and every one of the 8760 native ticV schedule
+        /// values and delivered flows read, finite and exactly 0 (an unread, masked, out-of-domain, NaN or non-zero hour gives
+        /// no exemption). The native profile stays recorded as present; V2 and every other quantity are unchanged.
+        /// </summary>
+        private string InactiveVentilation(ExpectedSpace space, NativeZone zone, NativeInternalCondition ic, ReaderResult icMissing, ReaderResult[] dayMask)
+        {
+            if (Configuration.RuleSet != GateRuleSet.Approved)
+            {
+                return null;
+            }
+
+            string spaceKey = Keys.Space(space.Guid);
+            string Refuse(string why)
+            {
+                Supporting.Add(spaceKey + ": " + InactiveVentilationTransformation + " not applied: " + why);
+                return null;
+            }
+
+            VentilationRequirement requirement = new VentilationRequirement { Flow = Param(space, "SupplyAirFlow"), FlowPerArea = Param(space, "SupplyAirFlowPerArea"), FlowPerPerson = Param(space, "SupplyAirFlowPerPerson"), AirChangesPerHour = Param(space, "SupplyAirChangesPerHour") };
+            VentilationState state = EQ.ClassifyVentilation(requirement, ProfileFor(space, "ticV") != null);
+            if (state != VentilationState.V0 && state != VentilationState.V1) return Refuse("D-F2 state " + state + " (only V0 and V1 qualify)");
+
+            NativeProfile ticV = GainProfile(ic, "ticV");
+            if (ticV == null) return Refuse("no native ticV profile (it is compared as absent)");
+            if (ticV.Kind != FieldKind.Finite) return Refuse("the native ticV profile is not read as present (" + ticV.Kind + ")");
+            if (ShapeConventions(ticV) != null) return Refuse(ShapeConventions(ticV));
+            if (HourAlignment() != AlignmentStatus.Verified) return Refuse("the hour or calendar alignment is not verified");
+
+            ReaderResult factor = ProfileField(ticV, x => x.Factor, icMissing);
+            ReaderResult volume = Field(zone?.Volume, zone);
+            List<ReaderResult> shapes = NativeHours(ticV, icMissing, dayMask, null, out _);
+            List<ReaderResult> delivered = NativeHours(ticV, icMissing, dayMask, shape => EQ.Multiply(EQ.Multiply(shape, factor), volume, 1 / SecondsPerHour), out _);
+            int shapeBad = shapes.FindIndex(x => x == null || x.Kind != ReaderKind.Zero);
+            if (shapes.Count != 8760 || shapeBad >= 0) return Refuse("native ticV schedule hour " + shapeBad + " is " + (shapeBad >= 0 ? shapes[shapeBad]?.ToString() : "missing") + ", not a read, finite, exact 0");
+            int flowBad = delivered.FindIndex(x => x == null || x.Kind != ReaderKind.Zero);
+            if (delivered.Count != 8760 || flowBad >= 0) return Refuse("native ticV delivered flow hour " + flowBad + " is " + (flowBad >= 0 ? delivered[flowBad]?.ToString() : "missing") + ", not a read, finite, exact 0");
+
+            Supporting.Add(spaceKey + ": " + InactiveVentilationTransformation + " verified (" + state + ", native ticV present: " + ticV.Type + " factor " + ticV.Factor + " value " + ticV.Value + "; 8760 schedule values and delivered flows read, finite, exactly 0)");
+            return InactiveVentilationTransformation;
         }
 
         private static ReaderResult Sum(List<ReaderResult> values)
@@ -1033,7 +1083,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
             return ReaderResult.FromValue(sum);
         }
 
-        private void CompareInfiltrationAndVentilation(ExpectedSpace space, NativeZone zone, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask, ModelInterpretation volumeInterpretation)
+        private void CompareInfiltrationAndVentilation(ExpectedSpace space, NativeZone zone, NativeInternalCondition ic, ReaderResult icMissing, IdentityStatus identity, ReaderResult[] dayMask, ModelInterpretation volumeInterpretation, string inactiveVentilation)
         {
             ReaderResult volume = Field(zone?.Volume, zone);
             double geometricVolume = space.ShellVolume?.State == SamInputState.Value ? space.ShellVolume.Value : double.NaN;
@@ -1070,7 +1120,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
 
             // V0, V1 and the undefined state: one scalar against the native peak delivered flow (Tas intent: no ticV).
             ReaderResult peak = Peak(delivered);
-            Results.Add(EQ.Evaluate(Input("8b", key, EQ.ExpectedDeliveredOutdoorAir(state, required), peak, identity, HourAlignment(), ContractListing.None, ShapeConventions(ticV), false, volumeInterpretation), Configuration));
+            Results.Add(EQ.Evaluate(Input("8b", key, EQ.ExpectedDeliveredOutdoorAir(state, required), peak, identity, HourAlignment(), ContractListing.None, ShapeConventions(ticV), false, volumeInterpretation, inactiveVentilation), Configuration));
         }
 
         private static ReaderResult Peak(List<ReaderResult> values)

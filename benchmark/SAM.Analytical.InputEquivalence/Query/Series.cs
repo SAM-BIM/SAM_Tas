@@ -63,7 +63,8 @@ namespace SAM.Analytical.InputEquivalence
                 ListedDefault = prototype.ListedDefault,
                 TransformationId = prototype.TransformationId,
                 TransformationVerified = prototype.TransformationVerified,
-                Interpretation = prototype.Interpretation
+                Interpretation = prototype.Interpretation,
+                InactiveNativeTransformation = prototype.InactiveNativeTransformation
             };
         }
 

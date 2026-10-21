@@ -74,12 +74,14 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.ReadBack
                     case "readback-compare":
                         {
                             string ruleSet = options.TryGetValue("rule-set", out string r) ? r : "interim";
-                            if (ruleSet != "interim" && ruleSet != "provisional")
+                            if (ruleSet != "interim" && ruleSet != "provisional" && ruleSet != "approved")
                             {
-                                throw new UsageException("--rule-set interim|provisional");
+                                throw new UsageException("--rule-set interim|provisional|approved");
                             }
 
-                            ReadBackReport report = ReadBackCompare.Run(Require(options, "run"), options.TryGetValue("rules", out string rules) ? rules : DefaultRules(), Require(options, "fixture-id"), options.TryGetValue("purpose", out string purpose) ? purpose : "calibration (not an equivalence fixture)", ruleSet == "provisional" ? InputEquivalence.GateRuleSet.ProvisionalProposed : InputEquivalence.GateRuleSet.Interim, options.TryGetValue("out", out string output) ? output : null);
+                            // approved: OD-G1..G3 as the owner approved them on 2026-10-21 (S08 PR-C), with T-VENT-INACTIVE.
+                            InputEquivalence.GateRuleSet gateRuleSet = ruleSet == "approved" ? InputEquivalence.GateRuleSet.Approved : ruleSet == "provisional" ? InputEquivalence.GateRuleSet.ProvisionalProposed : InputEquivalence.GateRuleSet.Interim;
+                            ReadBackReport report = ReadBackCompare.Run(Require(options, "run"), options.TryGetValue("rules", out string rules) ? rules : DefaultRules(), Require(options, "fixture-id"), options.TryGetValue("purpose", out string purpose) ? purpose : "calibration (not an equivalence fixture)", gateRuleSet, options.TryGetValue("out", out string output) ? output : null);
                             Console.Write(report.ToText());
                             return report.ExitCode;
                         }

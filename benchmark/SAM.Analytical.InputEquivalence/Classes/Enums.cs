@@ -4,8 +4,8 @@
 namespace SAM.Analytical.InputEquivalence
 {
     /// <summary>
-    /// The per-quantity outcome categories of S07 section 6. <see cref="UnlistedDefault"/> exists only through the
-    /// proposed OD-G1 and is never produced as an approved outcome.
+    /// The per-quantity outcome categories of S07 section 6. <see cref="UnlistedDefault"/> exists only through OD-G1
+    /// (proposed under the pre-decision rule sets, approved under <see cref="GateRuleSet.Approved"/>).
     /// </summary>
     public enum EquivalenceOutcome
     {
@@ -24,7 +24,7 @@ namespace SAM.Analytical.InputEquivalence
         /// <summary>SAM has no value and the native holds the contract-listed default.</summary>
         DocumentedDefault,
 
-        /// <summary>Proposed OD-G1: SAM has no value and the native holds 0 although 0 is not contract-listed. Handled as an unaccepted DOCUMENTED-DEFAULT.</summary>
+        /// <summary>OD-G1: SAM has no value and the native holds 0 although 0 is not contract-listed. Handled as a DOCUMENTED-DEFAULT (unaccepted unless the owner accepts it).</summary>
         UnlistedDefault,
 
         /// <summary>A contract-listed converter limitation: the native object is missing or differs by design.</summary>
@@ -111,9 +111,10 @@ namespace SAM.Analytical.InputEquivalence
     }
 
     /// <summary>
-    /// Which gate-completeness rules apply to the three cases S07 section 6.1 leaves undecided (G1, G1-NaN/G3, G2).
-    /// Neither rule set is owner-approved. Both are fail-closed: they can never produce a pass, and every case they
-    /// touch is at least BLOCKED with the owner decision named.
+    /// Which gate-completeness rules apply to the three cases S07 section 6.1 left undecided (G1, G1-NaN/G3, G2).
+    /// <see cref="Interim"/> and <see cref="ProvisionalProposed"/> are the pre-decision rule sets, kept so earlier evidence
+    /// replays unchanged: they can never produce a pass, and every case they touch is at least BLOCKED with the owner
+    /// decision named. <see cref="Approved"/> applies OD-G1 to OD-G3 as the owner approved them.
     /// </summary>
     public enum GateRuleSet
     {
@@ -125,7 +126,16 @@ namespace SAM.Analytical.InputEquivalence
         /// (G1-NaN and G3 are EXPORT-DEFECT, rank 1) that rank is used. The floor stays BLOCKED and the result
         /// stays labelled proposed until the owner approves OD-G1 to OD-G3.
         /// </summary>
-        ProvisionalProposed
+        ProvisionalProposed,
+
+        /// <summary>
+        /// OD-G1, OD-G2 and OD-G3 approved by the owner on 2026-10-21 as drafted in S07 section 6.1 (S08 PR-C): G1 is
+        /// DOCUMENTED-DEFAULT or UNLISTED-DEFAULT handled as a DOCUMENTED-DEFAULT (rank 3 until accepted per quantity and
+        /// fixture, then rank 5; G2 when not gated); G1-NaN and G3 are EXPORT-DEFECT (rank 1); G2 is rank 3 until accepted.
+        /// Nothing is labelled proposed. The one owner-approved refinement of G1 is the verified inactive-profile
+        /// transformation (<see cref="QuantityInput.InactiveNativeTransformation"/>); no other zero is read as absence.
+        /// </summary>
+        Approved
     }
 
     /// <summary>The limitation an owner may accept per quantity and per fixture (S07 rank 5). UNLISTED-DEFAULT is not acceptable until OD-G1 is approved.</summary>
