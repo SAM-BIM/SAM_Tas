@@ -36,9 +36,9 @@ function Put([string]$Source, [string]$Relative, [switch]$Gzip) {
     }
 }
 
-# Repacking replaces the run evidence but keeps the hand-written README.
+# Repacking replaces the run evidence but keeps the hand-written README and the offline replays of later revisions.
 New-Item -ItemType Directory -Force $Target | Out-Null
-Get-ChildItem $Target | Where-Object { $_.Name -ne 'README.md' } | Remove-Item -Recurse -Force
+Get-ChildItem $Target | Where-Object { $_.Name -ne 'README.md' -and $_.Name -notlike 'offline-replay-*' } | Remove-Item -Recurse -Force
 
 foreach ($phase in 'acceptance', 'acceptance-negative') {
     Put (Join-Path $Root "provenance-$phase.json") "provenance-$phase.json"
@@ -75,7 +75,7 @@ foreach ($dir in Get-ChildItem $Root -Directory -Filter 'neg-*') {
 
 Get-ChildItem (Join-Path $Root 'logs') -File -ErrorAction SilentlyContinue | ForEach-Object { Put $_.FullName "logs\$($_.Name)" }
 
-Get-ChildItem $Target -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' -or $_.DirectoryName -ne $Target } | Sort-Object FullName | ForEach-Object {
+Get-ChildItem $Target -Recurse -File | Where-Object { ($_.Name -ne 'SHA256SUMS.txt' -or $_.DirectoryName -ne $Target) -and $_.FullName -notlike (Join-Path $Target 'offline-replay-*') } | Sort-Object FullName | ForEach-Object {
     $sums.Add((Hash $_.FullName) + '  ' + $_.FullName.Substring($Target.Length + 1).Replace('\', '/'))
 }
 

@@ -1,0 +1,21 @@
+s08-fix-box approved: Pass/0, required=353, results_match_committed=True
+s08-fix-box provisional: Pass/0, required=353, results_match_committed=True
+s08-fix-two approved: Pass/0, required=623, results_match_committed=True
+s08-fix-two provisional: BlockedOwnerDecision/12, required=623, results_match_committed=True
+s08-fix-box-repeat approved: Pass/0, required=353, results_match_committed=True
+s08-fix-box-repeat provisional: Pass/0, required=353, results_match_committed=True
+neg-add-izam approved: Fail/10, required=353, results_match_committed=True
+neg-add-izam provisional: Fail/10, required=353, results_match_committed=True
+neg-flip-partition approved: Fail/10, required=623, results_match_committed=True
+neg-flip-partition provisional: Fail/10, required=623, results_match_committed=True
+neg-layer-conductivity approved: Fail/10, required=353, results_match_committed=True
+neg-layer-conductivity provisional: Fail/10, required=353, results_match_committed=True
+neg-nan-infiltration approved: Fail/10, required=353, results_match_committed=True
+neg-nan-infiltration provisional: Fail/10, required=353, results_match_committed=True
+neg-shift-heating-slot approved: Fail/10, required=353, results_match_committed=True
+neg-shift-heating-slot provisional: Fail/10, required=353, results_match_committed=True
+neg-swap-space-guid approved: Fail/10, required=623, results_match_committed=True
+neg-swap-space-guid provisional: Fail/10, required=623, results_match_committed=True
+neg-zero-lighting-factor approved: Fail/10, required=353, results_match_committed=True
+neg-zero-lighting-factor provisional: Fail/10, required=353, results_match_committed=True
+20 comparisons replayed, 0 differ from the committed reports
