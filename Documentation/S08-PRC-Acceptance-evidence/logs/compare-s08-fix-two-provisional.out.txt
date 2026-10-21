@@ -1,0 +1,13 @@
+S08 read-back s08-fix-two (S08 PR-C equivalence fixture (acceptance)): BlockedOwnerDecision (rank 3, exit 12)
+  gate: s08-fix-two: BlockedOwnerDecision (provisional: unapproved OD-G rules applied), 623 result(s), 6 not pass, 0 informational, coverage Complete
+  gate BlockedOwnerDecision | provisional-rules gate BlockedOwnerDecision | coverage Complete (623 required, 0 missing, 0 unrequested)
+  results by status: BlockedOwnerDecision=6, Pass=617
+  elements by outcome: Match=145045, NotApplicable=6, UnlistedDefault=17524, WithinTolerance=92381
+  proposed cases (all elements): G1 (S-UNSPEC, native zero, UNLISTED-DEFAULT) -> UnlistedDefault (proposed, OD-G1) x17524
+  owner decisions (all elements): 1; technical blockers: 0; informational mismatches: 0
+  NOT PASS BlockedOwnerDecision 6.hourly space:5080c000-0000-0000-0000-00000000c0a1.ic.ticV.hourly
+  NOT PASS BlockedOwnerDecision 6.eflh space:5080c000-0000-0000-0000-00000000c0a1.ic.ticV.eflh
+  NOT PASS BlockedOwnerDecision 8b space:5080c000-0000-0000-0000-00000000c0a1.ic.ticV.delivered
+  NOT PASS BlockedOwnerDecision 6.hourly space:5080c000-0000-0000-0000-00000000c0b1.ic.ticV.hourly
+  NOT PASS BlockedOwnerDecision 6.eflh space:5080c000-0000-0000-0000-00000000c0b1.ic.ticV.eflh
+  NOT PASS BlockedOwnerDecision 8b space:5080c000-0000-0000-0000-00000000c0b1.ic.ticV.delivered

@@ -1,0 +1,1 @@
+negative add-izam: added IZAM 'S08 negative IZAM' (from outside) on zone 'FixBox'; originals unchanged: True

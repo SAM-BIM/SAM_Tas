@@ -1,0 +1,16 @@
+{
+  "A": "C:\\TasOut\\s08c\\acc1\\s08-fix-box\\snapshot.json",
+  "B": "C:\\TasOut\\s08c\\acc1\\s08-fix-box-repeat\\snapshot.json",
+  "Purpose": "writer control: the same frozen fixture exported twice",
+  "Ignored": [
+    "Reader",
+    "Guid",
+    "BuildingElementGuid",
+    "LinkZoneGuid",
+    "LinkSurfaceGuid"
+  ],
+  "Compared": 77748,
+  "DifferenceCount": 0,
+  "ByPattern": {},
+  "Differences": []
+}

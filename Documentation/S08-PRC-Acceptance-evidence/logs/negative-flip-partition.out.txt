@@ -1,0 +1,1 @@
+negative flip-partition: zone 'FixA' surface 5 (FIX_PARTITION) reversed 0 -> -1; originals unchanged: True

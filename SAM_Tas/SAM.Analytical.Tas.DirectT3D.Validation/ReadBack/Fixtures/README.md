@@ -1,6 +1,9 @@
 # S08 PR-C equivalence fixtures (D-FIX): provenance
 
-**Status: prepared offline for the owner's provenance sign-off. Not signed off; no licensed run has used them.**
+**Status: signed off by the owner on 2026-10-21 at commit `05edbdde`** ("I approve the two fixtures at commit 05edbdde,
+their documented synthetic provenance, centre-line/PhysicalThickness conventions, both multizone spaces being V1, and
+single-pane glazing. I approve Budapest as the explicit weather choice."). Used by the S08 PR-C licensed acceptance
+(`Documentation/S08-PRC-Acceptance-evidence/`).
 
 The two Phase B Tas equivalence fixtures required by the roadmap (box and one multizone model) and S07 §8 D-FIX. The
 committed JSON files below are the fixtures, byte for byte; a later regeneration is not a substitute (SAM mints new
@@ -55,8 +58,8 @@ sha256 `472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3` is the
 `Run-S08-ReadBack.ps1 -Phase acceptance` before any export. 8760 data rows (not a leap year). Design days are derived
 from it by the contract route (S07 §3 Tas precedence step 2).
 
-## Not decided here
+## Owner decisions that apply to them (2026-10-21, S08 PR-C gate)
 
-The owner's provenance sign-off of these files, the choice of weather, OD-G1 to OD-G3 (including whether a zero-delivery
-`ticV` is native absence for V1) and the authorization of the licensed exports, reads and negative checks are owner
-decisions (S08 PR-C gate). Until OD-G1 is decided, a V1 zone with a present zero `ticV` stays at most BLOCKED.
+The provenance and weather sign-off above; OD-G1 to OD-G3 approved as drafted in S07 §6.1; and the verified
+inactive-profile transformation `T-VENT-INACTIVE` for a V0/V1 zone's present, all-zero `ticV` on rows 6 and 8b only (see
+`Documentation/S08-PRC-FixturesAcceptance-PR.md`).
