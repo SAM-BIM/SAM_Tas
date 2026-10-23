@@ -1,5 +1,48 @@
 # Project Progress - SAM_Tas (2026-Q4)
 
+## Q4 S10 Tas results round-trip validation closeout - 2026-10-23
+
+- **PR**: SAM-BIM/SAM_Tas#107 -> `sow/2026-Q4`, **merged 2026-10-23T20:33:53Z**.
+  - Owner instruction: "I approve marking SAM-BIM/SAM_Tas#107 Ready and merging exactly 662977a6ace1fa0ca27e189c66080739ad575daa, provided the head is unchanged and checks remain green".
+  - Merge commit `1d61ab052157fac868ef7beeae53054ff6c75c66`, made as a merge commit with `--match-head-commit`. Parents: base `c50e9169` and the approved head `662977a6`. The merge tree equals that head's tree (checked).
+  - The PR was marked ready from draft immediately before the merge. No GitHub review or comment existed; the owner's instruction was the approval.
+- **Status: S10 ACCEPTED WITH ONE DECLARED VALIDATION LIMITATION. This is not an unqualified full PASS.**
+  - The limitation is `SAM|FixB|Heating|designDayPeak.hourOfDay` on `s08-fix-two`. It stays BLOCKED: comparison 94 PASS / 0 FAIL / 1 BLOCKED. The two-zone negative control keeps its measured BLOCKED / exit-10 outcome, and S10-C9 stays unresolved for heating.
+  - Cause: nothing independent places the heating design day in time. The heating gains are constant zero and the TBD heating dry bulb is constant. FixB has 12 alternating exact maxima that differ by 0.00042724609375 W, which is consistent with numerical noise in a steady load (an inference, not proof).
+  - Still checked and passing: FixB's heating design-day load, the native peak index and load, the annual load and hour, and every B1a row.
+  - Owner accepted this one row (2026-10-23), as the independent attempt-2 review recommended. No code, tolerance, fixture or comparison status was changed. Unsupported heating design-day hours still BLOCK in general.
+  - **The limitation must stay visible in the roadmap, Phase B and release evidence.** Phase B is not accepted by this decision. The roadmap row is unchanged; it changes only through a separate reviewed SAM PR. S11 not started.
+- **Work**:
+  - B1a annual peaks (F4-F6) in `benchmark/SAM.Analytical.Tas.Benchmark/Modify/ToBenchmark.cs`.
+  - An independent TSD/TBD reference, comparison and negatives in `SAM.Analytical.Tas.DirectT3D.Validation/Results/` (calendar design-day mask from the TBD `yearDay`; C9 in-day peaks and the full-day-tie hour rule).
+  - `Run-S10-Results.ps1`: receipt-verified provenance, stop on infrastructure failure, watchdog.
+  - `Build-S10-Receipt.ps1`: the controlled stamped build and receipt.
+  - The S10 offline tests, the record `Documentation/S10-TasResultsRoundTrip-PR.md`, and the evidence `Documentation/S10-Results-evidence/`: the attempt-2 pack, 248 files with `SHA256SUMS.txt` re-verified, plus a README stating the limitation and the N/A negative controls.
+- **Review history**: revision 1 `77ac1cda` REVISE → `3387915b` accepted for measurement. Licensed attempt 1 (`C:\TasOut\s10\acc1`) stopped (B1a refused; R3/R4; design-day layout disproved) → correction `f29adaed`: calendar method ACCEPTED, runner REVISE (R3 timestamp binding, R5 `Get-FileHash` in the test child) → `9871f437` ACCEPTED. Licensed attempt 2 execution and evidence ACCEPTED. All reviews are local `.review-s10-*` folders.
+- **Licensed results, attempt 2** (`C:\TasOut\s10\acc2`, Tas 2.0.0.1, 2026-10-23):
+  - The receipt preflight was proven (receipt `c36bb206…`; SAM `2cfd6909`, runner built at `9871f437`).
+  - 2 simulations, 12 steps, no infrastructure failure, no retry.
+  - Box: PASS 59/59; negatives 52/52 as intended (6 N/A).
+  - Two-zone: 94/0/1; negatives 51/52 as intended. The only miss is the control, blocked by the limited row.
+  - The reads left the produced files unchanged. Fixtures, EPW and attempt 1 are preserved.
+- **Validation**: local at `9871f437`: build exit 0; producer 40/40, core 258/258, read-back 249/249. Hosted at the approved head `662977a6`: Build (Windows) run `40010831380` and SPDX run `40010831293` SUCCESS, testing merge `0997f449`; all dependencies cloned at `sow/2026-Q4`; totals producer 40, core 258, read-back 249, TM59 1249, GenOpt 432. For the post-merge Build on `1d61ab05`, see the Actions tab. `sow/2026-Q4` has no branch protection or ruleset; none was bypassed.
+- **Unresolved**:
+  - The declared limitation above. Closing it needs independent heating timing evidence and separately authorised work; repeating the unchanged steady fixture would add no time signal.
+  - The calendar design-day layout is measured on these two fixtures only.
+  - Libraries from other repositories and third parties are pinned by hash in the build receipt, not source-bound.
+  - The hosted R5 module-path cause is not proven (the fix is confirmed by CI).
+  - `Pack-S10-Evidence.ps1` still uses `Get-FileHash`.
+  - Follow-ups: the SAM_Validation `METRICS.md` Tas column, the `designDaySource` label, and the OpenStudio zero rule at S11.
+  - Machine-local, to copy before switching machines: `C:\TasOut\s10\acc1`, `C:\TasOut\s10\acc2`, `C:\TasOut\s08c\weather\budapest.epw`, the `SAM-BIM/.s10-*` and `.review-s10-*` folders, and `S10_IMPLEMENTATION_PLAN.md`.
+- **Cleanup**: remote `feature/s10-tas-results-roundtrip` was deleted with a lease on `662977a6` and confirmed gone. Before deleting, I confirmed that:
+  - its remote head was that SHA;
+  - it was an ancestor of `origin/sow/2026-Q4`, with 0 unmerged commits;
+  - no open PR used it as head or base;
+  - it was unprotected.
+
+  The local branch was deleted with `git branch -d` (fully merged, no worktree used it), and the checkout is on `sow/2026-Q4`. No dependency repository has a same-named branch.
+- **Next step**: a separate reviewed SAM PR records S10 in the roadmap as "accepted with one declared validation limitation", carrying the limitation. Then S11 only on the owner's start, as a new session.
+
 ## Q4 S08 PR-C equivalence fixtures and licensed acceptance closeout - 2026-10-21
 
 - **PR**: SAM-BIM/SAM_Tas#106 -> `sow/2026-Q4`, **merged 2026-10-21T09:53:41Z** on the owner's instruction ("I approve merging SAM-BIM/SAM_Tas#106 at exactly 89345a84… conditional on successful final-head CI"), merge commit `61eb0d37af62dc2142248ddea30f0b043797e75f` (merge commit, `--match-head-commit`). Parents: base `989972ce` and approved head `89345a84a724870d69b0b7ef3220aee98245ecb8`; the merge tree equals that head's tree (checked). Marked ready from draft immediately before the merge. No GitHub review or comment existed; the owner's instruction was the approval. Independent reviews outside GitHub: revision 1 (`9badb9b4`) REVISE with one P1, fixed in revision 2; the owner approved the merge after revision 2.
