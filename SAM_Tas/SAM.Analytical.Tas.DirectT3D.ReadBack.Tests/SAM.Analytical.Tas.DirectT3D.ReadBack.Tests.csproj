@@ -66,4 +66,23 @@
     <None Include="..\SAM.Analytical.Tas.DirectT3D.Validation\ReadBack\calibration-rules.json" Link="calibration-rules.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- S10: the COM-free half of the results round-trip (Results/). TsdResultRead.cs and ResultsRun.cs (TSD COM, the
+         production converter) stay in the licensed harness only. -->
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\Results\ResultSnapshot.cs" Link="Results\ResultSnapshot.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\Results\ResultReference.cs" Link="Results\ResultReference.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\Results\ResultSubject.cs" Link="Results\ResultSubject.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\Results\ResultCompare.cs" Link="Results\ResultCompare.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\Results\ResultNegatives.cs" Link="Results\ResultNegatives.cs" />
+    <Compile Include="..\SAM.Analytical.Tas.DirectT3D.Validation\Results\ResultReport.cs" Link="Results\ResultReport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- S10: the synthetic offline triple's B1a document is produced by the real (COM-free) producer mapping. -->
+    <ProjectReference Include="..\..\benchmark\SAM.Analytical.Tas.Benchmark\SAM.Analytical.Tas.Benchmark.csproj" />
+    <Reference Include="SAM.Analytical.Benchmark">
+      <HintPath>..\..\..\SAM_Validation\build\SAM.Analytical.Benchmark.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>
