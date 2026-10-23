@@ -13,11 +13,19 @@
 #   offline  (COM-free) recompute the comparison and the negative controls of an existing root into compare-replay/ and
 #            negatives-replay/, so a later commit can be checked against the same reads without Tas.
 #
-# Provenance (S10 revision-2 review R3): local builds carry no commit stamp, so benchmark-tas is given --sam-commit and
-# --runner-commit explicitly, resolved here before any engine starts. Each is the HEAD of a clean checkout (no change,
-# no untracked file) whose built artifacts are bound to it: every artifact is at least as new as every tracked source
-# file of that checkout, and the SAM libraries benchmark-tas loads are byte-identical to the SAM checkout's build output.
-# Anything missing, malformed or unproven stops the run before the first simulation.
+# Provenance (S10 revision-2 review R3): the binaries must come from Build-S10-Receipt.ps1, a controlled build of clean
+# SAM and SAM_Tas checkouts that stamps each assembly with its commit and writes a receipt of the commits and the sha256
+# of every .dll/.exe in the harness and benchmark-tas folders and of the SAM core libraries. Before any engine starts, the
+# preflight here verifies, and never writes, that receipt:
+#   - it exists, is s10-build-receipt/1 and names these checkouts and these harness/benchmark-tas paths;
+#   - every file it lists has its recorded sha256, and no .dll/.exe it does not list sits beside the harness or
+#     benchmark-tas (a copied or rebuilt artifact, however new, is refused);
+#   - the SAM libraries the harness and benchmark-tas load equal SAM\build and the receipt's SAM build;
+#   - each checkout is clean, at the receipt's commit or at a descendant whose difference from it is record-only (*.md):
+#     a PR record commit after the tested build changes no build input. Any other change needs a rebuild.
+# Timestamps stay as a freshness check: no artifact may be older than a tracked source file. benchmark-tas is given
+# --sam-commit/--runner-commit = the receipt's build commits, which its stamps also carry. Anything missing, malformed or
+# unproven stops the run before the first simulation.
 #
 # Failure control (review R4): a step is recorded as started before its process launches and as completed or
 # terminated afterwards. A failed or timed-out simulation, a failed read or capture, a missing produced file, a file
@@ -27,6 +35,7 @@
 # recorded and the run continues. A successful exit is never taken as a PASS by itself (the reports decide).
 #
 # Usage (Windows PowerShell 5.1, licensed Tas, Tas GUI closed, short output path):
+#   powershell -ExecutionPolicy Bypass -File Build-S10-Receipt.ps1
 #   powershell -ExecutionPolicy Bypass -File Run-S10-Results.ps1 -Phase run -Root C:\TasOut\s10\acc1 -WeatherEpw C:\TasOut\s08c\weather\budapest.epw
 #   powershell -ExecutionPolicy Bypass -File Run-S10-Results.ps1 -Phase offline -Root C:\TasOut\s10\acc1
 # -SamRepository, -RunnerRepository and -TasProcessNames default to this workspace and the Tas engine processes; the
@@ -43,6 +52,7 @@ param(
     [string]$WeatherEpwSha256 = '472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3',
     [string]$SamRepository = '',
     [string]$RunnerRepository = '',
+    [string]$BuildReceipt = '',
     [string[]]$TasProcessNames = @('ProfGate', 'TBD', 'TSD', 'TAS3D', 'TPD', 'TWD', 'TCD')
 )
 
@@ -51,6 +61,7 @@ if (-not $Exe) { $Exe = Join-Path $PSScriptRoot 'bin\Release\direct-t3d-validati
 if (-not $BenchmarkExe) { $BenchmarkExe = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\build\benchmark-tas.exe')) }
 if (-not $RunnerRepository) { $RunnerRepository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..')) }
 if (-not $SamRepository) { $SamRepository = [IO.Path]::GetFullPath((Join-Path $RunnerRepository '..\SAM')) }
+if (-not $BuildReceipt) { $BuildReceipt = Join-Path (Split-Path $BenchmarkExe) 's10-build-receipt.json' }
 $fixtures = 's08-fix-box', 's08-fix-two'
 $fixtureDir = Join-Path $PSScriptRoot 'ReadBack\Fixtures'
 $sourcePatterns = '*.cs', '*.csproj', '*.props', '*.targets', '*.resx', '*.xaml', '*.sln'
@@ -140,9 +151,17 @@ function Require([string]$Name, [string]$File, [string[]]$Arguments, [int[]]$Exp
     return $entry
 }
 
+# SHA-256 through .NET (review R5): in Windows PowerShell 5.1 Get-FileHash is a script function of the Utility module's
+# psm1, available only through module autoload along the PSModulePath inherited from the parent host (PowerShell 7 on
+# the hosted runner, where every runner test failed on it). The stream digest needs no module.
 function Sha([string]$Path) {
-    if (-not (Test-Path $Path)) { return $null }
-    return (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { return ([BitConverter]::ToString($sha.ComputeHash($stream)) -replace '-', '').ToLowerInvariant() } finally { $sha.Dispose() }
+    }
+    finally { $stream.Dispose() }
 }
 
 $git = 'C:\Program Files\Git\cmd\git.exe'
@@ -154,10 +173,11 @@ function Git([string]$Directory) {
     & $git -C $Directory @args 2>$null
 }
 
-# The HEAD of a clean checkout and the artifacts built from it: every artifact must be at least as new as every tracked
-# source file (a later checkout, edit or revert of a source file makes it newer than the build and is refused).
-function Resolve-Source([string]$Name, [string]$Directory, [string[]]$Artifacts) {
-    $result = [ordered]@{ name = $Name; directory = $Directory; head = $null; branch = $null; dirty = $null; newestSource = $null; newestSourceUtc = $null; artifacts = @(); problems = @() }
+# A clean checkout, bound to the commit the build receipt says was built (-Built): HEAD itself, or a descendant whose
+# difference from it is record-only (*.md). Every artifact must also be at least as new as every tracked source file (a
+# later checkout, edit or revert of a source file makes it newer than the build and is refused).
+function Resolve-Source([string]$Name, [string]$Directory, [string[]]$Artifacts, [string]$Built) {
+    $result = [ordered]@{ name = $Name; directory = $Directory; head = $null; branch = $null; dirty = $null; built = $null; recordOnly = @(); newestSource = $null; newestSourceUtc = $null; artifacts = @(); problems = @() }
     if (-not (Test-Path (Join-Path $Directory '.git'))) {
         $result.problems += "$Directory is not a git checkout"
         return $result
@@ -170,6 +190,22 @@ function Resolve-Source([string]$Name, [string]$Directory, [string[]]$Artifacts)
     if ($LASTEXITCODE -ne 0) { $result.problems += "git status failed in $Directory" }
     $result.dirty = $status.Count
     if ($status.Count -gt 0) { $result.problems += "$Directory has $($status.Count) uncommitted or untracked change(s), e.g. $($status[0]): the built artifacts cannot be bound to HEAD" }
+
+    if ($Built -notmatch '^[0-9a-f]{40}$') { $result.problems += "the build receipt gives no $Name commit" }
+    elseif ($result.head) {
+        $result.built = $Built
+        if ($Built -ne $result.head) {
+            Git $Directory merge-base --is-ancestor $Built $result.head | Out-Null
+            if ($LASTEXITCODE -ne 0) { $result.problems += "$Directory was built at $Built, which is not HEAD $($result.head) nor an ancestor of it: rebuild" }
+            else {
+                $changed = @(Git $Directory diff --name-only $Built $result.head)
+                if ($LASTEXITCODE -ne 0) { $result.problems += "git diff $Built $($result.head) failed in $Directory" }
+                $inputs = @($changed | Where-Object { $_ -notlike '*.md' })
+                if ($inputs.Count -gt 0) { $result.problems += "$Directory changed $($inputs.Count) build input(s) since the receipt's build $Built, e.g. $($inputs[0]): rebuild" }
+                else { $result.recordOnly = $changed }
+            }
+        }
+    }
 
     $newest = $null
     foreach ($file in @(Git $Directory ls-files '--' @sourcePatterns)) {
@@ -199,31 +235,81 @@ function Resolve-Source([string]$Name, [string]$Directory, [string[]]$Artifacts)
     return $result
 }
 
-# The SAM libraries benchmark-tas loads must be the SAM checkout's build output, byte for byte.
-function Bind-SamLibraries([string]$BuildDirectory, [string]$LoadDirectory) {
-    $result = [ordered]@{ build = $BuildDirectory; loaded = $LoadDirectory; compared = @(); problems = @() }
-    $libraries = @(Get-ChildItem -LiteralPath $BuildDirectory -Filter 'SAM.*.dll' -ErrorAction SilentlyContinue)
-    foreach ($library in $libraries) {
-        $loaded = Join-Path $LoadDirectory $library.Name
-        if (-not (Test-Path -LiteralPath $loaded)) { continue }
-        $built = Sha $library.FullName
-        $used = Sha $loaded
-        $result.compared += [ordered]@{ name = $library.Name; built = $built; loaded = $used }
-        if ($built -ne $used) { $result.problems += "$loaded differs from the SAM build output $($library.FullName)" }
+function Same-Path([string]$A, [string]$B) {
+    if (-not $A -or -not $B) { return $false }
+    return [string]::Equals([IO.Path]::GetFullPath($A).TrimEnd('\'), [IO.Path]::GetFullPath($B).TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+}
+
+# Verifies the actual files against the receipt Build-S10-Receipt.ps1 wrote after its controlled build. Nothing here
+# writes or amends the receipt: a file that differs from it, or a .dll/.exe it does not list, is refused.
+function Test-Receipt([string]$SamBuild, [string]$BenchmarkDirectory) {
+    $result = [ordered]@{ path = $BuildReceipt; sha256 = (Sha $BuildReceipt); samCommit = $null; runnerCommit = $null; filesChecked = 0; samLibraries = @(); problems = @() }
+    if (-not $result.sha256) {
+        $result.problems += "no build receipt at ${BuildReceipt}: build with Build-S10-Receipt.ps1"
+        return $result
     }
 
-    if (-not ($result.compared | Where-Object { $_.name -eq 'SAM.Analytical.dll' })) { $result.problems += "SAM.Analytical.dll is not both in $BuildDirectory and beside benchmark-tas ($LoadDirectory)" }
+    try { $receipt = [IO.File]::ReadAllText($BuildReceipt) | ConvertFrom-Json }
+    catch {
+        $result.problems += "the build receipt $BuildReceipt is not JSON: $($_.Exception.Message)"
+        return $result
+    }
+
+    if ($receipt.schema -ne 's10-build-receipt/1') {
+        $result.problems += "the build receipt $BuildReceipt is not s10-build-receipt/1 ('$($receipt.schema)')"
+        return $result
+    }
+
+    $result.samCommit = $receipt.sam.commit
+    $result.runnerCommit = $receipt.runner.commit
+    if (-not (Same-Path $receipt.sam.repository $SamRepository)) { $result.problems += "the build receipt is for SAM at '$($receipt.sam.repository)', not $SamRepository" }
+    if (-not (Same-Path $receipt.runner.repository $RunnerRepository)) { $result.problems += "the build receipt is for SAM_Tas at '$($receipt.runner.repository)', not $RunnerRepository" }
+    foreach ($pair in @(@('exe', $Exe), @('harnessDll', [IO.Path]::ChangeExtension($Exe, '.dll')), @('benchmarkExe', $BenchmarkExe), @('benchmarkDll', [IO.Path]::ChangeExtension($BenchmarkExe, '.dll')))) {
+        if (-not (Same-Path $receipt.($pair[0]) $pair[1])) { $result.problems += "$($pair[1]) is not the receipt's $($pair[0]) ('$($receipt.($pair[0]))'): build it with Build-S10-Receipt.ps1" }
+    }
+
+    # Every listed file is as built; nothing unlisted is beside the harness or benchmark-tas.
+    $listed = @{}
+    foreach ($file in @($receipt.files)) {
+        $listed[[IO.Path]::GetFullPath($file.path).ToLowerInvariant()] = $true
+        $actual = Sha $file.path
+        $result.filesChecked++
+        if (-not $actual) { $result.problems += "$($file.path) is in the build receipt but missing" }
+        elseif ($actual -ne $file.sha256) { $result.problems += "$($file.path) ($actual) does not match the build receipt ($($file.sha256)): not the receipt's build" }
+    }
+
+    $present = @($Exe, [IO.Path]::ChangeExtension($Exe, '.dll'), $BenchmarkExe, [IO.Path]::ChangeExtension($BenchmarkExe, '.dll')) + @(Get-ChildItem -LiteralPath (Split-Path $Exe), $BenchmarkDirectory -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.dll', '.exe' } | ForEach-Object { $_.FullName })
+    foreach ($path in @($present | Sort-Object -Unique)) {
+        if (-not $listed.ContainsKey([IO.Path]::GetFullPath($path).ToLowerInvariant())) { $result.problems += "$path is not in the build receipt" }
+    }
+
+    # The SAM libraries the harness and benchmark-tas load: equal to SAM\build, which is the receipt's SAM build.
+    $libraries = @($receipt.samLibraries)
+    foreach ($library in $libraries) {
+        $built = Join-Path $SamBuild $library.name
+        $entry = [ordered]@{ name = $library.name; receipt = $library.sha256; built = (Sha $built) }
+        $result.samLibraries += $entry
+        if ($entry.built -ne $library.sha256) { $result.problems += "$built ($($entry.built)) is not the receipt's SAM build ($($library.sha256))" }
+    }
+
+    foreach ($library in @(Get-ChildItem -LiteralPath @((Split-Path $Exe), $BenchmarkDirectory | Sort-Object -Unique) -Filter 'SAM.*.dll' -ErrorAction SilentlyContinue | Where-Object { Test-Path -LiteralPath (Join-Path $SamBuild $_.Name) })) {
+        $built = Join-Path $SamBuild $library.Name
+        if (-not ($libraries | Where-Object { $_.name -eq $library.Name })) { $result.problems += "$($library.FullName) is a SAM\build library the receipt's build did not rebuild" }
+        elseif ((Sha $library.FullName) -ne (Sha $built)) { $result.problems += "$($library.FullName) differs from the SAM build output $built" }
+    }
+
+    if (-not (($libraries | Where-Object { $_.name -eq 'SAM.Analytical.dll' }) -and (Test-Path -LiteralPath (Join-Path $BenchmarkDirectory 'SAM.Analytical.dll')))) { $result.problems += "SAM.Analytical.dll is not both in the receipt's SAM build and beside benchmark-tas ($BenchmarkDirectory)" }
     return $result
 }
 
 function Provenance {
     $benchmarkDir = Split-Path $BenchmarkExe
-    $runner = Resolve-Source 'runner' $RunnerRepository @($Exe, [IO.Path]::ChangeExtension($Exe, '.dll'), $BenchmarkExe, [IO.Path]::ChangeExtension($BenchmarkExe, '.dll'), (Join-Path $benchmarkDir 'SAM.Analytical.Tas.dll'))
     $samBuild = Join-Path $SamRepository 'build'
+    $receipt = Test-Receipt $samBuild $benchmarkDir
+    $runner = Resolve-Source 'runner' $RunnerRepository @($Exe, [IO.Path]::ChangeExtension($Exe, '.dll'), $BenchmarkExe, [IO.Path]::ChangeExtension($BenchmarkExe, '.dll'), (Join-Path $benchmarkDir 'SAM.Analytical.Tas.dll')) $receipt.runnerCommit
     $samArtifacts = @(Get-ChildItem -LiteralPath $samBuild -Filter 'SAM.*.dll' -ErrorAction SilentlyContinue | Where-Object { Test-Path -LiteralPath (Join-Path $benchmarkDir $_.Name) } | ForEach-Object { $_.FullName })
     if ($samArtifacts.Count -eq 0) { $samArtifacts = @((Join-Path $samBuild 'SAM.Analytical.dll')) }
-    $sam = Resolve-Source 'sam' $SamRepository $samArtifacts
-    $binding = Bind-SamLibraries $samBuild $benchmarkDir
+    $sam = Resolve-Source 'sam' $SamRepository $samArtifacts $receipt.samCommit
 
     # Informational only (not passed to benchmark-tas): the other checkouts the build used.
     $others = [ordered]@{}
@@ -235,14 +321,14 @@ function Provenance {
     }
 
     $rules = Join-Path (Split-Path $Exe) 'calibration-rules.json'
-    $problems = @($runner.problems) + @($sam.problems) + @($binding.problems)
+    $problems = @($receipt.problems) + @($runner.problems) + @($sam.problems)
     $record = [ordered]@{
         utc = (Get-Date).ToUniversalTime().ToString('o'); machine = $env:COMPUTERNAME; phase = $Phase
         exe = $Exe; exeSha256 = (Sha $Exe); harnessDll = [IO.Path]::ChangeExtension($Exe, '.dll'); harnessDllSha256 = (Sha ([IO.Path]::ChangeExtension($Exe, '.dll')))
         benchmarkExe = $BenchmarkExe; benchmarkExeSha256 = (Sha $BenchmarkExe); benchmarkDll = [IO.Path]::ChangeExtension($BenchmarkExe, '.dll'); benchmarkDllSha256 = (Sha ([IO.Path]::ChangeExtension($BenchmarkExe, '.dll')))
         rules = $rules; rulesSha256 = (Sha $rules); engineVersion = $EngineVersion
-        samCommit = $sam.head; runnerCommit = $runner.head; proven = ($problems.Count -eq 0); problems = $problems
-        runner = $runner; sam = $sam; samLibraries = $binding; otherRepositories = $others; powershell = $PSVersionTable.PSVersion.ToString()
+        samCommit = $sam.built; runnerCommit = $runner.built; samHead = $sam.head; runnerHead = $runner.head; proven = ($problems.Count -eq 0); problems = $problems
+        receipt = $receipt; runner = $runner; sam = $sam; otherRepositories = $others; powershell = $PSVersionTable.PSVersion.ToString()
     }
     $record | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $Root "provenance-$Phase.json")
     return $record
