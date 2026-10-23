@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": {
+    "sourceModelName": "s08-fix-box",
+    "sourceModelGuid": "eeebda3b1bee4dc1b9169cf176adc1b2",
+    "sourceFileHash": "sha256:45524172b32f85df89511dd344141023de999faa9552a199e6b49062612acd08",
+    "canonicalModelHash": "sha256:f7c302eba3f109421893fd0c4ff5dfb3dbfc10b387193cb9ed0cf437d741a0c1",
+    "canonicalizationVersion": "1.0.0",
+    "samCommit": "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+    "runnerCommit": "9871f437f679e2e55d0aa2f3ef3479a33524a1f3",
+    "engine": {
+      "kind": "TAS",
+      "name": "Tas",
+      "version": "2.0.0.1",
+      "sdkVersion": null
+    },
+    "route": "Native-TAS",
+    "weather": {
+      "identity": "budapest",
+      "hash": "sha256:472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3"
+    },
+    "designDaySource": "None",
+    "runTimestampUtc": "2026-10-23T18:33:30.060141Z",
+    "durationSeconds": 27.7043566,
+    "state": "Success",
+    "resultSources": [
+      "SAM.Analytical.Tas"
+    ],
+    "warnings": [],
+    "notes": [
+      "Shared gbXML was exported from the source model (no --gbxml supplied)."
+    ]
+  },
+  "model": {
+    "consumptionHeating": {
+      "value": 2037.1340381522775,
+      "unit": "kWh",
+      "available": true
+    },
+    "consumptionCooling": {
+      "value": 994.3502346024811,
+      "unit": "kWh",
+      "available": true
+    },
+    "peakHeatingLoad": {
+      "value": 1.4284979248046874,
+      "unit": "kW",
+      "available": true
+    },
+    "peakHeatingHour": {
+      "value": 7,
+      "unit": "hourOfYear",
+      "available": true
+    },
+    "peakCoolingLoad": {
+      "value": 1.60656640625,
+      "unit": "kW",
+      "available": true
+    },
+    "peakCoolingHour": {
+      "value": 3877,
+      "unit": "hourOfYear",
+      "available": true
+    },
+    "floorArea": {
+      "value": 26.8799991607666,
+      "unit": "m2",
+      "available": true
+    },
+    "volume": {
+      "value": 76.60800170898438,
+      "unit": "m3",
+      "available": true
+    }
+  },
+  "spaces": [
+    {
+      "guid": "5080c00000000000000000000000c001",
+      "name": "FixBox",
+      "area": {
+        "value": 26.880000000000003,
+        "unit": "m2",
+        "available": true
+      },
+      "volume": {
+        "value": 76.608,
+        "unit": "m3",
+        "available": true
+      },
+      "heating": {
+        "designLoad": {
+          "value": 1428.4979248046875,
+          "unit": "W",
+          "available": true
+        },
+        "peakLoad": {
+          "value": 1428.4979248046875,
+          "unit": "W",
+          "available": true
+        },
+        "peakHour": {
+          "value": 7,
+          "unit": "hourOfYear",
+          "available": true
+        },
+        "unmetHours": {
+          "value": 292,
+          "unit": "h",
+          "available": true
+        }
+      },
+      "cooling": {
+        "designLoad": {
+          "value": 1606.56640625,
+          "unit": "W",
+          "available": true
+        },
+        "peakLoad": {
+          "value": 1606.56640625,
+          "unit": "W",
+          "available": true
+        },
+        "peakHour": {
+          "value": 3877,
+          "unit": "hourOfYear",
+          "available": true
+        },
+        "unmetHours": {
+          "value": 9,
+          "unit": "h",
+          "available": true
+        }
+      }
+    }
+  ]
+}

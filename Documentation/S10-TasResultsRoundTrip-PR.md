@@ -28,8 +28,13 @@ accepted; hour and peak definitions documented. Branch `feature/s10-tas-results-
 - **Revision 2, attempt 2** (licensed, owner-authorised 2026-10-23: at most two simulations, new empty root, no retry):
   **completed without an infrastructure failure. Box PASS 59/59; two-zone BLOCKED 94/0/1** on one row, the FixB
   heating design-day hour of day. See "Revision 2 attempt 2".
-- **S10 is not accepted.** Next: independent review of attempt 2, then an owner decision on the one blocked row. Any
-  further licensed execution needs a fresh owner decision; none is authorised by this record.
+- **Attempt 2 independently reviewed** (`SAM-BIM/.review-s10-acc2-20261023/REVIEW.md`, machine-local). The review
+  accepted the execution and evidence, and recommended a narrowly scoped owner-accepted limitation for the one row.
+- **S10 accepted by the owner (2026-10-23) with one declared validation limitation:** FixB Heating
+  `designDayPeak.hourOfDay`. This is not an unqualified full PASS. The row stays BLOCKED, and the two-zone negative
+  control keeps its measured BLOCKED / exit-10 outcome. See "Owner acceptance".
+- Evidence pack committed: `Documentation/S10-Results-evidence/`. Next: independent review of the record and evidence,
+  then final-head CI. No merge, Ready or S11 is authorised by this record, and no further licensed run.
 - No merge, no deployment, no roadmap/handoff change (those need the normal workflow or a fresh owner exception).
 
 ## Owner decisions (2026-10-23, recorded for portability)
@@ -473,7 +478,38 @@ accepted the correction.
 - The FixB heating design-day hour of day has no independent time signal. The HDD condition holds no gains, and FixB's
   heating load is not a full-day tie.
 - The acceptance rule is unchanged: both fixtures PASS, every negative as intended. It is not relaxed here.
-- Resolving the row needs an owner decision, not a code change in this attempt.
+- Resolving the row needs an owner decision, not a code change in this attempt. The decision followed; see "Owner
+  acceptance".
+
+## Owner acceptance (2026-10-23): S10 accepted with one declared validation limitation
+
+Owner decision in chat: "I accept S10 with the single documented validation limitation for FixB Heating
+designDayPeak.hourOfDay identified in the independent attempt-2 review. Preserve the original BLOCKED row and
+negative-control outcome."
+
+- **Label:** S10 accepted with one declared validation limitation. It is **not** an unqualified full PASS.
+- **The limitation:** `SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.hourOfDay` (FixB,
+  `s08-fix-two`), the clock hour of the heating design-day peak.
+  - Nothing independent places the heating design day in time: the captured heating gains are constant zero, and the
+    TBD heating dry bulb is constant.
+  - FixB has 12 exact maxima at alternating slots, whose two values differ by 0.00042724609375 W. This is consistent with
+    numerical noise in an effectively steady load, but that is an inference, not proof of the origin.
+  - Still checked and passing: FixB's heating design-day load, the native peak index and load, the annual load and hour,
+    and every B1a row.
+- **Preserved as measured, unchanged:**
+  - the comparison 94 PASS / 0 FAIL / 1 BLOCKED (exit 11);
+  - S10-C9 unresolved for heating;
+  - the two-zone negatives exit 10, with the unmutated control BLOCKED by that row and the other 51 cases as intended;
+  - all native, run and pack evidence.
+- **Not changed:** code, tolerances, fixtures, comparison statuses, and the general rule that unsupported heating
+  design-day hours BLOCK. A role with a narrower tie set and no time signal stays BLOCKED in any future run. The decision
+  covers this one row of this attempt only.
+- **Carried forward:** the limitation must stay visible in later roadmap, Phase B and release evidence. Phase B is not
+  accepted by this decision, and S11/S12 remain separately gated. Closing the limitation needs independent heating timing
+  evidence and separately authorised work; repeating the unchanged steady fixture would add no time signal.
+- **Evidence:** the attempt-2 pack is committed unchanged as `Documentation/S10-Results-evidence/` (248 files, 38.7 MB;
+  `SHA256SUMS.txt` as independently checked), with a `README.md` that states the limitation and the N/A negative
+  controls. The README is not listed in `SHA256SUMS.txt`.
 
 ## Decisions and assumptions (for review)
 
@@ -522,6 +558,9 @@ The R3/R5 correction changes only `SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validati
 `Run-S10-Results.ps1`, `SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/S10RunnerScriptTests.cs` and this record.
 SAM is reference-only: its eight core libraries were rebuilt into the ignored `SAM\build` with the stamp; no SAM file is
 changed.
+
+The owner-acceptance commit adds only `Documentation/S10-Results-evidence/` (the unchanged attempt-2 pack plus
+`README.md`) and this record. There is no code change.
 
 ## Tests and validation
 
@@ -702,14 +741,16 @@ Prerequisites:
 
 PASS = both fixtures PASS with complete coverage, every calibration check verified, every negative as intended, and the
 produced files and fixtures unchanged by the reads. Evidence: `Documentation/S10-Results-evidence/` (committed); run
-folders machine-local.
+folders machine-local. Attempt 2 did not meet this full-PASS gate. S10 was accepted instead with one declared validation
+limitation by explicit owner decision ("Owner acceptance"); the gate itself is unchanged.
 
 ## Unresolved, risks, limits
 
-- **Blockers after attempt 2 (current):**
-  - The one remaining S10 blocker is `SAM|FixB|Heating|designDayPeak.hourOfDay` on `s08-fix-two`, together with that
-    fixture's negative control. The heating within-day origin has no independent time signal, and FixB's heating
-    design-day load is not a full-day tie. An owner decision is needed.
+- **After attempt 2 and the owner acceptance (current):**
+  - **Declared validation limitation (accepted, still open):** `SAM|FixB|Heating|designDayPeak.hourOfDay` on
+    `s08-fix-two` stays BLOCKED, and so does that fixture's negative control. The heating within-day origin has no
+    independent time signal, and FixB's heating design-day load is not a full-day tie. The owner accepted S10 with this
+    single limitation (see "Owner acceptance"). It must stay visible downstream.
   - Measured in attempt 2, no longer blockers:
     - B1a is produced and checked natively on both fixtures;
     - the two-zone TSD exists;
@@ -753,18 +794,12 @@ folders machine-local.
 
 ## Next step
 
-Independent review of revision 2 attempt 2 (run root `C:\TasOut\s10\acc2`, evidence `SAM-BIM/.s10-acc2-20261023/`, code
-`9871f437` unchanged), recommended as GPT-6 or Claude Opus 5.5, effort High, new session, read-only review mode. The
-review should check:
-- the box PASS 59/59 and its 52 negatives;
-- the two-zone 94/0/1 and the single blocked row;
-- that the two-zone control is blocked only by that row;
-- the hashes and preservation.
+Independent review of the acceptance record and the committed evidence, then final-head CI. Recommended reviewer: GPT-6
+or Claude Opus 5.5, effort High, new session, read-only review mode. The review should check:
+- that `Documentation/S10-Results-evidence/` equals the independently checked attempt-2 pack, against `SHA256SUMS.txt`;
+- that the README and this record state the single limitation and the N/A controls accurately;
+- that the BLOCKED row and the control outcome are preserved unchanged;
+- that the head adds no code change.
 
-The review then frames the **owner decision on the FixB heating design-day hour of day**. Options:
-- supply an independent heating time signal, which would be a revision with its own review;
-- change the acceptance scope for that row explicitly, as an owner decision recorded here;
-- accept S10 as not met.
-
-No criterion is relaxed by this record. Ready, final-head CI, owner merge and the post-merge closeout come only after
-acceptance.
+After that review: the owner decides Ready and merge, then the post-merge `PROJECT_PROGRESS.md` closeout, which must
+carry the limitation. No further Tas run is needed for this decision. S11 stays separately gated.

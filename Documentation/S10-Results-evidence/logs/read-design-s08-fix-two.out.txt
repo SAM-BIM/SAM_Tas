@@ -1,0 +1,1 @@
+TBD 85216403e95869a72c02f60317498fee6d5ee8f7c4faf760afcb75dd760c1db3 -> 85216403e95869a72c02f60317498fee6d5ee8f7c4faf760afcb75dd760c1db3, design-day groups Cooling 'Budapest.Met.Center ANN CLG 0% CONDS DB=>GRad' (1 day(s)), Heating 'Budapest.Met.Center ANN HTG 100% CONDS DB' (1 day(s)), errors 0

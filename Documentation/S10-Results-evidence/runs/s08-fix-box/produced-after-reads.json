@@ -1,0 +1,17 @@
+﻿{
+    "before":  {
+                   "tbd":  "fcc945cbdeb35283fddcc289fc7236e59476b149f2fddf05e9aaa26edfce00cc",
+                   "tsd":  "047a51e97dfd816ce8753646ff7533f5aa7404029a2575fe3eb233dd223d721b",
+                   "samJson":  "c4080fa97d3e1fa7685fe045f37431f71746696cfce8e3343c1e5c5d65fb3291",
+                   "b1a":  "82ecfa5b445c95685a1d962f7a1dd9ab173f0e7adde4c59f2df9b82f8ae321fe"
+               },
+    "after":  {
+                  "tbd":  "fcc945cbdeb35283fddcc289fc7236e59476b149f2fddf05e9aaa26edfce00cc",
+                  "tsd":  "047a51e97dfd816ce8753646ff7533f5aa7404029a2575fe3eb233dd223d721b",
+                  "samJson":  "c4080fa97d3e1fa7685fe045f37431f71746696cfce8e3343c1e5c5d65fb3291",
+                  "b1a":  "82ecfa5b445c95685a1d962f7a1dd9ab173f0e7adde4c59f2df9b82f8ae321fe"
+              },
+    "changed":  [
+
+                ]
+}
