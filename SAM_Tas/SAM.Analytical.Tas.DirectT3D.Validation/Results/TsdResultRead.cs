@@ -30,7 +30,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             tsdZoneArray.externalConductionOpaque, tsdZoneArray.externalConductionGlazing, tsdZoneArray.AHUGain,
         };
 
-        public static readonly tsdZoneArray[] DesignZoneArrays = { tsdZoneArray.heatingLoad, tsdZoneArray.coolingLoad, tsdZoneArray.dryBulbTemp };
+        public static readonly tsdZoneArray[] DesignZoneArrays = { tsdZoneArray.heatingLoad, tsdZoneArray.coolingLoad, tsdZoneArray.dryBulbTemp, tsdZoneArray.lightingGain, tsdZoneArray.equipmentSensibleGain };
 
         public static readonly tsdBuildingArray[] BuildingArrays = { tsdBuildingArray.heatingProfile, tsdBuildingArray.coolingProfile };
 

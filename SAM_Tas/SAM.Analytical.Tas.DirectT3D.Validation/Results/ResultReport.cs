@@ -68,7 +68,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             text.AppendLine("# S10 Tas results round-trip: " + comparison.Verdict + (comparison.Mutation == null ? string.Empty : " (negative: " + comparison.Mutation + ")"));
             text.AppendLine();
             text.AppendLine("Rows " + comparison.Rows.Count + ": PASS " + comparison.Pass + ", FAIL " + comparison.Fail + ", BLOCKED " + comparison.Blocked + ". Exit " + comparison.ExitCode + ".");
-            text.AppendLine("TSD sha256 `" + reference.TsdSha256 + "`, TBD sha256 `" + reference.TbdSha256 + "`, rules sha256 `" + reference.RulesSha256 + "`.");
+            text.AppendLine("TSD sha256 `" + reference.TsdSha256 + "`, TBD sha256 `" + reference.TbdSha256 + "` (design-day coverage read `" + reference.CoverageSha256 + "`), rules sha256 `" + reference.RulesSha256 + "`.");
             text.AppendLine();
             if (reference.Blockers.Count > 0 || comparison.SubjectErrors.Count > 0)
             {

@@ -228,6 +228,56 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
         public B1aDocument B1a { get; set; } = new B1aDocument();
     }
 
+
+    // ---- the TBD design-day coverage (S10 R2) ------------------------------------------------------------------------
+
+    /// <summary>One TBD design day of a group, every field with its reader state (a read that threw is recorded in Detail).</summary>
+    public sealed class DesignCoverageDay
+    {
+        public int Index { get; set; }
+        public string Name { get; set; }
+        public string DayType { get; set; }
+        public NativeField Repetitions { get; set; }
+        public string Detail { get; set; }
+    }
+
+    /// <summary>One TBD design-day group (GetCoolingDesignDay(i) / GetHeatingDesignDay(i)).</summary>
+    public sealed class DesignCoverageGroup
+    {
+        /// <summary>"Cooling" or "Heating".</summary>
+        public string Role { get; set; }
+        public int Index { get; set; }
+        public string Name { get; set; }
+
+        /// <summary>Why the group or its day list could not be read completely; null when it was.</summary>
+        public string Detail { get; set; }
+        public List<DesignCoverageDay> Days { get; set; } = new List<DesignCoverageDay>();
+    }
+
+    /// <summary>
+    /// The design-day groups the TBD asks the sizing run to simulate: the independent expectation of which TSD design-day
+    /// data sets must exist (S10 R2). Read in a fresh process, read-only, by <c>TbdDesignCoverageRead</c>. Unlike an
+    /// enumeration that stops at the first exception, a read that throws is recorded in <see cref="Errors"/> or the group's
+    /// Detail, so unreadable coverage is never mistaken for "no design days".
+    /// </summary>
+    public sealed class TbdDesignCoverage
+    {
+        public const string CurrentSchema = "s10-tbd-design-coverage/1";
+
+        public string Schema { get; set; } = CurrentSchema;
+        public string Path { get; set; }
+        public int ProcessId { get; set; }
+        public string StartedUtc { get; set; }
+        public string ReaderAssembly { get; set; }
+        public string ReaderAssemblySha256 { get; set; }
+        public string Sha256Before { get; set; }
+        public string Sha256After { get; set; }
+
+        /// <summary>Open, enumeration or file problems. Any entry makes the coverage of both roles unreadable.</summary>
+        public List<string> Errors { get; set; } = new List<string>();
+        public List<DesignCoverageGroup> Groups { get; set; } = new List<DesignCoverageGroup>();
+    }
+
     /// <summary>
     /// COM element conversion for the S10 reader, kept COM-free so the offline tests exercise it: a value is a number only
     /// when it is a CLR numeric type; null, text and anything else are unread, never 0.

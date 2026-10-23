@@ -15,6 +15,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
     /// <summary>
     /// The S10 modes. Each licensed read runs in its own process and opens its files read-only:
     /// <list type="bullet">
+    /// <item><c>results-read-design &lt;tbd&gt; &lt;outDir&gt;</c>: the independent TBD design-day coverage (S10 R2) to
+    /// <c>tbd-design-coverage.json</c>, in its own process; an exception is recorded, never taken as the end of a list.</item>
     /// <item><c>results-read &lt;tsd&gt; &lt;tbd&gt; &lt;outDir&gt;</c>: the independent reference read (TSD arrays, TBD sizing,
     /// thermostat and calendar) to <c>tsd-result.json</c> and <c>tbd-snapshot.json</c>.</item>
     /// <item><c>results-subject &lt;model.json&gt; &lt;tsd&gt; &lt;b1a.json&gt; &lt;out.json&gt;</c>: the subject: the saved SAM
@@ -34,6 +36,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
         {
             switch (args[0])
             {
+                case "results-read-design":
+                    return args.Length == 3 ? ReadDesign(args[1], args[2]) : Usage();
                 case "results-read":
                     return args.Length == 4 ? Read(args[1], args[2], args[3]) : Usage();
                 case "results-subject":
@@ -49,7 +53,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
 
         private static int Usage()
         {
-            Console.WriteLine("modes: results-read <tsd> <tbd> <outDir> | results-subject <model.json> <tsd> <b1a.json> <out.json> | results-compare <readDir> <subject.json> <outDir> [rules=<path>] | results-negatives <readDir> <subject.json> <outDir> [rules=<path>] [expect=PASS]");
+            Console.WriteLine("modes: results-read <tsd> <tbd> <outDir> | results-read-design <tbd> <outDir> | results-subject <model.json> <tsd> <b1a.json> <out.json> | results-compare <readDir> <subject.json> <outDir> [rules=<path>] | results-negatives <readDir> <subject.json> <outDir> [rules=<path>] [expect=PASS]");
             return ReadBackExit.Usage;
         }
 
@@ -132,6 +136,32 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             return subject.Errors.Count == 0 ? ReadBackExit.Pass : ReadBackExit.Infrastructure;
         }
 
+        public const string CoverageFile = "tbd-design-coverage.json";
+
+        /// <summary>The independent TBD design-day coverage of a read directory, or null when it was not read (blocks every design-day row).</summary>
+        private static TbdDesignCoverage Coverage(string readDir)
+        {
+            string path = Path.Combine(readDir, CoverageFile);
+            return File.Exists(path) ? SnapshotJson.Read<TbdDesignCoverage>(path) : null;
+        }
+
+        private static int ReadDesign(string tbd, string outDir)
+        {
+            string output = Path.Combine(outDir, CoverageFile);
+            if (File.Exists(output))
+            {
+                Console.WriteLine("ERROR: refusing to overwrite an earlier read in " + outDir);
+                return ReadBackExit.Usage;
+            }
+
+            Directory.CreateDirectory(outDir);
+            TbdDesignCoverage coverage = TbdDesignCoverageRead.Read(tbd);
+            SnapshotJson.Write(coverage, output);
+            Console.WriteLine("TBD " + coverage.Sha256Before + " -> " + coverage.Sha256After + ", design-day groups " + string.Join(", ", coverage.Groups.Select(x => x.Role + " '" + x.Name + "' (" + x.Days.Count + " day(s)" + (x.Detail == null ? string.Empty : ", " + x.Detail) + ")")) + ", errors " + coverage.Errors.Count);
+            foreach (string error in coverage.Errors) Console.WriteLine("ERROR: " + error);
+            return coverage.Errors.Count == 0 && coverage.Groups.All(x => x.Detail == null) ? ReadBackExit.Pass : ReadBackExit.Infrastructure;
+        }
+
         private static CalibrationRules Rules(string path)
         {
             return CalibrationRules.Load(path ?? Path.Combine(AppContext.BaseDirectory, "calibration-rules.json"));
@@ -142,7 +172,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             TsdResultSnapshot tsd = SnapshotJson.Read<TsdResultSnapshot>(Path.Combine(readDir, "tsd-result.json"));
             NativeSnapshot tbd = SnapshotJson.Read<NativeSnapshot>(Path.Combine(readDir, "tbd-snapshot.json"));
             ResultSubjectSnapshot subject = SnapshotJson.Read<ResultSubjectSnapshot>(subjectPath);
-            ResultReferenceModel reference = ResultReference.Build(tsd, tbd, Rules(rulesPath));
+            ResultReferenceModel reference = ResultReference.Build(tsd, tbd, Coverage(readDir), Rules(rulesPath));
             ResultComparison comparison = ResultCompare.Run(reference, subject);
 
             Directory.CreateDirectory(outDir);
@@ -167,6 +197,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             ResultInputs inputs = new ResultInputs
             {
                 TsdJson = File.ReadAllText(Path.Combine(readDir, "tsd-result.json")),
+                CoverageJson = File.Exists(Path.Combine(readDir, CoverageFile)) ? File.ReadAllText(Path.Combine(readDir, CoverageFile)) : null,
                 TbdJson = File.ReadAllText(Path.Combine(readDir, "tbd-snapshot.json")),
                 Rules = Rules(rulesPath),
                 ModelJson = File.ReadAllText(subject.ModelJsonPath),
@@ -184,6 +215,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                 if (copy != null && outcome.Applicable)
                 {
                     if (copy.TsdChanged) SnapshotJson.Write(copy.Tsd, Path.Combine(directory, "tsd-result.mutated.json"));
+                    if (copy.CoverageChanged) SnapshotJson.Write(copy.Coverage, Path.Combine(directory, "tbd-design-coverage.mutated.json"));
                     if (copy.ModelChanged) File.WriteAllText(Path.Combine(directory, "model.mutated.json"), Core.Convert.ToString(copy.Model));
                     if (copy.B1aChanged) File.WriteAllText(Path.Combine(directory, "b1a.mutated.json"), copy.B1a.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
                     if (copy.ModelResultChanged) SnapshotJson.Write(copy.ModelResult, Path.Combine(directory, "model-result.mutated.json"));
@@ -191,7 +223,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
 
                 if (outcome.Comparison != null)
                 {
-                    ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, inputs.Rules);
+                    ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, copy.Coverage, inputs.Rules);
                     ResultReport.Write(directory, reference, outcome.Comparison);
                 }
             }

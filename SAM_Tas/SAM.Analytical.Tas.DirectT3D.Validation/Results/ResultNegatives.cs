@@ -17,6 +17,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
     {
         public string TsdJson { get; set; }
         public string TbdJson { get; set; }
+
+        /// <summary>The independent TBD design-day coverage (<see cref="TbdDesignCoverage"/>), serialised; null when it was not read.</summary>
+        public string CoverageJson { get; set; }
         public CalibrationRules Rules { get; set; }
 
         /// <summary>The workflow's saved SAM model (<c>&lt;tbd&gt;.json</c>).</summary>
@@ -32,10 +35,11 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
     {
         public TsdResultSnapshot Tsd;
         public NativeSnapshot Tbd;
+        public TbdDesignCoverage Coverage;
         public AnalyticalModel Model;
         public JsonNode B1a;
         public SubjectModelResult ModelResult;
-        public bool TsdChanged, ModelChanged, B1aChanged, ModelResultChanged;
+        public bool TsdChanged, CoverageChanged, ModelChanged, B1aChanged, ModelResultChanged;
 
         public static ResultCase From(ResultInputs inputs)
         {
@@ -43,6 +47,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             {
                 Tsd = JsonSerializer.Deserialize<TsdResultSnapshot>(inputs.TsdJson, SnapshotJson.Options),
                 Tbd = JsonSerializer.Deserialize<NativeSnapshot>(inputs.TbdJson, SnapshotJson.Options),
+                Coverage = inputs.CoverageJson == null ? null : JsonSerializer.Deserialize<TbdDesignCoverage>(inputs.CoverageJson, SnapshotJson.Options),
                 Model = Core.Convert.ToSAM<AnalyticalModel>(inputs.ModelJson).FirstOrDefault(),
                 B1a = JsonNode.Parse(inputs.B1aJson),
                 ModelResult = JsonSerializer.Deserialize<SubjectModelResult>(inputs.ModelResultJson, SnapshotJson.Options),
@@ -61,7 +66,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
 
         public ResultComparison Compare(CalibrationRules rules, string mutation, out ResultReferenceModel reference)
         {
-            reference = ResultReference.Build(Tsd, Tbd, rules);
+            reference = ResultReference.Build(Tsd, Tbd, Coverage, rules);
             return ResultCompare.Run(reference, Subject(mutation));
         }
     }
@@ -151,6 +156,22 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             new Spec { Name = "tsd-loads-in-kw", Expected = "BLOCKED", Description = "zone loads divided by 1000 (kW): the balance no longer closes", Apply = (c, t, o) => Loads(c, t, o, "kw") },
             new Spec { Name = "tsd-load-roles-swapped", Expected = "BLOCKED", Description = "zone heating and cooling load arrays swapped: the balance no longer closes", Apply = (c, t, o) => Loads(c, t, o, "swap") },
             new Spec { Name = "tsd-design-day-short", Expected = "BLOCKED", Description = "a design-day series one hour short", Apply = DesignShort },
+
+            // S10 R1: an unexpected design-day bound, a missing native index or a shifted time signal leaves the hour rows unresolved.
+            new Spec { Name = "dd-lower-bound-0", Expected = "BLOCKED", Description = "every design-day series at lower bound 0 (values unchanged)", Apply = (c, t, o) => DesignBound(c, t, o, 0) },
+            new Spec { Name = "dd-lower-bound-2", Expected = "BLOCKED", Description = "every design-day series at lower bound 2 (values unchanged)", Apply = (c, t, o) => DesignBound(c, t, o, 2) },
+            new Spec { Name = "dd-lower-bound-minus-23", Expected = "BLOCKED", Description = "every design-day series at lower bound -23 (values unchanged)", Apply = (c, t, o) => DesignBound(c, t, o, -23) },
+            new Spec { Name = "dd-peak-table-absent", Expected = "BLOCKED", Description = "a role's design-day GetPeakZoneGains not read (no native index evidence)", Apply = DesignTableAbsent },
+            new Spec { Name = "dd-time-signal-shifted", Expected = "BLOCKED", Description = "a role's design-day gain arrays one hour late against the TBD schedule", Apply = DesignSignalShifted },
+
+            // S10 R2: the TBD design-day groups are the expectation; missing, extra, duplicate or unreadable coverage blocks the role.
+            new Spec { Name = "dd-all-datasets-missing", Expected = "BLOCKED", Description = "every TSD design-day data set missing although the TBD holds groups", Apply = (c, t, o) => DesignDatasets(c, t, o, "all") },
+            new Spec { Name = "dd-role-missing", Expected = "BLOCKED", Description = "one role's TSD design-day data sets missing", Apply = (c, t, o) => DesignDatasets(c, t, o, "role") },
+            new Spec { Name = "dd-duplicate-dataset", Expected = "BLOCKED", Description = "a TSD design-day data set duplicated", Apply = (c, t, o) => DesignDatasets(c, t, o, "duplicate") },
+            new Spec { Name = "dd-group-missing", Expected = "BLOCKED", Description = "a TBD design-day group with no TSD data set", Apply = (c, t, o) => DesignCoverage(c, t, o, "extra-group") },
+            new Spec { Name = "dd-unexpected-dataset", Expected = "BLOCKED", Description = "a TSD design-day data set the TBD does not hold", Apply = (c, t, o) => DesignCoverage(c, t, o, "no-group") },
+            new Spec { Name = "dd-coverage-unreadable", Expected = "BLOCKED", Description = "a TBD design-day group that could not be read", Apply = (c, t, o) => DesignCoverage(c, t, o, "unreadable") },
+            new Spec { Name = "dd-coverage-absent", Expected = "BLOCKED", Description = "no TBD design-day coverage read", Apply = (c, t, o) => DesignCoverage(c, t, o, "absent") },
         };
 
         public static IReadOnlyList<string> Names => specs.Select(x => x.Name).ToList();
@@ -526,6 +547,161 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             copy.TsdChanged = true;
             o.IntendedRows.AddRange(t.Reference.Rows.Where(x => x.Layer == "SAM" && x.LoadType == dataset.Role && x.Quantity.StartsWith("designDayPeak", StringComparison.Ordinal)).Select(x => x.Id));
             return dataset.Role + " design-day data set '" + dataset.Name + "' zone '" + dataset.Zones[0].Name + "' " + load + " one element short";
+        }
+
+        // ---- S10 R1/R2 design-day controls ----------------------------------------------------------------------------
+
+        /// <summary>The unmutated reference's derived (not blocked, not no-value) design-day rows of the roles, by quantity prefix.</summary>
+        private static List<ReferenceRow> DesignRows(Targets t, IEnumerable<string> roles, params string[] quantities)
+        {
+            HashSet<string> set = new HashSet<string>(roles, StringComparer.Ordinal);
+            return t.Reference.Rows.Where(x => x.Layer == "SAM" && x.Scope != "model" && set.Contains(x.LoadType) && x.State == ExpectedState.Value && quantities.Any(q => x.Quantity.StartsWith(q, StringComparison.Ordinal))).ToList();
+        }
+
+        /// <summary>The rows that depend on the design-day index convention: positive design-day hours and design-governed legacy indices.</summary>
+        private static List<ReferenceRow> IndexRows(Targets t, IEnumerable<string> roles)
+        {
+            List<ReferenceRow> result = DesignRows(t, roles, "designDayPeak.hourOfDay");
+            foreach (ReferenceRow index in DesignRows(t, roles, "legacy.loadIndex").Where(x => x.Allowed != null))
+            {
+                ReferenceRow sizing = t.Row("SAM", index.Scope, index.LoadType, "legacy.sizingMethod");
+                if (sizing?.Text != null && sizing.Text.EndsWith("Design Day", StringComparison.Ordinal)) result.Add(index);
+            }
+
+            return result;
+        }
+
+        private static List<string> RolesWithDatasets(ResultCase copy) => copy.Tsd.DesignDatasets.Select(x => x.Role).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
+
+        private static string NotApplicable(NegativeOutcome o, string why)
+        {
+            o.Evidence.Add(why);
+            return null;
+        }
+
+        private static string DesignBound(ResultCase copy, Targets t, NegativeOutcome o, int lowerBound)
+        {
+            List<ReferenceRow> rows = IndexRows(t, RolesWithDatasets(copy));
+            if (rows.Count == 0) return NotApplicable(o, "no design-day hour or design-governed legacy index is derived in this input");
+            foreach (TsdDesignDataset dataset in copy.Tsd.DesignDatasets)
+            {
+                foreach (TsdResultZone zone in dataset.Zones)
+                {
+                    foreach (ResultSeries series in zone.Arrays.Values) series.LowerBound = lowerBound;
+                }
+            }
+
+            copy.TsdChanged = true;
+            o.IntendedRows.AddRange(rows.Select(x => x.Id));
+            return "every design-day series at lower bound " + lowerBound + "; " + rows.Count + " hour/index row(s) depend on the convention";
+        }
+
+        private static string DesignTableAbsent(ResultCase copy, Targets t, NegativeOutcome o)
+        {
+            foreach (string role in RolesWithDatasets(copy))
+            {
+                List<ReferenceRow> rows = IndexRows(t, new[] { role });
+                if (rows.Count == 0) continue;
+                foreach (TsdDesignDataset dataset in copy.Tsd.DesignDatasets.Where(x => x.Role == role)) dataset.PeakZoneGains = new NativeTable { Kind = FieldKind.Absent, Detail = "null" };
+                copy.TsdChanged = true;
+                o.IntendedRows.AddRange(rows.Select(x => x.Id));
+                return role + " design-day GetPeakZoneGains absent";
+            }
+
+            return NotApplicable(o, "no role derives a design-day hour or design-governed legacy index");
+        }
+
+        private static string DesignSignalShifted(ResultCase copy, Targets t, NegativeOutcome o)
+        {
+            foreach (string role in RolesWithDatasets(copy))
+            {
+                List<ReferenceRow> rows = DesignRows(t, new[] { role }, "designDayPeak.hourOfDay");
+                if (rows.Count == 0) continue;
+                foreach (TsdResultZone zone in copy.Tsd.DesignDatasets.Where(x => x.Role == role).SelectMany(x => x.Zones))
+                {
+                    foreach (string array in new[] { "lightingGain", "equipmentSensibleGain" })
+                    {
+                        if (!zone.Arrays.TryGetValue(array, out ResultSeries series) || series.Values == null || series.Values.Length == 0) continue;
+                        double[] values = series.Values;
+                        series.Values = new[] { values[values.Length - 1] }.Concat(values.Take(values.Length - 1)).ToArray();
+                    }
+                }
+
+                copy.TsdChanged = true;
+                o.IntendedRows.AddRange(rows.Select(x => x.Id));
+                return role + " design-day gain arrays rotated one element later";
+            }
+
+            return NotApplicable(o, "no role has a verified design-day hour of day (no independent time signal) in this input");
+        }
+
+        private static string DesignDatasets(ResultCase copy, Targets t, NegativeOutcome o, string kind)
+        {
+            List<string> roles = RolesWithDatasets(copy);
+            if (roles.Count == 0) return NotApplicable(o, "the TSD has no design-day data set");
+            if (kind != "all") roles = roles.Take(1).ToList();
+
+            List<ReferenceRow> rows = DesignRows(t, roles, "designDayPeak.", "legacy.");
+            if (rows.Count == 0) return NotApplicable(o, "no design-day or legacy row is derived for " + string.Join(", ", roles));
+            switch (kind)
+            {
+                case "duplicate":
+                    TsdDesignDataset original = copy.Tsd.DesignDatasets.First(x => x.Role == roles[0]);
+                    TsdDesignDataset duplicate = JsonSerializer.Deserialize<TsdDesignDataset>(JsonSerializer.Serialize(original, SnapshotJson.Options), SnapshotJson.Options);
+                    duplicate.Index = copy.Tsd.DesignDatasets.Where(x => x.Role == roles[0]).Max(x => x.Index) + 1;
+                    copy.Tsd.DesignDatasets.Add(duplicate);
+                    break;
+                default:
+                    copy.Tsd.DesignDatasets.RemoveAll(x => roles.Contains(x.Role));
+                    break;
+            }
+
+            copy.TsdChanged = true;
+            o.IntendedRows.AddRange(rows.Select(x => x.Id));
+            return kind == "duplicate" ? roles[0] + " data set '" + copy.Tsd.DesignDatasets.Last().Name + "' duplicated" : "TSD design-day data sets of " + string.Join(", ", roles) + " removed (the TBD still holds their groups)";
+        }
+
+        private static string DesignCoverage(ResultCase copy, Targets t, NegativeOutcome o, string kind)
+        {
+            if (kind == "absent")
+            {
+                List<ReferenceRow> all = DesignRows(t, new[] { ResultReference.Cooling, ResultReference.Heating }, "designDayPeak.", "legacy.");
+                if (copy.Coverage == null || all.Count == 0) return NotApplicable(o, "no coverage read, or no design-day or legacy row derived");
+                copy.Coverage = null;
+                copy.CoverageChanged = true;
+                o.IntendedRows.AddRange(all.Select(x => x.Id));
+                return "TBD design-day coverage absent";
+            }
+
+            List<string> roles = RolesWithDatasets(copy);
+            if (copy.Coverage == null || roles.Count == 0) return NotApplicable(o, "no coverage read or no design-day data set");
+            string role = roles[0];
+            List<ReferenceRow> rows = DesignRows(t, new[] { role }, "designDayPeak.", "legacy.");
+            if (rows.Count == 0) return NotApplicable(o, "no design-day or legacy row derived for " + role);
+            DesignCoverageGroup group = copy.Coverage.Groups.First(x => x.Role == role);
+            string applied;
+            switch (kind)
+            {
+                case "extra-group":
+                    DesignCoverageGroup extra = JsonSerializer.Deserialize<DesignCoverageGroup>(JsonSerializer.Serialize(group, SnapshotJson.Options), SnapshotJson.Options);
+                    extra.Name = group.Name + " (S10 extra expected group)";
+                    extra.Index = copy.Coverage.Groups.Where(x => x.Role == role).Max(x => x.Index) + 1;
+                    copy.Coverage.Groups.Add(extra);
+                    applied = role + " TBD group '" + extra.Name + "' added, with no TSD data set";
+                    break;
+                case "no-group":
+                    copy.Coverage.Groups.RemoveAll(x => x.Role == role);
+                    applied = role + " TBD groups removed while the TSD keeps its data sets";
+                    break;
+                default:
+                    group.Detail = "design day 0 unreadable: COMException: The server threw an exception.";
+                    applied = role + " TBD group '" + group.Name + "' unreadable";
+                    break;
+            }
+
+            copy.CoverageChanged = true;
+            o.IntendedRows.AddRange(rows.Select(x => x.Id));
+            return applied;
         }
     }
 }

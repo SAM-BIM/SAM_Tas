@@ -6,7 +6,8 @@
 #   run      (licensed; owner-approved OD-1) check the committed fixtures (ReadBack/Fixtures/SHA256SUMS.txt) and the
 #            weather EPW against their hashes; refuse a non-empty run folder; then per fixture: ONE benchmark-tas
 #            simulation on the unchanged producer route, the independent reference read (results-read: TSD + TBD, fresh
-#            process, read-only), the subject capture (results-subject: saved model, production model-level converter on
+#            process, read-only), the TBD design-day coverage (results-read-design, its own fresh process, read-only),
+#            the subject capture (results-subject: saved model, production model-level converter on
 #            the same TSD, B1a; fresh process, read-only), the COM-free comparison and the COM-free negative controls on
 #            copies. Two fixtures = two simulations; nothing else is executed.
 #   offline  (COM-free) recompute the comparison and the negative controls of an existing root into compare-replay/ and
@@ -133,6 +134,7 @@ if ($Phase -eq 'run') {
         $produced | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $run 'produced.json')
 
         Step "read-$m" $Exe @('results-read', $tsd, $tbd, (Join-Path $run 'read')) | Out-Null
+        Step "read-design-$m" $Exe @('results-read-design', $tbd, (Join-Path $run 'read')) | Out-Null
         Step "subject-$m" $Exe @('results-subject', $samJson, $tsd, $b1a, (Join-Path $run 'subject.json')) | Out-Null
         Step "compare-$m" $Exe @('results-compare', (Join-Path $run 'read'), (Join-Path $run 'subject.json'), (Join-Path $run 'compare')) | Out-Null
         Step "negatives-$m" $Exe @('results-negatives', (Join-Path $run 'read'), (Join-Path $run 'subject.json'), (Join-Path $run 'negatives'), 'expect=PASS') | Out-Null

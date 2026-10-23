@@ -139,7 +139,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         public void UnitsUnresolved_BlocksTheLoadRows_NeverPasses()
         {
             NegativeOutcome outcome = ResultNegatives.Run(S10SyntheticTriple.Inputs()).Single(x => x.Case == "tsd-loads-in-kw");
-            ResultReferenceModel reference = ResultReference.Build(outcome.Copy.Tsd, outcome.Copy.Tbd, S10SyntheticTriple.Inputs().Rules);
+            ResultReferenceModel reference = ResultReference.Build(outcome.Copy.Tsd, outcome.Copy.Tbd, outcome.Copy.Coverage, S10SyntheticTriple.Inputs().Rules);
 
             Assert.That(reference.Checks.Single(x => x.Id == "S10-C5").Status, Is.EqualTo("unresolved"));
             Assert.That(outcome.Verdict, Is.Not.EqualTo("PASS"));
@@ -150,7 +150,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         public void ASubjectThatCouldNotBeCaptured_BlocksEveryRow()
         {
             ResultCase copy = ResultCase.From(S10SyntheticTriple.Inputs());
-            ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, S10SyntheticTriple.Inputs().Rules);
+            ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, copy.Coverage, S10SyntheticTriple.Inputs().Rules);
             ResultSubjectSnapshot subject = copy.Subject(null);
             subject.Errors.Add("the TSD changed during the subject capture");
 
@@ -170,6 +170,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             System.IO.Directory.CreateDirectory(read);
             System.IO.File.WriteAllText(System.IO.Path.Combine(read, "tsd-result.json"), inputs.TsdJson);
             System.IO.File.WriteAllText(System.IO.Path.Combine(read, "tbd-snapshot.json"), inputs.TbdJson);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(read, "tbd-design-coverage.json"), inputs.CoverageJson);
             string model = System.IO.Path.Combine(root, "fixture.json"), b1a = System.IO.Path.Combine(root, "b1a.json");
             System.IO.File.WriteAllText(model, inputs.ModelJson);
             System.IO.File.WriteAllText(b1a, inputs.B1aJson);
@@ -185,6 +186,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             ResultReferenceModel reference = ResultReference.Build(
                 Validation.ReadBack.SnapshotJson.Read<TsdResultSnapshot>(System.IO.Path.Combine(read, "tsd-result.json")),
                 Validation.ReadBack.SnapshotJson.Read<Validation.ReadBack.NativeSnapshot>(System.IO.Path.Combine(read, "tbd-snapshot.json")),
+                Validation.ReadBack.SnapshotJson.Read<TbdDesignCoverage>(System.IO.Path.Combine(read, "tbd-design-coverage.json")),
                 inputs.Rules);
 
             Assert.That(ResultCompare.Run(reference, reloaded).Verdict, Is.EqualTo("PASS"));

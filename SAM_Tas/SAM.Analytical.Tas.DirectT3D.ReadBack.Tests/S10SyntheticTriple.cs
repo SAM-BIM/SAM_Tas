@@ -35,6 +35,10 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         public static double LowerLimit(int hour) => hour % 24 < 7 || hour % 24 >= 19 ? 16 : 21;
         public const double UpperLimit = 26;
 
+        /// <summary>The hourly lighting schedule of every internal condition (TBD ticLG shape; factor = W/m2), hour-varying so it can place a design day in time.</summary>
+        public static double LightingShape(int hour) => hour % 24 >= 8 && hour % 24 < 18 ? 0.8 : 0.1;
+        public const double LightingFactor = 10;
+
         public sealed class Zone
         {
             public string Name;
@@ -76,7 +80,26 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
 
         private static ResultSeries Series(double[] values) => ResultSeries.Of((double[])values.Clone(), 1);
 
-        public static TsdResultSnapshot Tsd(List<Zone> zones)
+        /// <summary>A GetPeakZoneGains-like table: row 0 zone number, row 1 the value, row 2 the CLR index (0 for a zero peak), lower bounds 0.</summary>
+        private static NativeTable Table(IList<(double value, int index)> columns)
+        {
+            NativeTable table = new NativeTable { Kind = FieldKind.Finite, LowerBounds = new[] { 0, 0 }, Lengths = new[] { 3, columns.Count } };
+            table.Cells.Add(columns.Select((x, i) => NativeField.Of(i + 1)).ToList());
+            table.Cells.Add(columns.Select(x => NativeField.Of(x.value)).ToList());
+            table.Cells.Add(columns.Select(x => NativeField.Of(x.index)).ToList());
+            return table;
+        }
+
+        /// <summary>The peak Tas reports: max and the CLR index (lower bound 1) of the chosen tie; zone A cooling reports the later tie.</summary>
+        private static (double value, int index) NativePeak(Zone zone, double[] values)
+        {
+            double max = values.Max();
+            if (max == 0) return (0, 0);
+            int position = values == zone.Cooling && zone.Name == ZoneA ? CoolingTieA2 : Array.IndexOf(values, max);
+            return (max, position + 1);
+        }
+
+        public static TsdResultSnapshot Tsd(List<Zone> zones, bool designDays = true)
         {
             TsdResultSnapshot result = new TsdResultSnapshot { Path = "synthetic.tsd", Sha256Before = "synthetic", Sha256After = "synthetic", FirstDay = NativeField.Of(1), LastDay = NativeField.Of(365) };
             double[] heating = new double[8760], cooling = new double[8760];
@@ -106,8 +129,10 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
 
             result.Building["heatingProfile"] = Series(heating);
             result.Building["coolingProfile"] = Series(cooling);
+            result.AnnualPeakZoneGains["heatingLoad"] = Table(zones.Select(x => NativePeak(x, x.Heating)).ToList());
+            result.AnnualPeakZoneGains["coolingLoad"] = Table(zones.Select(x => NativePeak(x, x.Cooling)).ToList());
 
-            foreach (string role in new[] { ResultReference.Cooling, ResultReference.Heating })
+            foreach (string role in designDays ? new[] { ResultReference.Cooling, ResultReference.Heating } : new string[0])
             {
                 TsdDesignDataset dataset = new TsdDesignDataset { Role = role, Index = 0, Name = role == ResultReference.Cooling ? "CDD" : "HDD" };
                 int i = 1;
@@ -117,16 +142,33 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
                     item.Arrays["heatingLoad"] = Series(role == ResultReference.Heating ? zone.DesignHeating : new double[24]);
                     item.Arrays["coolingLoad"] = Series(role == ResultReference.Cooling ? zone.DesignCooling : new double[24]);
                     item.Arrays["dryBulbTemp"] = Series(Enumerable.Repeat(20.0, 24).ToArray());
+                    item.Arrays["lightingGain"] = Series(Enumerable.Range(0, 24).Select(h => zone.FloorArea * LightingFactor * LightingShape(h)).ToArray());
+                    item.Arrays["equipmentSensibleGain"] = Series(new double[24]);
                     dataset.Zones.Add(item);
                 }
 
+                dataset.PeakZoneGains = Table(zones.Select(x => NativePeak(x, role == ResultReference.Heating ? x.DesignHeating : x.DesignCooling)).ToList());
                 result.DesignDatasets.Add(dataset);
             }
 
             return result;
         }
 
-        public static NativeSnapshot Tbd(List<Zone> zones)
+        /// <summary>
+        /// The TBD design-day coverage: one cooling group "CDD" and one heating group "HDD" (one day each, day types CDD and
+        /// HDD, 1 repetition), or, without design days, a completely read TBD with no group.
+        /// </summary>
+        public static TbdDesignCoverage Coverage(bool designDays = true)
+        {
+            TbdDesignCoverage result = new TbdDesignCoverage { Path = "synthetic.tbd", Sha256Before = "synthetic", Sha256After = "synthetic" };
+            if (!designDays) return result;
+            result.Groups.Add(new DesignCoverageGroup { Role = ResultReference.Cooling, Index = 0, Name = "CDD", Days = { new DesignCoverageDay { Index = 0, Name = "CDD day", DayType = "CDD", Repetitions = NativeField.Of(1) } } });
+            result.Groups.Add(new DesignCoverageGroup { Role = ResultReference.Heating, Index = 0, Name = "HDD", Days = { new DesignCoverageDay { Index = 0, Name = "HDD day", DayType = "HDD", Repetitions = NativeField.Of(1) } } });
+            return result;
+        }
+
+        /// <param name="heatingTimeSignal">False gives the heating design day's condition no gains, as in the S08 PR-C fixtures.</param>
+        public static NativeSnapshot Tbd(List<Zone> zones, bool heatingTimeSignal = true)
         {
             NativeSnapshot result = new NativeSnapshot { Calendar = new NativeCalendar() };
             result.Reader.TbdSha256Before = result.Reader.TbdSha256After = "synthetic";
@@ -136,7 +178,10 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
                 NativeInternalCondition ic = new NativeInternalCondition { Name = "IC " + zone.Name, DayTypes = new List<string> { "Weekday", "Saturday", "Sunday", "CDD" } };
                 ic.ThermostatProfiles["ticLL"] = Hourly(LowerLimit);
                 ic.ThermostatProfiles["ticUL"] = Hourly(h => UpperLimit);
-                result.Zones.Add(new NativeZone { Name = zone.Name, Guid = zone.Guid.ToString("D"), MaxHeatingLoad = NativeField.Of(zone.MaxHeating), MaxCoolingLoad = NativeField.Of(zone.MaxCooling), InternalConditions = { ic } });
+                ic.GainProfiles["ticLG"] = Hourly(LightingShape, LightingFactor);
+                NativeInternalCondition hdd = new NativeInternalCondition { Name = "IC " + zone.Name + " - HDD", DayTypes = new List<string> { "HDD" } };
+                hdd.GainProfiles["ticLG"] = heatingTimeSignal ? Hourly(LightingShape, LightingFactor) : Hourly(h => 0);
+                result.Zones.Add(new NativeZone { Name = zone.Name, Guid = zone.Guid.ToString("D"), MaxHeatingLoad = NativeField.Of(zone.MaxHeating), MaxCoolingLoad = NativeField.Of(zone.MaxCooling), InternalConditions = { ic, hdd } });
             }
 
             result.CoolingDesignDays.Add(new NativeDesignDayGroup { Index = 1, Name = "CDD", Days = { new NativeDesignDay { Index = 1, Repetitions = NativeField.Of(1) } } });
@@ -144,9 +189,9 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             return result;
         }
 
-        private static NativeProfile Hourly(Func<int, double> value)
+        private static NativeProfile Hourly(Func<int, double> value, double factor = 1)
         {
-            NativeProfile profile = new NativeProfile { Kind = FieldKind.Finite, Type = "hourly", TypeCode = 2, Factor = NativeField.Of(1), Hourly = new Dictionary<int, NativeField>() };
+            NativeProfile profile = new NativeProfile { Kind = FieldKind.Finite, Type = "hourly", TypeCode = 2, Factor = NativeField.Of(factor), Hourly = new Dictionary<int, NativeField>() };
             for (int slot = 1; slot <= 24; slot++) profile.Hourly[slot] = NativeField.Of(value(slot - 1));
             return profile;
         }
@@ -170,19 +215,19 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             return (max, Array.IndexOf(values, max));
         }
 
-        private static SpaceSimulationResult Result(Zone zone, LoadType loadType, int annualHour)
+        private static SpaceSimulationResult Result(Zone zone, LoadType loadType, int annualHour, bool designDays)
         {
             bool heating = loadType == LoadType.Heating;
-            double[] annual = heating ? zone.Heating : zone.Cooling, design = heating ? zone.DesignHeating : zone.DesignCooling;
+            double[] annual = heating ? zone.Heating : zone.Cooling, design = designDays ? (heating ? zone.DesignHeating : zone.DesignCooling) : null;
             (double annualMax, _) = Max(annual);
-            (double designMax, int designPosition) = Max(design);
+            (double designMax, int designPosition) = design == null ? (double.NaN, -1) : Max(design);
 
             SpaceSimulationResult result = new SpaceSimulationResult(zone.Name, ResultReference.TasSource, zone.Guid.ToString("B").ToUpperInvariant());
             result.SetValue(SpaceSimulationResultParameter.LoadType, loadType.Text());
             result.SetValue(SpaceSimulationResultParameter.AnnualPeak, annualMax == 0 ? new SpaceLoadPeak(LoadPeakBasis.AnnualSimulation, 0) : new SpaceLoadPeak(LoadPeakBasis.AnnualSimulation, annualMax) { HourOfYear = annualHour, HourOfDay = annualHour % 24 });
-            result.SetValue(SpaceSimulationResultParameter.DesignDayPeak, designMax == 0 ? new SpaceLoadPeak(LoadPeakBasis.DesignDay, 0) { DesignDayName = heating ? "HDD" : "CDD" } : new SpaceLoadPeak(LoadPeakBasis.DesignDay, designMax) { HourOfDay = designPosition % 24, DesignDayName = heating ? "HDD" : "CDD" });
+            if (designDays) result.SetValue(SpaceSimulationResultParameter.DesignDayPeak, designMax == 0 ? new SpaceLoadPeak(LoadPeakBasis.DesignDay, 0) { DesignDayName = heating ? "HDD" : "CDD" } : new SpaceLoadPeak(LoadPeakBasis.DesignDay, designMax) { HourOfDay = designPosition % 24, DesignDayName = heating ? "HDD" : "CDD" });
 
-            bool designGoverns = !(annualMax > designMax);
+            bool designGoverns = designDays && !(annualMax > designMax);
             double governing = designGoverns ? designMax : annualMax;
             int index = governing == 0 ? 0 : designGoverns ? designPosition + 1 : annualHour + 1;
             result.SetValue(SpaceSimulationResultParameter.SizingMethod, (designGoverns ? (heating ? SizingMethod.HDD : SizingMethod.CDD) : SizingMethod.Simulation).Text());
@@ -193,7 +238,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             return result;
         }
 
-        public static AnalyticalModel Model(List<Zone> zones)
+        public static AnalyticalModel Model(List<Zone> zones, bool designDays = true)
         {
             AdjacencyCluster cluster = new AdjacencyCluster();
             foreach (Zone zone in zones)
@@ -205,7 +250,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
 
                 // Zone A cooling has two tied maxima: the importer may hold either; this one holds the later.
                 int heatingHour = Max(zone.Heating).first, coolingHour = zone.Name == ZoneA ? CoolingTieA2 : Max(zone.Cooling).first;
-                foreach (SpaceSimulationResult result in new[] { Result(zone, LoadType.Heating, heatingHour), Result(zone, LoadType.Cooling, coolingHour) })
+                foreach (SpaceSimulationResult result in new[] { Result(zone, LoadType.Heating, heatingHour, designDays), Result(zone, LoadType.Cooling, coolingHour, designDays) })
                 {
                     cluster.AddObject(result);
                     cluster.AddRelation(space, result);
@@ -267,15 +312,18 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         }
 
         /// <summary>The serialised inputs of the consistent triple (the model goes through SAM JSON, as the workflow saves it).</summary>
-        public static ResultInputs Inputs()
+        /// <param name="designDays">False: the TBD holds no design-day group, the TSD no data set and SAM no design-day peak (a justified absence).</param>
+        /// <param name="heatingTimeSignal">False: the heating design day's condition has no gains, as in the S08 PR-C fixtures.</param>
+        public static ResultInputs Inputs(bool designDays = true, bool heatingTimeSignal = true)
         {
             List<Zone> zones = Zones();
-            AnalyticalModel model = Model(zones);
+            AnalyticalModel model = Model(zones, designDays);
             AnalyticalModelSimulationResult modelResult = ModelResult(zones);
             return new ResultInputs
             {
-                TsdJson = JsonSerializer.Serialize(Tsd(zones), SnapshotJson.Options),
-                TbdJson = JsonSerializer.Serialize(Tbd(zones), SnapshotJson.Options),
+                TsdJson = JsonSerializer.Serialize(Tsd(zones, designDays), SnapshotJson.Options),
+                TbdJson = JsonSerializer.Serialize(Tbd(zones, heatingTimeSignal), SnapshotJson.Options),
+                CoverageJson = JsonSerializer.Serialize(Coverage(designDays), SnapshotJson.Options),
                 Rules = CalibrationRules.Load(Evidence.Rules),
                 ModelJson = Core.Convert.ToString(model),
                 B1aJson = B1a(model, modelResult),

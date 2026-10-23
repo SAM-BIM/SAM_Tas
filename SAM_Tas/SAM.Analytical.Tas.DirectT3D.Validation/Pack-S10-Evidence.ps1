@@ -56,6 +56,7 @@ foreach ($m in 's08-fix-box', 's08-fix-two') {
     Put (Join-Path $run 'fixture.timing.csv') "runs\$m\fixture.timing.csv"
     Put (Join-Path $run 'read\tsd-result.json') "runs\$m\read\tsd-result.json" -Gzip
     Put (Join-Path $run 'read\tbd-snapshot.json') "runs\$m\read\tbd-snapshot.json" -Gzip
+    Put (Join-Path $run 'read\tbd-design-coverage.json') "runs\$m\read\tbd-design-coverage.json"
     Put (Join-Path $run 'subject.json') "runs\$m\subject.json" -Gzip
     foreach ($d in 'compare', 'compare-replay') {
         Put (Join-Path $run "$d\report.md") "runs\$m\$d\report.md"

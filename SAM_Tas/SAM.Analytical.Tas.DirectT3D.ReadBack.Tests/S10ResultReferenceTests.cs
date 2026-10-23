@@ -130,11 +130,12 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         public void MissingDesignDayGroup_BlocksTheDesignDayRows()
         {
             ResultCase copy = ResultCase.From(S10SyntheticTriple.Inputs());
-            copy.Tbd.HeatingDesignDays.Clear();
+            copy.Coverage.Groups.RemoveAll(x => x.Role == "Heating");
 
-            ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, S10SyntheticTriple.Inputs().Rules);
+            ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, copy.Coverage, S10SyntheticTriple.Inputs().Rules);
 
-            Assert.That(reference.Checks.Single(x => x.Id == "S10-C7").Status, Is.EqualTo("unresolved"));
+            Assert.That(reference.Checks.Single(x => x.Id == "S10-C10").Status, Is.EqualTo("unresolved"));
+            Assert.That(reference.Checks.Single(x => x.Id == "S10-C10").Answer, Does.Contain("in the TSD but not a TBD group: 'HDD'"));
             Assert.That(reference.Rows.Where(x => x.LoadType == "Heating" && x.Quantity.StartsWith("designDayPeak", StringComparison.Ordinal)).Select(x => x.State), Is.All.EqualTo(ExpectedState.Blocked));
             Assert.That(reference.Rows.Where(x => x.LoadType == "Cooling" && x.Quantity == "designDayPeak.load").Select(x => x.State), Is.All.EqualTo(ExpectedState.Value));
         }
@@ -144,7 +145,7 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         {
             ResultCase copy = ResultCase.From(S10SyntheticTriple.Inputs());
 
-            ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, CalibrationRules.None());
+            ResultReferenceModel reference = ResultReference.Build(copy.Tsd, copy.Tbd, copy.Coverage, CalibrationRules.None());
 
             Assert.That(reference.Blockers, Has.Some.Contains("N-5"));
             Assert.That(reference.Rows.Select(x => x.State), Is.All.EqualTo(ExpectedState.Blocked));

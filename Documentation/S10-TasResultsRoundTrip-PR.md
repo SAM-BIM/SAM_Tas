@@ -7,8 +7,10 @@ accepted; hour and peak definitions documented. Branch `feature/s10-tas-results-
 
 ## Status
 
-- **Revision 1** (code and offline tests, no licensed step): implemented, built and tested locally. Tested content SHA
-  and results: see "Tests and validation". Awaiting independent review before revision 2.
+- **Revision 1** (code and offline tests, no licensed step): first tested at content `77ac1cda` (record head `b607d529`);
+  the independent review returned **REVISE** with two P1 findings (R1, R2). **Revision 1 correction** (this commit series)
+  closes both offline; see "Revision 1 correction". Tested content SHA and results: "Tests and validation". Awaiting the
+  independent re-review of revision 1 before revision 2.
 - **Revision 2** (licensed acceptance): not started. It runs only after revision 1 is accepted: exactly the two approved
   fixture simulations plus read-only reads and offline comparisons (OD-1). Nothing licensed was executed for revision 1.
 - No merge, no deployment, no roadmap/handoff change (those need the normal workflow or a fresh owner exception).
@@ -107,7 +109,7 @@ a right load at a wrong hour FAILs only the hour row (tested).
    - `ResultCompare.cs` (COM-free): every reference row is required (complete coverage by construction); FAIL when the
      subject lacks a value, BLOCKED when the reference is blocked or the subject capture failed; verdict PASS only when
      every row passes; exit 0/10/11.
-   - `ResultNegatives.cs` (COM-free): 28 negative controls on copies plus an unmutated control (list below).
+   - `ResultNegatives.cs` (COM-free): 28 negative controls on copies plus an unmutated control (list below); the correction adds 12 design-day controls (40 in all).
    - `ResultReport.cs`, `ResultsRun.cs` (modes `results-read`, `results-subject`, `results-compare`, `results-negatives`;
      `results-subject` is the only caller of the production `ToSAM_AnalyticalModelSimulationResult`, tested), `Program.cs`
      dispatch, `Run-S10-Results.ps1` (phases `run` licensed / `offline` replay; fixture and EPW hashes checked first; a
@@ -127,6 +129,73 @@ consumption off by 1e-6 relative, captured model peak hour +1, a non-maximal "ti
 non-Tas-source space result, a missing B1a metric (all FAIL); part-year TSD, stub TSD, non-unique zone name, negative,
 unread, NaN, truncated (8759), lower-bound-0 and absent load arrays, absent building profile, zone loads in kW, swapped
 load arrays, a design-day series one hour short (all BLOCKED). The forbidden-API source scan has its own negative test.
+Correction (all BLOCKED through only the dependent rows): design-day series at lower bound 0, 2 and -23, a role's
+design-day `GetPeakZoneGains` absent, a role's design-day gain arrays one hour late, every data set missing, one role
+missing, a duplicate data set, an expected TBD group without a data set, a data set the TBD does not hold, an unreadable
+TBD group, no coverage read.
+
+## Revision 1 correction (independent review R1/R2, 2026-10-23)
+
+Review: `SAM-BIM/.review-s10-r1-20261023/REVIEW.md` (machine-local, with its probe). Both findings were reproduced by the
+review probe at `77ac1cda`: the unmodified control and three design-day lower bounds (0, 2, -23) all PASS 95/95 with C7
+verified (R1), and deleting every TSD design-day data set while the TBD keeps its groups, with SAM omitting the same
+outputs, PASS 95/95 with C7 not-exercised (R2).
+
+**R2, design-day coverage (new check S10-C10).** The expectation is now independent of the TSD:
+- `results-read-design` (new COM reader `Results/TbdDesignCoverageRead.cs`, its own fresh process, read-only, sha256
+  before/after) reads the TBD design-day groups to `tbd-design-coverage.json`.
+- A null ends a list. An exception, or reaching the enumeration bound, is recorded as unreadable, never as the end of the
+  list. The merged S08 `TbdReadBack` (unchanged) takes an exception as the end of the list, which is why it is not used for
+  coverage.
+- Per role, every TBD group needs exactly one TSD data set of the same role and exact name, and no TSD data set may be
+  unexpected.
+- The following BLOCK that role's design-day rows (`designDayPeak.*`) and legacy rows (`legacy.*`), whatever the subject
+  holds: missing groups, extra data sets, duplicate names, unnamed data sets, unreadable groups or days, read errors, and a
+  coverage that was never read.
+- No design days is accepted only when the coverage was read completely and holds no group of the role.
+- The name correspondence is required and checked, not assumed. It is first observed on the acceptance TSDs, and a
+  mismatch stays BLOCKED.
+- C7 (series shape and expected length) now takes the expected length from the matched coverage group.
+
+**R1, design-day index and day origin (new check S10-C9, per role).** The convention is established only from evidence:
+- **Index**:
+  - Every design-day series must be at the N-5 lower bound 1. Another bound is never taken as evidence of another
+    convention.
+  - The (value, index) rows of Tas's own `GetPeakZoneGains` are located on the annual tables. There N-5 fixes the index as
+    the CLR index, and exactly one row pair must fit every positive annual zone peak.
+  - Each design data set's table must then hold every positive design-day maximum and the CLR index of one of its tied
+    elements.
+- **Day origin**: an hour-varying TBD hourly gain schedule (`ticLG`/`ticESG`, x factor, N-5 hourly slot) of the condition
+  carrying the design days' day type must match the TSD design-day `lightingGain`/`equipmentSensibleGain` at offset 0 only
+  (index 1 = 00:00-01:00, `ResultReference.Offsets`). Constant schedules are no evidence. Any other set of fitting offsets
+  is a contradiction.
+- **Blocking, hours kept separate from loads**:
+  - Without index evidence, the design-day hour of day and the design-governed `legacy.loadIndex` are BLOCKED.
+  - Without a time signal, only the design-day hour of day is BLOCKED.
+  - Design-day loads, names, the sizing method, the legacy load, annual-governed indices and a zero peak's absent hour do
+    not depend on the convention and keep their verdict.
+- The importer and agreement with it are never used.
+- `TsdResultRead` now also reads the design-day `lightingGain` and `equipmentSensibleGain` arrays.
+
+**Evidence that the regressions catch the reviewed code.** The new scenarios, written against the `77ac1cda` API and run
+on an extracted copy of `77ac1cda` (machine-local:
+`SAM-BIM/.s10-r1-correction-20261023/old-code-regressions/`), fail on 7 of 9 checks there:
+
+| Scenario | `77ac1cda` | Corrected |
+|---|---|---|
+| Lower bound 0, 2, -23 | PASS 95/95 each | BLOCKED |
+| All data sets missing, subject omits them | PASS | BLOCKED |
+| Extra expected group | PASS | BLOCKED |
+| Duplicate data set | PASS | BLOCKED |
+| One role missing | FAIL, via the subject only | BLOCKED |
+| Unexpected data set | already BLOCKED (name match) | BLOCKED |
+| Justified no-design-day control | PASS | PASS |
+
+The review probe, re-run with only the reference's new coverage argument added
+(`SAM-BIM/.s10-r1-correction-20261023/probe-rerun/`):
+- control PASS 95/95, with C7, C9 and C10 verified;
+- lower bounds 0, 2 and -23: BLOCKED 91/95 each, C9 unresolved, exactly the four hour/index rows;
+- all data sets missing: BLOCKED 71/95, C10 unresolved, all 24 design-day and legacy rows.
 
 ## Decisions and assumptions (for review)
 
@@ -139,10 +208,11 @@ load arrays, a design-day series one hour short (all BLOCKED). The forbidden-API
 - **Identity**: SAM result <-> TSD zone by `Reference` = zone GUID (compared as GUIDs, not text); SAM space <-> zone by
   unique exact name with equal counts; B1a space <-> SAM space by GUID and name; TBD zone <-> TSD zone by GUID. Anything
   else is BLOCKED (reference) or FAIL (subject).
-- **Design-day shape [U]**: a data set's series must be complete, finite, non-negative, equal in lower bound and length
-  across zones, and of length 24 x (TBD design days of the same role and name) or 24 x (their repetitions); the hour of
-  day is position mod 24 (series day-aligned). This is measured on the acceptance TSDs; another native shape BLOCKS the
-  design-day and legacy rows (recorded as a blocker, never accepted by widening the rule).
+- **Design-day shape, coverage and convention [U]**: a data set's series must be complete, finite, non-negative, equal in
+  lower bound and length across zones, and of length 24 x (the matched TBD group's design days) or 24 x (their
+  repetitions) (C7); the data sets must correspond to the TBD groups (C10); index and hour of day follow only the
+  evidence-backed convention (C9). All three are measured for the first time on the acceptance TSDs; anything else
+  BLOCKS the dependent rows (recorded as a blocker, never accepted by widening a rule).
 - **Balance closure [U]**: the S10-C5 tolerance (1 % of the hour's absolute terms + 0.5 W) is fixed now, before any
   licensed read. If Tas's breakdown arrays do not close as the Theory Manual describes, the affected zone rows are BLOCKED
   and recorded with the largest residual; the tolerance is not relaxed.
@@ -155,18 +225,27 @@ load arrays, a design-day series one hour short (all BLOCKED). The forbidden-API
 
 `benchmark/SAM.Analytical.Tas.Benchmark/Modify/ToBenchmark.cs`;
 `benchmark/SAM.Analytical.Tas.Benchmark.Tests/Fixtures/BenchmarkFixture.cs`, `PeakSemanticsTests.cs` (new);
-`SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/Program.cs`, `Results/*.cs` (7 new), `Run-S10-Results.ps1`,
-`Pack-S10-Evidence.ps1` (new);
+`SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/Program.cs`, `Results/*.cs` (8 new, incl. the correction's
+`TbdDesignCoverageRead.cs`), `Run-S10-Results.ps1`, `Pack-S10-Evidence.ps1` (new);
 `SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj`,
 `S10ResultCompareTests.cs`, `S10ResultReferenceTests.cs`, `S10SourceScanTests.cs`, `S10UnitsEvidenceTests.cs`,
-`S10SyntheticTriple.cs` (new); `.gitattributes`; this record. No importer, route, default, schema, workflow, SAM_UI,
+`S10SyntheticTriple.cs`, `S10DesignDayTests.cs` (correction) (new); `.gitattributes`; this record. The correction
+changes only `Results/` (`ResultReference.cs`, `ResultSnapshot.cs`, `ResultNegatives.cs`, `ResultsRun.cs`,
+`ResultReport.cs`, `TsdResultRead.cs`, new `TbdDesignCoverageRead.cs`), the two scripts, the S10 tests and this record. No importer, route, default, schema, workflow, SAM_UI,
 SAM_Validation or SAM change. `PROJECT_PROGRESS.md` unchanged (post-merge closeout only).
 
 ## Tests and validation
 
-Revision 1, local Windows workstation (2026-10-23), no Tas licence used. **Tested content SHA `77ac1cda`**
-(`77ac1cda7d79866183ee672323073981d1a62d04`), clean tree; the record-only commit after it changes this file only. Final
-head and hosted checks: PR description.
+### Revision 1 correction (current)
+
+CORRECTION-RESULTS-PENDING
+
+### Revision 1 as first reviewed (superseded by the correction)
+
+Local Windows workstation (2026-10-23), no Tas licence used. Tested content SHA `77ac1cda`
+(`77ac1cda7d79866183ee672323073981d1a62d04`), clean tree; record head `b607d529`. Hosted at `b607d529`: Build
+`39957785234` and SPDX `39957785222` SUCCESS (testing merge `810734c8`, all eight dependencies at Q4, totals
+40/258/178/1249/432), as recorded by the independent review.
 
 | Check (local, at `77ac1cda`) | Result |
 |---|---|
@@ -196,23 +275,43 @@ powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.Dire
 powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Pack-S10-Evidence.ps1 -Root C:\TasOut\s10\acc1
 ```
 
-Prerequisites: licensed Tas 2.0.0.1, Tas GUI closed, the revision-1 head built in Release from a clean tree, the Budapest
+Per fixture the run executes: one `benchmark-tas` simulation, then `results-read` (TSD + TBD), `results-read-design` (TBD
+design-day coverage), `results-subject`, `results-compare` and `results-negatives`, each in its own process.
+Prerequisites: licensed Tas 2.0.0.1, Tas GUI closed, the accepted revision-1 head built in Release from a clean tree, the Budapest
 EPW at the given path (`472ffb4e…`). PASS = both fixtures PASS with complete coverage, every calibration check verified,
 every negative as intended, produced files and fixtures unchanged by the reads. Evidence: `Documentation/S10-Results-evidence/`
 (committed); run folders machine-local.
 
 ## Unresolved, risks, limits
 
-- Revision 2 not run: S10 is not accepted. The design-day shape and the balance closure are fixed rules measured for the
-  first time on the acceptance TSDs; either may BLOCK (see above). The Tas tie rule for `GetPeakZoneGains` is unknown and
-  only reported (the subject is accepted on any tied maximum).
+- Revision 2 not run: S10 is not accepted. Licensed-only questions, first measured on the acceptance TSDs, any of which
+  may BLOCK the dependent rows (never relaxed):
+  - **Design-day series**:
+    - Length: 24 or 24 x the 30 repetitions the S08 PR-C fixture TBDs hold.
+    - Lower bound: must be 1.
+    - Name correspondence: TSD data set names must equal TBD group names.
+  - **`GetPeakZoneGains` layout**:
+    - The annual tables must give exactly one fitting (value, index) row pair.
+    - The design tables must hold the CLR index of the maximum.
+    - The Tas tie rule is unknown and only reported; the subject is accepted on any tied maximum.
+  - **Heating design-day hour of day is expected to stay BLOCKED.** The committed S08 PR-C fixture reads show:
+    - the heating design day's condition (`FixBox - HDD`, `FixA - HDD`, `FixB - HDD`) holds only zero `ticValueProfile`
+      gains, so nothing places that day in time;
+    - the cooling design day uses the annual condition with an hour-varying `ticLG`, which is a time signal.
+
+    Unless the owner provides another independent time signal, `designDayPeak.hourOfDay` for heating will be BLOCKED in
+    revision 2. The heating legacy index needs only the native index evidence.
+  - **Balance closure**: the S10-C5 assumption.
 - B1a files produced before this change keep F4-F6 values (superseded, not migrated). SAM_Validation `METRICS.md` (Tas
   column) needs a docs-only follow-up; `designDaySource` label follow-up; OpenStudio zero rule at S11.
 - Machine-local: `SAM-BIM/S10_IMPLEMENTATION_PLAN.md` (the reviewed plan) and, for revision 2, `C:\TasOut\s08c\weather\budapest.epw`.
 
 ## Next step
 
-Independent review of revision 1 (this branch, the tested SHA above): GPT-6 or Claude Opus 5.5, effort High, new session,
-read-only review mode, because the reference's independence and fail-closed semantics are where a false PASS would hide.
+Independent re-review of revision 1 including the correction (this branch, the correction's tested SHA above): GPT-6 or
+Claude Opus 5.5, effort High, new session, read-only review mode, because the reference's independence and fail-closed
+semantics are where a false PASS would hide. The owner also decides whether the expected BLOCKED heating design-day hour
+of day (no independent time signal) is acceptable for S10 or needs further evidence. Revision 2 does not start before
+that acceptance.
 After acceptance: revision 2 in Build mode on the licensed workstation (the two approved runs only), then Ready, final-head
 CI, owner merge and the post-merge closeout.
