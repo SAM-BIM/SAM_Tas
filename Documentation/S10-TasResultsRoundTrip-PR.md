@@ -238,7 +238,31 @@ SAM_Validation or SAM change. `PROJECT_PROGRESS.md` unchanged (post-merge closeo
 
 ### Revision 1 correction (current)
 
-CORRECTION-RESULTS-PENDING
+Local Windows workstation (2026-10-23), no Tas licence used, no COM read, no simulation. **Tested content SHA `3387915b`**
+(`3387915ba63c10ab5723ac73f625074e0cdbf942`), clean tree. The record-only commit after it changes this file only. Final
+head and hosted checks: PR description. Diff `77ac1cda..3387915b` touches no producer, golden, importer, S08 reader,
+calibration table, fixture or workflow file (checked with `git diff --quiet`).
+
+| Check (local, at `3387915b`) | Result |
+|---|---|
+| `SAM_Tas.sln` Restore + Rebuild, Release, VS MSBuild 18 | exit 0, 0 errors; the CS warnings are all in untouched pre-existing projects (UKBR, SAP, TPD, GenOpt, Tas), none in S10 files |
+| Producer tests | 40/40 (unchanged; golden byte-identical) |
+| Core `SAM.Analytical.InputEquivalence.Tests` | 258/258 |
+| Read-back tests | 196/196 = the 178 of revision 1 + 18 new in `S10DesignDayTests`, 0 failed, 0 skipped (includes every S08 offline replay and the full negative matrix) |
+| Negative matrix (synthetic triple, also through the built harness `results-negatives`) | control PASS + 40 cases as intended, exit 0 |
+| Built harness `results-compare` on the synthetic triple's files | PASS 95/95, exit 0 |
+| Review probe, re-run on this build | control PASS 95/95 (C7/C9/C10 verified); lower bounds 0, 2, -23 BLOCKED 91/95; all data sets missing BLOCKED 71/95 |
+| New regressions on the reviewed code `77ac1cda` | 7 of 9 fail as intended (see "Revision 1 correction") |
+| Artefacts (build-specific; builds are not byte-reproducible) | `direct-t3d-validation.dll` sha256 `888348d337586cb7…`, `benchmark-tas.dll` `5a73217d4727db30…`, rules `766a88cdbf129499…` (frozen S08 table, unchanged) |
+
+Not run locally: TM59 (1249) and GenOpt (432) suites; those projects are untouched and hosted CI runs them. Machine-local
+evidence: `SAM-BIM/.s10-r1-correction-20261023/` holds:
+- `rebuild.txt` and `*-tests.txt`;
+- `harness-smoke/`;
+- `probe-rerun/` (review probe with only the coverage argument added; `probe-results.json`, `console.txt`);
+- `old-code-regressions/` (the old-API scenarios and their run on `77ac1cda`).
+
+Copy it, with the review folder and `S10_IMPLEMENTATION_PLAN.md`, before changing machines.
 
 ### Revision 1 as first reviewed (superseded by the correction)
 
