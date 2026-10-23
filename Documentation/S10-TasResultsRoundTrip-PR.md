@@ -18,7 +18,12 @@ accepted; hour and peak definitions documented. Branch `feature/s10-tas-results-
 - **Revision 2 correction** (this commit series, offline only): closes R3/R4 and replaces the disproved design-day
   assumption with the measured calendar representation. See "Revision 2 correction". Tested content SHA and results:
   "Tests and validation". No simulation, COM read or Tas process was run for it.
-- **S10 is not accepted.** Next: independent review of this correction. Any further licensed execution needs a fresh
+- **Correction review** (`SAM-BIM/.review-s10-r3-20261023/REVIEW.md`, machine-local): the calendar design-day method and
+  the full-day-tie argument are **accepted**; the runner returned **REVISE** on R3 (timestamps are not a source-to-binary
+  binding) and R5 (all 13 runner tests failed locally and on hosted CI: `Get-FileHash` not recognised).
+- **R3/R5 correction** (this commit series, offline only): tested content SHA `9871f437`. See "R3/R5 correction". No
+  simulation, COM read or Tas process was run for it.
+- **S10 is not accepted.** Next: independent review of the R3/R5 correction. Any further licensed execution needs a fresh
   owner decision; none is authorised by this record.
 - No merge, no deployment, no roadmap/handoff change (those need the normal workflow or a fresh owner exception).
 
@@ -254,7 +259,9 @@ No evidence from this attempt is committed: the acceptance pack belongs to a suc
 
 ## Revision 2 correction (review R3/R4 and the design-day evidence method, 2026-10-23)
 
-**R3, provenance** (`Run-S10-Results.ps1`). Before any engine starts, the script resolves `samCommit` and
+**R3, provenance** (`Run-S10-Results.ps1`; the timestamp binding below was found insufficient by the correction review
+and is replaced by the build receipt in "R3/R5 correction"; timestamps remain only a freshness check). Before any engine
+starts, the script resolves `samCommit` and
 `runnerCommit` and passes them to `benchmark-tas` as `--sam-commit`/`--runner-commit`. Each is the HEAD (40 hex) of a
 clean checkout (`git status --porcelain --untracked-files=all` empty), bound to its build:
 - every artifact (the harness and `benchmark-tas` exe/dll, `SAM.Analytical.Tas.dll`; the SAM build's `SAM.*.dll`) is no
@@ -331,6 +338,87 @@ written.
 
 The missing B1a remains a blocker, and no B1a was recovered or fabricated.
 
+## R3/R5 correction (correction review, 2026-10-23)
+
+Offline only. The calendar method, raw indices, full-day-tie logic, producer/importer/schema, fixtures, calibration
+table, R0/R1/R2, the R4 stop control and the stage boundaries are unchanged.
+
+**R3, source-to-artifact binding.** The review's probe showed that a newer assembly from another build (`3387915b`),
+copied under the harness DLL's name, passed the reviewed preflight with `proven=true` and the current HEAD as its
+`runnerCommit`. Timestamps prove freshness, not identity. The binding now comes from the build itself:
+- **`Build-S10-Receipt.ps1` (new), the controlled engine-free build.**
+  - SAM and SAM_Tas must be clean checkouts; their HEADs are the build commits.
+  - VS MSBuild rebuilds the eight SAM core libraries benchmark-tas loads (`SAM.Core`, `.Math`, `.Units`, `.Geometry`,
+    `.Weather`, `.Architectural`, `.Analytical`, `.Core.Optimisation`), one project at a time into `SAM\build`, then
+    `SAM_Tas.sln`. Each gets `/p:SAMSourceRevision=<HEAD>`: the repositories' existing stamp (`Directory.Build.props`),
+    which writes InformationalVersion `1.0.0.0+<commit>` and which benchmark-tas reads. No BuildAll, no Revit/Grasshopper
+    deployment, no installer.
+  - It refuses (exit 3, no receipt) on a dirty checkout, any non-zero build, a HEAD moved or a tree dirtied by the build,
+    a declared output not written by this build or without its checkout's stamp, or a SAM library beside the harness or
+    benchmark-tas that is not one of those built or differs from `SAM\build`.
+  - Only then it writes `s10-build-receipt.json` beside benchmark-tas: both commits, the commands and exit codes, and the
+    sha256 of every `.dll`/`.exe` in the harness and benchmark-tas folders and of the SAM core libraries. An earlier receipt
+    is removed first, so a failed build never leaves a stale one.
+- **The run preflight verifies the receipt and never writes one.** It refuses before any process starts when:
+  - the receipt is missing, not JSON, or not `s10-build-receipt/1`;
+  - it names other checkouts, or the configured `-Exe`/`-BenchmarkExe` (custom paths included) are not its paths;
+  - any listed file's sha256 differs, or a `.dll`/`.exe` it does not list sits beside the harness or benchmark-tas;
+  - a SAM library loaded by the harness or benchmark-tas differs from `SAM\build`, or `SAM\build` differs from the
+    receipt;
+  - a checkout is not clean, or its HEAD is neither the built commit nor a descendant whose difference from it is
+    record-only.
+- **Record-only commits.** A difference consisting only of `*.md` paths (e.g. this record after the tested build) is
+  accepted and listed as `recordOnly` in `provenance-run.json`. `--sam-commit`/`--runner-commit` are then the receipt's
+  **built** commits, the same as the binaries' stamps, with the current HEADs recorded beside them. Any other path needs a
+  rebuild.
+- **Kept:** the existing clean-checkout and "no artifact older than a tracked source file" checks, as freshness checks.
+- **Limit:** libraries built by other repositories (`SAM_gbXML`, `SAM_Validation`, `SAM_Systems`, ...) and third-party
+  libraries beside the harness/benchmark-tas are pinned by hash in the receipt but are not source-bound to a revision. The
+  HEADs of `SAM_gbXML`/`SAM_Validation` stay informational, as before.
+
+**R5, runner tests failed before their logic.**
+- **Mechanism.** In Windows PowerShell 5.1, `Get-FileHash` is not a compiled cmdlet: it is a function in
+  `Microsoft.PowerShell.Utility.psm1`, exported by the module manifest and loaded only by module autoload along
+  `PSModulePath`. Compiled cmdlets (`Get-Date`, `ConvertTo-Json`, `Set-Content`) do not depend on that autoload.
+- **Hosted runner.** `dotnet test` runs under PowerShell 7 (`shell: pwsh`), and the test's Windows PowerShell child
+  inherits that environment. That every runner test failed there on `Get-FileHash` is recorded fact. The exact hosted
+  module path is **not proven**: there is no PowerShell 7 on this workstation, and CI was not changed to print it.
+- **Local.** This workstation passes all 13 original runner tests from bash and from Windows PowerShell parents, and
+  `Get-FileHash` resolves in the unaltered child and in 7 altered child environments (empty, removed or bogus
+  `PSModulePath`; removed or unwritable `LOCALAPPDATA`; removed profile variables; non-existent PowerShell 7 paths first).
+  The review's local failure environment was not reproduced.
+- **Deterministic reproduction, of the message only.** A child whose `PSModulePath` puts an unloadable Core-edition
+  `Microsoft.PowerShell.Utility` first fails `Get-FileHash` with the hosted message. With that synthetic module, the full
+  reviewed script still passed locally. In an isolated probe, an earlier `New-Object` call (as in the script) made the
+  system module load first. The
+  synthetic case therefore reproduces the failing call, not the whole hosted failure. The hosted re-run of this correction
+  is the end-to-end check.
+- **Fix.** Both scripts' `Sha` use a .NET `SHA256` stream digest, which needs no module. Cryptographic validation is
+  unchanged: the same lowercase sha256 and the same null for a missing file. No test was skipped or weakened, and CI is
+  unchanged.
+- `Pack-S10-Evidence.ps1` (a manual packer that no test runs) still calls `Get-FileHash`; it is left unchanged here (see
+  "Unresolved").
+
+**Tests** (`S10RunnerScriptTests`, 13 → 30). Each workspace is now built by the committed `Build-S10-Receipt.ps1`, with
+an MSBuild double that stamps whatever revision the script passes. The 13 earlier tests are kept unchanged in intent:
+simulation exit 4 / no capture / no second fixture, timeout, missing outputs, failed captures, measured FAIL/BLOCKED,
+weather, dirty checkout, newer source, SAM library, not a checkout. New:
+- **launch nothing:**
+  - the review's foreign newer harness DLL;
+  - a rebuilt `SAM.Analytical.Tas.dll`;
+  - an unlisted library;
+  - a missing receipt;
+  - a malformed receipt, or one with a foreign schema;
+  - a receipt hash mismatch;
+  - a receipt of another commit;
+  - a stale runner input or a stale SAM input committed after the build (dated before it, so only the receipt can
+    object);
+  - a byte-identical harness at a custom path;
+- **build script:** a dirty checkout builds nothing and removes the old receipt; a failed build or unstamped outputs write
+  no receipt; the control stamps each checkout's commit and records every loaded file;
+- **record-only commit:** the run completes, passing the built commit and recording the record-only path;
+- **R5:** each script's own `Sha`, taken from its syntax tree, run where autoload cannot supply `Get-FileHash`.
+
 ## Decisions and assumptions (for review)
 
 - **Reference independence**: `TsdResultRead.cs`, `ResultReference.cs`, `ResultCompare.cs` and `ResultSnapshot.cs` call
@@ -374,9 +462,51 @@ changes only `Results/` (`ResultReference.cs`, `ResultSnapshot.cs`, `ResultNegat
 `ResultReport.cs`, `TsdResultRead.cs`, new `TbdDesignCoverageRead.cs`), the two scripts, the S10 tests and this record. No importer, route, default, schema, workflow, SAM_UI,
 SAM_Validation or SAM change. `PROJECT_PROGRESS.md` unchanged (post-merge closeout only).
 
+The R3/R5 correction changes only `SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/Build-S10-Receipt.ps1` (new),
+`Run-S10-Results.ps1`, `SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/S10RunnerScriptTests.cs` and this record.
+SAM is reference-only: its eight core libraries were rebuilt into the ignored `SAM\build` with the stamp; no SAM file is
+changed.
+
 ## Tests and validation
 
-### Revision 2 correction (current)
+### R3/R5 correction (current)
+
+Run on the local Windows workstation, 2026-10-23. No simulation, sizing, COM read or Tas process. **Tested content SHA
+`9871f437`** (`9871f437f679e2e55d0aa2f3ef3479a33524a1f3`), clean tree; SAM `2cfd6909` (`sow/2026-Q4`), clean. The
+record-only commit after it changes this file only. Final head and hosted checks: PR description.
+
+| Check (local, at `9871f437`) | Result |
+|---|---|
+| `Build-S10-Receipt.ps1` (VS MSBuild 18: 8 SAM core projects, then `SAM_Tas.sln` Rebuild Release, restore included) | exit 0, 0 errors; receipt `c36bb206…`, 79 files; stamps `1.0.0.0+9871f437…` (harness, benchmark-tas, `SAM.Analytical.Tas`) and `1.0.0.0+2cfd6909…` (SAM core), both checkouts clean afterwards |
+| Producer tests | 40/40 |
+| Core `SAM.Analytical.InputEquivalence.Tests` | 258/258 |
+| Read-back tests | **249/249**, 0 failed, 0 skipped (219 earlier + 30 runner-script tests, of which 17 new) |
+| The new tests against the reviewed `f29adaed` script (same test build) | 17 passed, **13 failed**: every new R3 negative and the record-only control (the reviewed guard launches the doubles), the build-script dirty case, and `Sha_NeedsNoModuleAutoload(Run-S10-Results.ps1)` with the hosted `Get-FileHash` message |
+| Provenance probe (the review's AST-import method, exact `Provenance`, no engine) | real build: proven; the review's foreign `3387915b` DLL under the harness name: **refused** (path and unlisted file); a full harness copy with a matching receipt: proven, and with the foreign DLL: **refused** (`d8a96922…` does not match `d01b92cb…`); the reviewed guard on the same foreign DLL: still `proven=true` |
+| Offline replay of acc1 box (built harness, new folder) | `results-compare` BLOCKED 59/59, exit 11, "B1a missing" kept; `reference.json`, `report.json`, `report.md` byte-identical to the review's replay; `results-negatives` exit 70 (no B1a) |
+| Preservation | `C:\TasOut\s10\acc1`: all 37 files byte-identical before and after (box TBD `d868316b…`, TSD `3d80a135…`, SAM JSON `204062f6…`); no file under acc1 or `.s10-r2-acceptance-20261023/` written in this session; committed fixtures unchanged (clean tree, and the runner tests' preflight checks them against `SHA256SUMS.txt`); EPW `472ffb4e…` unchanged |
+| Artefacts | `direct-t3d-validation.dll` `d01b92cb0de7cecd…`, `benchmark-tas.dll` `be4897ea4f882ce7…`, `SAM.Analytical.Tas.dll` `ad7af130fdd2ba5d…`, `SAM.Analytical.dll` `1492f3ed29206def…` (= `SAM\build`), rules `766a88cdbf129499…` (frozen) |
+
+Machine-local evidence, `SAM-BIM/.s10-r3r5-correction-20261023/`:
+- `build-receipt.txt`, `s10-build-receipt.json`, `binaries-sha256.txt`, `tested-content.txt`;
+- `*-tests.txt`, `test-results/` (TRX);
+- `reviewed-script-vs-new-tests.*`, `Run-S10-Results.reviewed-f29adaed.ps1`;
+- `provenance-probe-r3.ps1`, `probe-at-content/`, and `probe-after-record/` (the same probe re-run at the record-only
+  head on the same build; result in the PR description);
+- `replay/`, `acc1-sha256-before.txt`, `acc1-sha256-after.txt`.
+
+Commands (from the SAM-BIM root):
+
+```text
+powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Build-S10-Receipt.ps1
+dotnet test SAM_Tas/benchmark/SAM.Analytical.Tas.Benchmark.Tests/SAM.Analytical.Tas.Benchmark.Tests.csproj -c Release --no-build
+dotnet test SAM_Tas/benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytical.InputEquivalence.Tests.csproj -c Release --no-build
+dotnet test SAM_Tas/SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj -c Release --no-build
+powershell -ExecutionPolicy Bypass -File .s10-r3r5-correction-20261023\provenance-probe-r3.ps1 -Label <folder>
+SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\bin\Release\direct-t3d-validation.exe results-compare C:\TasOut\s10\acc1\s08-fix-box\read C:\TasOut\s10\acc1\s08-fix-box\subject.json <new empty folder>
+```
+
+### Revision 2 correction (superseded by the R3/R5 correction)
 
 Run on the local Windows workstation, 2026-10-23. No simulation, sizing, COM read or Tas process. **Tested content SHA
 `f29adaed`** (`f29adaedb3c48c7ee3dfc895b3616f9701b01f75`), clean tree. The record-only commit after it changes this file
@@ -499,6 +629,7 @@ licensed run needs a fresh owner decision on its scope (which fixtures, how many
 form of the command is:
 
 ```text
+powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Build-S10-Receipt.ps1
 powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Run-S10-Results.ps1 -Phase run -Root <new empty root> -WeatherEpw C:\TasOut\s08c\weather\budapest.epw
 powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Pack-S10-Evidence.ps1 -Root <that root>
 ```
@@ -509,7 +640,8 @@ infrastructure failure stops the run (exit 3, `status-run.json`).
 
 Prerequisites:
 - licensed Tas 2.0.0.1, Tas GUI closed;
-- clean SAM_Tas and SAM checkouts with Release builds no older than their sources (the preflight checks this);
+- clean SAM_Tas and SAM checkouts built by `Build-S10-Receipt.ps1` at their current commits, or with only record-only
+  (`*.md`) commits since (the preflight verifies the receipt, the hashes and the freshness);
 - the Budapest EPW at the given path (`472ffb4e…`).
 
 PASS = both fixtures PASS with complete coverage, every calibration check verified, every negative as intended, and the
@@ -524,8 +656,15 @@ folders machine-local.
   - The calendar design-day representation is measured on one fixture only.
   - The heating within-day origin is unresolved. Its hour row is derived only through the box's 24-way tie; a fixture
     without that tie would BLOCK it.
-  - The new runner preflight has not met a live engine.
+  - The runner preflight and the receipt binding have not met a live engine. They are tested only with doubles, and with
+    the real build through the provenance probe.
   - Both OD-1 invocations are spent; further licensed execution needs a fresh owner decision.
+- **R3/R5 correction limits:**
+  - Libraries from other repositories and third parties are pinned by hash but not source-bound to a revision.
+  - The hosted `PSModulePath` cause of R5 is not proven (see "R3/R5 correction"). The hosted re-run is the end-to-end
+    check.
+  - `Pack-S10-Evidence.ps1` still uses `Get-FileHash` and could fail the same way under such a host. It is a manual
+    packer that no test runs, and it is outside the two findings.
 - The list below is the original revision-1 statement of the licensed-only questions. Its design-day series item is
   superseded by "Revision 2 attempt 1" and "Revision 2 correction". Any of these may BLOCK the dependent rows (never
   relaxed):
@@ -551,17 +690,18 @@ folders machine-local.
   - `SAM-BIM/S10_IMPLEMENTATION_PLAN.md` (the reviewed plan);
   - `C:\TasOut\s08c\weather\budapest.epw`;
   - the attempt-1 run root `C:\TasOut\s10\acc1`;
-  - `SAM-BIM/.s10-r2-acceptance-20261023/`, `SAM-BIM/.review-s10-r2-20261023/`, `SAM-BIM/.s10-r3-correction-20261023/`.
+  - `SAM-BIM/.s10-r2-acceptance-20261023/`, `SAM-BIM/.review-s10-r2-20261023/`, `SAM-BIM/.s10-r3-correction-20261023/`,
+    `SAM-BIM/.review-s10-r3-20261023/`, `SAM-BIM/.s10-r3r5-correction-20261023/`.
 
 ## Next step
 
-Independent review of the revision-2 correction (this branch, tested content `f29adaed`), recommended as GPT-6 or Claude
-Opus 5.5, effort High, new session, read-only review mode. The calendar evidence method, the full-day-tie hour rule and
-the runner preflight/stop control are where a false PASS or a wasted licensed invocation would hide. The review should
-cover:
-- R3 and R4;
-- the evidence-method amendment and the C9 assessment;
-- the regression probe and the replay.
+Independent review of the R3/R5 correction (this branch, tested content `9871f437`), recommended as GPT-6 or Claude Opus
+5.5, effort High, new session, read-only review mode: source/binary provenance is where a wasted licensed invocation
+would hide. The calendar method was already accepted and is unchanged. The review should cover:
+- the receipt binding, including the record-only rule, and whether its scope (SAM core + SAM_Tas, other libraries pinned
+  by hash only) is sufficient;
+- the R5 fix and the hosted re-run;
+- the provenance probe and the replay.
 
 Only after that review does the owner decide the minimum further licensed execution. A fresh successful wrapper run is
 still needed for end-to-end acceptance, because no B1a and no two-zone TSD exist. Then: Ready, final-head CI, owner merge
