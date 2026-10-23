@@ -23,8 +23,13 @@ accepted; hour and peak definitions documented. Branch `feature/s10-tas-results-
   binding) and R5 (all 13 runner tests failed locally and on hosted CI: `Get-FileHash` not recognised).
 - **R3/R5 correction** (this commit series, offline only): tested content SHA `9871f437`. See "R3/R5 correction". No
   simulation, COM read or Tas process was run for it.
-- **S10 is not accepted.** Next: independent review of the R3/R5 correction. Any further licensed execution needs a fresh
-  owner decision; none is authorised by this record.
+- **R3/R5 correction independently ACCEPTED** (`SAM-BIM/.review-s10-r3r5-20261023/REVIEW.md`, machine-local; correction
+  only, not S10). Hosted Build `39999339029` and SPDX `39999338873` SUCCESS at `a170cdf3`.
+- **Revision 2, attempt 2** (licensed, owner-authorised 2026-10-23: at most two simulations, new empty root, no retry):
+  **completed without an infrastructure failure. Box PASS 59/59; two-zone BLOCKED 94/0/1** on one row, the FixB
+  heating design-day hour of day. See "Revision 2 attempt 2".
+- **S10 is not accepted.** Next: independent review of attempt 2, then an owner decision on the one blocked row. Any
+  further licensed execution needs a fresh owner decision; none is authorised by this record.
 - No merge, no deployment, no roadmap/handoff change (those need the normal workflow or a fresh owner exception).
 
 ## Owner decisions (2026-10-23, recorded for portability)
@@ -419,6 +424,57 @@ weather, dirty checkout, newer source, SAM library, not a checkout. New:
 - **record-only commit:** the run completes, passing the built commit and recording the record-only path;
 - **R5:** each script's own `Sha`, taken from its syntax tree, run where autoload cannot supply `Get-FileHash`.
 
+## Revision 2 attempt 2 (licensed, 2026-10-23): completed, box PASS, two-zone BLOCKED
+
+Owner authorisation (chat, 2026-10-23): one fresh attempt, at most two `benchmark-tas` simulations (one per approved
+fixture), a new empty root, the build-receipt workflow, stop on any infrastructure failure, no automatic retry, no code
+change or criteria relaxation, no Ready/merge/S11. It was given before the R3/R5 review and confirmed after the review
+accepted the correction.
+
+**Run.**
+- `Run-S10-Results.ps1 -Phase run -Root C:\TasOut\s10\acc2 -WeatherEpw C:\TasOut\s08c\weather\budapest.epw`, at head
+  `a170cdf3` (content `9871f437`), 18:33:26Z–18:34:48Z. Tas 2.0.0.1; no Tas process was running before it.
+- **Preflight proven** against receipt `c36bb206…` (unchanged since the build). `samCommit` `2cfd6909`, `runnerCommit`
+  `9871f437` (built); `runnerHead` `a170cdf3`, whose difference from the built commit is record-only.
+- 12 steps, all `completed`, none timed out. Wrapper exit 0, `status-run.json` `infrastructure: completed`,
+  `simulationsStarted: 2`. No retry.
+- After each COM step a Tas server process (`TSD`/`TBD`) was still alive. The script's `Clear-Tas` stopped it after that
+  step, and all are recorded in `watchdog-run.json` (`strayAfter`). None remain.
+- Produced TBD/TSD/JSON/B1a unchanged by every read (`changed: []`, both fixtures); fixtures OK against `SHA256SUMS.txt`;
+  EPW `472ffb4e…`; acc1's 37 files byte-identical afterwards.
+
+**Box `s08-fix-box`: PASS.**
+- `benchmark-tas` exit 0. B1a written: `state=Success`, `route=Native-TAS`, provenance `samCommit` `2cfd6909…`,
+  `runnerCommit` `9871f437…`.
+- `results-compare` **PASS 59/59** (exit 0). Negatives: **52/52 as intended** (exit 0), including the control PASS.
+- Hashes: TBD `fcc945cb…`, TSD `047a51e9…`, SAM JSON `c4080fa9…`, B1a `82ecfa5b…`.
+
+**Two-zone `s08-fix-two`: BLOCKED (measured, not an infrastructure failure).**
+- `benchmark-tas` exit 0, B1a written (`Success`).
+- `results-compare` **BLOCKED: 95 rows, 94 PASS, 0 FAIL, 1 BLOCKED** (exit 11). The blocked row is
+  `SAM|FixB|Heating|designDayPeak.hourOfDay`: "design-day hour of day unresolved (S10-C9): Heating: no independent time
+  signal".
+  - FixB's heating design-day load itself PASSes (622.7639770507812 W).
+  - FixA's heating design-day hour PASSes through its 24-way full-day tie.
+  - Both zones' cooling design-day hours are derived from the `ticLG` signal (13, 17) and PASS.
+  - This is the case the record anticipated: "A role with a narrower tie set and no time signal stays BLOCKED."
+- `results-negatives` exit 10: **51 of 52 as intended**. The one case not as intended is the unmutated **control**,
+  expected PASS but BLOCKED by the same single row. All 51 mutations FAIL or BLOCK as intended.
+- Hashes: TBD `85216403…`, TSD `8109d47c…`, SAM JSON `510b8b09…`, B1a `90354820…`.
+
+**Evidence (machine-local).**
+- Run root `C:\TasOut\s10\acc2`.
+- `SAM-BIM/.s10-acc2-20261023/`: `run-console.txt`, `acc2-sha256.txt` (357 files),
+  `acc1-sha256-after-acc2.txt`, `binaries-sha256-before.txt`, and `pack/`. The pack holds 248 files and 38.7 MB, made by
+  the committed packer with `-Target` set there.
+- Nothing is committed under `Documentation/S10-Results-evidence/`: that is reserved for a full PASS.
+
+**What remains for S10 acceptance:**
+- The FixB heating design-day hour of day has no independent time signal. The HDD condition holds no gains, and FixB's
+  heating load is not a full-day tie.
+- The acceptance rule is unchanged: both fixtures PASS, every negative as intended. It is not relaxed here.
+- Resolving the row needs an owner decision, not a code change in this attempt.
+
 ## Decisions and assumptions (for review)
 
 - **Reference independence**: `TsdResultRead.cs`, `ResultReference.cs`, `ResultCompare.cs` and `ResultSnapshot.cs` call
@@ -650,15 +706,16 @@ folders machine-local.
 
 ## Unresolved, risks, limits
 
-- **Revision-2 blockers (current):**
-  - No B1a document has been produced by a run, so every B1a row and the negative matrix are unexercised natively.
-  - The two-zone fixture has no TSD.
-  - The calendar design-day representation is measured on one fixture only.
-  - The heating within-day origin is unresolved. Its hour row is derived only through the box's 24-way tie; a fixture
-    without that tie would BLOCK it.
-  - The runner preflight and the receipt binding have not met a live engine. They are tested only with doubles, and with
-    the real build through the provenance probe.
-  - Both OD-1 invocations are spent; further licensed execution needs a fresh owner decision.
+- **Blockers after attempt 2 (current):**
+  - The one remaining S10 blocker is `SAM|FixB|Heating|designDayPeak.hourOfDay` on `s08-fix-two`, together with that
+    fixture's negative control. The heating within-day origin has no independent time signal, and FixB's heating
+    design-day load is not a full-day tie. An owner decision is needed.
+  - Measured in attempt 2, no longer blockers:
+    - B1a is produced and checked natively on both fixtures;
+    - the two-zone TSD exists;
+    - the calendar design-day representation holds on both fixtures, in all four design-day data sets;
+    - the receipt preflight has preceded a live engine.
+  - Both authorised attempt-2 invocations are spent; any further licensed execution needs a fresh owner decision.
 - **R3/R5 correction limits:**
   - Libraries from other repositories and third parties are pinned by hash but not source-bound to a revision.
   - The hosted `PSModulePath` cause of R5 is not proven (see "R3/R5 correction"). The hosted re-run is the end-to-end
@@ -691,18 +748,23 @@ folders machine-local.
   - `C:\TasOut\s08c\weather\budapest.epw`;
   - the attempt-1 run root `C:\TasOut\s10\acc1`;
   - `SAM-BIM/.s10-r2-acceptance-20261023/`, `SAM-BIM/.review-s10-r2-20261023/`, `SAM-BIM/.s10-r3-correction-20261023/`,
-    `SAM-BIM/.review-s10-r3-20261023/`, `SAM-BIM/.s10-r3r5-correction-20261023/`.
+    `SAM-BIM/.review-s10-r3-20261023/`, `SAM-BIM/.s10-r3r5-correction-20261023/`, `SAM-BIM/.review-s10-r3r5-20261023/`,
+    `SAM-BIM/.s10-acc2-20261023/` and the attempt-2 run root `C:TasOuts10cc2`.
 
 ## Next step
 
-Independent review of the R3/R5 correction (this branch, tested content `9871f437`), recommended as GPT-6 or Claude Opus
-5.5, effort High, new session, read-only review mode: source/binary provenance is where a wasted licensed invocation
-would hide. The calendar method was already accepted and is unchanged. The review should cover:
-- the receipt binding, including the record-only rule, and whether its scope (SAM core + SAM_Tas, other libraries pinned
-  by hash only) is sufficient;
-- the R5 fix and the hosted re-run;
-- the provenance probe and the replay.
+Independent review of revision 2 attempt 2 (run root `C:\TasOut\s10\acc2`, evidence `SAM-BIM/.s10-acc2-20261023/`, code
+`9871f437` unchanged), recommended as GPT-6 or Claude Opus 5.5, effort High, new session, read-only review mode. The
+review should check:
+- the box PASS 59/59 and its 52 negatives;
+- the two-zone 94/0/1 and the single blocked row;
+- that the two-zone control is blocked only by that row;
+- the hashes and preservation.
 
-Only after that review does the owner decide the minimum further licensed execution. A fresh successful wrapper run is
-still needed for end-to-end acceptance, because no B1a and no two-zone TSD exist. Then: Ready, final-head CI, owner merge
-and the post-merge closeout.
+The review then frames the **owner decision on the FixB heating design-day hour of day**. Options:
+- supply an independent heating time signal, which would be a revision with its own review;
+- change the acceptance scope for that row explicitly, as an owner decision recorded here;
+- accept S10 as not met.
+
+No criterion is relaxed by this record. Ready, final-head CI, owner merge and the post-merge closeout come only after
+acceptance.
