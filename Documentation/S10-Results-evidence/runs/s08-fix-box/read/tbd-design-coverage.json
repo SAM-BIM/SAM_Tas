@@ -1,0 +1,53 @@
+{
+  "Schema": "s10-tbd-design-coverage/1",
+  "Path": "C:\\TasOut\\s10\\acc2\\s08-fix-box\\fixture.tbd",
+  "ProcessId": 43744,
+  "StartedUtc": "2026-10-23T18:34:01.1278370Z",
+  "ReaderAssembly": "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Release\\direct-t3d-validation.dll",
+  "ReaderAssemblySha256": "d01b92cb0de7cecd038755590dfe94094dc9b56df7e6a372ce6277d52ea42d65",
+  "Sha256Before": "fcc945cbdeb35283fddcc289fc7236e59476b149f2fddf05e9aaa26edfce00cc",
+  "Sha256After": "fcc945cbdeb35283fddcc289fc7236e59476b149f2fddf05e9aaa26edfce00cc",
+  "Errors": [],
+  "Groups": [
+    {
+      "Role": "Cooling",
+      "Index": 0,
+      "Name": "Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad",
+      "Detail": null,
+      "Days": [
+        {
+          "Index": 0,
+          "Name": "Cooling Design Day",
+          "DayType": "CDD",
+          "Repetitions": {
+            "Kind": "Finite",
+            "Value": 30,
+            "Text": null,
+            "Detail": null
+          },
+          "Detail": null
+        }
+      ]
+    },
+    {
+      "Role": "Heating",
+      "Index": 0,
+      "Name": "Budapest.Met.Center ANN HTG 100% CONDS DB",
+      "Detail": null,
+      "Days": [
+        {
+          "Index": 0,
+          "Name": "Heating Design Day",
+          "DayType": "HDD",
+          "Repetitions": {
+            "Kind": "Finite",
+            "Value": 30,
+            "Text": null,
+            "Detail": null
+          },
+          "Detail": null
+        }
+      ]
+    }
+  ]
+}

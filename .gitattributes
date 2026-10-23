@@ -11,3 +11,6 @@ SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/ReadBack/calibration-rules.json 
 # S08 PR-C: the committed equivalence fixtures are hashed (SHA256SUMS.txt); keep their bytes on every machine.
 SAM_Tas/SAM.Analytical.Tas.DirectT3D.Validation/ReadBack/Fixtures/** -text
 Documentation/S08-PRC-Acceptance-evidence/** -text
+
+# S10: the results round-trip evidence is hashed (SHA256SUMS.txt). Keep its bytes exactly as committed: no end-of-line conversion.
+Documentation/S10-Results-evidence/** -text

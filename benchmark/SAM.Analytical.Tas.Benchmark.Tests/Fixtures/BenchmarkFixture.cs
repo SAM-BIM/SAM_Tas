@@ -116,7 +116,7 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             return foreign;
         }
 
-        private static AnalyticalModel BuildModel(IEnumerable<SpaceSimulationResult> resultsToAttach)
+        public static AnalyticalModel BuildModel(IEnumerable<SpaceSimulationResult> resultsToAttach)
         {
             AdjacencyCluster adjacencyCluster = new AdjacencyCluster();
 
@@ -179,7 +179,21 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             return result;
         }
 
-        /// <summary>The per-space heating and cooling results (W), referenced by the TAS zone GUID (as TAS attaches them).</summary>
+        // The design-day peaks (W, hour of day) carried next to the annual peaks. They are smaller than
+        // the annual peaks, so the annual peak governs, and B1a never emits them.
+        public const double SpaceDesignDayPeakHeatingW = 3000.0;
+
+        public const double SpaceDesignDayPeakCoolingW = 2000.0;
+
+        public const int DesignDayPeakHeatingHourOfDay = 7;
+
+        public const int DesignDayPeakCoolingHourOfDay = 15;
+
+        /// <summary>
+        /// The per-space heating and cooling results (W), referenced by the TAS zone GUID (as TAS attaches them). Each
+        /// carries its annual peak (<see cref="SpaceSimulationResultParameter.AnnualPeak"/>, the B1a source since S10)
+        /// with the same load and 0-based hour of year as before, and a smaller design-day peak.
+        /// </summary>
         public static List<SpaceSimulationResult> SpaceResults()
         {
             string reference = TasZoneReference;
@@ -190,6 +204,8 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             heating.SetValue(SpaceSimulationResultParameter.LoadIndex, PeakHeatingHour);
             heating.SetValue(SpaceSimulationResultParameter.DesignLoad, SpaceDesignHeatingW);
             heating.SetValue(SpaceSimulationResultParameter.UnmetHours, UnmetHeatingHours);
+            heating.SetValue(SpaceSimulationResultParameter.AnnualPeak, AnnualPeak(SpacePeakHeatingW, PeakHeatingHour));
+            heating.SetValue(SpaceSimulationResultParameter.DesignDayPeak, DesignDayPeak(SpaceDesignDayPeakHeatingW, DesignDayPeakHeatingHourOfDay, "Fixture HDD"));
 
             SpaceSimulationResult cooling = new SpaceSimulationResult(SpaceName, TasSource, reference);
             cooling.SetValue(SpaceSimulationResultParameter.LoadType, LoadType.Cooling.Text());
@@ -197,8 +213,22 @@ namespace SAM.Analytical.Tas.Benchmark.Tests
             cooling.SetValue(SpaceSimulationResultParameter.LoadIndex, PeakCoolingHour);
             cooling.SetValue(SpaceSimulationResultParameter.DesignLoad, SpaceDesignCoolingW);
             cooling.SetValue(SpaceSimulationResultParameter.UnmetHours, UnmetCoolingHours);
+            cooling.SetValue(SpaceSimulationResultParameter.AnnualPeak, AnnualPeak(SpacePeakCoolingW, PeakCoolingHour));
+            cooling.SetValue(SpaceSimulationResultParameter.DesignDayPeak, DesignDayPeak(SpaceDesignDayPeakCoolingW, DesignDayPeakCoolingHourOfDay, "Fixture CDD"));
 
             return new List<SpaceSimulationResult> { heating, cooling };
+        }
+
+        /// <summary>An annual peak as SAM_Tas stores it: W, 0-based hour of year and hour of day.</summary>
+        public static SpaceLoadPeak AnnualPeak(double load, int hourOfYear)
+        {
+            return new SpaceLoadPeak(LoadPeakBasis.AnnualSimulation, load) { HourOfYear = hourOfYear, HourOfDay = hourOfYear % 24 };
+        }
+
+        /// <summary>A design-day peak as SAM_Tas stores it: W, hour of day and day name, no hour of year.</summary>
+        public static SpaceLoadPeak DesignDayPeak(double load, int hourOfDay, string designDayName)
+        {
+            return new SpaceLoadPeak(LoadPeakBasis.DesignDay, load) { HourOfDay = hourOfDay, DesignDayName = designDayName };
         }
 
         /// <summary>

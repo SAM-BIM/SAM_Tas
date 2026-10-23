@@ -28,6 +28,20 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation
                 }
             }
 
+            // S10: the independent results round-trip (Results/). Same exit-code discipline as the read-back modes.
+            if (mode.StartsWith("results-", StringComparison.Ordinal))
+            {
+                try
+                {
+                    return Results.ResultsRun.Run(args);
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine("ERROR (infrastructure): " + exception);
+                    return ReadBack.ReadBackExit.Infrastructure;
+                }
+            }
+
             try
             {
                 switch (mode)

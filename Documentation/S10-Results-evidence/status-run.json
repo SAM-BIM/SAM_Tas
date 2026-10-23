@@ -1,0 +1,21 @@
+﻿{
+    "phase":  "run",
+    "utc":  "2026-10-23T18:34:48.4080359Z",
+    "infrastructure":  "completed",
+    "reason":  "",
+    "failedStep":  "",
+    "simulationsStarted":  2,
+    "outcomes":  [
+                     {
+                         "fixture":  "s08-fix-box",
+                         "compare":  "PASS",
+                         "negativesAllAsIntended":  true
+                     },
+                     {
+                         "fixture":  "s08-fix-two",
+                         "compare":  "BLOCKED",
+                         "negativesAllAsIntended":  false
+                     }
+                 ],
+    "note":  "infrastructure = whether the run completed; measured verdicts are in outcomes and the reports, never in the wrapper exit"
+}

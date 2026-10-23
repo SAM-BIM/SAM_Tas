@@ -29,8 +29,23 @@ namespace SAM.Analytical.Tas.Benchmark
         /// a result whose units are not known is emitted as unavailable. Per-space loads and design loads are already in <b>W</b> and are
         /// emitted unscaled; hours are hour-of-year in 0..8759. A measurement that is present, finite
         /// and in range is <c>available</c>; anything missing or out of range is <c>available:false</c>
-        /// with a null value. A measured zero stays a value of 0. Peak load and its hour are coupled:
-        /// a peak with no valid hour-of-year is emitted as unavailable rather than a misleading zero.
+        /// with a null value. A measured zero stays a value of 0.
+        /// <para>Peaks (S10 definitions, SAM_Tas S10 record):</para>
+        /// <list type="bullet">
+        /// <item>Hours are 0-based interval hours of the year: hour <i>h</i> is <i>h</i>:00 to <i>h</i>+1:00,
+        /// local standard time, 0..8759 (TSD slot <i>n</i> is hour <i>n</i>-1).</item>
+        /// <item>A space's <c>peakLoad</c>/<c>peakHour</c> are its <b>annual</b> peak: the maximum of its
+        /// annual heating or cooling load over the 365-day simulation, from
+        /// <see cref="SpaceSimulationResultParameter.AnnualPeak"/> (<c>Load</c>, <c>HourOfYear</c>). There is no
+        /// fallback to the legacy <c>Load</c>/<c>LoadIndex</c>, which project the governing (possibly
+        /// design-day) peak and keep Tas's 1-based index: a result without an annual peak emits both as
+        /// unavailable. The design-day peak is never emitted; <c>designLoad</c> stays the TBD sizing load.</item>
+        /// <item>The model peak is the maximum of the building heating or cooling profile, at the hour SAM
+        /// stores (the earliest maximum).</item>
+        /// <item>Zero rule (space and model): a peak load of 0 is a measured zero, available, and has no
+        /// peak hour, so its hour is unavailable. A load above 0 without a valid hour leaves both
+        /// unavailable, never a misleading zero.</item>
+        /// </list>
         /// </remarks>
         /// <param name="analyticalModel">The neutral source model, carrying the TAS-attached per-space results.</param>
         /// <param name="tasBenchmarkContext">Run context: model-level result, hashes and provenance.</param>
@@ -181,10 +196,10 @@ namespace SAM.Analytical.Tas.Benchmark
         {
             SpaceSimulationResult match = spaceResults.FirstOrDefault(x => IsLoadType(x, loadType));
 
-            (MetricValue peakLoad, MetricValue peakHour) = Peak(
-                Double(match, Analytical.SpaceSimulationResultParameter.Load),
-                Integer(match, Analytical.SpaceSimulationResultParameter.LoadIndex),
-                MetricUnit.Watt);
+            // The annual peak only (S10): never the legacy Load/LoadIndex, which project the governing
+            // peak (a design day when it is not exceeded) with Tas's raw 1-based index.
+            SpaceLoadPeak annualPeak = AnnualPeak(match);
+            (MetricValue peakLoad, MetricValue peakHour) = Peak(annualPeak?.Load, annualPeak?.HourOfYear, MetricUnit.Watt);
 
             return new BenchmarkConditionResult
             {
@@ -228,14 +243,37 @@ namespace SAM.Analytical.Tas.Benchmark
         }
 
         /// <summary>
-        /// A peak load and its hour-of-year, coupled: both are available only when the load is a
-        /// finite non-negative number and the hour is an integer in 0..8759; otherwise both are
+        /// The space's annual-simulation peak, or null when the result carries none (or carries a peak
+        /// of another basis under that parameter).
+        /// </summary>
+        private static SpaceLoadPeak AnnualPeak(SpaceSimulationResult spaceSimulationResult)
+        {
+            if (spaceSimulationResult != null
+                && spaceSimulationResult.TryGetValue(Analytical.SpaceSimulationResultParameter.AnnualPeak, out SpaceLoadPeak spaceLoadPeak)
+                && spaceLoadPeak != null
+                && spaceLoadPeak.Basis == LoadPeakBasis.AnnualSimulation)
+            {
+                return spaceLoadPeak;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// A peak load and its hour-of-year. A load of exactly 0 is a measured zero: the load is
+        /// available and the hour is not (there is no peak timestep), whatever hour was stored. A load
+        /// above 0 is available only together with an integer hour in 0..8759; otherwise both are
         /// unavailable (a peak without a valid hour is missing, never a measured zero).
         /// </summary>
         private static (MetricValue load, MetricValue hour) Peak(double? loadValue, int? hourValue, MetricUnit loadUnit)
         {
-            bool hourValid = hourValue.HasValue && hourValue.Value >= 0 && hourValue.Value <= 8759;
             bool loadValid = loadValue.HasValue && IsFinite(loadValue.Value) && loadValue.Value >= 0;
+            if (loadValid && loadValue.Value == 0)
+            {
+                return (MetricValue.AvailableValue(0, loadUnit), MetricValue.Unavailable(MetricUnit.HourOfYear));
+            }
+
+            bool hourValid = hourValue.HasValue && hourValue.Value >= 0 && hourValue.Value <= 8759;
             if (hourValid && loadValid)
             {
                 return (MetricValue.AvailableValue(loadValue.Value, loadUnit), MetricValue.AvailableValue(hourValue.Value, MetricUnit.HourOfYear));

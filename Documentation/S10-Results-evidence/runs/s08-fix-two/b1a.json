@@ -1,0 +1,194 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": {
+    "sourceModelName": "s08-fix-two",
+    "sourceModelGuid": "cf75fa356bcf4418b060a342d99b533f",
+    "sourceFileHash": "sha256:20da9b586345e9fc67dc6308e6da1578b9bc41b3c694dbdab37e9c677959baa0",
+    "canonicalModelHash": "sha256:df4cd812b38af13948c5c0de78b3102821880d5d5316dd6a0eacd0949093e14c",
+    "canonicalizationVersion": "1.0.0",
+    "samCommit": "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+    "runnerCommit": "9871f437f679e2e55d0aa2f3ef3479a33524a1f3",
+    "engine": {
+      "kind": "TAS",
+      "name": "Tas",
+      "version": "2.0.0.1",
+      "sdkVersion": null
+    },
+    "route": "Native-TAS",
+    "weather": {
+      "identity": "budapest",
+      "hash": "sha256:472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3"
+    },
+    "designDaySource": "None",
+    "runTimestampUtc": "2026-10-23T18:34:09.89639Z",
+    "durationSeconds": 23.8835765,
+    "state": "Success",
+    "resultSources": [
+      "SAM.Analytical.Tas"
+    ],
+    "warnings": [],
+    "notes": [
+      "Shared gbXML was exported from the source model (no --gbxml supplied)."
+    ]
+  },
+  "model": {
+    "consumptionHeating": {
+      "value": 1482.3062198656799,
+      "unit": "kWh",
+      "available": true
+    },
+    "consumptionCooling": {
+      "value": 693.4221556667685,
+      "unit": "kWh",
+      "available": true
+    },
+    "peakHeatingLoad": {
+      "value": 1.6982847900390625,
+      "unit": "kW",
+      "available": true
+    },
+    "peakHeatingHour": {
+      "value": 919,
+      "unit": "hourOfYear",
+      "available": true
+    },
+    "peakCoolingLoad": {
+      "value": 1.1864725341796876,
+      "unit": "kW",
+      "available": true
+    },
+    "peakCoolingHour": {
+      "value": 4381,
+      "unit": "hourOfYear",
+      "available": true
+    },
+    "floorArea": {
+      "value": 43.739999771118164,
+      "unit": "m2",
+      "available": true
+    },
+    "volume": {
+      "value": 133.40699768066406,
+      "unit": "m3",
+      "available": true
+    }
+  },
+  "spaces": [
+    {
+      "guid": "5080c00000000000000000000000c0a1",
+      "name": "FixA",
+      "area": {
+        "value": 24.3,
+        "unit": "m2",
+        "available": true
+      },
+      "volume": {
+        "value": 74.115,
+        "unit": "m3",
+        "available": true
+      },
+      "heating": {
+        "designLoad": {
+          "value": 1072.0504150390625,
+          "unit": "W",
+          "available": true
+        },
+        "peakLoad": {
+          "value": 1072.0504150390625,
+          "unit": "W",
+          "available": true
+        },
+        "peakHour": {
+          "value": 7,
+          "unit": "hourOfYear",
+          "available": true
+        },
+        "unmetHours": {
+          "value": 40,
+          "unit": "h",
+          "available": true
+        }
+      },
+      "cooling": {
+        "designLoad": {
+          "value": 1117.7353515625,
+          "unit": "W",
+          "available": true
+        },
+        "peakLoad": {
+          "value": 1064.852783203125,
+          "unit": "W",
+          "available": true
+        },
+        "peakHour": {
+          "value": 4381,
+          "unit": "hourOfYear",
+          "available": true
+        },
+        "unmetHours": {
+          "value": 0,
+          "unit": "h",
+          "available": true
+        }
+      }
+    },
+    {
+      "guid": "5080c00000000000000000000000c0b1",
+      "name": "FixB",
+      "area": {
+        "value": 19.439999999999998,
+        "unit": "m2",
+        "available": true
+      },
+      "volume": {
+        "value": 59.29199999999999,
+        "unit": "m3",
+        "available": true
+      },
+      "heating": {
+        "designLoad": {
+          "value": 626.234375,
+          "unit": "W",
+          "available": true
+        },
+        "peakLoad": {
+          "value": 626.234375,
+          "unit": "W",
+          "available": true
+        },
+        "peakHour": {
+          "value": 726,
+          "unit": "hourOfYear",
+          "available": true
+        },
+        "unmetHours": {
+          "value": 0,
+          "unit": "h",
+          "available": true
+        }
+      },
+      "cooling": {
+        "designLoad": {
+          "value": 211.9634246826172,
+          "unit": "W",
+          "available": true
+        },
+        "peakLoad": {
+          "value": 154.81298828125,
+          "unit": "W",
+          "available": true
+        },
+        "peakHour": {
+          "value": 4385,
+          "unit": "hourOfYear",
+          "available": true
+        },
+        "unmetHours": {
+          "value": 0,
+          "unit": "h",
+          "available": true
+        }
+      }
+    }
+  ]
+}

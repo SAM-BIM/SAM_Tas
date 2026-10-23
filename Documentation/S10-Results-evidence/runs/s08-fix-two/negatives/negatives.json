@@ -1,0 +1,1496 @@
+[
+  {
+    "Case": "control",
+    "Description": "unmutated copies of every input",
+    "Applicable": true,
+    "Applied": "none",
+    "ExpectedStatus": "PASS",
+    "IntendedRows": [],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 1,
+    "Evidence": [],
+    "AsIntended": false
+  },
+  {
+    "Case": "f4-b1a-hour-is-raw-index",
+    "Description": "F4 replay: B1a peakHour = Tas\u0027s raw 1-based index (hour \u002B 1)",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Cooling peakHour 4381 -\u003E 4382",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|peakHour"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 1,
+    "Blocked": 1,
+    "Evidence": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|peakHour: Fail (not one of the 1 expected value(s))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "f5-b1a-governing-design-day",
+    "Description": "F5 replay: B1a peakLoad/peakHour from the governing design day",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating B1a peak = design day 1072.011962890625 W at index 0",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 2,
+    "Blocked": 1,
+    "Evidence": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Fail (|difference| 0.0384521484375 \u003E R0 tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "f6-zero-peak-hour-0-available",
+    "Description": "F6 replay: a zero peak\u0027s placeholder hour 0 emitted as an available B1a hour",
+    "Applicable": false,
+    "Applied": "no zero peak in this input (no model profile or zone load is zero all year)",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [],
+    "Verdict": null,
+    "ExitCode": 0,
+    "Fail": 0,
+    "Blocked": 0,
+    "Evidence": [
+      "no zero peak in this input (no model profile or zone load is zero all year)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-hour-plus-1",
+    "Description": "SAM AnnualPeak hour of year \u002B 1",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Cooling AnnualPeak hour 4381 -\u003E 4382",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.hourOfYear"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 2,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.hourOfYear: Fail (not one of the 1 expected value(s))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-hour-minus-1",
+    "Description": "SAM AnnualPeak hour of year - 1",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Cooling AnnualPeak hour 4381 -\u003E 4380",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.hourOfYear"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 2,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.hourOfYear: Fail (not one of the 1 expected value(s))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-heating-cooling-swapped",
+    "Description": "SAM heating and cooling results swapped",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 heating and cooling results swapped",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.load"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 21,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Fail (|difference| 7.1976318359375 \u003E R0 tolerance 0)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.load: Fail (|difference| 7.1976318359375 \u003E R0 tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "b1a-model-consumption-x1000",
+    "Description": "B1a model consumption x 1000 (unit slip)",
+    "Applicable": true,
+    "Applied": "B1a model Heating consumption 1482.3062198656799 x 1000",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "B1a|model|Heating|consumption"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 1,
+    "Blocked": 1,
+    "Evidence": [
+      "B1a|model|Heating|consumption: Fail (|difference| 1480823.9136458142 \u003E R2 tolerance 1.48330621986568E-06)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "b1a-space-peak-x1000",
+    "Description": "B1a space peakLoad x 1000 (unit slip)",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating B1a peakLoad 1072.0504150390625 x 1000",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 1,
+    "Blocked": 1,
+    "Evidence": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Fail (|difference| 1070978.3646240234 \u003E R0 tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "b1a-model-consumption-1e-6",
+    "Description": "B1a model consumption off by 1e-6 relative",
+    "Applicable": true,
+    "Applied": "B1a model Heating consumption 1482.3062198656799 x 1.000001",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "B1a|model|Heating|consumption"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 1,
+    "Blocked": 1,
+    "Evidence": [
+      "B1a|model|Heating|consumption: Fail (|difference| 0.0014823062197137915 \u003E R2 tolerance 1.48330621986568E-06)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-model-peak-hour-plus-1",
+    "Description": "captured SAM model peak hour \u002B 1",
+    "Applicable": true,
+    "Applied": "captured model Heating peak hour \u002B 1",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|model|Heating|peakHour"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 1,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|model|Heating|peakHour: Fail (|difference| 1 \u003E Hour tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-non-maximal-hour",
+    "Description": "SAM AnnualPeak hour set to an hour that is not a maximum",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Cooling AnnualPeak hour 4381 -\u003E 0 (value 0 \u003C max 1064.852783203125)",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.hourOfYear"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 2,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.hourOfYear: Fail (not one of the 1 expected value(s))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-missing-result",
+    "Description": "a space\u0027s Tas result removed",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating Tas result missing",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|tasResultCount"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 13,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|tasResultCount: Fail (|difference| 1 \u003E Count tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-duplicate-result",
+    "Description": "a space\u0027s Tas result duplicated",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating Tas result duplicate",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|tasResultCount"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 13,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|tasResultCount: Fail (|difference| 1 \u003E Count tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "sam-non-tas-source",
+    "Description": "a space\u0027s result from a non-Tas source",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating Tas result foreign",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|tasResultCount"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 13,
+    "Blocked": 1,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|tasResultCount: Fail (|difference| 1 \u003E Count tolerance 0)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "b1a-metric-missing",
+    "Description": "a B1a space designLoad metric removed",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating B1a designLoad removed",
+    "ExpectedStatus": "FAIL",
+    "IntendedRows": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designLoad"
+    ],
+    "Verdict": "FAIL",
+    "ExitCode": 10,
+    "Fail": 1,
+    "Blocked": 1,
+    "Evidence": [
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designLoad: Fail (not produced: B1a heating.designLoad absent)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-part-year",
+    "Description": "the TSD simulation window is days 1..364",
+    "Applicable": true,
+    "Applied": "lastDay 364",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "ALL"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 95,
+    "Evidence": [
+      "SAM|model|Heating|consumption: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "SAM|model|Heating|peakLoad: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "SAM|model|Heating|peakHour: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "B1a|model|Heating|consumption: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "B1a|model|Heating|peakLoad: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "B1a|model|Heating|peakHour: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "SAM|model|Cooling|consumption: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "SAM|model|Cooling|peakLoad: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "SAM|model|Cooling|peakHour: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)",
+      "B1a|model|Cooling|consumption: Blocked (the TSD simulation window is not days 1..365 (Finite(1)..Finite(364)): a part-year TSD is refused)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-stub",
+    "Description": "a stub TSD (refused simulation)",
+    "Applicable": true,
+    "Applied": "reader error: stub",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "ALL"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 95,
+    "Evidence": [
+      "SAM|model|Heating|consumption: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "SAM|model|Heating|peakLoad: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "SAM|model|Heating|peakHour: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "B1a|model|Heating|consumption: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "B1a|model|Heating|peakLoad: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "B1a|model|Heating|peakHour: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "SAM|model|Cooling|consumption: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "SAM|model|Cooling|peakLoad: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "SAM|model|Cooling|peakHour: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)",
+      "B1a|model|Cooling|consumption: Blocked (TSD read: TSD is a 22-byte stub (a refused simulation); it is not opened)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-non-unique-zone-name",
+    "Description": "two TSD zones share a name",
+    "Applicable": true,
+    "Applied": "zone \u0027FixB\u0027 renamed \u0027FixA\u0027",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|tasResultCount",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|reference",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|annualPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|annualPeak.hourOfYear",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|annualPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designLoad",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|unmetHours",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|peakLoad",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|peakHour",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designLoad",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|unmetHours",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|tasResultCount",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|reference",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|annualPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|annualPeak.hourOfYear",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|annualPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designLoad",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|unmetHours",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|peakLoad",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|peakHour",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designLoad",
+      "B1a|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|unmetHours"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 76,
+    "Evidence": [
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|tasResultCount: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|reference: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|annualPeak.load: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|annualPeak.hourOfYear: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|annualPeak.hourOfDay: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.hourOfDay: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load: Blocked (zone identity unresolved: zone name \u0027FixA\u0027 is not unique (2 zones): identity by name is refused)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-negative-load",
+    "Description": "an unexpected negative element in a zone load array",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating load: element 0 = -1",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 35,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (zone \u0027FixA\u0027 heatingLoad has 1 negative element(s), first -1 at position 0: a Tas plant load array is a non-negative magnitude, so the sign is unresolved)",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Blocked (zone \u0027FixA\u0027 heatingLoad has 1 negative element(s), first -1 at position 0: a Tas plant load array is a non-negative magnitude, so the sign is unresolved)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-unread-element",
+    "Description": "a zone load element that could not be read (never a zero)",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating load: element 100 unread",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 35,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (zone \u0027FixA\u0027 heatingLoad has 1 unread element(s), first at CLR index 101: a missing value is never a zero)",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Blocked (zone \u0027FixA\u0027 heatingLoad has 1 unread element(s), first at CLR index 101: a missing value is never a zero)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-nan-element",
+    "Description": "a NaN zone load element",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating load: element 200 NaN",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 35,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (zone \u0027FixA\u0027 heatingLoad has 1 NaN/infinite element(s), first at CLR index 201)",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Blocked (zone \u0027FixA\u0027 heatingLoad has 1 NaN/infinite element(s), first at CLR index 201)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-short-array",
+    "Description": "a zone load array of 8759 elements",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating load: last element dropped",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 35,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (zone \u0027FixA\u0027 heatingLoad has 8759 elements at lower bound 1; expected 8760 at lower bound 1 (N-5, 24 per simulated day): it is never truncated, padded or shifted)",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Blocked (zone \u0027FixA\u0027 heatingLoad has 8759 elements at lower bound 1; expected 8760 at lower bound 1 (N-5, 24 per simulated day): it is never truncated, padded or shifted)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-lower-bound-0",
+    "Description": "a zone load array at lower bound 0",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating load: lower bound 0",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 35,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (zone \u0027FixA\u0027 heatingLoad has 8760 elements at lower bound 0; expected 8760 at lower bound 1 (N-5, 24 per simulated day): it is never truncated, padded or shifted)",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Blocked (zone \u0027FixA\u0027 heatingLoad has 8760 elements at lower bound 0; expected 8760 at lower bound 1 (N-5, 24 per simulated day): it is never truncated, padded or shifted)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-absent-array",
+    "Description": "a zone load array not returned",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 Heating load: array absent",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 35,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (zone \u0027FixA\u0027 heatingLoad is Absent (null))",
+      "B1a|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|peakLoad: Blocked (zone \u0027FixA\u0027 heatingLoad is Absent (null))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-building-profile-absent",
+    "Description": "the building heating profile not returned",
+    "Applicable": true,
+    "Applied": "building heatingProfile absent",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|model|Heating|consumption",
+      "SAM|model|Heating|peakLoad",
+      "SAM|model|Heating|peakHour",
+      "B1a|model|Heating|consumption",
+      "B1a|model|Heating|peakLoad",
+      "B1a|model|Heating|peakHour"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 7,
+    "Evidence": [
+      "SAM|model|Heating|consumption: Blocked (building heatingProfile is Absent (null))",
+      "SAM|model|Heating|peakLoad: Blocked (building heatingProfile is Absent (null))",
+      "SAM|model|Heating|peakHour: Blocked (building heatingProfile is Absent (null))",
+      "B1a|model|Heating|consumption: Blocked (building heatingProfile is Absent (null))",
+      "B1a|model|Heating|peakLoad: Blocked (building heatingProfile is Absent (null))",
+      "B1a|model|Heating|peakHour: Blocked (building heatingProfile is Absent (null))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-loads-in-kw",
+    "Description": "zone loads divided by 1000 (kW): the balance no longer closes",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 loads divided by 1000",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.load"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 37,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (the load units/roles/sign are unresolved: zone \u0027FixA\u0027: 3617 hour(s) outside tolerance; largest residual -1070.9806534423828 W at hour 535 (sum |terms| 1343.1527388916015 W); hours with heating \u003E 0: 2044, cooling \u003E 0: 1669, both: 0; roles swapped would violate 3617 hour(s); max |AHUGain| 0 W)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.load: Blocked (the load units/roles/sign are unresolved: zone \u0027FixA\u0027: 3617 hour(s) outside tolerance; largest residual -1070.9806534423828 W at hour 535 (sum |terms| 1343.1527388916015 W); hours with heating \u003E 0: 2044, cooling \u003E 0: 1669, both: 0; roles swapped would violate 3617 hour(s); max |AHUGain| 0 W)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-load-roles-swapped",
+    "Description": "zone heating and cooling load arrays swapped: the balance no longer closes",
+    "Applicable": true,
+    "Applied": "zone \u0027FixA\u0027 loads heating/cooling arrays swapped",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.load"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 37,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|annualPeak.load: Blocked (the load units/roles/sign are unresolved: zone \u0027FixA\u0027: 3655 hour(s) outside tolerance; largest residual -2144.1031188964844 W at hour 535 (sum |terms| 2414.131103515625 W); hours with heating \u003E 0: 1669, cooling \u003E 0: 2044, both: 0; roles swapped would violate 0 hour(s); max |AHUGain| 0 W)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|annualPeak.load: Blocked (the load units/roles/sign are unresolved: zone \u0027FixA\u0027: 3655 hour(s) outside tolerance; largest residual -2144.1031188964844 W at hour 535 (sum |terms| 2414.131103515625 W); hours with heating \u003E 0: 1669, cooling \u003E 0: 2044, both: 0; roles swapped would violate 0 hour(s); max |AHUGain| 0 W)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "tsd-design-day-short",
+    "Description": "a design-day series one hour short",
+    "Applicable": true,
+    "Applied": "Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad one element short",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8759 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8759 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8759 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8759 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8759 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8759 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-lower-bound-0",
+    "Description": "every design-day series at lower bound 0 (values unchanged)",
+    "Applicable": true,
+    "Applied": "every design-day series at lower bound 0; 23 design-day/legacy row(s) depend on the calendar shape",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 24,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 0; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-lower-bound-2",
+    "Description": "every design-day series at lower bound 2 (values unchanged)",
+    "Applicable": true,
+    "Applied": "every design-day series at lower bound 2; 23 design-day/legacy row(s) depend on the calendar shape",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 24,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound 2; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-lower-bound-minus-23",
+    "Description": "every design-day series at lower bound -23 (values unchanged)",
+    "Applicable": true,
+    "Applied": "every design-day series at lower bound -23; 23 design-day/legacy row(s) depend on the calendar shape",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 24,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 8760 elements at lower bound -23; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-peak-table-absent",
+    "Description": "a role\u0027s design-day GetPeakZoneGains not read (no native index evidence)",
+    "Applicable": true,
+    "Applied": "Cooling design-day GetPeakZoneGains absent",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 5,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: GetPeakZoneGains was not read (Absent null), so its native index cannot be checked)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (design-day index unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: GetPeakZoneGains was not read (Absent null), so its native index cannot be checked)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: GetPeakZoneGains was not read (Absent null), so its native index cannot be checked)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex: Blocked (design-day index unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: GetPeakZoneGains was not read (Absent null), so its native index cannot be checked)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-time-signal-shifted",
+    "Description": "a role\u0027s design-day gains rotated one hour later within the TBD design day, against the TBD schedule",
+    "Applicable": true,
+    "Applied": "Cooling design-day gains rotated one hour later within the TBD design day",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 3,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling: the TBD gain schedules fit the TSD design-day gains at offset(s) [1] over 3 signal(s); the convention requires offset 0 only (index 1 = 00:00-01:00))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling: the TBD gain schedules fit the TSD design-day gains at offset(s) [1] over 3 signal(s); the convention requires offset 0 only (index 1 = 00:00-01:00))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-day-shifted",
+    "Description": "a role\u0027s design-day series moved one hour later than the TBD year day\u0027s block",
+    "Applicable": true,
+    "Applied": "Cooling design-day series moved one element later (populated block at CLR 4346..4369)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first -0 at CLR 4369: the populated hours are not the TBD year day\u0027s)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-in-day-sentinel",
+    "Description": "one load hour inside the design day holds Tas\u0027s -1 (a missing active hour)",
+    "Applicable": true,
+    "Applied": "Cooling \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad CLR 4357 (inside the day) = -1",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 negative element(s) inside the design day CLR 4345..4368, first -1 at CLR 4357: a load there is a non-negative magnitude (Tas\u0027s -1 marks only hours outside the day))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-outside-day-value",
+    "Description": "one load element outside the design day holds a value instead of -1 (an extra active hour)",
+    "Applicable": true,
+    "Applied": "Cooling \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad CLR 4344 (outside the day) = 0",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 1 element(s) other than Tas\u0027s -1 outside the design day CLR 4345..4368, first 0 at CLR 4344: the populated hours are not the TBD year day\u0027s)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-in-day-unread",
+    "Description": "one load element inside the design day could not be read (never a zero)",
+    "Applicable": true,
+    "Applied": "Cooling \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad CLR 4357 (inside the day) unread",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 unread element(s), first at CLR index 4357: a missing value is never a zero)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-in-day-nan",
+    "Description": "one load element inside the design day is NaN",
+    "Applicable": true,
+    "Applied": "Cooling \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad CLR 4357 (inside the day) NaN",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 1 NaN/infinite element(s), first at CLR index 4357)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-compact-24",
+    "Description": "every design-day series compacted to its 24 in-day values (the earlier, unmeasured layout)",
+    "Applicable": true,
+    "Applied": "every located design-day series compacted to its 24 in-day elements at its own lower bound",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 24,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex: Blocked (Heating design-day data set 0 \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad has 24 elements at lower bound 1; the calendar representation is 8760 at the N-5 lower bound 1 (never compacted, padded or re-based))"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-year-day-unread",
+    "Description": "the TBD design day\u0027s yearDay could not be read",
+    "Applicable": true,
+    "Applied": "Cooling TBD design day of \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 yearDay 182 -\u003E Unreadable [COMException: the server threw an exception]",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay is Unreadable [COMException: the server threw an exception], so the expected design-day hours are unknown)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-year-day-plus-1",
+    "Description": "the TBD design day\u0027s yearDay one day later than the populated block",
+    "Applicable": true,
+    "Applied": "Cooling TBD design day of \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 yearDay 182 -\u003E Finite(183)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 coolingLoad holds 24 element(s) other than Tas\u0027s -1 outside the design day CLR 4369..4392, first -0 at CLR 4345: the populated hours are not the TBD year day\u0027s)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-year-day-0",
+    "Description": "the TBD design day\u0027s yearDay 0 (outside the simulated year)",
+    "Applicable": true,
+    "Applied": "Cooling TBD design day of \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 yearDay 182 -\u003E Zero(0)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day data set 0 \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027: the TBD design day\u0027s yearDay 0 is not a day 1..365 of the simulated year)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-peak-index-outside-day",
+    "Description": "Tas\u0027s design-day peak index at the hour before the design day (a -1 element)",
+    "Applicable": true,
+    "Applied": "Cooling \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 GetPeakZoneGains index -\u003E CLR 4344 (the hour before the design day, a -1 element)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 5,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4344) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (design-day index unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4344) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4344) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex: Blocked (design-day index unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4344) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-peak-index-non-maximal",
+    "Description": "Tas\u0027s design-day peak index at an in-day hour that is not a maximum",
+    "Applicable": true,
+    "Applied": "Cooling \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027 GetPeakZoneGains index -\u003E CLR 4345 (an in-day hour below the maximum 1117.6485595703125)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 5,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4345) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (design-day index unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4345) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (design-day hour of day unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4345) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex: Blocked (design-day index unresolved (S10-C9): Cooling design-day data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 zone \u0027FixA\u0027: GetPeakZoneGains index Finite(4345) is not the CLR index of a tied maximum (4358), so the native index convention is contradicted)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-all-datasets-missing",
+    "Description": "every TSD design-day data set missing although the TBD holds groups",
+    "Applicable": true,
+    "Applied": "TSD design-day data sets of Cooling, Heating removed (the TBD still holds their groups)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 24,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load: Blocked (Heating design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay: Blocked (Heating design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name: Blocked (Heating design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod: Blocked (Heating design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load: Blocked (Heating design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex: Blocked (Heating design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN HTG 100% CONDS DB\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-role-missing",
+    "Description": "one role\u0027s TSD design-day data sets missing",
+    "Applicable": true,
+    "Applied": "TSD design-day data sets of Cooling removed (the TBD still holds their groups)",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-duplicate-dataset",
+    "Description": "a TSD design-day data set duplicated",
+    "Applicable": true,
+    "Applied": "Cooling data set \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 duplicated",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: duplicate TSD data sets: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 x2)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-group-missing",
+    "Description": "a TBD design-day group with no TSD data set",
+    "Applicable": true,
+    "Applied": "Cooling TBD group \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027 added, with no TSD data set",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: expected but missing in the TSD: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad (S10 extra expected group)\u0027)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-unexpected-dataset",
+    "Description": "a TSD design-day data set the TBD does not hold",
+    "Applicable": true,
+    "Applied": "Cooling TBD groups removed while the TSD keeps its data sets",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (Cooling design-day coverage: in the TSD but not a TBD group: \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-coverage-unreadable",
+    "Description": "a TBD design-day group that could not be read",
+    "Applicable": true,
+    "Applied": "Cooling TBD group \u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027 unreadable",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 13,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod: Blocked (the TBD Cooling design-day coverage is unreadable: group 0 (\u0027Budapest.Met.Center ANN CLG 0% CONDS DB=\u003EGRad\u0027): design day 0 unreadable: COMException: The server threw an exception.)"
+    ],
+    "AsIntended": true
+  },
+  {
+    "Case": "dd-coverage-absent",
+    "Description": "no TBD design-day coverage read",
+    "Applicable": true,
+    "Applied": "TBD design-day coverage absent",
+    "ExpectedStatus": "BLOCKED",
+    "IntendedRows": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.load",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Heating|legacy.loadIndex",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.hourOfDay",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|designDayPeak.name",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.sizingMethod",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.load",
+      "SAM|{D267F93B-CB70-4981-9095-8298DEF76FBB}|Cooling|legacy.loadIndex"
+    ],
+    "Verdict": "BLOCKED",
+    "ExitCode": 11,
+    "Fail": 0,
+    "Blocked": 24,
+    "Evidence": [
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.load: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.hourOfDay: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|designDayPeak.name: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.sizingMethod: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.load: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Heating|legacy.loadIndex: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.load: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.hourOfDay: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|designDayPeak.name: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)",
+      "SAM|{424293C1-D7B7-4B95-BDAB-D7C31F517F42}|Cooling|legacy.sizingMethod: Blocked (no TBD design-day coverage was read (tbd-design-coverage.json): the expected design-day data sets are unknown)"
+    ],
+    "AsIntended": true
+  }
+]

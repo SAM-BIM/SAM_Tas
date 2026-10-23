@@ -1,0 +1,67 @@
+﻿{
+    "fixtures":  [
+                     {
+                         "value":  "45524172b32f85df89511dd344141023de999faa9552a199e6b49062612acd08  s08-fix-box.json",
+                         "PSPath":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\ReadBack\\Fixtures\\SHA256SUMS.txt",
+                         "PSParentPath":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\ReadBack\\Fixtures",
+                         "PSChildName":  "SHA256SUMS.txt",
+                         "PSDrive":  {
+                                         "CurrentLocation":  "Users\\michal\\Documents\\GitHub\\SAM-BIM",
+                                         "Name":  "C",
+                                         "Provider":  "Microsoft.PowerShell.Core\\FileSystem",
+                                         "Root":  "C:\\",
+                                         "Description":  "Windows-SSD",
+                                         "MaximumSize":  null,
+                                         "Credential":  "System.Management.Automation.PSCredential",
+                                         "DisplayRoot":  null
+                                     },
+                         "PSProvider":  {
+                                            "ImplementingType":  "Microsoft.PowerShell.Commands.FileSystemProvider",
+                                            "HelpFile":  "System.Management.Automation.dll-Help.xml",
+                                            "Name":  "FileSystem",
+                                            "PSSnapIn":  "Microsoft.PowerShell.Core",
+                                            "ModuleName":  "Microsoft.PowerShell.Core",
+                                            "Module":  null,
+                                            "Description":  "",
+                                            "Capabilities":  52,
+                                            "Home":  "C:\\Users\\michal",
+                                            "Drives":  "C D"
+                                        },
+                         "ReadCount":  1
+                     },
+                     {
+                         "value":  "20da9b586345e9fc67dc6308e6da1578b9bc41b3c694dbdab37e9c677959baa0  s08-fix-two.json",
+                         "PSPath":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\ReadBack\\Fixtures\\SHA256SUMS.txt",
+                         "PSParentPath":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\ReadBack\\Fixtures",
+                         "PSChildName":  "SHA256SUMS.txt",
+                         "PSDrive":  {
+                                         "CurrentLocation":  "Users\\michal\\Documents\\GitHub\\SAM-BIM",
+                                         "Name":  "C",
+                                         "Provider":  "Microsoft.PowerShell.Core\\FileSystem",
+                                         "Root":  "C:\\",
+                                         "Description":  "Windows-SSD",
+                                         "MaximumSize":  null,
+                                         "Credential":  "System.Management.Automation.PSCredential",
+                                         "DisplayRoot":  null
+                                     },
+                         "PSProvider":  {
+                                            "ImplementingType":  "Microsoft.PowerShell.Commands.FileSystemProvider",
+                                            "HelpFile":  "System.Management.Automation.dll-Help.xml",
+                                            "Name":  "FileSystem",
+                                            "PSSnapIn":  "Microsoft.PowerShell.Core",
+                                            "ModuleName":  "Microsoft.PowerShell.Core",
+                                            "Module":  null,
+                                            "Description":  "",
+                                            "Capabilities":  52,
+                                            "Home":  "C:\\Users\\michal",
+                                            "Drives":  "C D"
+                                        },
+                         "ReadCount":  2
+                     }
+                 ],
+    "weather":  "C:\\TasOut\\s08c\\weather\\budapest.epw",
+    "weatherSha256":  "472ffb4e2f10867600949a392ce46891fc1bd05f2fc8d8917a99bca7d26209c3",
+    "engineVersion":  "2.0.0.1",
+    "samCommit":  "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+    "runnerCommit":  "9871f437f679e2e55d0aa2f3ef3479a33524a1f3"
+}

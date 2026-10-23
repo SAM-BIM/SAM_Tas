@@ -1,0 +1,190 @@
+﻿{
+    "utc":  "2026-10-23T18:33:29.6938832Z",
+    "machine":  "LEGION5MD",
+    "phase":  "run",
+    "exe":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Release\\direct-t3d-validation.exe",
+    "exeSha256":  "2e373fb0e9f134d3c580344782fc6f369d1c1332f1b24427f580c748e406980e",
+    "harnessDll":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Release\\direct-t3d-validation.dll",
+    "harnessDllSha256":  "d01b92cb0de7cecd038755590dfe94094dc9b56df7e6a372ce6277d52ea42d65",
+    "benchmarkExe":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\build\\benchmark-tas.exe",
+    "benchmarkExeSha256":  "65a0c3e4cfd899f23cc855db48dad48a73c87a03956f24c88333493003805cc0",
+    "benchmarkDll":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\build\\benchmark-tas.dll",
+    "benchmarkDllSha256":  "be4897ea4f882ce7db672feb57eaaf84187b034174549ec52f90f456c4404253",
+    "rules":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Release\\calibration-rules.json",
+    "rulesSha256":  "766a88cdbf1294992c2b089502ad2027d6645674f514628c0a039d16a9e42c40",
+    "engineVersion":  "2.0.0.1",
+    "samCommit":  "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+    "runnerCommit":  "9871f437f679e2e55d0aa2f3ef3479a33524a1f3",
+    "samHead":  "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+    "runnerHead":  "a170cdf3cbd850341e259ac0e2e352145e4ed8dc",
+    "proven":  true,
+    "problems":  [
+
+                 ],
+    "receipt":  {
+                    "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\build\\s10-build-receipt.json",
+                    "sha256":  "c36bb2066d8168b1c4a154ff2b1c139b64b485d6f80f07c9d60ef9f97a81f822",
+                    "samCommit":  "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+                    "runnerCommit":  "9871f437f679e2e55d0aa2f3ef3479a33524a1f3",
+                    "filesChecked":  79,
+                    "samLibraries":  [
+                                         {
+                                             "name":  "SAM.Core.dll",
+                                             "receipt":  "167fd688bc55e8c175eecdc6a03bc7656c2766c7435ddf035eb87c34bb28c9c7",
+                                             "built":  "167fd688bc55e8c175eecdc6a03bc7656c2766c7435ddf035eb87c34bb28c9c7"
+                                         },
+                                         {
+                                             "name":  "SAM.Math.dll",
+                                             "receipt":  "86c6871e16e2f525dc14e5c8e97ae0c8e5830005d12f352ffce955e1a7bddc6d",
+                                             "built":  "86c6871e16e2f525dc14e5c8e97ae0c8e5830005d12f352ffce955e1a7bddc6d"
+                                         },
+                                         {
+                                             "name":  "SAM.Units.dll",
+                                             "receipt":  "b9e8e7590744ea2e77381c08e5a0440dc42ede786b373b6f75a96e98f979babe",
+                                             "built":  "b9e8e7590744ea2e77381c08e5a0440dc42ede786b373b6f75a96e98f979babe"
+                                         },
+                                         {
+                                             "name":  "SAM.Geometry.dll",
+                                             "receipt":  "5d3a387d7f7833b7c082c70da4331119fefb594bf8f95219eaeebcdcfeb4732a",
+                                             "built":  "5d3a387d7f7833b7c082c70da4331119fefb594bf8f95219eaeebcdcfeb4732a"
+                                         },
+                                         {
+                                             "name":  "SAM.Weather.dll",
+                                             "receipt":  "6aa1efcd7c7a6e78747b868825904e9876cce963533e6adec8ff72e4f0835063",
+                                             "built":  "6aa1efcd7c7a6e78747b868825904e9876cce963533e6adec8ff72e4f0835063"
+                                         },
+                                         {
+                                             "name":  "SAM.Architectural.dll",
+                                             "receipt":  "7c06c9814f6131a8a3bdd8917894b69e46c549d885f887fc615ca8da30037c6b",
+                                             "built":  "7c06c9814f6131a8a3bdd8917894b69e46c549d885f887fc615ca8da30037c6b"
+                                         },
+                                         {
+                                             "name":  "SAM.Analytical.dll",
+                                             "receipt":  "1492f3ed29206def0c185db5a0afec974407d63abe681b8af6198ab6950fd9f9",
+                                             "built":  "1492f3ed29206def0c185db5a0afec974407d63abe681b8af6198ab6950fd9f9"
+                                         },
+                                         {
+                                             "name":  "SAM.Core.Optimisation.dll",
+                                             "receipt":  "87c0b43bd3b41c9df189d2016427bd37bbb479ff662c664b4fe773e9b51368d8",
+                                             "built":  "87c0b43bd3b41c9df189d2016427bd37bbb479ff662c664b4fe773e9b51368d8"
+                                         }
+                                     ],
+                    "problems":  [
+
+                                 ]
+                },
+    "runner":  {
+                   "name":  "runner",
+                   "directory":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas",
+                   "head":  "a170cdf3cbd850341e259ac0e2e352145e4ed8dc",
+                   "branch":  "feature/s10-tas-results-roundtrip",
+                   "dirty":  0,
+                   "built":  "9871f437f679e2e55d0aa2f3ef3479a33524a1f3",
+                   "recordOnly":  [
+                                      "Documentation/S10-TasResultsRoundTrip-PR.md"
+                                  ],
+                   "newestSource":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.ReadBack.Tests\\S10RunnerScriptTests.cs",
+                   "newestSourceUtc":  "2026-10-23T17:48:16.0298072Z",
+                   "artifacts":  [
+                                     {
+                                         "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Release\\direct-t3d-validation.exe",
+                                         "sha256":  "2e373fb0e9f134d3c580344782fc6f369d1c1332f1b24427f580c748e406980e",
+                                         "lastWriteUtc":  "2026-10-23T17:49:20.9874677Z"
+                                     },
+                                     {
+                                         "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\SAM_Tas\\SAM.Analytical.Tas.DirectT3D.Validation\\bin\\Release\\direct-t3d-validation.dll",
+                                         "sha256":  "d01b92cb0de7cecd038755590dfe94094dc9b56df7e6a372ce6277d52ea42d65",
+                                         "lastWriteUtc":  "2026-10-23T17:49:20.9713682Z"
+                                     },
+                                     {
+                                         "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\build\\benchmark-tas.exe",
+                                         "sha256":  "65a0c3e4cfd899f23cc855db48dad48a73c87a03956f24c88333493003805cc0",
+                                         "lastWriteUtc":  "2026-10-23T17:49:19.8153077Z"
+                                     },
+                                     {
+                                         "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\build\\benchmark-tas.dll",
+                                         "sha256":  "be4897ea4f882ce7db672feb57eaaf84187b034174549ec52f90f456c4404253",
+                                         "lastWriteUtc":  "2026-10-23T17:49:19.7925078Z"
+                                     },
+                                     {
+                                         "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM_Tas\\build\\SAM.Analytical.Tas.dll",
+                                         "sha256":  "ad7af130fdd2ba5d871a58fe808dbee477062090d6e2b6b4f0dfc760e66490f8",
+                                         "lastWriteUtc":  "2026-10-23T17:49:19.1742714Z"
+                                     }
+                                 ],
+                   "problems":  [
+
+                                ]
+               },
+    "sam":  {
+                "name":  "sam",
+                "directory":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM",
+                "head":  "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+                "branch":  "sow/2026-Q4",
+                "dirty":  0,
+                "built":  "2cfd6909155a255d9884fa3ef18c5d5dda444e94",
+                "recordOnly":  [
+
+                               ],
+                "newestSource":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\SAM\\SAM.Weather\\Query\\EPWSolarGeometry.cs",
+                "newestSourceUtc":  "2026-10-19T09:21:02.8506248Z",
+                "artifacts":  [
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Analytical.dll",
+                                      "sha256":  "1492f3ed29206def0c185db5a0afec974407d63abe681b8af6198ab6950fd9f9",
+                                      "lastWriteUtc":  "2026-10-23T17:49:13.5165945Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Architectural.dll",
+                                      "sha256":  "7c06c9814f6131a8a3bdd8917894b69e46c549d885f887fc615ca8da30037c6b",
+                                      "lastWriteUtc":  "2026-10-23T17:49:11.9262103Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Core.dll",
+                                      "sha256":  "167fd688bc55e8c175eecdc6a03bc7656c2766c7435ddf035eb87c34bb28c9c7",
+                                      "lastWriteUtc":  "2026-10-23T17:49:10.6530772Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Core.Optimisation.dll",
+                                      "sha256":  "87c0b43bd3b41c9df189d2016427bd37bbb479ff662c664b4fe773e9b51368d8",
+                                      "lastWriteUtc":  "2026-10-23T17:49:15.6876368Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Geometry.dll",
+                                      "sha256":  "5d3a387d7f7833b7c082c70da4331119fefb594bf8f95219eaeebcdcfeb4732a",
+                                      "lastWriteUtc":  "2026-10-23T17:49:11.8429936Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Math.dll",
+                                      "sha256":  "86c6871e16e2f525dc14e5c8e97ae0c8e5830005d12f352ffce955e1a7bddc6d",
+                                      "lastWriteUtc":  "2026-10-23T17:49:10.9802132Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Units.dll",
+                                      "sha256":  "b9e8e7590744ea2e77381c08e5a0440dc42ede786b373b6f75a96e98f979babe",
+                                      "lastWriteUtc":  "2026-10-23T17:49:15.3310047Z"
+                                  },
+                                  {
+                                      "path":  "C:\\Users\\michal\\Documents\\GitHub\\SAM-BIM\\SAM\\build\\SAM.Weather.dll",
+                                      "sha256":  "6aa1efcd7c7a6e78747b868825904e9876cce963533e6adec8ff72e4f0835063",
+                                      "lastWriteUtc":  "2026-10-23T17:49:12.0549827Z"
+                                  }
+                              ],
+                "problems":  [
+
+                             ]
+            },
+    "otherRepositories":  {
+                              "SAM_gbXML":  {
+                                                "head":  "43b5d018ac7a8a14f332e8bcde9cb0d613bf1efb",
+                                                "branch":  "sow/2026-Q4",
+                                                "dirty":  0
+                                            },
+                              "SAM_Validation":  {
+                                                     "head":  "2a3acfafb3919b4a0b81d67ef16a4b9d1e222f5d",
+                                                     "branch":  "sow/2026-Q4",
+                                                     "dirty":  0
+                                                 }
+                          },
+    "powershell":  "5.1.26100.9711"
+}
