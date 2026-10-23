@@ -7,12 +7,19 @@ accepted; hour and peak definitions documented. Branch `feature/s10-tas-results-
 
 ## Status
 
-- **Revision 1** (code and offline tests, no licensed step): first tested at content `77ac1cda` (record head `b607d529`);
-  the independent review returned **REVISE** with two P1 findings (R1, R2). **Revision 1 correction** (this commit series)
-  closes both offline; see "Revision 1 correction". Tested content SHA and results: "Tests and validation". Awaiting the
-  independent re-review of revision 1 before revision 2.
-- **Revision 2** (licensed acceptance): not started. It runs only after revision 1 is accepted: exactly the two approved
-  fixture simulations plus read-only reads and offline comparisons (OD-1). Nothing licensed was executed for revision 1.
+- **Revision 1** (code and offline tests): tested at `77ac1cda`; the review returned REVISE (R1, R2). The correction was
+  tested at `3387915b` (record head `223c49dd`) and independently **accepted for the bounded licensed measurement only**
+  (`SAM-BIM/.review-s10-r1-correction-20261023/REVIEW.md`, machine-local).
+- **Revision 2, attempt 1** (licensed, 2026-10-23): **STOPPED on an infrastructure failure.** Both OD-1 invocations count
+  as attempted. The box simulation completed, but B1a was refused (no SAM commit). The script then started the two-zone
+  invocation, which was terminated before it wrote a TSD. The review of that outcome returned **REVISE**: R3 (runner
+  provenance), R4 (no stop on failure), and a design-day representation that contradicts the S10-C7 assumption
+  (`SAM-BIM/.review-s10-r2-20261023/REVIEW.md`). See "Revision 2 attempt 1".
+- **Revision 2 correction** (this commit series, offline only): closes R3/R4 and replaces the disproved design-day
+  assumption with the measured calendar representation. See "Revision 2 correction". Tested content SHA and results:
+  "Tests and validation". No simulation, COM read or Tas process was run for it.
+- **S10 is not accepted.** Next: independent review of this correction. Any further licensed execution needs a fresh
+  owner decision; none is authorised by this record.
 - No merge, no deployment, no roadmap/handoff change (those need the normal workflow or a fresh owner exception).
 
 ## Owner decisions (2026-10-23, recorded for portability)
@@ -133,6 +140,17 @@ Correction (all BLOCKED through only the dependent rows): design-day series at l
 design-day `GetPeakZoneGains` absent, a role's design-day gain arrays one hour late, every data set missing, one role
 missing, a duplicate data set, an expected TBD group without a data set, a data set the TBD does not hold, an unreadable
 TBD group, no coverage read.
+Revision-2 correction (11 more, 51 in all; all BLOCKED):
+- the design day moved one hour later than its year day's block;
+- a load hour inside the day holding −1;
+- a value outside the day;
+- an unread or NaN load inside the day;
+- the series compacted to 24 elements;
+- `yearDay` unread, +1, or 0;
+- Tas's design-day peak index outside the day, or at a non-maximum.
+
+The time-signal control now rotates the gains within the TBD day. Lower-bound controls now take the role off the calendar
+shape.
 
 ## Revision 1 correction (independent review R1/R2, 2026-10-23)
 
@@ -197,6 +215,122 @@ The review probe, re-run with only the reference's new coverage argument added
 - lower bounds 0, 2 and -23: BLOCKED 91/95 each, C9 unresolved, exactly the four hour/index rows;
 - all data sets missing: BLOCKED 71/95, C10 unresolved, all 24 design-day and legacy rows.
 
+## Revision 2 attempt 1 (licensed, 2026-10-23): stopped
+
+The run used the committed `Run-S10-Results.ps1 -Phase run -Root C:\TasOut\s10\acc1` at `223c49dd` (content `3387915b`).
+- **Build:** fresh Release rebuild, byte-identical to the build the correction review tested: `direct-t3d-validation.dll`
+  `c055753c…`, `benchmark-tas.dll` `6f6aff19…`.
+- **Inputs:** Tas 2.0.0.1; fixtures `45524172…`/`20da9b58…` and EPW `472ffb4e…`, all unchanged afterwards.
+
+**Counted attempts: both OD-1 invocations.**
+1. **`s08-fix-box`:** the workflow ran to completion (Sizing, Simulating, Saving Model). It saved the native TBD
+   `d868316b…`, TSD `3d80a135…` and SAM JSON `204062f6…`. Then `benchmark-tas` exited **4**: "provenance.commit.malformed
+   at $.provenance.samCommit". The script passed no `--sam-commit`, and local builds carry no stamp
+   (`benchmark/D10-CHECKPOINT.md`). The reads ran: TSD and TBD unchanged by them, 1 zone, 2 data sets. The subject capture
+   recorded "B1a missing" (exit 70). Compare: BLOCKED 59/59 (exit 11). Negatives: not run (exit 70).
+2. **`s08-fix-two`:** the script did not stop after the failure (R4), so it started this invocation automatically about
+   5 s later. The agent terminated it during the T3D/TBD build. No TSD was written, and the watchdog has no entry because
+   the script was killed inside the step.
+   - It left an orphan `TBD.exe` (PID 50008). It is no longer running as of the correction session. This branch's code
+     and tests did not stop it: the runner tests bind `-TasProcessNames` to a name that matches nothing (verified). Who
+     ended it is not recorded.
+
+**Native observations, box (independent reads, unchanged by reading):**
+- **Model:** heating 2037.1340381522775 kWh, 1.4284979248046874 kW at hour 7 (354 tied hours). Cooling 994.3502346024811
+  kWh, 1.60656640625 kW at hour 3877 (17 tied hours).
+- **Checks:** C1–C6, C8 and C10 verified. C5 closes in every hour; the largest residual is −0.0307 W.
+- **Annual `GetPeakZoneGains`:** value row 1, index row 2, index = the CLR index of the earliest tied maximum.
+- **Design-day series (contradicting the S10-C7 assumption):** 8760 elements at lower bound 1, populated only at the 24
+  CLR indices of the TBD design day's `yearDay`, Tas's −1 elsewhere. Heating `yearDay` 39 → CLR 913..936; cooling 182 →
+  CLR 4345..4368. All five series of each data set follow this.
+- **Design-day peak table:** Tas's index is the CLR index of an in-day maximum: cooling 4358, heating 913.
+
+**Evidence (machine-local):**
+- the run root `C:\TasOut\s10\acc1`;
+- `SAM-BIM/.s10-r2-acceptance-20261023/`: `REPORT.md`, and a `pack/` made with the committed packer (`-Target` set there),
+  28 files.
+
+No evidence from this attempt is committed: the acceptance pack belongs to a successful run.
+
+## Revision 2 correction (review R3/R4 and the design-day evidence method, 2026-10-23)
+
+**R3, provenance** (`Run-S10-Results.ps1`). Before any engine starts, the script resolves `samCommit` and
+`runnerCommit` and passes them to `benchmark-tas` as `--sam-commit`/`--runner-commit`. Each is the HEAD (40 hex) of a
+clean checkout (`git status --porcelain --untracked-files=all` empty), bound to its build:
+- every artifact (the harness and `benchmark-tas` exe/dll, `SAM.Analytical.Tas.dll`; the SAM build's `SAM.*.dll`) is no
+  older than every tracked source file (`*.cs`, `*.csproj`, `*.props`, `*.targets`, `*.resx`, `*.xaml`, `*.sln`) of its
+  checkout;
+- every `SAM.*.dll` beside `benchmark-tas` is byte-identical to `SAM/build`, and `SAM.Analytical.dll` must be among them.
+
+Any problem, recorded in `provenance-run.json`, stops the run in preflight. The fixture and EPW checks also stop in
+preflight. The production CLI is unchanged.
+
+**R4, failure control.**
+- Each step is written to the watchdog as `started` before its launch, then as `completed` or `terminated` (timeout).
+- The run stops at once (exit 3, `status-run.json` with the reason and the failed step) on any of: a simulation that is
+  non-zero or timed out; an exit 0 without the TBD/TSD/JSON/B1a; a read, coverage or subject capture that is non-zero; an
+  infrastructure exit from compare (not 0/10/11) or from negatives (not 0/10); a file changed by the reads; a fixture
+  changed. Nothing dependent runs and no further fixture starts.
+- Compare FAIL/BLOCKED and a negative matrix that is not all as intended are measured results: they are recorded in
+  `status-run.json` and the run continues.
+- `Clear-Tas` runs only in the run phase, and the process names are a parameter. The tests drive the real script with
+  `.cmd` process doubles, temporary git checkouts and a non-matching process name (`S10RunnerScriptTests`), so no Tas
+  process or COM server is touched.
+
+**Design-day evidence method (amends S10-C7 and C9).** This implements only the representation measured on the acc1 box.
+- **The expected mask comes from the TBD, never from the series.** The data set's coverage group must hold exactly one
+  design day.
+  - Its `yearDay` is taken from the raw TBD read (`tbd-snapshot.json`, `TbdReadBack` `d.yearDay`): the group is matched by
+    role and exact name, the snapshot and coverage must be reads of the same TBD (equal sha256), and they must agree on the
+    day type and repetitions.
+  - `yearDay` must be a readable integer 1..365. Mask = CLR (d−1)·24+1 .. d·24.
+  - Calendar basis: N-5 (CLR = hour + 1, days 1..365). The 1-based `yearDay` reading of that basis is checked on every run,
+    because any other basis puts the expected mask off the populated elements and BLOCKS.
+- **Every series of the data set that was read must:**
+  - be 8760 elements at the N-5 lower bound, every element read and finite;
+  - be exactly −1 outside the mask;
+  - hold a non-negative load inside the mask (so never the −1 sentinel). Other series may hold any finite value inside,
+    e.g. −1 °C.
+- **Kept as they are:** raw positions, original CLR indices, the legacy index semantics and R0/R1/R2. Annual arrays are
+  unchanged: no sentinel exemption.
+- **Not measured, so BLOCKED:** the earlier 24 / 24 × repetitions layout, a group of several design days, two data sets on
+  one year day, and any other bound or length.
+- **S10-C9:**
+  - Design-day peaks and ties are taken over the mask only.
+  - Tas's design index must be the CLR index of an in-day maximum, so an index at a −1 element or at a non-maximum
+    contradicts it.
+  - The time-signal fit uses the 24 in-day gains, whose first element is hour 0 at offset 0.
+
+**C9 assessment (established / uncertain), box:**
+- **Day block:** established from the TBD `yearDay` and the exact mask, both roles.
+- **Index:** established; Tas's design index is the CLR index of an in-day maximum, both roles.
+- **Cooling within-day origin:** established. The TBD `ticLG` hourly schedule of the CDD condition fits the in-day
+  lighting gain at offset 0 only, so the cooling hour of day is derived.
+- **Heating within-day origin:** NOT established. The HDD condition has no gains, and C9 stays unresolved for heating.
+  However, the heating design load is a 24-way tie over the whole day. Any within-day rotation maps that tie set onto
+  itself, so the hour-of-day row is derived with all 24 hours accepted. This does not depend on the importer, on a waiver
+  or on relaxed tolerances.
+  - A role with a narrower tie set and no time signal stays BLOCKED.
+  - An absent hour, or one outside 0..23, still FAILs.
+- **Still uncertain:**
+  - universality beyond this box: the layout is measured on one fixture, both roles; the two-zone fixture has no TSD;
+  - the meaning of the native `yearDay` beyond its exact match here;
+  - multi-day, repeated-day or overlapping variants (BLOCKED).
+
+**Offline replay of the acc1 box.** Read-only, written to `SAM-BIM/.s10-r3-correction-20261023/replay/`; acc1 is not
+written.
+- **Built harness `results-compare`:** BLOCKED 59/59 (exit 11), the original "B1a missing" error preserved. C7 is now
+  verified (year days 182 and 39); C9 is unresolved only for the heating origin. All 59 reference rows are derived
+  (`3387915b`: 47, with 12 BLOCKED by C7).
+- **`results-negatives`:** exit 70 (no B1a file), as before.
+- **Diagnostic only** (machine-local probe, derived, not the producer's acceptance): the partial SAM capture checked
+  against the corrected reference.
+  - 39 SAM/identity rows match, including both design-day loads, the cooling hour of day 13, the heating hour of day,
+    legacy and annual peaks, design loads and unmet hours (heating 292, cooling 9).
+  - 20 B1a-dependent rows are not checkable.
+
+The missing B1a remains a blocker, and no B1a was recovered or fabricated.
+
 ## Decisions and assumptions (for review)
 
 - **Reference independence**: `TsdResultRead.cs`, `ResultReference.cs`, `ResultCompare.cs` and `ResultSnapshot.cs` call
@@ -208,11 +342,10 @@ The review probe, re-run with only the reference's new coverage argument added
 - **Identity**: SAM result <-> TSD zone by `Reference` = zone GUID (compared as GUIDs, not text); SAM space <-> zone by
   unique exact name with equal counts; B1a space <-> SAM space by GUID and name; TBD zone <-> TSD zone by GUID. Anything
   else is BLOCKED (reference) or FAIL (subject).
-- **Design-day shape, coverage and convention [U]**: a data set's series must be complete, finite, non-negative, equal in
-  lower bound and length across zones, and of length 24 x (the matched TBD group's design days) or 24 x (their
-  repetitions) (C7); the data sets must correspond to the TBD groups (C10); index and hour of day follow only the
-  evidence-backed convention (C9). All three are measured for the first time on the acceptance TSDs; anything else
-  BLOCKS the dependent rows (recorded as a blocker, never accepted by widening a rule).
+- **Design-day shape, coverage and convention**: the data sets must correspond to the TBD groups (C10), and index and hour
+  of day follow only the evidence-backed convention (C9). C7's original assumption (24 x days or repetitions) was
+  disproved by the acc1 box TSD and replaced by the measured calendar representation ("Revision 2 correction"). Anything
+  unmeasured BLOCKS the dependent rows (recorded as a blocker, never accepted by widening a rule).
 - **Balance closure [U]**: the S10-C5 tolerance (1 % of the hour's absolute terms + 0.5 W) is fixed now, before any
   licensed read. If Tas's breakdown arrays do not close as the Theory Manual describes, the affected zone rows are BLOCKED
   and recorded with the largest residual; the tolerance is not relaxed.
@@ -229,14 +362,81 @@ The review probe, re-run with only the reference's new coverage argument added
 `TbdDesignCoverageRead.cs`), `Run-S10-Results.ps1`, `Pack-S10-Evidence.ps1` (new);
 `SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj`,
 `S10ResultCompareTests.cs`, `S10ResultReferenceTests.cs`, `S10SourceScanTests.cs`, `S10UnitsEvidenceTests.cs`,
-`S10SyntheticTriple.cs`, `S10DesignDayTests.cs` (correction) (new); `.gitattributes`; this record. The correction
+`S10SyntheticTriple.cs`, `S10DesignDayTests.cs` (correction), `S10RunnerScriptTests.cs` (revision-2 correction) (new);
+`.gitattributes`; this record. The revision-2 correction changes:
+- `Results/ResultReference.cs` (C7 calendar shape, C9 in-day peaks/offsets, full-day-tie hour rows);
+- `Results/ResultNegatives.cs` (11 controls, a TBD-mutation flag);
+- `Results/ResultsRun.cs` (writes a mutated TBD snapshot);
+- `Run-S10-Results.ps1` (R3/R4), `Pack-S10-Evidence.ps1` (packs `status-*.json`);
+- `S10SyntheticTriple.cs` (calendar-shaped design days, year days 182/39, an optional 24-way heating tie);
+- `S10DesignDayTests.cs`, and the new `S10RunnerScriptTests.cs`. The correction
 changes only `Results/` (`ResultReference.cs`, `ResultSnapshot.cs`, `ResultNegatives.cs`, `ResultsRun.cs`,
 `ResultReport.cs`, `TsdResultRead.cs`, new `TbdDesignCoverageRead.cs`), the two scripts, the S10 tests and this record. No importer, route, default, schema, workflow, SAM_UI,
 SAM_Validation or SAM change. `PROJECT_PROGRESS.md` unchanged (post-merge closeout only).
 
 ## Tests and validation
 
-### Revision 1 correction (current)
+### Revision 2 correction (current)
+
+Run on the local Windows workstation, 2026-10-23. No simulation, sizing, COM read or Tas process. **Tested content SHA
+`f29adaed`** (`f29adaedb3c48c7ee3dfc895b3616f9701b01f75`), clean tree. The record-only commit after it changes this file
+only. Final head and hosted checks: PR description.
+
+| Check (local, at `f29adaed`) | Result |
+|---|---|
+| `SAM_Tas.sln` Rebuild, Release, VS MSBuild 18, existing restore assets | exit 0, 0 errors |
+| Producer tests | 40/40 |
+| Core `SAM.Analytical.InputEquivalence.Tests` | 258/258 |
+| Read-back tests | 232/232 (196 + 23 design-day + 13 runner-script doubles), 0 failed, 0 skipped |
+| Negative matrix | synthetic control PASS, 51 cases as intended; on the box-like input (no heating signal, 24-way heating tie), the control PASSes and every case is as intended |
+| Runner doubles (`S10RunnerScriptTests`, the committed script) | see below |
+| Offline replay of acc1 box (built harness) | `results-compare` BLOCKED 59/59, exit 11 (B1a missing kept), C7 verified; `results-negatives` exit 70 (no B1a) |
+| Regression probe, same inputs on both builds (below) | the reviewed build blocks the measured layout and accepts the unmeasured one; the correction does the reverse |
+| Preservation | fixtures, EPW, acc1 native files and all 28 pack hashes unchanged; no write under `C:\TasOut\s10\acc1` since 16:15:32Z |
+| Artefacts | `direct-t3d-validation.dll` `b16fba39bc9fcc9d…`, `benchmark-tas.dll` `d2561556728…`, `SAM.Analytical.Tas.dll` `c4de5d7db9f8…`, rules `766a88cdbf129499…` (frozen) |
+
+The runner doubles show:
+- simulation exit 4 starts no capture and no second fixture: 1 invocation, exit 3;
+- a timeout is terminated and the run stops;
+- an exit 0 without its files stops;
+- a failed read, coverage read or subject capture stops before the dependents;
+- a compare exit of 70 stops, but compare/negatives exit 10/11 complete (measured);
+- a wrong weather sha256, a dirty or untracked checkout, a source newer than the build, a SAM library that is not the SAM
+  build output, or no git checkout each launch nothing;
+- a complete run passes `--sam-commit`/`--runner-commit` = the checkouts' HEADs.
+
+Regression probe, the same inputs on both builds:
+
+| Scenario | Reviewed `3387915b` | Corrected `f29adaed` |
+|---|---|---|
+| Calendar-shaped control | BLOCKED 71/95 (C7 rejects 8760) | PASS 95/95 |
+| Box-like (no heating signal, 24-way tie) | BLOCKED 71/95 | PASS 95/95 |
+| Earlier compact 24-element layout | **PASS 95/95** (unmeasured layout accepted) | BLOCKED 71/95 (C7) |
+| Day shifted / `yearDay` +1 | BLOCKED (length) | BLOCKED 83/95 (C7 mask) |
+| Native acc1 box reference | 47 rows derived, 12 BLOCKED (C7) | 59 rows derived |
+
+Reviewed-script R3/R4 evidence is static only: that script calls the real `Clear-Tas`, so it was not executed. It shows:
+- the simulation step has no `--sam-commit`/`--runner-commit`;
+- every `Step` return value is discarded.
+
+Machine-local evidence, `SAM-BIM/.s10-r3-correction-20261023/`:
+- `rebuild.txt`, `*-tests.txt`, `test-results/` (TRX), `binaries-sha256.txt`, `tested-head.txt`;
+- `replay/`;
+- `probe/` (source, generated scenarios, `results-*.json`, consoles);
+- `reviewed-build/` (the reviewed test build and script);
+- `reviewed-script-static.txt`, `preservation-check.txt`.
+
+Commands (from the SAM-BIM root):
+
+```text
+"C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" SAM_Tas\SAM_Tas.sln -t:Rebuild -p:Configuration=Release -m -nr:false -v:m
+dotnet test SAM_Tas/benchmark/SAM.Analytical.Tas.Benchmark.Tests/SAM.Analytical.Tas.Benchmark.Tests.csproj -c Release --no-build
+dotnet test SAM_Tas/benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytical.InputEquivalence.Tests.csproj -c Release --no-build
+dotnet test SAM_Tas/SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj -c Release --no-build
+SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\bin\Release\direct-t3d-validation.exe results-compare C:\TasOut\s10\acc1\s08-fix-box\read C:\TasOut\s10\acc1\s08-fix-box\subject.json <new empty folder>
+```
+
+### Revision 1 correction (accepted for measurement; superseded by the revision-2 correction)
 
 Local Windows workstation (2026-10-23), no Tas licence used, no COM read, no simulation. **Tested content SHA `3387915b`**
 (`3387915ba63c10ab5723ac73f625074e0cdbf942`), clean tree. The record-only commit after it changes this file only. Final
@@ -292,24 +492,43 @@ dotnet test SAM_Tas/benchmark/SAM.Analytical.InputEquivalence.Tests/SAM.Analytic
 dotnet test SAM_Tas/SAM_Tas/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests/SAM.Analytical.Tas.DirectT3D.ReadBack.Tests.csproj -c Release
 ```
 
-## Revision 2 (licensed acceptance; after revision-1 acceptance only)
+## Revision 2 (licensed acceptance; only on a fresh owner decision)
+
+Attempt 1 (`acc1`) spent both OD-1 invocations and is preserved; the script refuses its non-empty folder. A further
+licensed run needs a fresh owner decision on its scope (which fixtures, how many invocations) and an empty, new root. The
+form of the command is:
 
 ```text
-powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Run-S10-Results.ps1 -Phase run -Root C:\TasOut\s10\acc1 -WeatherEpw C:\TasOut\s08c\weather\budapest.epw
-powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Pack-S10-Evidence.ps1 -Root C:\TasOut\s10\acc1
+powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Run-S10-Results.ps1 -Phase run -Root <new empty root> -WeatherEpw C:\TasOut\s08c\weather\budapest.epw
+powershell -ExecutionPolicy Bypass -File SAM_Tas\SAM_Tas\SAM.Analytical.Tas.DirectT3D.Validation\Pack-S10-Evidence.ps1 -Root <that root>
 ```
 
 Per fixture the run executes: one `benchmark-tas` simulation, then `results-read` (TSD + TBD), `results-read-design` (TBD
-design-day coverage), `results-subject`, `results-compare` and `results-negatives`, each in its own process.
-Prerequisites: licensed Tas 2.0.0.1, Tas GUI closed, the accepted revision-1 head built in Release from a clean tree, the Budapest
-EPW at the given path (`472ffb4e…`). PASS = both fixtures PASS with complete coverage, every calibration check verified,
-every negative as intended, produced files and fixtures unchanged by the reads. Evidence: `Documentation/S10-Results-evidence/`
-(committed); run folders machine-local.
+design-day coverage), `results-subject`, `results-compare` and `results-negatives`, each in its own process. Any
+infrastructure failure stops the run (exit 3, `status-run.json`).
+
+Prerequisites:
+- licensed Tas 2.0.0.1, Tas GUI closed;
+- clean SAM_Tas and SAM checkouts with Release builds no older than their sources (the preflight checks this);
+- the Budapest EPW at the given path (`472ffb4e…`).
+
+PASS = both fixtures PASS with complete coverage, every calibration check verified, every negative as intended, and the
+produced files and fixtures unchanged by the reads. Evidence: `Documentation/S10-Results-evidence/` (committed); run
+folders machine-local.
 
 ## Unresolved, risks, limits
 
-- Revision 2 not run: S10 is not accepted. Licensed-only questions, first measured on the acceptance TSDs, any of which
-  may BLOCK the dependent rows (never relaxed):
+- **Revision-2 blockers (current):**
+  - No B1a document has been produced by a run, so every B1a row and the negative matrix are unexercised natively.
+  - The two-zone fixture has no TSD.
+  - The calendar design-day representation is measured on one fixture only.
+  - The heating within-day origin is unresolved. Its hour row is derived only through the box's 24-way tie; a fixture
+    without that tie would BLOCK it.
+  - The new runner preflight has not met a live engine.
+  - Both OD-1 invocations are spent; further licensed execution needs a fresh owner decision.
+- The list below is the original revision-1 statement of the licensed-only questions. Its design-day series item is
+  superseded by "Revision 2 attempt 1" and "Revision 2 correction". Any of these may BLOCK the dependent rows (never
+  relaxed):
   - **Design-day series**:
     - Length: 24 or 24 x the 30 repetitions the S08 PR-C fixture TBDs hold.
     - Lower bound: must be 1.
@@ -328,14 +547,22 @@ every negative as intended, produced files and fixtures unchanged by the reads. 
   - **Balance closure**: the S10-C5 assumption.
 - B1a files produced before this change keep F4-F6 values (superseded, not migrated). SAM_Validation `METRICS.md` (Tas
   column) needs a docs-only follow-up; `designDaySource` label follow-up; OpenStudio zero rule at S11.
-- Machine-local: `SAM-BIM/S10_IMPLEMENTATION_PLAN.md` (the reviewed plan) and, for revision 2, `C:\TasOut\s08c\weather\budapest.epw`.
+- Machine-local, to copy before changing machines:
+  - `SAM-BIM/S10_IMPLEMENTATION_PLAN.md` (the reviewed plan);
+  - `C:\TasOut\s08c\weather\budapest.epw`;
+  - the attempt-1 run root `C:\TasOut\s10\acc1`;
+  - `SAM-BIM/.s10-r2-acceptance-20261023/`, `SAM-BIM/.review-s10-r2-20261023/`, `SAM-BIM/.s10-r3-correction-20261023/`.
 
 ## Next step
 
-Independent re-review of revision 1 including the correction (this branch, the correction's tested SHA above): GPT-6 or
-Claude Opus 5.5, effort High, new session, read-only review mode, because the reference's independence and fail-closed
-semantics are where a false PASS would hide. The owner also decides whether the expected BLOCKED heating design-day hour
-of day (no independent time signal) is acceptable for S10 or needs further evidence. Revision 2 does not start before
-that acceptance.
-After acceptance: revision 2 in Build mode on the licensed workstation (the two approved runs only), then Ready, final-head
-CI, owner merge and the post-merge closeout.
+Independent review of the revision-2 correction (this branch, tested content `f29adaed`), recommended as GPT-6 or Claude
+Opus 5.5, effort High, new session, read-only review mode. The calendar evidence method, the full-day-tie hour rule and
+the runner preflight/stop control are where a false PASS or a wasted licensed invocation would hide. The review should
+cover:
+- R3 and R4;
+- the evidence-method amendment and the C9 assessment;
+- the regression probe and the replay.
+
+Only after that review does the owner decide the minimum further licensed execution. A fresh successful wrapper run is
+still needed for end-to-end acceptance, because no B1a and no two-zone TSD exist. Then: Ready, final-head CI, owner merge
+and the post-merge closeout.
