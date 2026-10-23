@@ -749,7 +749,7 @@ folders machine-local.
   - the attempt-1 run root `C:\TasOut\s10\acc1`;
   - `SAM-BIM/.s10-r2-acceptance-20261023/`, `SAM-BIM/.review-s10-r2-20261023/`, `SAM-BIM/.s10-r3-correction-20261023/`,
     `SAM-BIM/.review-s10-r3-20261023/`, `SAM-BIM/.s10-r3r5-correction-20261023/`, `SAM-BIM/.review-s10-r3r5-20261023/`,
-    `SAM-BIM/.s10-acc2-20261023/` and the attempt-2 run root `C:TasOuts10cc2`.
+    `SAM-BIM/.s10-acc2-20261023/` and the attempt-2 run root `C:\TasOut\s10\acc2`.
 
 ## Next step
 
