@@ -164,8 +164,21 @@ SAM_Validation or SAM change. `PROJECT_PROGRESS.md` unchanged (post-merge closeo
 
 ## Tests and validation
 
-Revision 1, local Windows workstation, no Tas licence used. Tested content SHA: **to be filled by the record-only commit
-that follows the content commit** (see the PR description for the final head and hosted checks).
+Revision 1, local Windows workstation (2026-10-23), no Tas licence used. **Tested content SHA `77ac1cda`**
+(`77ac1cda7d79866183ee672323073981d1a62d04`), clean tree; the record-only commit after it changes this file only. Final
+head and hosted checks: PR description.
+
+| Check (local, at `77ac1cda`) | Result |
+|---|---|
+| `SAM_Tas.sln` Restore + Rebuild, Release, VS MSBuild 18 | exit 0 (only pre-existing CS8604 warnings in `SAM.Core.Tas.UKBR`) |
+| Producer tests `SAM.Analytical.Tas.Benchmark.Tests` | 40/40 (26 existing + 14 new); golden byte-identical |
+| Core `SAM.Analytical.InputEquivalence.Tests` | 258/258 (unchanged) |
+| Read-back `SAM.Analytical.Tas.DirectT3D.ReadBack.Tests` | 178/178 (141 existing, incl. every S08 PR-B/PR-C offline replay, + 37 S10) |
+| New producer tests against the pre-S10 `ToBenchmark` | 12/14 fail as intended (F4/F5/F6 replays) |
+| Built harness, COM-free modes on the synthetic triple's files | `results-compare` PASS 95/95, exit 0; `results-negatives` control + 28 cases as intended, exit 0 |
+| Artefacts | `direct-t3d-validation.dll` sha256 `86c77490b735fd2c…`, `benchmark-tas.dll` `a929cfea628e05f6…`, rules `766a88cdbf129499…` (the frozen S08 table, unchanged) |
+
+Not run locally: TM59 (1249) and GenOpt (432) suites (projects untouched; hosted CI runs them). No licensed step.
 
 Commands (from the SAM-BIM root; VS MSBuild is required for the COM harness, MSB4803):
 
