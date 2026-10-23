@@ -18,7 +18,8 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
     /// SAM model results exactly as the importer's documented semantics would store them, the model-level result as the
     /// converter computes it, and the B1a document from the real producer mapping (<c>ToBenchmark</c>). It exercises the
     /// cases the licensed fixtures may not: a peak in the last hour, a later tied maximum, an all-zero load, a design day
-    /// that governs and a zero design day.
+    /// that governs and a zero design day. The design-day series have the calendar shape measured on the S10 revision-2
+    /// acc1 TSD: 8760 elements, the 24 hours of the TBD design day's year day populated, Tas's -1 everywhere else.
     /// </summary>
     public static class S10SyntheticTriple
     {
@@ -31,6 +32,10 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
 
         public const int HeatingPeakHourA = 8759;
         public const int CoolingTieA1 = 4000, CoolingTieA2 = 4010;
+
+        /// <summary>The TBD design days' year days (as read on the acc1 box TBD) and the first position of each day's block.</summary>
+        public const int CoolingYearDay = 182, HeatingYearDay = 39;
+        public static int Start(string role) => ResultReference.DayStart(role == ResultReference.Cooling ? CoolingYearDay : HeatingYearDay);
 
         public static double LowerLimit(int hour) => hour % 24 < 7 || hour % 24 >= 19 ? 16 : 21;
         public const double UpperLimit = 26;
@@ -49,7 +54,8 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             public double MaxHeating, MaxCooling;
         }
 
-        public static List<Zone> Zones()
+        /// <param name="heatingFullDay">True: every hour of each zone's heating design day holds its maximum (a 24-way tie, as on the acc1 box).</param>
+        public static List<Zone> Zones(bool heatingFullDay = false)
         {
             Zone a = new Zone { Name = ZoneA, Guid = GuidA, Space = SpaceA, FloorArea = 20, Volume = 60, MaxHeating = 5500, MaxCooling = 2100 };
             Zone b = new Zone { Name = ZoneB, Guid = GuidB, Space = SpaceB, FloorArea = 30, Volume = 90, MaxHeating = 1300, MaxCooling = 0 };
@@ -75,10 +81,31 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
             a.DesignHeating[8] = 400;
             a.DesignCooling[14] = 1500;
             b.DesignHeating[6] = 1200;
+            if (heatingFullDay)
+            {
+                a.DesignHeating = Enumerable.Repeat(900.0, 24).ToArray();
+                b.DesignHeating = Enumerable.Repeat(1200.0, 24).ToArray();
+            }
+
             return new List<Zone> { a, b };
         }
 
         private static ResultSeries Series(double[] values) => ResultSeries.Of((double[])values.Clone(), 1);
+
+        /// <summary>A calendar-shaped design-day series: the 24 values at the role's year day, Tas's -1 at the other 8736 elements.</summary>
+        public static ResultSeries Calendar(double[] day, string role)
+        {
+            double[] values = Enumerable.Repeat(ResultReference.DesignOutsideSentinel, 8760).ToArray();
+            Array.Copy(day, 0, values, Start(role), 24);
+            return ResultSeries.Of(values, 1);
+        }
+
+        /// <summary>The design-day peak Tas reports: max and the CLR index of its first maximum in the calendar-shaped series (0 for a zero peak).</summary>
+        private static (double value, int index) NativeDesignPeak(double[] day, string role)
+        {
+            double max = day.Max();
+            return max == 0 ? (0, 0) : (max, Start(role) + Array.IndexOf(day, max) + 1);
+        }
 
         /// <summary>A GetPeakZoneGains-like table: row 0 zone number, row 1 the value, row 2 the CLR index (0 for a zero peak), lower bounds 0.</summary>
         private static NativeTable Table(IList<(double value, int index)> columns)
@@ -139,15 +166,15 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
                 foreach (Zone zone in zones)
                 {
                     TsdResultZone item = new TsdResultZone { Index = i++, Name = zone.Name, Guid = zone.Guid.ToString("B").ToUpperInvariant() };
-                    item.Arrays["heatingLoad"] = Series(role == ResultReference.Heating ? zone.DesignHeating : new double[24]);
-                    item.Arrays["coolingLoad"] = Series(role == ResultReference.Cooling ? zone.DesignCooling : new double[24]);
-                    item.Arrays["dryBulbTemp"] = Series(Enumerable.Repeat(20.0, 24).ToArray());
-                    item.Arrays["lightingGain"] = Series(Enumerable.Range(0, 24).Select(h => zone.FloorArea * LightingFactor * LightingShape(h)).ToArray());
-                    item.Arrays["equipmentSensibleGain"] = Series(new double[24]);
+                    item.Arrays["heatingLoad"] = Calendar(role == ResultReference.Heating ? zone.DesignHeating : new double[24], role);
+                    item.Arrays["coolingLoad"] = Calendar(role == ResultReference.Cooling ? zone.DesignCooling : new double[24], role);
+                    item.Arrays["dryBulbTemp"] = Calendar(Enumerable.Repeat(20.0, 24).ToArray(), role);
+                    item.Arrays["lightingGain"] = Calendar(Enumerable.Range(0, 24).Select(h => zone.FloorArea * LightingFactor * LightingShape(h)).ToArray(), role);
+                    item.Arrays["equipmentSensibleGain"] = Calendar(new double[24], role);
                     dataset.Zones.Add(item);
                 }
 
-                dataset.PeakZoneGains = Table(zones.Select(x => NativePeak(x, role == ResultReference.Heating ? x.DesignHeating : x.DesignCooling)).ToList());
+                dataset.PeakZoneGains = Table(zones.Select(x => NativeDesignPeak(role == ResultReference.Heating ? x.DesignHeating : x.DesignCooling, role)).ToList());
                 result.DesignDatasets.Add(dataset);
             }
 
@@ -184,8 +211,9 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
                 result.Zones.Add(new NativeZone { Name = zone.Name, Guid = zone.Guid.ToString("D"), MaxHeatingLoad = NativeField.Of(zone.MaxHeating), MaxCoolingLoad = NativeField.Of(zone.MaxCooling), InternalConditions = { ic, hdd } });
             }
 
-            result.CoolingDesignDays.Add(new NativeDesignDayGroup { Index = 1, Name = "CDD", Days = { new NativeDesignDay { Index = 1, Repetitions = NativeField.Of(1) } } });
-            result.HeatingDesignDays.Add(new NativeDesignDayGroup { Index = 1, Name = "HDD", Days = { new NativeDesignDay { Index = 1, Repetitions = NativeField.Of(1) } } });
+            // The raw TBD design days, as TbdReadBack records them (0-based indices), with their year days.
+            result.CoolingDesignDays.Add(new NativeDesignDayGroup { Index = 0, Name = "CDD", Days = { new NativeDesignDay { Index = 0, Name = "CDD day", YearDay = NativeField.Of(CoolingYearDay), Repetitions = NativeField.Of(1), DayType = "CDD" } } });
+            result.HeatingDesignDays.Add(new NativeDesignDayGroup { Index = 0, Name = "HDD", Days = { new NativeDesignDay { Index = 0, Name = "HDD day", YearDay = NativeField.Of(HeatingYearDay), Repetitions = NativeField.Of(1), DayType = "HDD" } } });
             return result;
         }
 
@@ -229,7 +257,8 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
 
             bool designGoverns = designDays && !(annualMax > designMax);
             double governing = designGoverns ? designMax : annualMax;
-            int index = governing == 0 ? 0 : designGoverns ? designPosition + 1 : annualHour + 1;
+            // Tas's raw index: a design day's is the CLR index in its calendar-shaped series.
+            int index = governing == 0 ? 0 : designGoverns ? Start(heating ? ResultReference.Heating : ResultReference.Cooling) + designPosition + 1 : annualHour + 1;
             result.SetValue(SpaceSimulationResultParameter.SizingMethod, (designGoverns ? (heating ? SizingMethod.HDD : SizingMethod.CDD) : SizingMethod.Simulation).Text());
             result.SetValue(SpaceSimulationResultParameter.Load, governing == 0 ? -1.0 : governing);
             result.SetValue(SpaceSimulationResultParameter.LoadIndex, index);
@@ -314,9 +343,10 @@ namespace SAM.Analytical.Tas.DirectT3D.ReadBack.Tests
         /// <summary>The serialised inputs of the consistent triple (the model goes through SAM JSON, as the workflow saves it).</summary>
         /// <param name="designDays">False: the TBD holds no design-day group, the TSD no data set and SAM no design-day peak (a justified absence).</param>
         /// <param name="heatingTimeSignal">False: the heating design day's condition has no gains, as in the S08 PR-C fixtures.</param>
-        public static ResultInputs Inputs(bool designDays = true, bool heatingTimeSignal = true)
+        /// <param name="heatingFullDay">True: each zone's heating design day is a 24-way tie (as on the acc1 box).</param>
+        public static ResultInputs Inputs(bool designDays = true, bool heatingTimeSignal = true, bool heatingFullDay = false)
         {
-            List<Zone> zones = Zones();
+            List<Zone> zones = Zones(heatingFullDay);
             AnalyticalModel model = Model(zones, designDays);
             AnalyticalModelSimulationResult modelResult = ModelResult(zones);
             return new ResultInputs

@@ -215,6 +215,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                 if (copy != null && outcome.Applicable)
                 {
                     if (copy.TsdChanged) SnapshotJson.Write(copy.Tsd, Path.Combine(directory, "tsd-result.mutated.json"));
+                    if (copy.TbdChanged) SnapshotJson.Write(copy.Tbd, Path.Combine(directory, "tbd-snapshot.mutated.json"));
                     if (copy.CoverageChanged) SnapshotJson.Write(copy.Coverage, Path.Combine(directory, "tbd-design-coverage.mutated.json"));
                     if (copy.ModelChanged) File.WriteAllText(Path.Combine(directory, "model.mutated.json"), Core.Convert.ToString(copy.Model));
                     if (copy.B1aChanged) File.WriteAllText(Path.Combine(directory, "b1a.mutated.json"), copy.B1a.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));

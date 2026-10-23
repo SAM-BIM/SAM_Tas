@@ -39,7 +39,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
         public AnalyticalModel Model;
         public JsonNode B1a;
         public SubjectModelResult ModelResult;
-        public bool TsdChanged, CoverageChanged, ModelChanged, B1aChanged, ModelResultChanged;
+        public bool TsdChanged, TbdChanged, CoverageChanged, ModelChanged, B1aChanged, ModelResultChanged;
 
         public static ResultCase From(ResultInputs inputs)
         {
@@ -157,12 +157,26 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             new Spec { Name = "tsd-load-roles-swapped", Expected = "BLOCKED", Description = "zone heating and cooling load arrays swapped: the balance no longer closes", Apply = (c, t, o) => Loads(c, t, o, "swap") },
             new Spec { Name = "tsd-design-day-short", Expected = "BLOCKED", Description = "a design-day series one hour short", Apply = DesignShort },
 
-            // S10 R1: an unexpected design-day bound, a missing native index or a shifted time signal leaves the hour rows unresolved.
+            // S10 R1: an unexpected design-day bound (now off the calendar shape, S10-C7), a missing native index or a shifted
+            // time signal leaves the dependent rows unresolved.
             new Spec { Name = "dd-lower-bound-0", Expected = "BLOCKED", Description = "every design-day series at lower bound 0 (values unchanged)", Apply = (c, t, o) => DesignBound(c, t, o, 0) },
             new Spec { Name = "dd-lower-bound-2", Expected = "BLOCKED", Description = "every design-day series at lower bound 2 (values unchanged)", Apply = (c, t, o) => DesignBound(c, t, o, 2) },
             new Spec { Name = "dd-lower-bound-minus-23", Expected = "BLOCKED", Description = "every design-day series at lower bound -23 (values unchanged)", Apply = (c, t, o) => DesignBound(c, t, o, -23) },
             new Spec { Name = "dd-peak-table-absent", Expected = "BLOCKED", Description = "a role's design-day GetPeakZoneGains not read (no native index evidence)", Apply = DesignTableAbsent },
-            new Spec { Name = "dd-time-signal-shifted", Expected = "BLOCKED", Description = "a role's design-day gain arrays one hour late against the TBD schedule", Apply = DesignSignalShifted },
+            new Spec { Name = "dd-time-signal-shifted", Expected = "BLOCKED", Description = "a role's design-day gains rotated one hour later within the TBD design day, against the TBD schedule", Apply = DesignSignalShifted },
+
+            // S10 revision-2 correction: the calendar-shaped design day (S10-C7) and its native peak index (S10-C9).
+            new Spec { Name = "dd-day-shifted", Expected = "BLOCKED", Description = "a role's design-day series moved one hour later than the TBD year day's block", Apply = (c, t, o) => DesignMask(c, t, o, "shift") },
+            new Spec { Name = "dd-in-day-sentinel", Expected = "BLOCKED", Description = "one load hour inside the design day holds Tas's -1 (a missing active hour)", Apply = (c, t, o) => DesignMask(c, t, o, "sentinel") },
+            new Spec { Name = "dd-outside-day-value", Expected = "BLOCKED", Description = "one load element outside the design day holds a value instead of -1 (an extra active hour)", Apply = (c, t, o) => DesignMask(c, t, o, "extra") },
+            new Spec { Name = "dd-in-day-unread", Expected = "BLOCKED", Description = "one load element inside the design day could not be read (never a zero)", Apply = (c, t, o) => DesignMask(c, t, o, "unread") },
+            new Spec { Name = "dd-in-day-nan", Expected = "BLOCKED", Description = "one load element inside the design day is NaN", Apply = (c, t, o) => DesignMask(c, t, o, "nan") },
+            new Spec { Name = "dd-compact-24", Expected = "BLOCKED", Description = "every design-day series compacted to its 24 in-day values (the earlier, unmeasured layout)", Apply = (c, t, o) => DesignMask(c, t, o, "compact") },
+            new Spec { Name = "dd-year-day-unread", Expected = "BLOCKED", Description = "the TBD design day's yearDay could not be read", Apply = (c, t, o) => DesignYearDay(c, t, o, "unread") },
+            new Spec { Name = "dd-year-day-plus-1", Expected = "BLOCKED", Description = "the TBD design day's yearDay one day later than the populated block", Apply = (c, t, o) => DesignYearDay(c, t, o, "plus") },
+            new Spec { Name = "dd-year-day-0", Expected = "BLOCKED", Description = "the TBD design day's yearDay 0 (outside the simulated year)", Apply = (c, t, o) => DesignYearDay(c, t, o, "zero") },
+            new Spec { Name = "dd-peak-index-outside-day", Expected = "BLOCKED", Description = "Tas's design-day peak index at the hour before the design day (a -1 element)", Apply = (c, t, o) => DesignPeakIndex(c, t, o, "outside") },
+            new Spec { Name = "dd-peak-index-non-maximal", Expected = "BLOCKED", Description = "Tas's design-day peak index at an in-day hour that is not a maximum", Apply = (c, t, o) => DesignPeakIndex(c, t, o, "non-maximal") },
 
             // S10 R2: the TBD design-day groups are the expectation; missing, extra, duplicate or unreadable coverage blocks the role.
             new Spec { Name = "dd-all-datasets-missing", Expected = "BLOCKED", Description = "every TSD design-day data set missing although the TBD holds groups", Apply = (c, t, o) => DesignDatasets(c, t, o, "all") },
@@ -581,8 +595,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
 
         private static string DesignBound(ResultCase copy, Targets t, NegativeOutcome o, int lowerBound)
         {
-            List<ReferenceRow> rows = IndexRows(t, RolesWithDatasets(copy));
-            if (rows.Count == 0) return NotApplicable(o, "no design-day hour or design-governed legacy index is derived in this input");
+            // The calendar mask is in CLR indices (S10-C7), so a moved bound takes the whole role off the measured shape.
+            List<ReferenceRow> rows = DesignRows(t, RolesWithDatasets(copy), "designDayPeak.", "legacy.");
+            if (rows.Count == 0) return NotApplicable(o, "no design-day or legacy row is derived in this input");
             foreach (TsdDesignDataset dataset in copy.Tsd.DesignDatasets)
             {
                 foreach (TsdResultZone zone in dataset.Zones)
@@ -593,7 +608,151 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
 
             copy.TsdChanged = true;
             o.IntendedRows.AddRange(rows.Select(x => x.Id));
-            return "every design-day series at lower bound " + lowerBound + "; " + rows.Count + " hour/index row(s) depend on the convention";
+            return "every design-day series at lower bound " + lowerBound + "; " + rows.Count + " design-day/legacy row(s) depend on the calendar shape";
+        }
+
+        /// <summary>The first position of the design day of a data set, from its TBD snapshot group's year day (as S10-C7 derives it), or null.</summary>
+        private static int? DayStart(ResultCase copy, TsdDesignDataset dataset)
+        {
+            List<NativeDesignDayGroup> groups = (dataset.Role == ResultReference.Cooling ? copy.Tbd?.CoolingDesignDays : copy.Tbd?.HeatingDesignDays)?.Where(x => string.Equals(x.Name, dataset.Name, StringComparison.Ordinal)).ToList();
+            if (groups == null || groups.Count != 1 || groups[0].Days.Count != 1 || groups[0].Days[0].YearDay?.HasNumber != true) return null;
+            int start = ResultReference.DayStart((int)groups[0].Days[0].YearDay.Value);
+            return start >= 0 && dataset.Zones.All(z => z.Arrays.Values.All(s => s?.Values == null || s.Values.Length >= start + ResultReference.HoursPerDay)) ? start : (int?)null;
+        }
+
+        /// <summary>The first role (ordinal) with derived design-day/legacy rows and a data set whose design day is located, with that data set.</summary>
+        private static (string role, TsdDesignDataset dataset, int start, List<ReferenceRow> rows)? DesignTarget(ResultCase copy, Targets t, Func<string, List<ReferenceRow>> rowsOf)
+        {
+            foreach (string role in RolesWithDatasets(copy))
+            {
+                List<ReferenceRow> rows = rowsOf(role);
+                if (rows.Count == 0) continue;
+                foreach (TsdDesignDataset dataset in copy.Tsd.DesignDatasets.Where(x => x.Role == role && x.Zones.Count > 0))
+                {
+                    int? start = DayStart(copy, dataset);
+                    if (start != null) return (role, dataset, start.Value, rows);
+                }
+            }
+
+            return null;
+        }
+
+        private static string DesignMask(ResultCase copy, Targets t, NegativeOutcome o, string kind)
+        {
+            var target = DesignTarget(copy, t, role => DesignRows(t, new[] { role }, "designDayPeak.", "legacy."));
+            if (target == null) return NotApplicable(o, "no role derives a design-day or legacy row from a located calendar-shaped design day");
+            (string role, TsdDesignDataset dataset, int start, List<ReferenceRow> rows) = target.Value;
+            string load = role == ResultReference.Cooling ? "coolingLoad" : "heatingLoad";
+            ResultSeries first = dataset.Zones[0].Arrays[load];
+            int inside = start + 12;
+            string applied;
+            switch (kind)
+            {
+                case "shift":
+                    foreach (ResultSeries series in copy.Tsd.DesignDatasets.Where(x => x.Role == role).SelectMany(x => x.Zones).SelectMany(x => x.Arrays.Values).Where(x => x?.Values != null && x.Values.Length > 0))
+                    {
+                        double[] values = series.Values;
+                        series.Values = new[] { values[values.Length - 1] }.Concat(values.Take(values.Length - 1)).ToArray();
+                    }
+
+                    applied = role + " design-day series moved one element later (populated block at CLR " + (start + first.LowerBound + 1) + ".." + (start + first.LowerBound + 24) + ")";
+                    break;
+                case "sentinel":
+                    first.Values[inside] = ResultReference.DesignOutsideSentinel;
+                    applied = role + " '" + dataset.Name + "' zone '" + dataset.Zones[0].Name + "' " + load + " CLR " + (inside + first.LowerBound) + " (inside the day) = -1";
+                    break;
+                case "extra":
+                    int outside = start > 0 ? start - 1 : start + ResultReference.HoursPerDay;
+                    first.Values[outside] = 0;
+                    applied = role + " '" + dataset.Name + "' zone '" + dataset.Zones[0].Name + "' " + load + " CLR " + (outside + first.LowerBound) + " (outside the day) = 0";
+                    break;
+                case "unread":
+                    first.Values[inside] = double.NaN;
+                    first.UnreadElements.Add(inside + first.LowerBound);
+                    applied = role + " '" + dataset.Name + "' zone '" + dataset.Zones[0].Name + "' " + load + " CLR " + (inside + first.LowerBound) + " (inside the day) unread";
+                    break;
+                case "nan":
+                    first.Values[inside] = double.NaN;
+                    applied = role + " '" + dataset.Name + "' zone '" + dataset.Zones[0].Name + "' " + load + " CLR " + (inside + first.LowerBound) + " (inside the day) NaN";
+                    break;
+                default:
+                    rows = DesignRows(t, RolesWithDatasets(copy), "designDayPeak.", "legacy.");
+                    foreach (TsdDesignDataset each in copy.Tsd.DesignDatasets)
+                    {
+                        int? at = DayStart(copy, each);
+                        if (at == null) continue;
+                        foreach (ResultSeries series in each.Zones.SelectMany(x => x.Arrays.Values).Where(x => x?.Values != null)) series.Values = ResultReference.Day(series.Values, at.Value);
+                    }
+
+                    applied = "every located design-day series compacted to its 24 in-day elements at its own lower bound";
+                    break;
+            }
+
+            copy.TsdChanged = true;
+            o.IntendedRows.AddRange(rows.Select(x => x.Id));
+            return applied;
+        }
+
+        private static string DesignYearDay(ResultCase copy, Targets t, NegativeOutcome o, string kind)
+        {
+            var target = DesignTarget(copy, t, role => DesignRows(t, new[] { role }, "designDayPeak.", "legacy."));
+            if (target == null) return NotApplicable(o, "no role derives a design-day or legacy row from a located TBD design day");
+            (string role, TsdDesignDataset dataset, _, List<ReferenceRow> rows) = target.Value;
+            NativeDesignDay day = (role == ResultReference.Cooling ? copy.Tbd.CoolingDesignDays : copy.Tbd.HeatingDesignDays).Single(x => string.Equals(x.Name, dataset.Name, StringComparison.Ordinal)).Days[0];
+            double before = day.YearDay.Value;
+            day.YearDay = kind == "unread" ? NativeField.Unreadable("COMException: the server threw an exception") : NativeField.Of(kind == "plus" ? before + 1 : 0);
+            copy.TbdChanged = true;
+            o.IntendedRows.AddRange(rows.Select(x => x.Id));
+            return role + " TBD design day of '" + dataset.Name + "' yearDay " + ResultReference.Num(before) + " -> " + day.YearDay;
+        }
+
+        private static string DesignPeakIndex(ResultCase copy, Targets t, NegativeOutcome o, string kind)
+        {
+            foreach (string role in RolesWithDatasets(copy))
+            {
+                List<ReferenceRow> rows = IndexRows(t, new[] { role });
+                if (rows.Count == 0) continue;
+                string load = role == ResultReference.Cooling ? "coolingLoad" : "heatingLoad";
+                foreach (TsdDesignDataset dataset in copy.Tsd.DesignDatasets.Where(x => x.Role == role && x.PeakZoneGains?.Kind == FieldKind.Finite))
+                {
+                    int? start = DayStart(copy, dataset);
+                    if (start == null) continue;
+                    foreach (TsdResultZone zone in dataset.Zones)
+                    {
+                        ResultSeries series = zone.Arrays[load];
+                        (double max, List<int> ties) = ResultReference.DayPeak(series.Values, start.Value);
+                        if (max <= 0) continue;
+                        int target;
+                        if (kind == "outside")
+                        {
+                            target = start.Value - 1 + series.LowerBound;
+                        }
+                        else
+                        {
+                            int position = Enumerable.Range(start.Value, ResultReference.HoursPerDay).FirstOrDefault(p => series.Values[p] < max, -1);
+                            if (position < 0) continue;
+                            target = position + series.LowerBound;
+                        }
+
+                        // Every cell of the zone's column holding a tied maximum's CLR index (the native index cell) moves to the target.
+                        HashSet<double> clr = new HashSet<double>(ties.Select(x => (double)(x + series.LowerBound)));
+                        int column = zone.Index - 1, changed = 0;
+                        foreach (List<NativeField> row in dataset.PeakZoneGains.Cells)
+                        {
+                            if (column < 0 || column >= row.Count || row[column]?.HasNumber != true || row[column].Value == max || !clr.Contains(row[column].Value)) continue;
+                            row[column] = NativeField.Of(target);
+                            changed++;
+                        }
+
+                        if (changed == 0) continue;
+                        copy.TsdChanged = true;
+                        o.IntendedRows.AddRange(rows.Select(x => x.Id));
+                        return role + " '" + dataset.Name + "' zone '" + zone.Name + "' GetPeakZoneGains index -> CLR " + target + (kind == "outside" ? " (the hour before the design day, a -1 element)" : " (an in-day hour below the maximum " + ResultReference.Num(max) + ")");
+                    }
+                }
+            }
+
+            return NotApplicable(o, kind == "outside" ? "no role derives a design-day hour or legacy index from a located design-day peak index" : "no positive design-day peak has an in-day hour below its maximum (every in-day hour is tied), or no role derives an index row");
         }
 
         private static string DesignTableAbsent(ResultCase copy, Targets t, NegativeOutcome o)
@@ -615,24 +774,31 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
         {
             foreach (string role in RolesWithDatasets(copy))
             {
-                List<ReferenceRow> rows = DesignRows(t, new[] { role }, "designDayPeak.hourOfDay");
+                // Only hours that rest on the time signal (a 24-way tie needs none).
+                List<ReferenceRow> rows = DesignRows(t, new[] { role }, "designDayPeak.hourOfDay").Where(x => x.Allowed == null || x.Allowed.Count < ResultReference.HoursPerDay).ToList();
                 if (rows.Count == 0) continue;
-                foreach (TsdResultZone zone in copy.Tsd.DesignDatasets.Where(x => x.Role == role).SelectMany(x => x.Zones))
+                List<TsdDesignDataset> datasets = copy.Tsd.DesignDatasets.Where(x => x.Role == role).ToList();
+                if (datasets.Any(x => DayStart(copy, x) == null)) continue;
+                foreach (TsdDesignDataset dataset in datasets)
                 {
-                    foreach (string array in new[] { "lightingGain", "equipmentSensibleGain" })
+                    int start = DayStart(copy, dataset).Value;
+                    foreach (TsdResultZone zone in dataset.Zones)
                     {
-                        if (!zone.Arrays.TryGetValue(array, out ResultSeries series) || series.Values == null || series.Values.Length == 0) continue;
-                        double[] values = series.Values;
-                        series.Values = new[] { values[values.Length - 1] }.Concat(values.Take(values.Length - 1)).ToArray();
+                        foreach (string array in new[] { "lightingGain", "equipmentSensibleGain" })
+                        {
+                            if (!zone.Arrays.TryGetValue(array, out ResultSeries series) || series.Values == null || series.Values.Length < start + ResultReference.HoursPerDay) continue;
+                            double[] day = ResultReference.Day(series.Values, start);
+                            for (int h = 0; h < ResultReference.HoursPerDay; h++) series.Values[start + h] = day[(h + ResultReference.HoursPerDay - 1) % ResultReference.HoursPerDay];
+                        }
                     }
                 }
 
                 copy.TsdChanged = true;
                 o.IntendedRows.AddRange(rows.Select(x => x.Id));
-                return role + " design-day gain arrays rotated one element later";
+                return role + " design-day gains rotated one hour later within the TBD design day";
             }
 
-            return NotApplicable(o, "no role has a verified design-day hour of day (no independent time signal) in this input");
+            return NotApplicable(o, "no role has a design-day hour of day that rests on an independent time signal in this input");
         }
 
         private static string DesignDatasets(ResultCase copy, Targets t, NegativeOutcome o, string kind)

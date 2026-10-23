@@ -103,6 +103,13 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
     /// the expectation of the TSD design-day data sets (S10-C10); their series' index and day origin must be established
     /// from Tas's own peak index and the TBD gain schedule (S10-C9). Unresolved coverage blocks the role's design-day and
     /// legacy rows; an unresolved convention blocks only the rows that depend on it (hours, design-governed indices).</para>
+    /// <para>Design-day representation (S10 revision 2, measured on the acc1 s08-fix-box TSD, both roles): a data set's
+    /// series are calendar-shaped, 8760 elements at the N-5 lower bound, populated only at the 24 CLR indices
+    /// (d - 1) x 24 + 1 .. d x 24 of the TBD design day's own year day d (read independently from the TBD, never inferred
+    /// from the series) and holding Tas's -1 everywhere else. The expected mask comes from the TBD; every element inside it
+    /// must be read and finite (loads non-negative), every element outside it must be -1, and the raw positions and CLR
+    /// indices are kept (never compacted or re-based). Only this single-design-day layout was measured; a group of several
+    /// design days, a shared year day or any other length stays BLOCKED (S10-C7).</para>
     /// </summary>
     public static class ResultReference
     {
@@ -136,6 +143,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
 
         /// <summary>The legacy Tas value SAM's governing projection stores for a zero peak (index 0; documented, Results.cs).</summary>
         public const double LegacyZeroSentinel = -1;
+
+        /// <summary>What Tas holds at every element of a calendar-shaped design-day series outside the design day (measured, S10 revision 2).</summary>
+        public const double DesignOutsideSentinel = -1;
 
         /// <param name="coverage">The independent TBD design-day coverage read (<c>results-read-design</c>); null blocks every design-day and legacy row.</param>
         public static ResultReferenceModel Build(TsdResultSnapshot tsd, NativeSnapshot tbd, TbdDesignCoverage coverage, CalibrationRules rules)
@@ -194,6 +204,61 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             }
 
             return (max, ties);
+        }
+
+        /// <summary>
+        /// The maximum over the 24 elements of the design day starting at position <paramref name="start"/>, and every
+        /// position holding it, as positions of the whole series (CLR index = position + lower bound).
+        /// </summary>
+        public static (double max, List<int> ties) DayPeak(double[] values, int start)
+        {
+            (double max, List<int> ties) = Peak(Day(values, start));
+            return (max, ties.Select(x => x + start).ToList());
+        }
+
+        /// <summary>The 24 elements of the design day starting at position <paramref name="start"/>.</summary>
+        public static double[] Day(double[] values, int start)
+        {
+            double[] result = new double[HoursPerDay];
+            Array.Copy(values, start, result, 0, HoursPerDay);
+            return result;
+        }
+
+        /// <summary>The first position of a calendar-shaped design-day series holding year day <paramref name="yearDay"/> (1..365).</summary>
+        public static int DayStart(int yearDay) => (yearDay - 1) * HoursPerDay;
+
+        /// <summary>
+        /// Why <paramref name="values"/> (validated complete and finite) is not populated exactly at the design day starting at
+        /// <paramref name="start"/>, or null: every element outside the day must be Tas's -1, and a load inside it a
+        /// non-negative magnitude (so never the sentinel).
+        /// </summary>
+        public static string DayMask(double[] values, int start, int lowerBound, bool load, string what)
+        {
+            int outside = 0, firstOutside = -1, negative = 0, firstNegative = -1;
+            for (int p = 0; p < values.Length; p++)
+            {
+                if (p >= start && p < start + HoursPerDay)
+                {
+                    if (load && values[p] < 0 && negative++ == 0) firstNegative = p;
+                }
+                else if (values[p] != DesignOutsideSentinel && outside++ == 0)
+                {
+                    firstOutside = p;
+                }
+            }
+
+            string day = "CLR " + (start + lowerBound).ToString(ci) + ".." + (start + HoursPerDay - 1 + lowerBound).ToString(ci);
+            if (outside > 0)
+            {
+                return what + " holds " + outside.ToString(ci) + " element(s) other than Tas's -1 outside the design day " + day + ", first " + Num(values[firstOutside]) + " at CLR " + (firstOutside + lowerBound).ToString(ci) + ": the populated hours are not the TBD year day's";
+            }
+
+            if (negative > 0)
+            {
+                return what + " holds " + negative.ToString(ci) + " negative element(s) inside the design day " + day + ", first " + Num(values[firstNegative]) + " at CLR " + (firstNegative + lowerBound).ToString(ci) + ": a load there is a non-negative magnitude (Tas's -1 marks only hours outside the day)";
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -328,6 +393,9 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
             private readonly Dictionary<string, string> indexProblems = new Dictionary<string, string>(StringComparer.Ordinal);
             private readonly Dictionary<string, string> originProblems = new Dictionary<string, string>(StringComparer.Ordinal);
             private readonly Dictionary<string, DesignCoverageGroup> datasetGroups = new Dictionary<string, DesignCoverageGroup>(StringComparer.Ordinal);
+
+            // Per data set (role#index) with a verified calendar shape (S10-C7): the first position of its design day.
+            private readonly Dictionary<string, int> datasetStarts = new Dictionary<string, int>(StringComparer.Ordinal);
 
             public Builder(ResultReferenceModel model, TsdResultSnapshot tsd, NativeSnapshot tbd, TbdDesignCoverage coverage, CalibrationRules rules)
             {
@@ -682,11 +750,20 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                 Verify(check, "the TSD design-day data sets correspond one to one, by role and exact name, to the TBD design-day groups");
             }
 
-            /// <summary>S10-C7: every design-day series of a matched data set is complete, finite, non-negative and of an expected length.</summary>
+            /// <summary>
+            /// S10-C7: every matched design-day data set is in the measured calendar representation. Its TBD group holds one
+            /// design day whose year day d (read from the TBD, 1..365) gives the expected mask; every series the reference uses
+            /// is 8760 elements at the N-5 lower bound, complete and finite, a load inside the mask non-negative, and every
+            /// element outside the mask Tas's -1. The mask is never discovered from the series. Any other layout, including the
+            /// earlier assumed 24 or 24 x repetitions elements, a group of several days and two data sets sharing a year day,
+            /// was not measured and blocks the role's design-day and legacy rows.
+            /// </summary>
             private void CheckDesignShapes()
             {
-                CalibrationCheck check = Check("S10-C7", "Are the design-day series complete and of the expected length (24 x the TBD group's design days, or 24 x their repetitions)?");
+                CalibrationCheck check = Check("S10-C7", "Is every design-day data set in the measured calendar representation (one TBD design day of year day d; every series 8760 elements at the N-5 lower bound; complete finite values, loads non-negative, at CLR (d - 1) x 24 + 1 .. d x 24; Tas's -1 at every other element)?");
+                check.Evidence.Add("representation measured on the S10 revision-2 acc1 s08-fix-box TSD (both roles, five series each): populated exactly at the TBD yearDay's 24 CLR indices, -1 elsewhere; the year day is the TBD design day's yearDay (raw TBD read, tbd-snapshot.json), matched to the coverage group by role and exact name");
                 int exercised = 0;
+                Dictionary<string, int> yearDays = new Dictionary<string, int>(StringComparer.Ordinal);
                 foreach (string role in Roles)
                 {
                     if (roleProblems.ContainsKey(role)) continue;
@@ -694,57 +771,51 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                     foreach (TsdDesignDataset dataset in Datasets(role))
                     {
                         exercised++;
+                        string key = role + "#" + dataset.Index;
                         string label = role + " design-day data set " + dataset.Index + " '" + dataset.Name + "'";
-                        DesignCoverageGroup group = datasetGroups[role + "#" + dataset.Index];
+                        DesignCoverageGroup group = datasetGroups[key];
                         string problem = null;
-                        List<int> expected = new List<int>();
+                        int yearDay = 0;
                         string day = group.Days.Select(x => x.Detail != null ? "design day " + x.Index + ": " + x.Detail : null).FirstOrDefault(x => x != null);
                         if (day != null) problem = label + ": its TBD group is not completely readable (" + day + ")";
-                        else if (group.Days.Count == 0) problem = label + ": the TBD group has no design days";
-                        else
-                        {
-                            expected.Add(HoursPerDay * group.Days.Count);
-                            if (group.Days.All(x => x.Repetitions?.HasNumber == true && x.Repetitions.Value >= 1 && x.Repetitions.Value == Math.Floor(x.Repetitions.Value)))
-                            {
-                                expected.Add(HoursPerDay * (int)group.Days.Sum(x => x.Repetitions.Value));
-                            }
-
-                            expected = expected.Distinct().ToList();
-                        }
+                        else yearDay = YearDay(role, label, group, out problem);
 
                         if (problem == null && dataset.Zones.Count != (tsd?.Zones?.Count ?? 0))
                         {
                             problem = label + " has " + dataset.Zones.Count + " zone(s); the building data has " + (tsd?.Zones?.Count ?? 0);
                         }
 
-                        HashSet<string> shapes = new HashSet<string>(StringComparer.Ordinal);
+                        int start = DayStart(yearDay);
+                        int arrays = 0;
                         foreach (TsdResultZone zone in problem == null ? dataset.Zones : new List<TsdResultZone>())
                         {
-                            zone.Arrays.TryGetValue(load, out ResultSeries series);
-                            string shape = Shape(series, label + " zone '" + zone.Name + "' " + load);
-                            if (shape == null && !expected.Contains(series.Values.Length))
-                            {
-                                shape = label + " zone '" + zone.Name + "' " + load + " has " + series.Values.Length + " elements; expected " + string.Join(" or ", expected) + " (24 per TBD design day or repetition)";
-                            }
-
-                            if (shape == null) shape = Sign(series.Values, label + " zone '" + zone.Name + "' " + load);
-                            if (shape != null)
-                            {
-                                problem = shape;
-                                break;
-                            }
-
-                            shapes.Add(series.LowerBound + ":" + series.Values.Length);
+                            problem = CalendarSeries(zone, load, start, label, ref arrays);
+                            if (problem != null) break;
                         }
 
-                        if (problem == null && shapes.Count > 1) problem = label + ": its zones' series differ in lower bound or length (" + string.Join(", ", shapes) + ")";
-                        check.Evidence.Add(label + ": " + (problem ?? "series " + string.Join(", ", shapes) + " (lower bound:length), expected length " + string.Join(" or ", expected)));
+                        check.Evidence.Add(label + ": " + (problem ?? "TBD yearDay " + yearDay + " -> CLR " + (start + offset) + ".." + (start + HoursPerDay - 1 + offset) + "; " + arrays + " series in " + dataset.Zones.Count + " zone(s), each 8760 at lower bound " + offset + " with 24 values inside the day and -1 at the other 8736"));
                         if (problem != null)
                         {
                             if (!roleProblems.ContainsKey(role)) roleProblems[role] = problem;
                             Unresolve(check, problem);
+                            continue;
                         }
+
+                        datasetStarts[key] = start;
+                        yearDays[key] = yearDay;
                     }
+                }
+
+                // Two data sets on one year day (an overlap) were not measured.
+                foreach (IGrouping<int, KeyValuePair<string, int>> shared in yearDays.GroupBy(x => x.Value).Where(x => x.Count() > 1))
+                {
+                    string problem = "design-day data sets " + string.Join(", ", shared.Select(x => x.Key)) + " share year day " + shared.Key + ": overlapping design days were not measured";
+                    foreach (string role in shared.Select(x => x.Key.Split('#')[0]).Distinct())
+                    {
+                        if (!roleProblems.ContainsKey(role)) roleProblems[role] = problem;
+                    }
+
+                    Unresolve(check, problem);
                 }
 
                 if (exercised == 0)
@@ -754,22 +825,108 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                 }
                 else
                 {
-                    Verify(check, "every design-day series is complete and of an expected length");
+                    Verify(check, "every design-day data set is calendar-shaped: 8760 elements at lower bound " + offset + ", populated exactly at its TBD year day, -1 elsewhere");
                 }
+            }
+
+            /// <summary>
+            /// The year day of a data set's single TBD design day, from the raw TBD read (tbd-snapshot.json), matched to the
+            /// coverage group by role and exact name; the two reads must be of the same TBD and agree on the day.
+            /// </summary>
+            private int YearDay(string role, string label, DesignCoverageGroup group, out string problem)
+            {
+                problem = null;
+                if (group.Days.Count != 1)
+                {
+                    problem = label + ": its TBD group holds " + group.Days.Count + " design day(s); only the single-design-day calendar representation was measured";
+                    return 0;
+                }
+
+                if (tbd == null)
+                {
+                    problem = label + ": no TBD snapshot, so the design day's year day is unknown";
+                    return 0;
+                }
+
+                if (coverage?.Sha256After == null || coverage.Sha256After != tbd.Reader?.TbdSha256After)
+                {
+                    problem = label + ": the coverage read (" + (coverage?.Sha256After ?? "no sha256") + ") and the TBD snapshot (" + (tbd.Reader?.TbdSha256After ?? "no sha256") + ") are not reads of the same TBD";
+                    return 0;
+                }
+
+                List<NativeDesignDayGroup> groups = (role == Cooling ? tbd.CoolingDesignDays : tbd.HeatingDesignDays)?.Where(x => string.Equals(x.Name, group.Name, StringComparison.Ordinal)).ToList() ?? new List<NativeDesignDayGroup>();
+                if (groups.Count != 1 || groups[0].Days.Count != 1)
+                {
+                    problem = label + ": the TBD snapshot holds " + groups.Count + " " + role + " group(s) named '" + group.Name + "'" + (groups.Count == 1 ? " with " + groups[0].Days.Count + " design day(s)" : string.Empty) + "; exactly one with one design day is required";
+                    return 0;
+                }
+
+                NativeDesignDay native = groups[0].Days[0];
+                DesignCoverageDay covered = group.Days[0];
+                bool sameRepetitions = native.Repetitions?.HasNumber == true && covered.Repetitions?.HasNumber == true ? native.Repetitions.Value == covered.Repetitions.Value : native.Repetitions?.HasNumber != true && covered.Repetitions?.HasNumber != true;
+                if (!string.Equals(native.DayType, covered.DayType, StringComparison.Ordinal) || !sameRepetitions)
+                {
+                    problem = label + ": the TBD snapshot and the coverage read disagree on the design day (day type '" + native.DayType + "' / '" + covered.DayType + "', repetitions " + native.Repetitions + " / " + covered.Repetitions + ")";
+                    return 0;
+                }
+
+                if (native.YearDay?.HasNumber != true)
+                {
+                    problem = label + ": the TBD design day's yearDay is " + (native.YearDay?.ToString() ?? "not read") + ", so the expected design-day hours are unknown";
+                    return 0;
+                }
+
+                double value = native.YearDay.Value;
+                if (value != Math.Floor(value) || value < 1 || value > 365)
+                {
+                    problem = label + ": the TBD design day's yearDay " + Num(value) + " is not a day 1..365 of the simulated year";
+                    return 0;
+                }
+
+                return (int)value;
+            }
+
+            /// <summary>
+            /// Why a data set zone's series are not calendar-shaped at the design day starting at <paramref name="start"/>, or
+            /// null. The role's load is required; every other series that was read is checked too (an unread one is used by no
+            /// row: S10-C9 checks a gain series again before taking it as a time signal).
+            /// </summary>
+            private string CalendarSeries(TsdResultZone zone, string load, int start, string label, ref int arrays)
+            {
+                if (!zone.Arrays.ContainsKey(load)) return label + " zone '" + zone.Name + "' " + load + " was not read";
+                foreach (KeyValuePair<string, ResultSeries> pair in zone.Arrays.OrderBy(x => x.Key, StringComparer.Ordinal))
+                {
+                    if (pair.Key != load && pair.Value?.IsRead != true) continue;
+                    string what = label + " zone '" + zone.Name + "' " + pair.Key;
+                    string problem = Shape(pair.Value, what);
+                    if (problem == null && (pair.Value.LowerBound != offset || pair.Value.Values.Length != AnnualHours))
+                    {
+                        problem = what + " has " + pair.Value.Values.Length + " elements at lower bound " + pair.Value.LowerBound + "; the calendar representation is " + AnnualHours + " at the N-5 lower bound " + offset + " (never compacted, padded or re-based)";
+                    }
+
+                    if (problem == null) problem = DayMask(pair.Value.Values, start, offset, pair.Key == "heatingLoad" || pair.Key == "coolingLoad", what);
+                    if (problem != null) return problem;
+                    arrays++;
+                }
+
+                return null;
             }
 
             /// <summary>
             /// S10-C9 (R1): the index and day-origin convention of the design-day series, per role, from independent evidence.
             /// Index: every series is at the N-5 lower bound, and Tas's own GetPeakZoneGains (whose value and index rows are
             /// located on the annual data, where N-5 fixes the index as the CLR index) holds each positive design-day maximum and
-            /// the CLR index of one of its tied elements. Day origin: an hour-varying TBD gain schedule of the design days' day
-            /// type is found in the TSD design-day gain array at offset 0 only (index 1 = 00:00-01:00). A matching lower bound
-            /// alone, or agreement with the importer, is never taken as evidence. Without index evidence the design-day hours and
-            /// the design-governed legacy index are BLOCKED; without a time signal the design-day hours are.
+            /// the CLR index of one of its tied elements inside the TBD design day (S10-C7: an index at an hour outside the day,
+            /// or at a non-maximum, contradicts it). The day block itself is the TBD year day's (S10-C7). Within-day origin: an
+            /// hour-varying TBD gain schedule of the design days' day type is found in the TSD design-day gains of that day at
+            /// offset 0 only (its first element = 00:00-01:00). A matching lower bound alone, or agreement with the importer, is
+            /// never taken as evidence. Without index evidence the design-day hours and the design-governed legacy index are
+            /// BLOCKED; without a time signal the design-day hours are, except where every hour of the day is a tied maximum
+            /// (then every origin gives the same hour set: <see cref="ZoneRows"/>).
             /// </summary>
             private void CheckDesignConvention()
             {
-                CalibrationCheck check = Check("S10-C9", "Is the design-day index and day-origin convention established from evidence (N-5 lower bound; Tas's peak index = CLR index of the maximum; hour 0 at index 1 from the TBD gain schedule)?");
+                CalibrationCheck check = Check("S10-C9", "Is the design-day index and day-origin convention established from evidence (N-5 lower bound; the TBD year day's block of CLR indices, S10-C7; Tas's peak index = CLR index of an in-day maximum; hour 0 at the block's first index from the TBD gain schedule)?");
                 MeasureLayout(check);
                 bool exercised = false;
                 foreach (string role in Roles)
@@ -785,6 +942,10 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                     {
                         originProblems[role] = origin;
                         Unresolve(check, origin);
+                        if (index == null && FullDayTies(role, datasets))
+                        {
+                            check.Evidence.Add(role + ": the within-day origin is unresolved, but every positive design-day zone maximum of the role holds all 24 hours of its design day, so its hour-of-day rows are the same for every origin and are derived; only a role with a narrower tie set stays BLOCKED");
+                        }
                     }
                 }
 
@@ -831,7 +992,7 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                     foreach (TsdResultZone zone in dataset.Zones)
                     {
                         ResultSeries series = zone.Arrays[load];
-                        (double max, List<int> ties) = Peak(series.Values);
+                        (double max, List<int> ties) = DayPeak(series.Values, datasetStarts[role + "#" + dataset.Index]);
                         if (max <= 0) continue;
 
                         string mismatch = TableMismatch(table, zone.Index - 1, max, ties.Select(x => x + series.LowerBound));
@@ -844,8 +1005,27 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                     }
                 }
 
-                evidence.Add(role + ": " + informative + " design-day zone peak(s) found in GetPeakZoneGains at value row " + layout.Value.value + ", index row " + layout.Value.index + " with index = CLR index");
+                evidence.Add(role + ": " + informative + " design-day zone peak(s) found in GetPeakZoneGains at value row " + layout.Value.value + ", index row " + layout.Value.index + " with index = CLR index of an in-day maximum");
                 return informative == 0 ? role + ": no design-day zone has a positive peak, so the native index is not checked" : null;
+            }
+
+            /// <summary>True when every positive design-day zone maximum of the role is tied at all 24 hours of its design day.</summary>
+            private bool FullDayTies(string role, List<TsdDesignDataset> datasets)
+            {
+                string load = role == Cooling ? "coolingLoad" : "heatingLoad";
+                bool any = false;
+                foreach (TsdDesignDataset dataset in datasets)
+                {
+                    foreach (TsdResultZone zone in dataset.Zones)
+                    {
+                        (double max, List<int> ties) = DayPeak(zone.Arrays[load].Values, datasetStarts[role + "#" + dataset.Index]);
+                        if (max <= 0) continue;
+                        if (ties.Count != HoursPerDay) return false;
+                        any = true;
+                    }
+                }
+
+                return any;
             }
 
             /// <summary>Why the table column does not hold <paramref name="max"/> and one of <paramref name="indices"/>, or null.</summary>
@@ -977,7 +1157,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                             zone.Arrays.TryGetValue(array, out ResultSeries gains);
                             if (Shape(gains, array) != null || gains.LowerBound != loadSeries.LowerBound || gains.Values.Length != loadSeries.Values.Length) continue;
 
-                            List<int> fit = Offsets(gains.Values, schedule);
+                            // Only the TBD year day's 24 elements (S10-C7); its first element is hour 0 at offset 0.
+                            List<int> fit = Offsets(Day(gains.Values, datasetStarts[role + "#" + dataset.Index]), schedule);
                             signals++;
                             offsets = offsets == null ? new HashSet<int>(fit) : new HashSet<int>(offsets.Intersect(fit));
                             evidence.Add(role + " '" + dataset.Name + "' zone '" + zone.Name + "' " + array + " vs TBD " + slot + " of '" + conditions[0].Name + "' (" + dayTypes[0] + "): fits at offset(s) [" + string.Join(",", fit) + "]");
@@ -1190,10 +1371,23 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                     {
                         NoValue(ddHourOfDay, "zero peak: no hour");
                     }
-                    else if (indexProblems.TryGetValue(type, out string ddIndexProblem) || originProblems.TryGetValue(type, out ddIndexProblem))
+                    else if (indexProblems.TryGetValue(type, out string ddIndexProblem))
                     {
                         // The load does not depend on the convention; the hour does (S10-C9).
                         Block(ddHourOfDay, "design-day hour of day unresolved (S10-C9): " + ddIndexProblem);
+                    }
+                    else if (originProblems.TryGetValue(type, out string ddOriginProblem))
+                    {
+                        if (dd.Ties.Count == HoursPerDay)
+                        {
+                            // Every hour of the TBD design day holds the maximum: a within-day rotation maps the tie set onto
+                            // itself, so the hour set does not depend on the unresolved origin.
+                            Hours(ddHourOfDay, Enumerable.Range(0, HoursPerDay).Select(x => (double)x), "all 24 hours of the TBD design day are tied maxima, so every hour of day is accepted whatever the within-day origin (S10-C9 origin unresolved: " + ddOriginProblem + ")");
+                        }
+                        else
+                        {
+                            Block(ddHourOfDay, "design-day hour of day unresolved (S10-C9): " + ddOriginProblem);
+                        }
                     }
                     else
                     {
@@ -1301,7 +1495,8 @@ namespace SAM.Analytical.Tas.DirectT3D.Validation.Results
                         return result;
                     }
 
-                    (double max, List<int> ties) = Peak(matches[0].Arrays[loadName].Values);
+                    // Over the TBD year day only (S10-C7), keeping the series' own positions, so the CLR index stays the raw one.
+                    (double max, List<int> ties) = DayPeak(matches[0].Arrays[loadName].Values, datasetStarts[type + "#" + dataset.Index]);
                     if (double.IsNaN(best) || max > best)
                     {
                         best = max;

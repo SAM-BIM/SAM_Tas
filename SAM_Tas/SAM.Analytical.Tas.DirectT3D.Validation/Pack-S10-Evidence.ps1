@@ -42,6 +42,7 @@ Get-ChildItem $Target | Where-Object { $_.Name -ne 'README.md' -and $_.Name -not
 foreach ($phase in 'run', 'offline') {
     Put (Join-Path $Root "provenance-$phase.json") "provenance-$phase.json"
     Put (Join-Path $Root "watchdog-$phase.json") "watchdog-$phase.json"
+    Put (Join-Path $Root "status-$phase.json") "status-$phase.json"
 }
 
 Put (Join-Path $Root 'inputs.json') 'inputs.json'
